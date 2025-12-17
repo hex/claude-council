@@ -1,0 +1,10 @@
+# Local settings with API keys
+.claude/*.local.md
+
+# OS files
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
