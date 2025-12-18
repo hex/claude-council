@@ -1,6 +1,6 @@
 ---
 description: Query multiple AI agents for diverse perspectives on a coding problem
-argument-hint: [--file=path] [--providers=list] [--output=path] "question"
+argument-hint: [--file=path] [--providers=list] [--output=path] [--quiet] "question"
 allowed-tools: Bash(*), Read, AskUserQuestion
 ---
 
@@ -10,6 +10,7 @@ Usage:
   /claude-council:ask --providers=gemini,openai "Review this approach"
   /claude-council:ask --file=src/auth.ts "What's wrong with this implementation?"
   /claude-council:ask --output=docs/decision.md "Should we use microservices?"
+  /claude-council:ask --quiet "What's the best caching strategy?"
 -->
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -82,6 +83,7 @@ Supported flags:
 - `--file=path`: Include contents of specified file in the query
 - `--providers=list`: Comma-separated list of providers to query (default: all)
 - `--output=path`: Export formatted response to markdown file (e.g., `--output=docs/decision.md`)
+- `--quiet` or `-q`: Show only synthesis, hide individual provider responses
 
 Everything after flags is the question text.
 
@@ -97,7 +99,9 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh [--providers=list] "compiled
 
 ## Response Presentation
 
-Present each provider's response with prominent separators showing the model used.
+**If `--quiet` flag is set**: Skip directly to the Synthesis section. Do not display individual provider responses. Still query all providers and analyze their responses internally, but only show the synthesis to the user.
+
+**Otherwise**: Present each provider's response with prominent separators showing the model used.
 Include the model name right-aligned in the header box.
 Use dim gray (\033[2m) for box-drawing characters - easier on the eyes than bright white.
 
