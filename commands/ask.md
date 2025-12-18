@@ -1,7 +1,7 @@
 ---
 description: Query multiple AI agents for diverse perspectives on a coding problem
-argument-hint: [--file=path] [--providers=list] [--output=path] [--quiet] [--no-cache] "question"
-allowed-tools: Bash(*), Read, AskUserQuestion
+argument-hint: [--file=path] [--providers=list] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
+allowed-tools: Bash(*), Read, Glob, Grep, AskUserQuestion
 ---
 
 <!--
@@ -12,6 +12,7 @@ Usage:
   /claude-council:ask --output=docs/decision.md "Should we use microservices?"
   /claude-council:ask --quiet "What's the best caching strategy?"
   /claude-council:ask --no-cache "What's new in React 19?"
+  /claude-council:ask --no-auto-context "General question about design patterns"
 -->
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -76,6 +77,42 @@ Before querying, gather relevant context:
 3. Include any relevant code snippets from conversation
 4. Note any constraints or requirements mentioned
 
+### Auto-Context Injection
+
+**Unless `--no-auto-context` is specified**, automatically detect and include relevant files:
+
+1. **Extract keywords** from the question:
+   - Function/class names (e.g., "handleAuth", "UserController")
+   - Domain terms (e.g., "authentication", "database", "caching")
+   - File patterns (e.g., "*.config", "middleware")
+
+2. **Search for relevant files** using Glob and Grep:
+   ```bash
+   # Search for files matching domain keywords
+   # Example for "authentication" question:
+   # - Glob: **/auth*.{ts,js,py} or **/*auth*/**
+   # - Grep: "auth" or "login" or "session"
+   ```
+
+3. **Limit context** to avoid token bloat:
+   - Maximum 5 files
+   - Maximum ~10,000 tokens of context
+   - Prioritize: exact matches > filename matches > content matches
+
+4. **Show auto-included files** to the user before querying:
+   ```
+   Auto-included context (3 files):
+     - src/auth/handler.ts (keyword: "auth")
+     - middleware/session.ts (keyword: "session")
+     - types/user.ts (keyword: "user")
+   ```
+
+5. **Skip auto-context** if:
+   - User specified `--file=` (they're providing explicit context)
+   - User specified `--no-auto-context`
+   - No relevant files found
+   - Question doesn't reference code concepts
+
 ## Query Execution
 
 Parse arguments from: $ARGUMENTS
@@ -86,6 +123,7 @@ Supported flags:
 - `--output=path`: Export formatted response to markdown file (e.g., `--output=docs/decision.md`)
 - `--quiet` or `-q`: Show only synthesis, hide individual provider responses
 - `--no-cache`: Skip cache and force fresh queries from all providers
+- `--no-auto-context`: Disable automatic context detection and file inclusion
 
 Everything after flags is the question text.
 
