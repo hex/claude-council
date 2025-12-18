@@ -1,6 +1,6 @@
 ---
 description: Query multiple AI agents for diverse perspectives on a coding problem
-argument-hint: [--file=path] [--providers=list] "question"
+argument-hint: [--file=path] [--providers=list] [--output=path] "question"
 allowed-tools: Bash(*), Read, AskUserQuestion
 ---
 
@@ -9,6 +9,7 @@ Usage:
   /claude-council:ask "How should I structure authentication?"
   /claude-council:ask --providers=gemini,openai "Review this approach"
   /claude-council:ask --file=src/auth.ts "What's wrong with this implementation?"
+  /claude-council:ask --output=docs/decision.md "Should we use microservices?"
 -->
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -80,6 +81,7 @@ Parse arguments from: $ARGUMENTS
 Supported flags:
 - `--file=path`: Include contents of specified file in the query
 - `--providers=list`: Comma-separated list of providers to query (default: all)
+- `--output=path`: Export formatted response to markdown file (e.g., `--output=docs/decision.md`)
 
 Everything after flags is the question text.
 
@@ -177,3 +179,63 @@ Use dim gray (\033[2m) for the box characters and cyan (\033[36m) for "SYNTHESIS
 Do NOT use horizontal rules (---) between sections. Use the box headers for visual separation.
 
 If any providers failed, note the errors but continue with available responses.
+
+## Export to File (--output flag)
+
+If `--output=path` was specified, save a clean markdown version of the response to the specified file.
+
+### Export Format
+
+Generate a **clean markdown file** (no ANSI colors, no box-drawing characters) with this structure:
+
+```markdown
+# Council Response
+
+> **Query:** [the user's question]
+>
+> **Date:** [YYYY-MM-DD HH:MM]
+>
+> **Providers:** [list of providers queried with models]
+
+---
+
+## Gemini (gemini-3-flash-preview)
+
+[Gemini's response]
+
+## OpenAI (codex-mini-latest)
+
+[OpenAI's response]
+
+## Synthesis
+
+### Consensus
+[Points of agreement]
+
+### Divergence
+[Points of disagreement]
+
+### Recommendation
+[Your recommendation]
+```
+
+### Writing the File
+
+Use bash to write the markdown content:
+
+```bash
+mkdir -p "$(dirname '<output_path>')" && cat > '<output_path>' << 'COUNCIL_EOF'
+[markdown content here]
+COUNCIL_EOF
+```
+
+After writing, confirm to the user:
+```
+📄 Exported to: <output_path>
+```
+
+### Important Notes
+- Use plain text headings (`## Gemini`) instead of styled boxes
+- Include the model name in parentheses after the provider name
+- Keep tables if they add value, but ensure they're valid markdown
+- Preserve code blocks and formatting from responses

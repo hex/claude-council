@@ -114,7 +114,28 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 
 # Include a specific file for review
 /claude-council:ask --file=src/auth.ts "What's wrong with this implementation?"
+
+# Export response to markdown file
+/claude-council:ask --output=docs/auth-decision.md "How should we implement authentication?"
 ```
+
+### Export to File
+
+Save council responses as clean markdown files for documentation or sharing:
+
+```bash
+/claude-council:ask --output=docs/decision.md "Should we use REST or GraphQL?"
+```
+
+The exported file includes:
+- Metadata header (query, date, providers)
+- Each provider's full response
+- Synthesis with consensus/divergence analysis
+
+Great for:
+- Documenting architectural decisions
+- Sharing with team members who aren't using Claude
+- Creating an audit trail of AI-assisted decisions
 
 ### Proactive Agent
 
