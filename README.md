@@ -150,6 +150,26 @@ Get just the bottom line without individual provider responses:
 
 Quiet mode still queries all providers and analyzes their responses, but only shows the synthesis with consensus/divergence analysis. Use when you want a quick answer without scrolling through multiple perspectives.
 
+### Response Caching
+
+Responses are automatically cached to speed up repeated queries and save API costs:
+
+```bash
+# Uses cache if available (default)
+/claude-council:ask "What's the best testing framework?"
+
+# Force fresh queries, skip cache
+/claude-council:ask --no-cache "What's the best testing framework?"
+```
+
+Cache configuration:
+```bash
+export COUNCIL_CACHE_DIR=".claude/council-cache"  # Cache location (default)
+export COUNCIL_CACHE_TTL=3600                      # Cache lifetime in seconds (default: 1 hour)
+```
+
+Cached responses show `cached` instead of `success` in the status output. Cache is keyed by prompt + provider + model, so changing models invalidates the cache.
+
 ### Proactive Agent
 
 The `council-advisor` agent will suggest consulting the council when:
