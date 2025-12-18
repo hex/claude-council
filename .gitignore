@@ -1,6 +1,12 @@
 # Local settings with API keys
 .claude/*.local.md
 
+# Response cache
+.claude/council-cache/
+
+# Issue tracker (personal)
+.beads/
+
 # OS files
 .DS_Store
 
