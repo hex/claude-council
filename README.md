@@ -170,6 +170,33 @@ export COUNCIL_CACHE_TTL=3600                      # Cache lifetime in seconds (
 
 Cached responses show `cached` instead of `success` in the status output. Cache is keyed by prompt + provider + model, so changing models invalidates the cache.
 
+### Auto-Context Injection
+
+The council automatically detects and includes relevant files based on your question:
+
+```bash
+/claude-council:ask "How should I refactor the authentication flow?"
+# Auto-detects and includes: src/auth/*.ts, middleware/auth.ts, etc.
+```
+
+Before querying, you'll see which files were auto-included:
+```
+Auto-included context (3 files):
+  - src/auth/handler.ts (keyword: "auth")
+  - middleware/session.ts (keyword: "session")
+  - types/user.ts (keyword: "user")
+```
+
+To disable auto-context (for general questions not about your code):
+```bash
+/claude-council:ask --no-auto-context "What are best practices for API design?"
+```
+
+Auto-context limits:
+- Maximum 5 files included
+- Maximum ~10,000 tokens of context
+- Skipped if you provide `--file=` explicitly
+
 ### Proactive Agent
 
 The `council-advisor` agent will suggest consulting the council when:
