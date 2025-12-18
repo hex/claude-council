@@ -6,7 +6,7 @@
     "name": "hex"
   },
   "keywords": ["multi-agent", "council", "gemini", "openai", "grok", "perspectives"],
-  "commands": ["./commands/ask.md"],
+  "commands": ["./commands/ask.md", "./commands/status.md"],
   "agents": ["./agents/council-advisor.md"],
   "skills": ["./skills/provider-integration"]
 }
