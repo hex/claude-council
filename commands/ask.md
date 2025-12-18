@@ -1,6 +1,6 @@
 ---
 description: Query multiple AI agents for diverse perspectives on a coding problem
-argument-hint: [--file=path] [--providers=list] [--output=path] [--quiet] "question"
+argument-hint: [--file=path] [--providers=list] [--output=path] [--quiet] [--no-cache] "question"
 allowed-tools: Bash(*), Read, AskUserQuestion
 ---
 
@@ -11,6 +11,7 @@ Usage:
   /claude-council:ask --file=src/auth.ts "What's wrong with this implementation?"
   /claude-council:ask --output=docs/decision.md "Should we use microservices?"
   /claude-council:ask --quiet "What's the best caching strategy?"
+  /claude-council:ask --no-cache "What's new in React 19?"
 -->
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -84,6 +85,7 @@ Supported flags:
 - `--providers=list`: Comma-separated list of providers to query (default: all)
 - `--output=path`: Export formatted response to markdown file (e.g., `--output=docs/decision.md`)
 - `--quiet` or `-q`: Show only synthesis, hide individual provider responses
+- `--no-cache`: Skip cache and force fresh queries from all providers
 
 Everything after flags is the question text.
 
@@ -94,8 +96,10 @@ Build a comprehensive prompt that includes:
 
 Execute the query:
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh [--providers=list] "compiled prompt"
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh [--providers=list] [--no-cache] "compiled prompt"
 ```
+
+Pass `--no-cache` to the script if the user specified `--no-cache` in the command arguments.
 
 ## Response Presentation
 

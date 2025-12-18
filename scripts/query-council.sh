@@ -7,13 +7,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROVIDERS_DIR="${SCRIPT_DIR}/providers"
 
+# Source cache library
+source "${SCRIPT_DIR}/lib/cache.sh"
+
 usage() {
-    echo "Usage: $0 [--providers=provider1,provider2] <prompt>"
+    echo "Usage: $0 [--providers=provider1,provider2] [--no-cache] <prompt>"
     echo ""
     echo "Options:"
     echo "  --providers=LIST  Comma-separated list of providers to query"
     echo "                    Available: gemini, openai, grok"
     echo "                    Default: all configured providers"
+    echo "  --no-cache        Skip cache and force fresh queries"
     echo ""
     echo "Output: JSON object with provider responses"
     exit 1
@@ -23,6 +27,7 @@ usage() {
 FILTER_PROVIDERS=""
 PROMPT=""
 LIST_AVAILABLE=false
+USE_CACHE=true
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -32,6 +37,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --list-available)
             LIST_AVAILABLE=true
+            shift
+            ;;
+        --no-cache)
+            USE_CACHE=false
             shift
             ;;
         --help|-h)
@@ -102,19 +111,41 @@ TEMP_DIR=$(mktemp -d)
 trap "rm -rf $TEMP_DIR" EXIT
 
 # Query provider and save result to temp file
+# Uses cache if available and USE_CACHE=true
 query_provider() {
     local provider="$1"
     local prompt="$2"
     local output_file="$3"
     local script="${PROVIDERS_DIR}/${provider}.sh"
+    local model
+    model=$(get_model "$provider")
 
     if [[ ! -x "$script" ]]; then
         echo '{"status": "error", "error": "Script not found or not executable"}' > "$output_file"
         return
     fi
 
+    # Check cache if enabled
+    if [[ "$USE_CACHE" == true ]]; then
+        local key
+        key=$(cache_key "$provider" "$model" "$prompt")
+        local cached_response
+        cached_response=$(cache_get "$key")
+        if [[ -n "$cached_response" ]]; then
+            jq -n --arg r "$cached_response" '{status: "success", response: $r, cached: true}' > "$output_file"
+            return
+        fi
+    fi
+
+    # Query provider
     if response=$("$script" "$prompt" 2>&1); then
         jq -n --arg r "$response" '{status: "success", response: $r}' > "$output_file"
+        # Store in cache on success
+        if [[ "$USE_CACHE" == true ]]; then
+            local key
+            key=$(cache_key "$provider" "$model" "$prompt")
+            cache_set "$key" "$provider" "$model" "$prompt" "$response"
+        fi
     else
         jq -n --arg e "$response" '{status: "error", error: $e}' > "$output_file"
     fi
@@ -201,9 +232,16 @@ for provider in "${PROVIDERS[@]}"; do
         RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --argjson r "$result" '.[$p] = $r')
 
         # Track errors and show status
-        if [[ $(echo "$result" | jq -r '.status') == "error" ]]; then
+        local status
+        status=$(echo "$result" | jq -r '.status')
+        local cached
+        cached=$(echo "$result" | jq -r '.cached // false')
+
+        if [[ "$status" == "error" ]]; then
             echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET}" >&2
             ERRORS+=("$provider: $(echo "$result" | jq -r '.error')")
+        elif [[ "$cached" == "true" ]]; then
+            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${CYAN}cached${RESET}" >&2
         else
             echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${GREEN}success${RESET}" >&2
         fi
