@@ -25,9 +25,11 @@ Then generate your synthesis with:
 - **Divergence**: Where they disagree
 - **Recommendation**: Best approach
 
-## Provider Emojis
+## Provider Names
 
-- 🔵 GEMINI
-- ⚪ OPENAI
-- 🔴 GROK
-- ⚡ SYNTHESIS
+**ALWAYS use emoji when mentioning a provider:**
+- 🔵 Gemini (not just "Gemini")
+- ⚪ OpenAI (not just "OpenAI")
+- 🔴 Grok (not just "Grok")
+
+Example: "🔵 Gemini recommends using Redis, while ⚪ OpenAI suggests Memcached."
