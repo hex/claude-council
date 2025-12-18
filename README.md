@@ -42,22 +42,66 @@ providers:
 ---
 ```
 
+### Model Selection
+
+Override default models via environment variables:
+
+```bash
+export GEMINI_MODEL="gemini-3-flash-preview"       # default
+export OPENAI_MODEL="codex-mini-latest"            # default
+export GROK_MODEL="grok-4-1-fast-reasoning"        # default
+```
+
+Use more powerful models for complex queries:
+
+```bash
+export GEMINI_MODEL="gemini-3-pro-preview"
+export OPENAI_MODEL="gpt-5.2"
+export GROK_MODEL="grok-4-1-fast-reasoning-latest"
+```
+
+### Response Length
+
+Control max tokens per response (default: 4096):
+
+```bash
+export COUNCIL_MAX_TOKENS=8192  # longer responses
+export COUNCIL_MAX_TOKENS=2048  # shorter, faster responses
+```
+
+#### OpenAI Reasoning Models
+
+For OpenAI reasoning models (`codex-*`, `o3-*`, `o4-*`), the token limit is automatically increased to 8x the base value (minimum 32768). This is because these models combine reasoning tokens and output tokens into a single `max_output_tokens` limit.
+
+| Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
+|------------|-------------------|--------------|
+| Standard (gpt-5.2) | 4096 (default) | 4096 |
+| Reasoning (codex-mini-latest) | 4096 (default) | 32768 |
+| Reasoning (codex-mini-latest) | 8192 | 65536 |
+
+Control reasoning effort to balance speed vs thoroughness:
+
+```bash
+export OPENAI_REASONING_EFFORT="low"     # faster, less reasoning overhead
+export OPENAI_REASONING_EFFORT="medium"  # default - balanced
+export OPENAI_REASONING_EFFORT="high"    # thorough reasoning, slower
+```
+
+Gemini and Grok handle reasoning/thinking tokens separately, so they use the base limit directly.
+
 ## Usage
 
 ### Slash Command
 
 ```bash
 # Query all configured providers
-/council "How should I structure authentication in this Express app?"
+/claude-council:ask "How should I structure authentication in this Express app?"
 
 # Query specific providers
-/council --providers=gemini,openai "What's the best approach for caching here?"
+/claude-council:ask --providers=gemini,openai "What's the best approach for caching here?"
 
 # Include a specific file for review
-/council --file=src/auth.ts "What's wrong with this implementation?"
-
-# Combine flags
-/council --file=src/api.ts --providers=gemini "Review this code"
+/claude-council:ask --file=src/auth.ts "What's wrong with this implementation?"
 ```
 
 ### Proactive Agent
