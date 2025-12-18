@@ -1,5 +1,5 @@
 #!/bin/bash
-# ABOUTME: Queries multiple AI providers and collects their responses
+# ABOUTME: Queries multiple AI providers in parallel and collects responses
 # ABOUTME: Supports filtering by provider and outputs JSON results
 
 set -euo pipefail
@@ -22,11 +22,16 @@ usage() {
 # Parse arguments
 FILTER_PROVIDERS=""
 PROMPT=""
+LIST_AVAILABLE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --providers=*)
             FILTER_PROVIDERS="${1#*=}"
+            shift
+            ;;
+        --list-available)
+            LIST_AVAILABLE=true
             shift
             ;;
         --help|-h)
@@ -38,6 +43,16 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Handle --list-available flag
+if [[ "$LIST_AVAILABLE" == true ]]; then
+    available=()
+    [[ -n "${GEMINI_API_KEY:-}" ]] && available+=("gemini")
+    [[ -n "${OPENAI_API_KEY:-}" ]] && available+=("openai")
+    [[ -n "${GROK_API_KEY:-}" ]] && available+=("grok")
+    echo "${available[*]}"
+    exit 0
+fi
 
 if [[ -z "$PROMPT" ]]; then
     echo "Error: No prompt provided" >&2
@@ -82,25 +97,120 @@ if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
     exit 1
 fi
 
-# Query each provider and collect results
+# Create temp directory for parallel results
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+# Query provider and save result to temp file
+query_provider() {
+    local provider="$1"
+    local prompt="$2"
+    local output_file="$3"
+    local script="${PROVIDERS_DIR}/${provider}.sh"
+
+    if [[ ! -x "$script" ]]; then
+        echo '{"status": "error", "error": "Script not found or not executable"}' > "$output_file"
+        return
+    fi
+
+    if response=$("$script" "$prompt" 2>&1); then
+        jq -n --arg r "$response" '{status: "success", response: $r}' > "$output_file"
+    else
+        jq -n --arg e "$response" '{status: "error", error: $e}' > "$output_file"
+    fi
+}
+
+# Colors for terminal output
+BLUE='\033[34m'
+WHITE='\033[37m'
+RED='\033[31m'
+GREEN='\033[32m'
+CYAN='\033[36m'
+LIGHT_YELLOW='\033[93m'
+ITALIC='\033[3m'
+RESET='\033[0m'
+
+provider_color() {
+    case "$1" in
+        gemini)  echo -e "${BLUE}" ;;
+        openai)  echo -e "${WHITE}" ;;
+        grok)    echo -e "${RED}" ;;
+        *)       echo -e "${CYAN}" ;;
+    esac
+}
+
+# Get model name for provider (mirrors logic in provider scripts)
+get_model() {
+    case "$1" in
+        gemini)  echo "${GEMINI_MODEL:-gemini-3-flash-preview}" ;;
+        openai)  echo "${OPENAI_MODEL:-codex-mini-latest}" ;;
+        grok)    echo "${GROK_MODEL:-grok-4-1-fast-reasoning}" ;;
+        *)       echo "unknown" ;;
+    esac
+}
+
+# Get emoji for provider
+provider_emoji() {
+    case "$1" in
+        gemini)  echo "🔵" ;;
+        openai)  echo "⚪" ;;
+        grok)    echo "🔴" ;;
+        *)       echo "⚫" ;;
+    esac
+}
+
+# Format provider list with colors and emojis
+format_providers() {
+    local formatted=""
+    for p in "$@"; do
+        local color=$(provider_color "$p")
+        local emoji=$(provider_emoji "$p")
+        formatted+="${emoji} ${color}${p}${RESET} "
+    done
+    echo "$formatted"
+}
+
+# Launch all queries in parallel
+FORMATTED_PROVIDERS=$(format_providers "${PROVIDERS[@]}")
+echo -e "🚀 Querying ${#PROVIDERS[@]} providers in parallel: ${FORMATTED_PROVIDERS}..." >&2
+
+PIDS=()
+for provider in "${PROVIDERS[@]}"; do
+    query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" &
+    PIDS+=($!)
+done
+
+# Wait for all to complete
+for pid in "${PIDS[@]}"; do
+    wait "$pid" 2>/dev/null || true
+done
+
+# Collect results
 RESULTS="{}"
 ERRORS=()
 
 for provider in "${PROVIDERS[@]}"; do
-    script="${PROVIDERS_DIR}/${provider}.sh"
+    result_file="${TEMP_DIR}/${provider}.json"
+    color=$(provider_color "$provider")
+    model=$(get_model "$provider")
 
-    if [[ ! -x "$script" ]]; then
-        ERRORS+=("$provider: Script not found or not executable")
-        continue
-    fi
+    if [[ -f "$result_file" ]]; then
+        result=$(cat "$result_file")
+        # Add model to result
+        result=$(echo "$result" | jq --arg m "$model" '. + {model: $m}')
+        RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --argjson r "$result" '.[$p] = $r')
 
-    echo "Querying $provider..." >&2
-
-    if response=$("$script" "$PROMPT" 2>&1); then
-        RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --arg r "$response" '.[$p] = {status: "success", response: $r}')
+        # Track errors and show status
+        if [[ $(echo "$result" | jq -r '.status') == "error" ]]; then
+            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET}" >&2
+            ERRORS+=("$provider: $(echo "$result" | jq -r '.error')")
+        else
+            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${GREEN}success${RESET}" >&2
+        fi
     else
-        ERRORS+=("$provider: $response")
-        RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --arg e "$response" '.[$p] = {status: "error", error: $e}')
+        echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}no response${RESET}" >&2
+        ERRORS+=("$provider: No response received")
+        RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --arg m "$model" '.[$p] = {status: "error", error: "No response received", model: $m}')
     fi
 done
 

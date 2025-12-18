@@ -21,15 +21,27 @@ fi
 # xAI API endpoint (OpenAI-compatible)
 ENDPOINT="https://api.x.ai/v1/chat/completions"
 
+# Model selection (override via GROK_MODEL env var)
+MODEL="${GROK_MODEL:-grok-4-1-fast-reasoning}"
+
+# Token limit (override via COUNCIL_MAX_TOKENS env var)
+TOKENS="${COUNCIL_MAX_TOKENS:-4096}"
+
+# System instruction
+SYSTEM="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
+
 # Build request payload
-PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{
-    model: "grok-3-latest",
+PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
+    model: $model,
     messages: [{
+        role: "system",
+        content: $system
+    }, {
         role: "user",
         content: $prompt
     }],
     temperature: 0.7,
-    max_tokens: 2048
+    max_tokens: $tokens
 }')
 
 # Make API call
