@@ -164,7 +164,7 @@ discover_providers() {
         fi
     done
 
-    echo "${available[@]}"
+    echo "${available[@]+"${available[@]}"}"
 }
 
 # Get list of providers to query
