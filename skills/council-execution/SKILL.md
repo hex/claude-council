@@ -4,9 +4,9 @@ description: Use this skill when executing council queries
 
 # Council Query Execution
 
-## Run the Query
+## Step 1: Run the Query
 
-Execute with a single command:
+Execute this command:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Your question" 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh
@@ -14,13 +14,22 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Y
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 
-## After Output
+## Step 2: The Bash Output Contains Provider Responses
 
-The terminal output may be truncated (shows "+N lines ctrl+o to expand"). Tell the user:
+The bash command outputs formatted provider responses with headers like:
+```
+━━━ 🔵 GEMINI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ gemini-3-flash-preview
+[response text]
 
-> Press **ctrl+o** to expand and see full provider responses.
+━━━ ⚪ OPENAI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ codex-mini-latest
+[response text]
+```
 
-Then generate your synthesis with:
+**This IS the provider output.** If truncated, tell user: "Press **ctrl+o** to see full responses."
+
+## Step 3: Generate Synthesis
+
+AFTER the bash output is shown, write your synthesis:
 - **Consensus**: Where providers agree
 - **Divergence**: Where they disagree
 - **Recommendation**: Best approach
