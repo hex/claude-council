@@ -67,40 +67,17 @@ Skip auto-context if:
 - `--file=` is specified (explicit context)
 - Question doesn't reference code concepts
 
-## Step 2: Execute Query
+## Step 2: Execute and Display
 
-Run the council query with all user arguments:
-
-```bash
-JSON_OUTPUT=$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh $ARGUMENTS 2>&1)
-```
-
-The script handles:
-- Argument parsing and validation
-- Role injection (--roles)
-- Debate mode two-round execution (--debate)
-- Response caching
-- Parallel provider queries
-
-Returns structured JSON with `metadata`, `round1`, and optionally `round2`.
-
-## Step 3: Format Output
-
-Display formatted results:
+Run the query and display formatted output in a single pipeline:
 
 ```bash
-echo '$JSON_OUTPUT' | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh $ARGUMENTS 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh
 ```
 
-IMPORTANT: Show the exact terminal output. Do not reformat, summarize, or recreate the headers.
+IMPORTANT: Show the exact terminal output verbatim. Do not reformat, summarize, or recreate the headers. The output includes provider responses with bar-style headers.
 
-The formatter handles:
-- Provider boxes with colors, emojis, models, roles
-- Quiet mode (--quiet skips individual responses)
-- Debate mode round headers and rebuttals
-- Synthesis header
-
-## Step 4: Generate Synthesis
+## Step 3: Generate Synthesis
 
 After the formatted output, generate synthesis analyzing the provider responses.
 
@@ -145,7 +122,7 @@ Provider colors in text:
 - OpenAI: Gray/dim
 - Grok: Red
 
-## Step 5: Export (if --output specified)
+## Step 4: Export (if --output specified)
 
 Check `.metadata.output_path` in the JSON. If set:
 
