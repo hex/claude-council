@@ -130,9 +130,17 @@ Additionally include:
 - **Consensus shifts**: Where providers changed positions
 - **Unresolved tensions**: Remaining disagreements
 
-### Provider Colors
+### Header Format
 
-Always color provider names in synthesis:
+When referencing providers in synthesis, use bar-style headers:
+```
+━━━ 🔵 GEMINI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ gemini-3-flash-preview
+━━━ ⚪ OPENAI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ codex-mini-latest
+━━━ 🔴 GROK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ grok-4-1-fast-reasoning
+━━━ ⚡ SYNTHESIS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Provider colors in text:
 - Gemini: Blue
 - OpenAI: Gray/dim
 - Grok: Red
