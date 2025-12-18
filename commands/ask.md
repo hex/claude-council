@@ -32,22 +32,6 @@ Options (multiSelect: true):
 
 If the question is vague or could be interpreted multiple ways, ask for clarification.
 
-Signs of ambiguity:
-- Question lacks specific context (e.g., "What's the best approach?")
-- Multiple valid interpretations exist
-- Missing key details (language, framework, scale, constraints)
-
-Example:
-```
-Question: "What aspect should I focus the council's attention on?"
-Header: "Focus"
-Options:
-  - Architecture & design patterns
-  - Performance optimization
-  - Security considerations
-  - Code quality & maintainability
-```
-
 **Skip these interactions if:**
 - User provided `--providers` flag
 - Question is specific and clear
@@ -69,36 +53,16 @@ Skip auto-context if:
 
 ## Step 2: Execute and Display
 
-Run the query and display formatted output in a single pipeline:
-
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh $ARGUMENTS 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh
-```
-
-IMPORTANT: Show the exact terminal output verbatim. Do not reformat, summarize, or recreate the headers. The output includes provider responses with bar-style headers.
+**Invoke the `council-execution` skill** and follow its instructions to run the query pipeline and display output.
 
 ## Step 3: Generate Synthesis
 
-After the formatted output, generate synthesis analyzing the provider responses.
+After the formatted output, generate synthesis analyzing the provider responses:
 
-Parse the JSON to understand:
-- Which providers responded (check `.round1` keys)
-- Assigned roles (check `.round1[provider].role`)
-- Whether debate mode was used (check `.metadata.debate_mode`)
-
-### Synthesis Content
-
-Create a synthesis section with:
-
-1. **Consensus**: Points where providers agree - use a summary table:
-   | Topic | Provider 1 | Provider 2 | Provider 3 | Consensus? |
-   |-------|------------|------------|------------|------------|
-
-2. **Divergence**: Where providers disagree and why
-
-3. **Unique insights**: Notable points from each provider (color provider names!)
-
-4. **Recommendation**: Which approach seems strongest for the situation
+1. **Consensus**: Points where providers agree
+2. **Divergence**: Where they disagree and why
+3. **Unique insights**: Notable points from each provider
+4. **Recommendation**: Strongest approach for the situation
 
 ### If Debate Mode Was Used
 
@@ -107,30 +71,15 @@ Additionally include:
 - **Consensus shifts**: Where providers changed positions
 - **Unresolved tensions**: Remaining disagreements
 
-### Header Format
-
-When referencing providers in synthesis, use bar-style headers:
-```
-━━━ 🔵 GEMINI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ gemini-3-flash-preview
-━━━ ⚪ OPENAI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ codex-mini-latest
-━━━ 🔴 GROK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ grok-4-1-fast-reasoning
-━━━ ⚡ SYNTHESIS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-Provider colors in text:
-- Gemini: Blue
-- OpenAI: Gray/dim
-- Grok: Red
-
 ## Step 4: Export (if --output specified)
 
-Check `.metadata.output_path` in the JSON. If set:
+If `--output=<path>` was specified:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/lib/export.sh --write "<output_path>" "<prompt>" "<providers>"
 ```
 
-After writing, confirm: `Exported to: <output_path>`
+Confirm: `Exported to: <output_path>`
 
 ## Error Handling
 
