@@ -227,6 +227,29 @@ Assign different perspectives to each provider for more comprehensive reviews:
 
 Roles are assigned to providers in order, ensuring each provider approaches the question from a different angle.
 
+### Debate Mode
+
+Enable multi-round discussions where providers critique each other:
+
+```bash
+/claude-council:ask --debate "How should I structure the database schema?"
+```
+
+**How it works:**
+1. **Round 1**: All providers answer the question normally
+2. **Round 2**: Each provider sees the others' responses and provides rebuttals
+3. **Synthesis**: Incorporates debate insights, consensus shifts, and unresolved tensions
+
+Debate mode surfaces blind spots and stress-tests recommendations. The synthesis includes:
+- Strongest criticisms raised
+- Where providers changed positions after seeing alternatives
+- Genuine disagreements that remain
+
+Combine with roles for focused debates:
+```bash
+/claude-council:ask --debate --roles=security,performance,simplicity "Review this architecture"
+```
+
 ### Proactive Agent
 
 The `council-advisor` agent will suggest consulting the council when:

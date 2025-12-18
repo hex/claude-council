@@ -1,6 +1,6 @@
 ---
 description: Query multiple AI agents for diverse perspectives on a coding problem
-argument-hint: [--file=path] [--providers=list] [--roles=list] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
+argument-hint: [--file=path] [--providers=list] [--roles=list] [--debate] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
 allowed-tools: Bash(*), Read, Glob, Grep, AskUserQuestion
 ---
 
@@ -15,6 +15,7 @@ Usage:
   /claude-council:ask --no-auto-context "General question about design patterns"
   /claude-council:ask --roles=security,performance,maintainability "Review this auth code"
   /claude-council:ask --roles=balanced "Review this implementation"
+  /claude-council:ask --debate "How should I structure the database schema?"
 -->
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -166,6 +167,7 @@ Supported flags:
 - `--file=path`: Include contents of specified file in the query
 - `--providers=list`: Comma-separated list of providers to query (default: all)
 - `--roles=list`: Assign specialized roles to providers (e.g., `security,performance,maintainability` or preset like `balanced`)
+- `--debate`: Enable debate mode - providers critique each other's responses in round 2
 - `--output=path`: Export formatted response to markdown file (e.g., `--output=docs/decision.md`)
 - `--quiet` or `-q`: Show only synthesis, hide individual provider responses
 - `--no-cache`: Skip cache and force fresh queries from all providers
@@ -234,6 +236,58 @@ Example with proper alignment:
 
 IMPORTANT: Count characters carefully! The box is 80 chars wide (78 inside + 2 borders).
 Pad with spaces between provider name and model to make total inner content exactly 78 chars.
+
+## Debate Mode (--debate flag)
+
+If the `--debate` flag is set, run a second round where providers critique each other:
+
+### Round 2: Rebuttals
+
+After presenting Round 1 responses, compile all responses and send a follow-up query to each provider:
+
+**Follow-up prompt template:**
+```
+Here are other perspectives on this question:
+
+[GEMINI'S RESPONSE]
+{gemini's round 1 response}
+
+[OPENAI'S RESPONSE]
+{openai's round 1 response}
+
+[GROK'S RESPONSE]
+{grok's round 1 response}
+
+As a critical reviewer, analyze these responses:
+1. What are the strengths of each approach?
+2. What are the weaknesses or blind spots?
+3. What did the other responses miss?
+4. What would you change about your original recommendation after seeing these?
+```
+
+**Rebuttal header format** - use yellow/orange for debate headers:
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🔵 GEMINI REBUTTAL                                                          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
+
+Use dim gray for box characters and yellow (\033[33m) for "REBUTTAL".
+
+### Debate Presentation Flow
+
+1. Show Round 1 header: `## Round 1: Initial Responses`
+2. Present all initial responses (as normal)
+3. Show Round 2 header: `## Round 2: Rebuttals`
+4. Present all rebuttal responses
+5. Show Synthesis (which now incorporates debate insights)
+
+### Synthesis with Debate
+
+When `--debate` is enabled, the synthesis should additionally include:
+- **Strongest criticisms**: Most compelling points raised in rebuttals
+- **Consensus shifts**: Where providers changed their positions
+- **Unresolved tensions**: Points of genuine disagreement that remain
 
 ## Synthesis
 
