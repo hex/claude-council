@@ -304,6 +304,18 @@ if [[ -n "$ROLES" ]]; then
     done
 fi
 
+# Include file content in prompt if --file specified
+if [[ -n "$FILE_PATH" ]]; then
+    FILE_CONTENT=$(cat "$FILE_PATH")
+    PROMPT="Here is the content of ${FILE_PATH}:
+
+\`\`\`
+${FILE_CONTENT}
+\`\`\`
+
+${PROMPT}"
+fi
+
 # Launch all queries in parallel
 FORMATTED_PROVIDERS=$(format_providers "${PROVIDERS[@]}")
 echo -e "🚀 Querying ${#PROVIDERS[@]} providers in parallel: ${FORMATTED_PROVIDERS}..." >&2
