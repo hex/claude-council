@@ -103,6 +103,19 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 
 ## Usage
 
+### Quick Reference
+
+| Flag | Description |
+|------|-------------|
+| `--providers=list` | Query specific providers (e.g., `gemini,openai`) |
+| `--roles=list` | Assign roles to providers (e.g., `security,performance` or `balanced`) |
+| `--debate` | Enable two-round debate mode |
+| `--file=path` | Include specific file in context |
+| `--output=path` | Export response to markdown file |
+| `--quiet` | Show only synthesis, hide individual responses |
+| `--no-cache` | Force fresh queries, skip cache |
+| `--no-auto-context` | Disable automatic file detection |
+
 ### Slash Command
 
 ```bash
@@ -168,7 +181,10 @@ export COUNCIL_CACHE_DIR=".claude/council-cache"  # Cache location (default)
 export COUNCIL_CACHE_TTL=3600                      # Cache lifetime in seconds (default: 1 hour)
 ```
 
-Cached responses show `cached` instead of `success` in the status output. Cache is keyed by prompt + provider + model, so changing models invalidates the cache.
+Cached responses show `cached` instead of `success` in the status output. Cache is keyed by prompt + provider + model + role, so:
+- Changing models invalidates the cache
+- Using `--roles` creates separate cache entries (same prompt with different role = cache miss)
+- Debate mode round 2 rebuttals are never cached (they depend on round 1 content)
 
 ### Auto-Context Injection
 
@@ -259,6 +275,42 @@ The `council-advisor` agent will suggest consulting the council when:
 ## Adding New Providers
 
 See the `provider-integration` skill for guidance on adding new AI providers.
+
+## Direct Script Usage
+
+Use the scripts directly without Claude Code (for automation, CI, or debugging):
+
+```bash
+# Basic query - returns JSON
+bash scripts/query-council.sh "What is dependency injection?"
+
+# With flags
+bash scripts/query-council.sh --providers=gemini,openai --roles=balanced "Review this pattern"
+
+# Pipe to formatter for terminal display
+bash scripts/query-council.sh --providers=gemini "Question" 2>/dev/null | bash scripts/format-output.sh
+
+# Check provider status
+bash scripts/check-status.sh
+```
+
+**JSON output structure:**
+```json
+{
+  "metadata": {
+    "prompt": "...",
+    "roles_used": ["security", "performance"],
+    "debate_mode": false,
+    "quiet_mode": false,
+    "timestamp": "2025-12-18T12:00:00Z"
+  },
+  "round1": {
+    "gemini": { "status": "success", "response": "...", "model": "...", "role": "security" },
+    "openai": { "status": "success", "response": "...", "model": "...", "role": "performance" }
+  },
+  "round2": { ... }  // Only present if --debate
+}
+```
 
 ## Requirements
 
