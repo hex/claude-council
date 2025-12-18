@@ -18,13 +18,63 @@ Manual testing procedures for claude-council features.
 
 3. **Verify provider status**:
    ```bash
+   bash scripts/check-status.sh
+   # Or via slash command:
    /claude-council:status
    ```
    Expected: At least one provider shows "Connected"
 
 ---
 
-## Feature Tests
+## Script-Level Tests (No Plugin Required)
+
+These tests verify the bash implementation directly.
+
+### JSON Output Structure
+```bash
+bash scripts/query-council.sh --providers=gemini "Test" 2>/dev/null | jq 'keys'
+```
+**Expected**: `["metadata", "round1"]`
+
+### Argument Validation
+```bash
+bash scripts/query-council.sh --invalid-flag "Test" 2>&1
+```
+**Expected**: `Error: Unknown flag: --invalid-flag`
+
+### Role Validation
+```bash
+bash scripts/query-council.sh --roles=nonexistent "Test" 2>&1
+```
+**Expected**: `Error: Unknown role: nonexistent` with available roles listed
+
+### Role Preset Expansion
+```bash
+bash scripts/query-council.sh --providers=gemini,openai --roles=balanced "Test" 2>&1 | grep "Provider roles"
+```
+**Expected**: Shows security, performance, maintainability assignments
+
+### Debate Mode JSON
+```bash
+bash scripts/query-council.sh --providers=gemini --debate "Test" 2>/dev/null | jq 'has("round2")'
+```
+**Expected**: `true`
+
+### Formatter Test
+```bash
+echo '{"metadata":{"quiet_mode":false},"round1":{"gemini":{"status":"success","response":"Test","model":"test-model","role":"security"}}}' | bash scripts/format-output.sh
+```
+**Expected**: Formatted box with provider name, model, and role
+
+### Quiet Mode Formatter
+```bash
+echo '{"metadata":{"quiet_mode":true},"round1":{"gemini":{"status":"success","response":"Test","model":"test"}}}' | bash scripts/format-output.sh
+```
+**Expected**: Only synthesis header shown (no provider response box)
+
+---
+
+## Feature Tests (Via Slash Command)
 
 ### 1. Basic Query
 
@@ -268,27 +318,45 @@ rm combined-test.md
 ### No API Keys
 ```bash
 unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY
-/claude-council:ask "Test question"
+bash scripts/query-council.sh "Test question" 2>&1
 ```
-**Expected**: Error message about no providers configured
+**Expected**: `Error: No providers configured. Set API keys for at least one provider.`
 
 ### Invalid Provider
 ```bash
-/claude-council:ask --providers=invalid "Test"
+bash scripts/query-council.sh --providers=invalid "Test" 2>&1
 ```
-**Expected**: Error or graceful handling
+**Expected**: Attempts query but provider script not found (graceful error in JSON)
+
+### Invalid Role
+```bash
+bash scripts/query-council.sh --roles=hacker "Test" 2>&1
+```
+**Expected**: `Error: Unknown role: hacker` with list of available roles
+
+### Unknown Flag
+```bash
+bash scripts/query-council.sh --foobar "Test" 2>&1
+```
+**Expected**: `Error: Unknown flag: --foobar` with usage message
+
+### Missing File
+```bash
+bash scripts/query-council.sh --file=/nonexistent "Test" 2>&1
+```
+**Expected**: `Error: File not found: /nonexistent`
 
 ### Empty Question
 ```bash
-/claude-council:ask ""
+bash scripts/query-council.sh "" 2>&1
 ```
-**Expected**: Error or prompt for question
+**Expected**: `Error: No prompt provided` with usage message
 
 ### Very Long Question
 ```bash
-/claude-council:ask "$(cat README.md) - Summarize this"
+bash scripts/query-council.sh "$(cat README.md) - Summarize this" 2>/dev/null | jq '.metadata.prompt' | head -c 100
 ```
-**Expected**: Handles gracefully, may truncate if too long
+**Expected**: Handles gracefully, full prompt stored in metadata
 
 ---
 
