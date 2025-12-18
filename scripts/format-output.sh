@@ -55,7 +55,7 @@ draw_hline() {
     printf "%${count}s" | tr ' ' "$char"
 }
 
-# Draw box header
+# Draw header bar
 # Args: emoji provider_name model [role] [header_type]
 # header_type: normal, rebuttal, synthesis
 draw_header() {
@@ -71,9 +71,9 @@ draw_header() {
     provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
 
     # Build left content
-    local left_content="${emoji} ${provider_upper}"
+    local left_content="${provider_upper}"
     if [[ "$header_type" == "rebuttal" ]]; then
-        left_content="${emoji} ${provider_upper} REBUTTAL"
+        left_content="${provider_upper} ${YELLOW}REBUTTAL${color}"
     fi
     if [[ -n "$role" ]] && [[ "$role" != "null" ]] && [[ "$header_type" != "rebuttal" ]]; then
         left_content="${left_content} (${role})"
@@ -82,51 +82,25 @@ draw_header() {
     # Build right content (model name)
     local right_content=""
     if [[ -n "$model" ]] && [[ "$model" != "null" ]]; then
-        right_content="$model"
+        right_content="${model}"
     fi
 
-    # Calculate padding
-    # Total inner = 78, subtract 4 for margins around content
-    # Emojis display as 2 columns but count as 1 char, so add 1 per emoji
+    # Calculate bar fill length
     local left_len=${#left_content}
     local right_len=${#right_content}
-    local emoji_adjustment=1  # Account for emoji double-width display
-    local padding=$((INNER_WIDTH - left_len - right_len - 4 - emoji_adjustment))
-    if [[ $padding -lt 1 ]]; then
-        padding=1
+    local bar_fill=$((BOX_WIDTH - left_len - right_len - 8))  # 8 = spaces + emoji + padding
+    if [[ $bar_fill -lt 3 ]]; then
+        bar_fill=3
     fi
 
-    # Draw top border
-    echo -e "${DIM}${BOX_TL}$(draw_hline "$BOX_H" $INNER_WIDTH)${BOX_TR}${RESET}"
-
-    # Draw content line with colors
-    local line_color="$color"
-    if [[ "$header_type" == "rebuttal" ]]; then
-        # Yellow for rebuttal
-        echo -ne "${DIM}${BOX_V}${RESET}  ${color}${emoji} ${provider_upper}${RESET} ${YELLOW}REBUTTAL${RESET}"
-        local rebuttal_left="${emoji} ${provider_upper} REBUTTAL"
-        local rebuttal_padding=$((INNER_WIDTH - ${#rebuttal_left} - 4 - 1))  # -1 for emoji width
-        printf "%${rebuttal_padding}s" ""
-        echo -e "  ${DIM}${BOX_V}${RESET}"
-    else
-        echo -ne "${DIM}${BOX_V}${RESET}  ${color}${left_content}${RESET}"
-        printf "%${padding}s" ""
-        echo -e "${ITALIC}${LIGHT_YELLOW}${right_content}${RESET}   ${DIM}${BOX_V}${RESET}"
-    fi
-
-    # Draw bottom border
-    echo -e "${DIM}${BOX_BL}$(draw_hline "$BOX_H" $INNER_WIDTH)${BOX_BR}${RESET}"
+    # Draw minimal bar header
+    echo -e "${DIM}━━━${RESET} ${color}${emoji} ${left_content}${RESET} ${DIM}$(draw_hline "━" $bar_fill)${RESET} ${ITALIC}${LIGHT_YELLOW}${right_content}${RESET}"
 }
 
 # Draw synthesis header
 draw_synthesis_header() {
-    echo -e "${DIM}${BOX_TL}$(draw_hline "$BOX_H" $INNER_WIDTH)${BOX_TR}${RESET}"
-    local content="⚡ SYNTHESIS"
-    local padding=$((INNER_WIDTH - ${#content} - 4 - 1))  # -1 for emoji width
-    echo -ne "${DIM}${BOX_V}${RESET}  ${CYAN}${BOLD}${content}${RESET}"
-    printf "%${padding}s" ""
-    echo -e "  ${DIM}${BOX_V}${RESET}"
-    echo -e "${DIM}${BOX_BL}$(draw_hline "$BOX_H" $INNER_WIDTH)${BOX_BR}${RESET}"
+    local bar_fill=$((BOX_WIDTH - 14))  # 14 = "⚡ SYNTHESIS" + spaces
+    echo -e "${DIM}━━━${RESET} ${CYAN}${BOLD}⚡ SYNTHESIS${RESET} ${DIM}$(draw_hline "━" $bar_fill)${RESET}"
 }
 
 # Format and display JSON council output
