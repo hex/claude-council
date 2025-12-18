@@ -1,60 +1,29 @@
 ---
-description: Use this skill when executing council queries to display provider responses in text (not truncated terminal output)
+description: Use this skill when executing council queries
 ---
 
 # Council Query Execution
 
-When running council queries, follow these rules to ensure responses are visible.
+## Run the Query
 
-## Step 1: Run Query and Save to File
-
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Your question" > /tmp/council.json 2>/dev/null
-```
-
-**IMPORTANT flag syntax**: Use `=` with no spaces:
-- Correct: `--providers=gemini,openai`
-- Wrong: `--providers gemini,openai`
-
-## Step 2: Extract Responses
-
-Extract each provider's response:
+Execute with a single command:
 
 ```bash
-jq -r '.round1.gemini.response' /tmp/council.json
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Your question" 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh
 ```
 
-```bash
-jq -r '.round1.openai.response' /tmp/council.json
-```
+**Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 
-Get model names:
-```bash
-jq -r '.round1.gemini.model' /tmp/council.json
-jq -r '.round1.openai.model' /tmp/council.json
-```
+## After Output
 
-## Step 3: Display in Your Response
+The terminal output may be truncated (shows "+N lines ctrl+o to expand"). Tell the user:
 
-Write the responses in your message with bar-style headers:
+> Press **ctrl+o** to expand and see full provider responses.
 
-```
-━━━ 🔵 GEMINI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ model-name
-
-[gemini response]
-
-━━━ ⚪ OPENAI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ model-name
-
-[openai response]
-
-━━━ ⚡ SYNTHESIS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[your synthesis]
-```
-
-## Why This Approach
-
-Claude Code's UI truncates long bash outputs. By extracting responses and writing them in your text output, the full content is visible.
+Then generate your synthesis with:
+- **Consensus**: Where providers agree
+- **Divergence**: Where they disagree
+- **Recommendation**: Best approach
 
 ## Provider Emojis
 
