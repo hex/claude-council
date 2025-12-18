@@ -316,3 +316,35 @@ bash scripts/check-status.sh
 
 - `curl` and `jq` for API calls
 - Valid API keys for desired providers
+
+## Development
+
+### Versioning
+
+Bump version in `.claude-plugin/plugin.json` on every release:
+
+```json
+{
+  "version": "YYYY.MM.RELEASE"
+}
+```
+
+Format: `YYYY.MM.RELEASE` where RELEASE is an incrementing number starting at 1 each month. Examples: `2025.12.1`, `2025.12.2`, `2025.12.20`.
+
+**Always bump version when:**
+- Changing command behavior
+- Fixing bugs
+- Updating formatting/output
+- Any change users should pull
+
+### Testing
+
+See `TESTING.md` for manual test procedures.
+
+### Release Checklist
+
+1. Make changes
+2. Test locally
+3. Bump version in `.claude-plugin/plugin.json`
+4. Commit and push
+5. Users update via `/plugin update claude-council`
