@@ -117,6 +117,9 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 
 # Export response to markdown file
 /claude-council:ask --output=docs/auth-decision.md "How should we implement authentication?"
+
+# Quiet mode - show only synthesis
+/claude-council:ask --quiet "What's the best caching strategy?"
 ```
 
 ### Export to File
@@ -136,6 +139,16 @@ Great for:
 - Documenting architectural decisions
 - Sharing with team members who aren't using Claude
 - Creating an audit trail of AI-assisted decisions
+
+### Quiet Mode
+
+Get just the bottom line without individual provider responses:
+
+```bash
+/claude-council:ask --quiet "Should I use Redis or Memcached?"
+```
+
+Quiet mode still queries all providers and analyzes their responses, but only shows the synthesis with consensus/divergence analysis. Use when you want a quick answer without scrolling through multiple perspectives.
 
 ### Proactive Agent
 
