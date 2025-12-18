@@ -1,51 +1,64 @@
 ---
-description: Use this skill when executing council queries to ensure correct bash pipeline and verbatim output display
+description: Use this skill when executing council queries to display provider responses in text (not truncated terminal output)
 ---
 
 # Council Query Execution
 
-When running council queries, follow these rules exactly.
+When running council queries, follow these rules to ensure responses are visible (not truncated by Claude Code's UI).
 
-## The Pipeline
-
-ALWAYS use this exact command:
+## Step 1: Run Query and Capture JSON
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh $ARGUMENTS 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh
+JSON=$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh $ARGUMENTS 2>/dev/null)
+echo "$JSON" | jq -r '.round1 | keys[]'
 ```
 
-Where `$ARGUMENTS` includes the user's question and any flags.
+This returns the JSON and lists which providers responded.
 
-## Output Rules
+## Step 2: Extract and Display Each Response
 
-1. **Show output VERBATIM** - Display the exact terminal output without reformatting, summarizing, or recreating
-2. **Provider responses come first** - Each provider's response appears with a bar header
-3. **Synthesis header appears last** - The `SYNTHESIS` header marks where you add your analysis
+For each provider, extract and display their response IN YOUR TEXT OUTPUT (not bash):
 
-## Header Format
+```bash
+echo "$JSON" | jq -r '.round1.gemini.response'
+echo "$JSON" | jq -r '.round1.openai.response'
+```
 
-The formatter outputs bar-style headers:
+## Step 3: Format in Your Response
+
+Display each provider's response with bar-style headers in your message text:
 
 ```
 ━━━ 🔵 GEMINI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ gemini-3-flash-preview
-[provider response here]
+
+[paste gemini response here]
 
 ━━━ ⚪ OPENAI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ codex-mini-latest
-[provider response here]
+
+[paste openai response here]
 
 ━━━ ⚡ SYNTHESIS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[your synthesis here]
 ```
 
-## After Displaying Output
+## Why This Approach
 
-Only AFTER showing the verbatim output, generate your synthesis analyzing:
-- **Consensus**: Where providers agree
-- **Divergence**: Where they disagree and why
-- **Recommendation**: Strongest approach for the situation
+Claude Code's UI truncates long bash outputs (shows "+N lines ctrl+o to expand"). By extracting responses and displaying them in your text output, the full content is visible without expansion.
 
-## Common Mistakes to Avoid
+## Provider Colors
 
-- Do NOT capture output to a variable then echo it
-- Do NOT recreate or reformat the headers yourself
-- Do NOT summarize provider responses instead of showing them
-- Do NOT skip showing the formatted output before synthesis
+When writing headers:
+- 🔵 GEMINI (blue)
+- ⚪ OPENAI (white/gray)
+- 🔴 GROK (red)
+- ⚡ SYNTHESIS (cyan)
+
+## Getting Model Names
+
+```bash
+echo "$JSON" | jq -r '.round1.gemini.model'
+echo "$JSON" | jq -r '.round1.openai.model'
+```
+
+Include the model name in the header bar.
