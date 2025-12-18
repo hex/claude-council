@@ -1,6 +1,6 @@
 ---
 description: Query multiple AI agents for diverse perspectives on a coding problem
-argument-hint: [--file=path] [--providers=list] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
+argument-hint: [--file=path] [--providers=list] [--roles=list] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
 allowed-tools: Bash(*), Read, Glob, Grep, AskUserQuestion
 ---
 
@@ -13,6 +13,8 @@ Usage:
   /claude-council:ask --quiet "What's the best caching strategy?"
   /claude-council:ask --no-cache "What's new in React 19?"
   /claude-council:ask --no-auto-context "General question about design patterns"
+  /claude-council:ask --roles=security,performance,maintainability "Review this auth code"
+  /claude-council:ask --roles=balanced "Review this implementation"
 -->
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -113,6 +115,49 @@ Before querying, gather relevant context:
    - No relevant files found
    - Question doesn't reference code concepts
 
+### Specialized Roles
+
+If `--roles=list` is specified, assign each provider a specialized persona:
+
+**Available roles** (from `config/roles.json`):
+- `security`: Security Auditor - focuses on vulnerabilities, OWASP Top 10
+- `performance`: Performance Optimizer - focuses on efficiency, bottlenecks
+- `maintainability`: Maintainability Advocate - focuses on code clarity, future changes
+- `devil`: Devil's Advocate - challenges assumptions, argues alternatives
+- `simplicity`: Simplicity Champion - identifies over-engineering
+- `scalability`: Scalability Architect - focuses on growth and scaling
+- `dx`: Developer Experience - focuses on API ergonomics, debugging ease
+- `compliance`: Compliance Officer - focuses on GDPR, regulations
+
+**Presets** (shorthand for common role combinations):
+- `balanced`: security, performance, maintainability
+- `security-focused`: security, devil, compliance
+- `architecture`: scalability, maintainability, simplicity
+- `review`: security, maintainability, dx
+
+**Role assignment**:
+- Roles are assigned to providers in order (first role → first provider, etc.)
+- If fewer roles than providers, extra providers use no role
+- If more roles than providers, extra roles are ignored
+
+**Prompt modification**:
+When roles are assigned, prepend the role persona to each provider's prompt:
+```
+[ROLE: Security Auditor]
+You are a security-focused code reviewer. Prioritize identifying vulnerabilities...
+
+[USER QUESTION]
+{original prompt}
+```
+
+**Show assigned roles** before querying:
+```
+Provider roles:
+  - Gemini: Security Auditor
+  - OpenAI: Performance Optimizer
+  - Grok: Maintainability Advocate
+```
+
 ## Query Execution
 
 Parse arguments from: $ARGUMENTS
@@ -120,6 +165,7 @@ Parse arguments from: $ARGUMENTS
 Supported flags:
 - `--file=path`: Include contents of specified file in the query
 - `--providers=list`: Comma-separated list of providers to query (default: all)
+- `--roles=list`: Assign specialized roles to providers (e.g., `security,performance,maintainability` or preset like `balanced`)
 - `--output=path`: Export formatted response to markdown file (e.g., `--output=docs/decision.md`)
 - `--quiet` or `-q`: Show only synthesis, hide individual provider responses
 - `--no-cache`: Skip cache and force fresh queries from all providers
