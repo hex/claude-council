@@ -4,19 +4,35 @@
 
 set -euo pipefail
 
-# Colors
-BLUE='\033[34m'
-WHITE='\033[37m'
-RED='\033[31m'
-GREEN='\033[32m'
-CYAN='\033[36m'
-YELLOW='\033[33m'
-LIGHT_YELLOW='\033[93m'
-LIGHT_PINK='\033[38;5;218m'
-DIM='\033[2m'
-BOLD='\033[1m'
-ITALIC='\033[3m'
-RESET='\033[0m'
+# Colors (only if output is a terminal)
+if [[ -t 1 ]]; then
+    BLUE='\033[34m'
+    WHITE='\033[37m'
+    RED='\033[31m'
+    GREEN='\033[32m'
+    CYAN='\033[36m'
+    YELLOW='\033[33m'
+    LIGHT_YELLOW='\033[93m'
+    LIGHT_PINK='\033[38;5;218m'
+    DIM='\033[2m'
+    BOLD='\033[1m'
+    ITALIC='\033[3m'
+    RESET='\033[0m'
+else
+    # No colors when redirected to file
+    BLUE=''
+    WHITE=''
+    RED=''
+    GREEN=''
+    CYAN=''
+    YELLOW=''
+    LIGHT_YELLOW=''
+    LIGHT_PINK=''
+    DIM=''
+    BOLD=''
+    ITALIC=''
+    RESET=''
+fi
 
 # Box drawing characters (Unicode)
 BOX_TL='╔'
