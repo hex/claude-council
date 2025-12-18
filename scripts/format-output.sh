@@ -12,6 +12,7 @@ GREEN='\033[32m'
 CYAN='\033[36m'
 YELLOW='\033[33m'
 LIGHT_YELLOW='\033[93m'
+LIGHT_PINK='\033[38;5;218m'
 DIM='\033[2m'
 BOLD='\033[1m'
 ITALIC='\033[3m'
@@ -94,13 +95,13 @@ draw_header() {
     fi
 
     # Draw minimal bar header
-    echo -e "${DIM}━━━${RESET} ${color}${emoji} ${left_content}${RESET} ${DIM}$(draw_hline "━" $bar_fill)${RESET} ${ITALIC}${LIGHT_YELLOW}${right_content}${RESET}"
+    echo -e "${LIGHT_PINK}━━━${RESET} ${color}${emoji} ${left_content}${RESET} ${LIGHT_PINK}$(draw_hline "━" $bar_fill)${RESET} ${ITALIC}${LIGHT_YELLOW}${right_content}${RESET}"
 }
 
 # Draw synthesis header
 draw_synthesis_header() {
     local bar_fill=$((BOX_WIDTH - 14))  # 14 = "⚡ SYNTHESIS" + spaces
-    echo -e "${DIM}━━━${RESET} ${CYAN}${BOLD}⚡ SYNTHESIS${RESET} ${DIM}$(draw_hline "━" $bar_fill)${RESET}"
+    echo -e "${LIGHT_PINK}━━━${RESET} ${CYAN}${BOLD}⚡ SYNTHESIS${RESET} ${LIGHT_PINK}$(draw_hline "━" $bar_fill)${RESET}"
 }
 
 # Format and display JSON council output
