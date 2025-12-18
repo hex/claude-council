@@ -11,8 +11,27 @@ A Claude Code plugin that consults multiple AI coding agents to get diverse pers
 
 ## Installation
 
+### From Marketplace (Recommended)
+
 ```bash
-# Clone or copy to your plugins directory
+# Add the hex-plugins marketplace
+/plugin marketplace add hex/claude-marketplace
+
+# Install claude-council
+/plugin install claude-council
+```
+
+### Direct from GitHub
+
+```bash
+/plugin install hex/claude-council
+```
+
+### Manual
+
+```bash
+# Clone to your plugins directory
+git clone https://github.com/hex/claude-council.git
 claude --plugin-dir /path/to/claude-council
 ```
 
