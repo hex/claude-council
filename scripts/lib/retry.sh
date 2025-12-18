@@ -5,6 +5,7 @@
 # Configuration via environment variables
 COUNCIL_MAX_RETRIES="${COUNCIL_MAX_RETRIES:-3}"
 COUNCIL_RETRY_DELAY="${COUNCIL_RETRY_DELAY:-1}"
+COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-60}"  # seconds per request
 
 # HTTP status codes that should trigger a retry
 is_retryable_status() {
@@ -13,6 +14,13 @@ is_retryable_status() {
         429|500|502|503|504) return 0 ;;  # Retryable
         *) return 1 ;;  # Not retryable
     esac
+}
+
+# Check if curl exit code indicates timeout
+is_timeout_error() {
+    local exit_code="$1"
+    # curl exit 28 = operation timeout
+    [[ "$exit_code" -eq 28 ]]
 }
 
 # Perform curl with retry logic
@@ -28,12 +36,20 @@ curl_with_retry() {
     temp_file=$(mktemp)
 
     while [[ $attempt -le $COUNCIL_MAX_RETRIES ]]; do
-        # Make request, capture HTTP status code separately
-        http_code=$(curl -s -w "%{http_code}" -o "$temp_file" "$@")
+        # Make request with timeout, capture HTTP status code separately
+        http_code=$(curl -s --max-time "$COUNCIL_TIMEOUT" -w "%{http_code}" -o "$temp_file" "$@")
         curl_exit=$?
         response=$(cat "$temp_file")
 
-        # Check for curl errors (network issues, DNS, timeout)
+        # Check for timeout (curl exit 28) - don't retry, fail fast
+        if is_timeout_error "$curl_exit"; then
+            [[ -n "$DEBUG" ]] && echo "=== TIMEOUT: Request exceeded ${COUNCIL_TIMEOUT}s ===" >&2
+            rm -f "$temp_file"
+            echo '{"error": {"message": "Request timed out after '"$COUNCIL_TIMEOUT"' seconds"}}'
+            return 28
+        fi
+
+        # Check for other curl errors (network issues, DNS)
         if [[ $curl_exit -ne 0 ]]; then
             if [[ $attempt -lt $COUNCIL_MAX_RETRIES ]]; then
                 [[ -n "$DEBUG" ]] && echo "=== RETRY: curl failed (exit $curl_exit), attempt $((attempt + 1))/$COUNCIL_MAX_RETRIES, waiting ${delay}s ===" >&2
