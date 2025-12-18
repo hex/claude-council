@@ -12,20 +12,11 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Y
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 
-## Step 2: Read and Display the Output
+## Step 2: Read and Display the Output VERBATIM
 
-Use the **Read tool** to read `/tmp/council-output.txt` and display its contents in your response.
+Use the **Read tool** to read `/tmp/council-output.txt`.
 
-The file contains formatted provider responses with headers like:
-```
-━━━ 🔵 GEMINI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ gemini-3-flash-preview
-[response text]
-
-━━━ ⚪ OPENAI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ codex-mini-latest
-[response text]
-
-━━━ ⚡ SYNTHESIS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+**Display the EXACT content** without modification. Copy the file contents directly into your response - do not interpret, summarize, or reformat. The headers and responses should appear exactly as in the file.
 
 ## Step 3: Generate Synthesis
 
