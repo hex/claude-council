@@ -1,10 +1,57 @@
 ---
 description: Query multiple AI agents for diverse perspectives on a coding problem
 argument-hint: [--file=path] [--providers=list] [--roles=list] [--debate] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
-allowed-tools: Bash(*), Read, Glob, Grep
+allowed-tools: Bash(*), Read, Glob, Grep, AskUserQuestion
 ---
 
 Query the council of AI coding agents to gather diverse perspectives.
+
+## Pre-Query Interaction
+
+Before querying, use AskUserQuestion in these scenarios:
+
+### 1. Provider Selection (if --providers not specified)
+
+First, discover available providers:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-available 2>&1 | head -1
+```
+
+**Only show available providers in the question.** If only 1 provider is available, skip and use it directly.
+
+Example (if Gemini and OpenAI available):
+```
+Question: "Which AI providers should I consult?"
+Header: "Providers"
+Options (multiSelect: true):
+  - Gemini (gemini-3-flash-preview) - Google's fast reasoning model
+  - OpenAI (codex-mini-latest) - OpenAI's code-focused model
+```
+
+### 2. Clarify Ambiguous Questions
+
+If the question is vague or could be interpreted multiple ways, ask for clarification.
+
+Signs of ambiguity:
+- Question lacks specific context (e.g., "What's the best approach?")
+- Multiple valid interpretations exist
+- Missing key details (language, framework, scale, constraints)
+
+Example:
+```
+Question: "What aspect should I focus the council's attention on?"
+Header: "Focus"
+Options:
+  - Architecture & design patterns
+  - Performance optimization
+  - Security considerations
+  - Code quality & maintainability
+```
+
+**Skip these interactions if:**
+- User provided `--providers` flag
+- Question is specific and clear
+- Context from conversation already clarifies intent
 
 ## Step 1: Auto-Context Detection
 
