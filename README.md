@@ -62,11 +62,11 @@ export GROK_MODEL="grok-4-1-fast-reasoning-latest"
 
 ### Response Length
 
-Control max tokens per response (default: 4096):
+Control max tokens per response (default: 2048):
 
 ```bash
-export COUNCIL_MAX_TOKENS=8192  # longer responses
-export COUNCIL_MAX_TOKENS=2048  # shorter, faster responses
+export COUNCIL_MAX_TOKENS=4096  # longer responses
+export COUNCIL_MAX_TOKENS=1024  # shorter, faster responses
 ```
 
 #### OpenAI Reasoning Models
@@ -75,8 +75,8 @@ For OpenAI reasoning models (`codex-*`, `o3-*`, `o4-*`), the token limit is auto
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
-| Standard (gpt-5.2) | 4096 (default) | 4096 |
-| Reasoning (codex-mini-latest) | 4096 (default) | 32768 |
+| Standard (gpt-5.2) | 2048 (default) | 2048 |
+| Reasoning (codex-mini-latest) | 2048 (default) | 32768 |
 | Reasoning (codex-mini-latest) | 8192 | 65536 |
 
 Control reasoning effort to balance speed vs thoroughness:
