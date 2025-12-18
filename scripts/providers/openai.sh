@@ -4,6 +4,10 @@
 
 set -euo pipefail
 
+# Source shared retry library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/retry.sh"
+
 # Debug mode: set COUNCIL_DEBUG=1 to see request/response details
 DEBUG="${COUNCIL_DEBUG:-}"
 
@@ -59,7 +63,7 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == o3-* ]] || [[ "$MODEL" == o4-* ]]
         echo "Reasoning effort: $EFFORT" >&2
     fi
 
-    RESPONSE=$(curl -s -X POST "$ENDPOINT" \
+    RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${API_KEY}" \
         -d "$PAYLOAD")
@@ -102,7 +106,7 @@ else
         max_completion_tokens: $tokens
     }')
 
-    RESPONSE=$(curl -s -X POST "$ENDPOINT" \
+    RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${API_KEY}" \
         -d "$PAYLOAD")

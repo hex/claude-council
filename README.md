@@ -89,6 +89,15 @@ export OPENAI_REASONING_EFFORT="high"    # thorough reasoning, slower
 
 Gemini and Grok handle reasoning/thinking tokens separately, so they use the base limit directly.
 
+### Retry Configuration
+
+Automatic retry on transient failures (429 rate limits, 5xx server errors):
+
+```bash
+export COUNCIL_MAX_RETRIES=3    # default: 3 retries
+export COUNCIL_RETRY_DELAY=1    # default: 1 second initial delay (doubles each retry)
+```
+
 ## Usage
 
 ### Slash Command

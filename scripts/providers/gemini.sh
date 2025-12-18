@@ -4,6 +4,13 @@
 
 set -euo pipefail
 
+# Source shared retry library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/retry.sh"
+
+# Debug mode
+DEBUG="${COUNCIL_DEBUG:-}"
+
 PROMPT="${1:-}"
 
 if [[ -z "$PROMPT" ]]; then
@@ -49,7 +56,7 @@ PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "
 }')
 
 # Make API call
-RESPONSE=$(curl -s -X POST \
+RESPONSE=$(curl_with_retry -s -X POST \
     "${ENDPOINT}?key=${API_KEY}" \
     -H "Content-Type: application/json" \
     -d "$PAYLOAD")
