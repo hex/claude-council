@@ -87,9 +87,11 @@ draw_header() {
 
     # Calculate padding
     # Total inner = 78, subtract 4 for margins around content
+    # Emojis display as 2 columns but count as 1 char, so add 1 per emoji
     local left_len=${#left_content}
     local right_len=${#right_content}
-    local padding=$((INNER_WIDTH - left_len - right_len - 4))
+    local emoji_adjustment=1  # Account for emoji double-width display
+    local padding=$((INNER_WIDTH - left_len - right_len - 4 - emoji_adjustment))
     if [[ $padding -lt 1 ]]; then
         padding=1
     fi
@@ -103,7 +105,7 @@ draw_header() {
         # Yellow for rebuttal
         echo -ne "${DIM}${BOX_V}${RESET}  ${color}${emoji} ${provider_upper}${RESET} ${YELLOW}REBUTTAL${RESET}"
         local rebuttal_left="${emoji} ${provider_upper} REBUTTAL"
-        local rebuttal_padding=$((INNER_WIDTH - ${#rebuttal_left} - 4))
+        local rebuttal_padding=$((INNER_WIDTH - ${#rebuttal_left} - 4 - 1))  # -1 for emoji width
         printf "%${rebuttal_padding}s" ""
         echo -e "  ${DIM}${BOX_V}${RESET}"
     else
@@ -120,7 +122,7 @@ draw_header() {
 draw_synthesis_header() {
     echo -e "${DIM}${BOX_TL}$(draw_hline "$BOX_H" $INNER_WIDTH)${BOX_TR}${RESET}"
     local content="⚡ SYNTHESIS"
-    local padding=$((INNER_WIDTH - ${#content} - 4))
+    local padding=$((INNER_WIDTH - ${#content} - 4 - 1))  # -1 for emoji width
     echo -ne "${DIM}${BOX_V}${RESET}  ${CYAN}${BOLD}${content}${RESET}"
     printf "%${padding}s" ""
     echo -e "  ${DIM}${BOX_V}${RESET}"
