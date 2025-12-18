@@ -197,6 +197,36 @@ Auto-context limits:
 - Maximum ~10,000 tokens of context
 - Skipped if you provide `--file=` explicitly
 
+### Specialized Roles
+
+Assign different perspectives to each provider for more comprehensive reviews:
+
+```bash
+# Use specific roles
+/claude-council:ask --roles=security,performance,maintainability "Review this auth code"
+
+# Use a preset
+/claude-council:ask --roles=balanced "Review this implementation"
+```
+
+**Available roles:**
+- `security` - Security Auditor (vulnerabilities, OWASP Top 10)
+- `performance` - Performance Optimizer (efficiency, bottlenecks)
+- `maintainability` - Maintainability Advocate (clarity, future changes)
+- `devil` - Devil's Advocate (challenges assumptions)
+- `simplicity` - Simplicity Champion (identifies over-engineering)
+- `scalability` - Scalability Architect (growth, scaling)
+- `dx` - Developer Experience (API ergonomics)
+- `compliance` - Compliance Officer (GDPR, regulations)
+
+**Presets:**
+- `balanced` - security, performance, maintainability
+- `security-focused` - security, devil, compliance
+- `architecture` - scalability, maintainability, simplicity
+- `review` - security, maintainability, dx
+
+Roles are assigned to providers in order, ensuring each provider approaches the question from a different angle.
+
 ### Proactive Agent
 
 The `council-advisor` agent will suggest consulting the council when:
