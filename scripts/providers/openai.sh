@@ -29,7 +29,7 @@ fi
 MODEL="${OPENAI_MODEL:-codex-mini-latest}"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var)
-BASE_TOKENS="${COUNCIL_MAX_TOKENS:-4096}"
+BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 
 # Determine which API to use based on model
 # Models requiring v1/responses: codex-*, o3-*, o4-*
