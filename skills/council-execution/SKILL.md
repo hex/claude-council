@@ -38,7 +38,7 @@ The file ends with a `## Synthesis` header. Write your synthesis UNDER that head
 After displaying the synthesis, tell the user:
 
 > ---
-> 💾 Full output saved to `.claude/council-cache/council-TIMESTAMP.md` (use the actual filename)
+> (use this emoji 💾) Full output saved to `.claude/council-cache/council-TIMESTAMP.md` (use the actual filename)
 
 This lets them review the complete responses later.
 
