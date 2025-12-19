@@ -18,11 +18,17 @@ This outputs the path to the saved file (e.g., `.claude/council-cache/council-17
 
 Use the **Read tool** to read the output file path returned by Step 1.
 
-**Display the EXACT content** without modification. Copy the file contents directly into your response - do not interpret, summarize, or reformat. The headers and responses should appear exactly as in the file.
+**CRITICAL**: Display the file content EXACTLY as written. Do NOT:
+- Reformat or reinterpret any text
+- Add your own headers or structure
+- Summarize or abbreviate responses
+- Skip any lines including separator lines (`---`)
 
-## Step 3: Generate Synthesis
+Simply copy-paste the entire file content into your response.
 
-After displaying the provider responses, write your synthesis:
+## Step 3: Complete the Synthesis Section
+
+The file ends with a `## Synthesis` header. Write your synthesis UNDER that header:
 - **Consensus**: Where providers agree
 - **Divergence**: Where they disagree
 - **Recommendation**: Best approach
@@ -31,7 +37,8 @@ After displaying the provider responses, write your synthesis:
 
 After displaying the synthesis, tell the user:
 
-> Full output saved to `.claude/council-cache/council-TIMESTAMP.md` (use the actual filename)
+> ---
+> 💾 Full output saved to `.claude/council-cache/council-TIMESTAMP.md` (use the actual filename)
 
 This lets them review the complete responses later.
 
