@@ -4,7 +4,7 @@ A Claude Code plugin that consults multiple AI coding agents to get diverse pers
 
 ## Features
 
-- Query Gemini, OpenAI (GPT/Codex), and Grok simultaneously
+- Query Gemini, OpenAI (GPT/Codex), Grok, and Perplexity simultaneously
 - Side-by-side comparison of responses
 - Extensible provider system - add new AI agents easily
 - Proactive suggestions for architecture decisions and debugging
@@ -45,6 +45,7 @@ Set environment variables (recommended):
 export GEMINI_API_KEY="your-key"
 export OPENAI_API_KEY="your-key"
 export GROK_API_KEY="your-key"
+export PERPLEXITY_API_KEY="your-key"
 ```
 
 Or create `.claude/claude-council.local.md` in your project:
@@ -58,6 +59,8 @@ providers:
     api_key: "your-key"
   grok:
     api_key: "your-key"
+  perplexity:
+    api_key: "your-key"
 ---
 ```
 
@@ -69,6 +72,7 @@ Override default models via environment variables:
 export GEMINI_MODEL="gemini-3-flash-preview"       # default
 export OPENAI_MODEL="codex-mini-latest"            # default
 export GROK_MODEL="grok-4-1-fast-reasoning"        # default
+export PERPLEXITY_MODEL="sonar-pro"                # default (search-augmented)
 ```
 
 Use more powerful models for complex queries:
@@ -77,6 +81,7 @@ Use more powerful models for complex queries:
 export GEMINI_MODEL="gemini-3-pro-preview"
 export OPENAI_MODEL="gpt-5.2"
 export GROK_MODEL="grok-4-1-fast-reasoning-latest"
+export PERPLEXITY_MODEL="sonar-reasoning-pro"      # with chain-of-thought
 ```
 
 ### Response Length
@@ -107,6 +112,23 @@ export OPENAI_REASONING_EFFORT="high"    # thorough reasoning, slower
 ```
 
 Gemini and Grok handle reasoning/thinking tokens separately, so they use the base limit directly.
+
+#### Perplexity Search Features
+
+Perplexity's sonar models are search-augmented, providing web-grounded responses with citations:
+
+```bash
+# Filter search results by recency: day, week, month, year
+export PERPLEXITY_RECENCY="week"
+```
+
+Available models:
+- `sonar` - Fast, search-enabled
+- `sonar-pro` - More capable, search-enabled (default)
+- `sonar-reasoning` - Chain-of-thought reasoning + search
+- `sonar-reasoning-pro` - Best reasoning + search
+
+Perplexity is useful when you need current information (latest framework versions, recent best practices) rather than just training-data knowledge.
 
 ### Retry & Timeout Configuration
 
