@@ -3,6 +3,7 @@
 
 # Response cache
 .claude/council-cache/
+.claude/cache/
 
 # Issue tracker (personal)
 .beads/
