@@ -190,11 +190,12 @@ If `jq` fails to extract response:
 
 Current providers in `scripts/providers/`:
 
-| Provider | Script | API Key Variable | Model |
-|----------|--------|------------------|-------|
-| Gemini | gemini.sh | GEMINI_API_KEY | gemini-2.0-flash |
-| OpenAI | openai.sh | OPENAI_API_KEY | gpt-4o |
-| Grok | grok.sh | GROK_API_KEY | grok-3-latest |
+| Provider | Script | API Key Variable | Model | Notes |
+|----------|--------|------------------|-------|-------|
+| Gemini | gemini.sh | GEMINI_API_KEY | gemini-3-flash-preview | |
+| OpenAI | openai.sh | OPENAI_API_KEY | codex-mini-latest | Supports reasoning models |
+| Grok | grok.sh | GROK_API_KEY | grok-3-latest | |
+| Perplexity | perplexity.sh | PERPLEXITY_API_KEY | sonar-pro | Search-augmented, citations |
 
 ## Adding Popular Providers
 
@@ -225,3 +226,19 @@ Would create recursion (asking Claude about Claude), but if needed:
 # Model: command-r-plus
 # Format: Custom (see Cohere docs)
 ```
+
+## Provider-Specific Configuration
+
+### Perplexity Search Features
+
+Perplexity's sonar models are search-augmented. Configure via environment variables:
+
+```bash
+# Model options: sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro
+PERPLEXITY_MODEL=sonar-pro
+
+# Filter search results by recency: day, week, month, year
+PERPLEXITY_RECENCY=week
+```
+
+The provider automatically enables `return_citations: true` for web-grounded responses.
