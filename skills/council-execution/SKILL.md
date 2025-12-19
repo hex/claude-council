@@ -25,6 +25,14 @@ After displaying the provider responses, write your synthesis:
 - **Divergence**: Where they disagree
 - **Recommendation**: Best approach
 
+## Step 4: Notify User of Saved Output
+
+After displaying the synthesis, tell the user:
+
+> Full output saved to `.claude/cache/council-YYYYMMDD-HHMMSS.txt` (use the actual filename)
+
+This lets them review the complete responses later.
+
 ## Provider Names
 
 **ALWAYS use emoji when mentioning a provider:**
