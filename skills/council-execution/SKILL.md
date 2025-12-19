@@ -7,14 +7,14 @@ description: Use this skill when executing council queries
 ## Step 1: Run Query and Save to File
 
 ```bash
-mkdir -p .claude/cache && bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Your question" 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh > .claude/cache/council-output.txt
+mkdir -p .claude/cache && bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Your question" 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh > .claude/cache/council-$(date +%Y%m%d-%H%M%S).txt
 ```
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 
 ## Step 2: Read and Display the Output VERBATIM
 
-Use the **Read tool** to read `.claude/cache/council-output.txt`.
+Use the **Read tool** to read the output file you just created.
 
 **Display the EXACT content** without modification. Copy the file contents directly into your response - do not interpret, summarize, or reformat. The headers and responses should appear exactly as in the file.
 
