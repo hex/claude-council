@@ -16,7 +16,7 @@ usage() {
 Usage: query-council.sh [OPTIONS] <prompt>
 
 Options:
-  --providers=LIST    Comma-separated providers (gemini,openai,grok)
+  --providers=LIST    Comma-separated providers (gemini,openai,grok,perplexity)
   --roles=LIST        Assign roles to providers (security,performance,maintainability)
                       Or use preset: balanced, security-focused, architecture, review
   --debate            Enable two-round debate mode
@@ -107,6 +107,7 @@ if [[ "$LIST_AVAILABLE" == true ]]; then
     [[ -n "${GEMINI_API_KEY:-}" ]] && available+=("gemini")
     [[ -n "${OPENAI_API_KEY:-}" ]] && available+=("openai")
     [[ -n "${GROK_API_KEY:-}" ]] && available+=("grok")
+    [[ -n "${PERPLEXITY_API_KEY:-}" ]] && available+=("perplexity")
     echo "${available[*]}"
     exit 0
 fi
@@ -176,7 +177,7 @@ fi
 
 if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
     echo "Error: No providers configured. Set API keys for at least one provider." >&2
-    echo "  GEMINI_API_KEY, OPENAI_API_KEY, or GROK_API_KEY" >&2
+    echo "  GEMINI_API_KEY, OPENAI_API_KEY, GROK_API_KEY, or PERPLEXITY_API_KEY" >&2
     exit 1
 fi
 
@@ -250,30 +251,33 @@ RESET='\033[0m'
 
 provider_color() {
     case "$1" in
-        gemini)  echo -e "${BLUE}" ;;
-        openai)  echo -e "${WHITE}" ;;
-        grok)    echo -e "${RED}" ;;
-        *)       echo -e "${CYAN}" ;;
+        gemini)     echo -e "${BLUE}" ;;
+        openai)     echo -e "${WHITE}" ;;
+        grok)       echo -e "${RED}" ;;
+        perplexity) echo -e "${GREEN}" ;;
+        *)          echo -e "${CYAN}" ;;
     esac
 }
 
 # Get model name for provider (mirrors logic in provider scripts)
 get_model() {
     case "$1" in
-        gemini)  echo "${GEMINI_MODEL:-gemini-3-flash-preview}" ;;
-        openai)  echo "${OPENAI_MODEL:-codex-mini-latest}" ;;
-        grok)    echo "${GROK_MODEL:-grok-4-1-fast-reasoning}" ;;
-        *)       echo "unknown" ;;
+        gemini)     echo "${GEMINI_MODEL:-gemini-3-flash-preview}" ;;
+        openai)     echo "${OPENAI_MODEL:-codex-mini-latest}" ;;
+        grok)       echo "${GROK_MODEL:-grok-4-1-fast-reasoning}" ;;
+        perplexity) echo "${PERPLEXITY_MODEL:-sonar-pro}" ;;
+        *)          echo "unknown" ;;
     esac
 }
 
 # Get emoji for provider
 provider_emoji() {
     case "$1" in
-        gemini)  echo "🔵" ;;
-        openai)  echo "⚪" ;;
-        grok)    echo "🔴" ;;
-        *)       echo "⚫" ;;
+        gemini)     echo "🔵" ;;
+        openai)     echo "⚪" ;;
+        grok)       echo "🔴" ;;
+        perplexity) echo "🟢" ;;
+        *)          echo "⚫" ;;
     esac
 }
 
