@@ -10,7 +10,7 @@ description: Use this skill when executing council queries
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --providers=gemini,openai "Your question"
 ```
 
-This outputs the path to the saved file (e.g., `.claude/cache/council-1734567890.txt`).
+This outputs the path to the saved file (e.g., `.claude/cache/council-1734567890.md`).
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 

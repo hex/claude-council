@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Generate timestamped filename
 OUTDIR=".claude/cache"
-OUTFILE="${OUTDIR}/council-$(date +%s).txt"
+OUTFILE="${OUTDIR}/council-$(date +%s).md"
 
 # Ensure output directory exists
 mkdir -p "$OUTDIR"
