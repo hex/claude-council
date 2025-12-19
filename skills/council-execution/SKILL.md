@@ -10,7 +10,7 @@ description: Use this skill when executing council queries
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --providers=gemini,openai "Your question"
 ```
 
-This outputs the path to the saved file (e.g., `.claude/cache/council-1734567890.md`).
+This outputs the path to the saved file (e.g., `.claude/council-cache/council-1734567890.md`).
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 
@@ -31,7 +31,7 @@ After displaying the provider responses, write your synthesis:
 
 After displaying the synthesis, tell the user:
 
-> Full output saved to `.claude/cache/council-YYYYMMDD-HHMMSS.txt` (use the actual filename)
+> Full output saved to `.claude/council-cache/council-TIMESTAMP.md` (use the actual filename)
 
 This lets them review the complete responses later.
 
