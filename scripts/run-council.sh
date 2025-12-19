@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Generate timestamped filename
-OUTDIR=".claude/cache"
+OUTDIR=".claude/council-cache"
 OUTFILE="${OUTDIR}/council-$(date +%s).md"
 
 # Ensure output directory exists
