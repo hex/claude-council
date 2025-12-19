@@ -7,8 +7,10 @@ description: Use this skill when executing council queries
 ## Step 1: Run Query and Save to File
 
 ```bash
-mkdir -p .claude/cache && bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Your question" 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh > .claude/cache/council-$(date +%Y%m%d-%H%M%S).txt
+mkdir -p .claude/cache && bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Your question" 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh > ".claude/cache/council-$(date +%s).txt"
 ```
+
+The output file will be named like `council-1734567890.txt` (epoch timestamp).
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 
