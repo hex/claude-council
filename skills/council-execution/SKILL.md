@@ -7,16 +7,16 @@ description: Use this skill when executing council queries
 ## Step 1: Run Query and Save to File
 
 ```bash
-mkdir -p .claude/cache && bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --providers=gemini,openai "Your question" 2>/dev/null | bash ${CLAUDE_PLUGIN_ROOT}/scripts/format-output.sh > ".claude/cache/council-$(date +%s).txt"
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --providers=gemini,openai "Your question"
 ```
 
-The output file will be named like `council-1734567890.txt` (epoch timestamp).
+This outputs the path to the saved file (e.g., `.claude/cache/council-1734567890.txt`).
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 
 ## Step 2: Read and Display the Output VERBATIM
 
-Use the **Read tool** to read the output file you just created.
+Use the **Read tool** to read the output file path returned by Step 1.
 
 **Display the EXACT content** without modification. Copy the file contents directly into your response - do not interpret, summarize, or reformat. The headers and responses should appear exactly as in the file.
 
