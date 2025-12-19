@@ -11,7 +11,7 @@ PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{
     model: "model-name",
     messages: [{role: "user", content: $prompt}],
     temperature: 0.7,
-    max_tokens: 2048
+    max_tokens: 1024
 }')
 
 RESPONSE=$(curl -s -X POST "$ENDPOINT" \
@@ -29,7 +29,7 @@ ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-fla
 
 PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{
     contents: [{parts: [{text: $prompt}]}],
-    generationConfig: {temperature: 0.7, maxOutputTokens: 2048}
+    generationConfig: {temperature: 0.7, maxOutputTokens: 1024}
 }')
 
 RESPONSE=$(curl -s -X POST "${ENDPOINT}?key=${API_KEY}" \
@@ -46,7 +46,7 @@ ENDPOINT="https://api.anthropic.com/v1/messages"
 
 PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{
     model: "claude-sonnet-4-20250514",
-    max_tokens: 2048,
+    max_tokens: 1024,
     messages: [{role: "user", content: $prompt}]
 }')
 

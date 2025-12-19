@@ -33,7 +33,7 @@ MODEL="${PERPLEXITY_MODEL:-sonar-pro}"
 ENDPOINT="https://api.perplexity.ai/chat/completions"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var)
-TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
+TOKENS="${COUNCIL_MAX_TOKENS:-1024}"
 
 # Search recency filter: day, week, month, year (override via PERPLEXITY_RECENCY)
 # Empty means no filter (all time)
