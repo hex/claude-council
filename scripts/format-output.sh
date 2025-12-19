@@ -74,9 +74,9 @@ draw_hline() {
     printf "%${count}s" | tr ' ' "$char"
 }
 
-# Draw header bar
+# Draw header bar (ASCII for Claude compatibility)
 # Args: emoji provider_name model [role] [header_type]
-# header_type: normal, rebuttal, synthesis
+# header_type: normal, rebuttal
 draw_header() {
     local emoji="$1"
     local provider="$2"
@@ -84,36 +84,25 @@ draw_header() {
     local role="${4:-}"
     local header_type="${5:-normal}"
 
-    local color
-    color=$(provider_color "$provider")
-    local provider_upper
-    provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+    # Capitalize provider name
+    local provider_cap
+    provider_cap="$(echo "${provider:0:1}" | tr '[:lower:]' '[:upper:]')${provider:1}"
 
-    # Build left content
-    local left_content="${provider_upper}"
+    # Build header text
+    local header_text="${emoji} ${provider_cap}"
     if [[ "$header_type" == "rebuttal" ]]; then
-        left_content="${provider_upper} ${YELLOW}REBUTTAL${color}"
+        header_text="${emoji} ${provider_cap} REBUTTAL"
     fi
     if [[ -n "$role" ]] && [[ "$role" != "null" ]] && [[ "$header_type" != "rebuttal" ]]; then
-        left_content="${left_content} (${role})"
+        header_text="${header_text} (${role})"
     fi
-
-    # Build right content (model name)
-    local right_content=""
     if [[ -n "$model" ]] && [[ "$model" != "null" ]]; then
-        right_content="${model}"
+        header_text="${header_text} - ${model}"
     fi
 
-    # Calculate bar fill length
-    local left_len=${#left_content}
-    local right_len=${#right_content}
-    local bar_fill=$((BOX_WIDTH - left_len - right_len - 8))  # 8 = spaces + emoji + padding
-    if [[ $bar_fill -lt 3 ]]; then
-        bar_fill=3
-    fi
-
-    # Draw minimal bar header
-    echo -e "${LIGHT_PINK}━━━${RESET} ${color}${emoji} ${left_content}${RESET} ${LIGHT_PINK}$(draw_hline "━" $bar_fill)${RESET} ${ITALIC}${LIGHT_YELLOW}${right_content}${RESET}"
+    # Draw ASCII header
+    echo "================================================================================"
+    echo "## ${header_text}"
 }
 
 # Draw synthesis header (ASCII for Claude compatibility)
@@ -158,9 +147,7 @@ format_output() {
             local status
             status=$(echo "$json" | jq -r ".round1[\"${provider}\"].status")
 
-            echo ""
             draw_header "$emoji" "$provider" "$model" "$role" "normal"
-            echo ""
 
             if [[ "$status" == "error" ]]; then
                 local error
@@ -193,9 +180,7 @@ format_output() {
                     local status
                     status=$(echo "$json" | jq -r ".round2[\"${provider}\"].status // \"error\"")
 
-                    echo ""
                     draw_header "$emoji" "$provider" "$model" "" "rebuttal"
-                    echo ""
 
                     if [[ "$status" == "error" ]]; then
                         local error
