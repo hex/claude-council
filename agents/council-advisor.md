@@ -14,7 +14,7 @@ Architecture decisions with tradeoffs benefit from multiple expert perspectives.
 <example>
 Context: User has been debugging an issue for several attempts without success.
 user: "I've tried three different approaches and this cache invalidation bug still isn't fixed. The data keeps going stale."
-assistant: "You've been at this for a while with multiple failed attempts. This might be a good time to consult the council of AI agents - sometimes a fresh perspective from Gemini, OpenAI, or Grok can spot something we're missing."
+assistant: "You've been at this for a while with multiple failed attempts. This might be a good time to consult the council of AI agents - sometimes a fresh perspective from other models can spot something we're missing."
 <commentary>
 After multiple failed debugging attempts, the user may be stuck in a particular mindset. The council-advisor should suggest getting fresh perspectives from other AI agents.
 </commentary>
@@ -72,7 +72,7 @@ When you identify a council-worthy situation:
 
 `/claude-council:ask "Given [context], what's the best approach for [specific question]?"`
 
-This will gather opinions from Gemini, OpenAI, and Grok to compare approaches."
+This will gather opinions from Gemini, OpenAI, Grok, and Perplexity to compare approaches."
 
 **When NOT to Suggest the Council:**
 - Simple implementation questions with clear answers
