@@ -86,11 +86,11 @@ export PERPLEXITY_MODEL="sonar-reasoning-pro"      # with chain-of-thought
 
 ### Response Length
 
-Control max tokens per response (default: 2048):
+Control max tokens per response (default: 1024):
 
 ```bash
-export COUNCIL_MAX_TOKENS=4096  # longer responses
-export COUNCIL_MAX_TOKENS=1024  # shorter, faster responses
+export COUNCIL_MAX_TOKENS=2048  # longer responses
+export COUNCIL_MAX_TOKENS=512   # shorter, faster responses
 ```
 
 #### OpenAI Reasoning Models
@@ -99,9 +99,9 @@ For OpenAI reasoning models (`codex-*`, `o3-*`, `o4-*`), the token limit is auto
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
-| Standard (gpt-5.2) | 2048 (default) | 2048 |
-| Reasoning (codex-mini-latest) | 2048 (default) | 32768 |
-| Reasoning (codex-mini-latest) | 8192 | 65536 |
+| Standard (gpt-5.2) | 1024 (default) | 1024 |
+| Reasoning (codex-mini-latest) | 1024 (default) | 32768 |
+| Reasoning (codex-mini-latest) | 4096 | 32768 |
 
 Control reasoning effort to balance speed vs thoroughness:
 
