@@ -46,6 +46,15 @@ check_provider() {
                 -H "Authorization: Bearer ${api_key}" \
                 "https://api.x.ai/v1/models" 2>/dev/null || echo "000")
             ;;
+        perplexity)
+            # Perplexity has no /models endpoint; use minimal chat request
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+                -X POST \
+                -H "Authorization: Bearer ${api_key}" \
+                -H "Content-Type: application/json" \
+                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":1}' \
+                "https://api.perplexity.ai/chat/completions" 2>/dev/null || echo "000")
+            ;;
     esac
 
     end_time=$(python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || date +%s)
@@ -73,6 +82,7 @@ echo ""
 gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "GEMINI_MODEL" "gemini-3-flash-preview")
 openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "codex-mini-latest")
 grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "grok-4-1-fast-reasoning")
+perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "sonar-pro")
 
 # Format output
 format_status() {
@@ -118,6 +128,7 @@ format_status() {
 format_status "🔵" "$BLUE" "Gemini" "$gemini_status"
 format_status "⚪" "$WHITE" "OpenAI" "$openai_status"
 format_status "🔴" "$RED" "Grok" "$grok_status"
+format_status "🟢" "$GREEN" "Perplexity" "$perplexity_status"
 
 echo ""
 
@@ -126,6 +137,7 @@ available=0
 [[ "$gemini_status" == ok:* ]] && ((available++))
 [[ "$openai_status" == ok:* ]] && ((available++))
 [[ "$grok_status" == ok:* ]] && ((available++))
+[[ "$perplexity_status" == ok:* ]] && ((available++))
 
-echo -e "${DIM}${available}/3 providers available${RESET}"
+echo -e "${DIM}${available}/4 providers available${RESET}"
 echo ""
