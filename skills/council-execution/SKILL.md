@@ -31,3 +31,4 @@ After displaying the provider responses, write your synthesis:
 - 🔵 Gemini
 - ⚪ OpenAI
 - 🔴 Grok
+- 🟢 Perplexity
