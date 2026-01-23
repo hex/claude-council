@@ -226,7 +226,7 @@ query_provider() {
     # Query provider with role-injected prompt
     if response=$("$script" "$final_prompt" 2>&1); then
         jq -n --arg r "$response" --arg role "$role" \
-            '{status: "success", response: $r, role: (if $role == "" then null else $role end)}' > "$output_file"
+            '{status: "success", response: $r, cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
         # Store in cache on success
         if [[ "$USE_CACHE" == true ]]; then
             local key
@@ -235,7 +235,7 @@ query_provider() {
         fi
     else
         jq -n --arg e "$response" --arg role "$role" \
-            '{status: "error", error: $e, role: (if $role == "" then null else $role end)}' > "$output_file"
+            '{status: "error", error: $e, cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
     fi
 }
 
@@ -370,7 +370,7 @@ for provider in "${PROVIDERS[@]}"; do
     else
         echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}no response${RESET}" >&2
         ERRORS+=("$provider: No response received")
-        RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --arg m "$model" '.[$p] = {status: "error", error: "No response received", model: $m}')
+        RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --arg m "$model" '.[$p] = {status: "error", error: "No response received", model: $m, cached: false}')
     fi
 done
 
