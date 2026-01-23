@@ -24,7 +24,7 @@ Each provider is a shell script in `scripts/providers/` that:
 |----------|------------------|---------------|
 | Gemini | `GEMINI_API_KEY` | gemini-3-flash-preview |
 | OpenAI | `OPENAI_API_KEY` | codex-mini-latest |
-| Grok | `GROK_API_KEY` | grok-3-latest |
+| Grok | `GROK_API_KEY` | grok-4-1-fast-reasoning |
 | Perplexity | `PERPLEXITY_API_KEY` | sonar-pro |
 
 ## Troubleshooting
