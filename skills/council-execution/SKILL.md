@@ -44,8 +44,10 @@ This lets them review the complete responses later.
 
 ## Provider Names
 
-**ALWAYS use emoji when mentioning a provider:**
-- 🔵 Gemini
-- ⚪ OpenAI
-- 🔴 Grok
-- 🟢 Perplexity
+**ALWAYS use emoji + space when mentioning a provider:**
+- 🔵 Gemini (blue circle)
+- ⚪ OpenAI (white circle)
+- 🔴 Grok (red circle)
+- 🟢 Perplexity (green circle)
+
+Format: `🔵 Gemini` not `🔵Gemini` - always include the space.
