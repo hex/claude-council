@@ -360,6 +360,10 @@ bash scripts/check-status.sh
 
 ## Development
 
+### Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design, data flow diagrams, and component details.
+
 ### Versioning
 
 Bump version in `.claude-plugin/plugin.json` on every release:
@@ -380,7 +384,16 @@ Format: `YYYY.MM.RELEASE` where RELEASE is an incrementing number starting at 1 
 
 ### Testing
 
-See `TESTING.md` for manual test procedures.
+```bash
+# Run automated tests (requires bats-core)
+./tests/run_tests.sh
+
+# Run specific test suite
+bats tests/cache.bats
+bats tests/roles.bats
+```
+
+See `TESTING.md` for complete test documentation including manual test procedures.
 
 ### Release Checklist
 

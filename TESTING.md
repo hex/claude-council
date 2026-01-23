@@ -1,8 +1,63 @@
 # Testing Guide
 
-Manual testing procedures for claude-council features.
+Automated and manual testing procedures for claude-council features.
 
-## Prerequisites
+## Automated Tests (bats)
+
+Unit tests using the [bats](https://github.com/bats-core/bats-core) framework.
+
+### Installation
+
+```bash
+# macOS
+brew install bats-core
+
+# Ubuntu/Debian
+sudo apt install bats
+
+# Manual (any platform)
+git clone https://github.com/bats-core/bats-core.git
+cd bats-core
+./install.sh /usr/local
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+./tests/run_tests.sh
+
+# Run specific test file
+bats tests/cache.bats
+bats tests/roles.bats
+bats tests/query-council.bats
+
+# Verbose output
+bats --verbose-run tests/cache.bats
+```
+
+### Test Coverage
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `cache.bats` | 14 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
+| `roles.bats` | 26 tests | presets, validation, prompt injection, assignment |
+| `query-council.bats` | 15 tests | argument parsing, error cases, flags |
+
+### Adding Tests
+
+1. Create `tests/your_feature.bats`
+2. Load test helper: `load test_helper`
+3. Use bats syntax: `@test "description" { ... }`
+4. Run: `bats tests/your_feature.bats`
+
+---
+
+## Manual Tests
+
+Manual testing procedures for features that require API calls or Claude Code integration.
+
+### Prerequisites
 
 1. **API Keys configured** (at least one):
    ```bash
