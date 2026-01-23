@@ -239,7 +239,7 @@ claude-council/
 | `GROK_API_KEY` | - | xAI API key |
 | `PERPLEXITY_API_KEY` | - | Perplexity API key |
 | `{PROVIDER}_MODEL` | varies | Model override |
-| `COUNCIL_MAX_TOKENS` | 1024 | Max response tokens |
+| `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
 | `COUNCIL_RETRY_DELAY` | 1 | Initial retry delay (s) |
 | `COUNCIL_TIMEOUT` | 60 | Request timeout (s) |
