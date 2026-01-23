@@ -32,7 +32,7 @@ ENDPOINT="https://api.x.ai/v1/chat/completions"
 MODEL="${GROK_MODEL:-grok-4-1-fast-reasoning}"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var)
-TOKENS="${COUNCIL_MAX_TOKENS:-1024}"
+TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 
 # System instruction
 SYSTEM="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."

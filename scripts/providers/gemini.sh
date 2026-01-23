@@ -32,7 +32,7 @@ MODEL="${GEMINI_MODEL:-gemini-3-flash-preview}"
 ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var)
-TOKENS="${COUNCIL_MAX_TOKENS:-1024}"
+TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 
 # System instruction
 SYSTEM="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
