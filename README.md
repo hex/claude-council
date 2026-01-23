@@ -370,11 +370,11 @@ Bump version in `.claude-plugin/plugin.json` on every release:
 
 ```json
 {
-  "version": "YYYY.MM.RELEASE"
+  "version": "YYYY.M.PATCH"
 }
 ```
 
-Format: `YYYY.MM.RELEASE` where RELEASE is an incrementing number starting at 1 each month. Examples: `2025.12.1`, `2025.12.2`, `2025.12.20`.
+Format: `YYYY.M.PATCH` where PATCH increments with each release. Examples: `2026.1.1`, `2026.1.2`, `2026.2.1`.
 
 **Always bump version when:**
 - Changing command behavior
