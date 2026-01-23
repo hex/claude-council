@@ -16,12 +16,14 @@ usage() {
 Usage: query-council.sh [OPTIONS] <prompt>
 
 Options:
-  --providers=LIST    Comma-separated providers (gemini,openai,grok,perplexity)
-  --roles=LIST        Assign roles to providers (security,performance,maintainability)
+  --providers LIST    Comma-separated providers (gemini,openai,grok,perplexity)
+  --roles LIST        Assign roles to providers (security,performance,maintainability)
                       Or use preset: balanced, security-focused, architecture, review
   --debate            Enable two-round debate mode
-  --file=PATH         Include file contents in query context
-  --output=PATH       Export destination (passed in metadata for caller)
+  --file PATH         Include file contents in query context
+  --output PATH       Export destination (passed in metadata for caller)
+
+Note: Flags accept both --flag=value and --flag value formats.
   --quiet, -q         Suppress individual responses (passed in metadata)
   --no-cache          Skip cache, force fresh queries
   --no-auto-context   Disable auto file detection (passed in metadata)
@@ -50,9 +52,17 @@ while [[ $# -gt 0 ]]; do
             FILTER_PROVIDERS="${1#*=}"
             shift
             ;;
+        --providers)
+            FILTER_PROVIDERS="$2"
+            shift 2
+            ;;
         --roles=*)
             ROLES="${1#*=}"
             shift
+            ;;
+        --roles)
+            ROLES="$2"
+            shift 2
             ;;
         --debate)
             DEBATE_MODE=true
@@ -62,9 +72,17 @@ while [[ $# -gt 0 ]]; do
             FILE_PATH="${1#*=}"
             shift
             ;;
+        --file)
+            FILE_PATH="$2"
+            shift 2
+            ;;
         --output=*)
             OUTPUT_PATH="${1#*=}"
             shift
+            ;;
+        --output)
+            OUTPUT_PATH="$2"
+            shift 2
             ;;
         --quiet|-q)
             QUIET_MODE=true

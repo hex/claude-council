@@ -1,10 +1,31 @@
 ---
 description: Query multiple AI agents for diverse perspectives on a coding problem
 argument-hint: [--file=path] [--providers=list] [--roles=list] [--debate] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
-allowed-tools: Bash(*), Read, Glob, Grep, AskUserQuestion
+allowed-tools: Bash(*), Read, Glob, Grep, AskUserQuestion, TaskCreate, TaskUpdate
 ---
 
 Query the council of AI coding agents to gather diverse perspectives.
+
+## Progress Tracking
+
+Create a task at the start to show progress throughout the query:
+
+```
+TaskCreate:
+  subject: "Query council"
+  description: "Querying AI providers for diverse perspectives"
+  activeForm: "Preparing council query..."
+
+TaskUpdate: status → in_progress
+```
+
+Update `activeForm` as you progress through phases:
+- `"Gathering context..."` - during auto-context detection
+- `"Querying council providers..."` - during query-council.sh execution
+- `"Formatting responses..."` - during format-output.sh execution
+- `"Synthesizing recommendations..."` - during synthesis generation
+
+Mark `status → completed` when finished.
 
 ## Pre-Query Interaction
 
@@ -52,6 +73,11 @@ Skip auto-context if:
 - Question doesn't reference code concepts
 
 ## Step 2: Execute and Display
+
+**CRITICAL - Flag Syntax**: All script flags use `=` with NO spaces:
+- CORRECT: `--providers=gemini,openai`
+- WRONG: `--providers "gemini,openai"`
+- WRONG: `--providers gemini,openai`
 
 **Invoke the `council-execution` skill** and follow its instructions to run the query pipeline and display output.
 
