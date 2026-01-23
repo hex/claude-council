@@ -74,7 +74,7 @@ draw_hline() {
     printf "%${count}s" | tr ' ' "$char"
 }
 
-# Draw header bar (ASCII for Claude compatibility)
+# Draw header bar (markdown compatible)
 # Args: emoji provider_name model [role] [header_type]
 # header_type: normal, rebuttal
 draw_header() {
@@ -100,14 +100,16 @@ draw_header() {
         header_text="${header_text} - ${model}"
     fi
 
-    # Draw ASCII header
-    echo "================================================================================"
+    # Draw markdown header
+    echo ""
+    echo "---"
     echo "## ${header_text}"
 }
 
-# Draw synthesis header (ASCII for Claude compatibility)
+# Draw synthesis header (markdown compatible)
 draw_synthesis_header() {
-    echo "================================================================================"
+    echo ""
+    echo "---"
     echo "## Synthesis"
 }
 
