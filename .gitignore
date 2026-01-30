@@ -1,6 +1,9 @@
 # Local settings with API keys
 .claude/*.local.md
 
+# Local commands (dev workflows)
+.claude/commands/
+
 # Response cache
 .claude/council-cache/
 
