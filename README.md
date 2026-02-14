@@ -70,7 +70,7 @@ Override default models via environment variables:
 
 ```bash
 export GEMINI_MODEL="gemini-3-flash-preview"       # default
-export OPENAI_MODEL="codex-mini-latest"            # default
+export OPENAI_MODEL="gpt-5.2-codex"                 # default
 export GROK_MODEL="grok-4-1-fast-reasoning"        # default
 export PERPLEXITY_MODEL="sonar-pro"                # default (search-augmented)
 ```
@@ -95,13 +95,13 @@ export COUNCIL_MAX_TOKENS=1024  # shorter, faster responses
 
 #### OpenAI Reasoning Models
 
-For OpenAI reasoning models (`codex-*`, `o3-*`, `o4-*`), the token limit is automatically increased to 8x the base value (minimum 32768). This is because these models combine reasoning tokens and output tokens into a single `max_output_tokens` limit.
+For OpenAI reasoning models (`codex-*`, `*-codex`, `o3-*`, `o4-*`), the token limit is automatically increased to 8x the base value (minimum 32768). This is because these models combine reasoning tokens and output tokens into a single `max_output_tokens` limit.
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
 | Standard (gpt-5.2) | 2048 (default) | 2048 |
-| Reasoning (codex-mini-latest) | 2048 (default) | 32768 |
-| Reasoning (codex-mini-latest) | 4096 | 32768 |
+| Reasoning (gpt-5.2-codex) | 2048 (default) | 32768 |
+| Reasoning (gpt-5.2-codex) | 4096 | 32768 |
 
 Control reasoning effort to balance speed vs thoroughness:
 
@@ -323,13 +323,13 @@ Use the scripts directly without Claude Code (for automation, CI, or debugging):
 
 ```bash
 # Basic query - returns JSON
-bash scripts/query-council.sh "What is dependency injection?"
+bash scripts/query-council.sh -- "What is dependency injection?"
 
 # With flags
-bash scripts/query-council.sh --providers=gemini,openai --roles=balanced "Review this pattern"
+bash scripts/query-council.sh --providers=gemini,openai --roles=balanced -- "Review this pattern"
 
 # Pipe to formatter for terminal display
-bash scripts/query-council.sh --providers=gemini "Question" 2>/dev/null | bash scripts/format-output.sh
+bash scripts/query-council.sh --providers=gemini -- "Question" 2>/dev/null | bash scripts/format-output.sh
 
 # Check provider status
 bash scripts/check-status.sh

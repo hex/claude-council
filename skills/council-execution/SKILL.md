@@ -7,12 +7,14 @@ description: Use this skill when executing council queries
 ## Step 1: Run Query and Save to File
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --providers=gemini,openai "Your question"
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --providers=gemini,openai -- "Your question"
 ```
 
 This outputs the path to the saved file (e.g., `.claude/council-cache/council-1734567890.md`).
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
+
+**CRITICAL**: Always place `--` before the prompt to prevent prompt text containing dashes from being parsed as flags.
 
 ## Step 2: Read and Display the Output VERBATIM
 
@@ -45,9 +47,9 @@ This lets them review the complete responses later.
 ## Provider Names
 
 **ALWAYS use emoji + space when mentioning a provider:**
-- 🔵 Gemini (blue circle)
-- ⚪ OpenAI (white circle)
-- 🔴 Grok (red circle)
-- 🟢 Perplexity (green circle)
+- 🟦 Gemini (blue square)
+- 🔳 OpenAI (white square button)
+- 🟥 Grok (red square)
+- 🟩 Perplexity (green square)
 
-Format: `🔵 Gemini` not `🔵Gemini` - always include the space.
+Format: `🟦 Gemini` not `🟦Gemini` - always include the space.

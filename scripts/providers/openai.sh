@@ -26,14 +26,14 @@ if [[ -z "$API_KEY" ]]; then
 fi
 
 # Model selection (override via OPENAI_MODEL env var)
-MODEL="${OPENAI_MODEL:-codex-mini-latest}"
+MODEL="${OPENAI_MODEL:-gpt-5.2-codex}"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var)
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 
 # Determine which API to use based on model
-# Models requiring v1/responses: codex-*, o3-*, o4-*
-if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == o3-* ]] || [[ "$MODEL" == o4-* ]]; then
+# Models requiring v1/responses: codex-*, *-codex, o3-*, o4-*
+if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-* ]] || [[ "$MODEL" == o4-* ]]; then
     # Use v1/responses API
     ENDPOINT="https://api.openai.com/v1/responses"
 

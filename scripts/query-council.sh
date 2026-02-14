@@ -13,7 +13,7 @@ source "${SCRIPT_DIR}/lib/roles.sh"
 
 usage() {
     cat >&2 << 'EOF'
-Usage: query-council.sh [OPTIONS] <prompt>
+Usage: query-council.sh [OPTIONS] [--] <prompt>
 
 Options:
   --providers LIST    Comma-separated providers (gemini,openai,grok,perplexity)
@@ -102,6 +102,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --help|-h)
             usage
+            ;;
+        --)
+            shift
+            # Everything after -- is the prompt
+            PROMPT="$*"
+            break
             ;;
         -*)
             echo "Error: Unknown flag: $1" >&2
@@ -265,6 +271,7 @@ GREEN='\033[32m'
 CYAN='\033[36m'
 LIGHT_YELLOW='\033[93m'
 ITALIC='\033[3m'
+DIM='\033[2m'
 RESET='\033[0m'
 
 provider_color() {
@@ -281,7 +288,7 @@ provider_color() {
 get_model() {
     case "$1" in
         gemini)     echo "${GEMINI_MODEL:-gemini-3-flash-preview}" ;;
-        openai)     echo "${OPENAI_MODEL:-codex-mini-latest}" ;;
+        openai)     echo "${OPENAI_MODEL:-gpt-5.2-codex}" ;;
         grok)       echo "${GROK_MODEL:-grok-4-1-fast-reasoning}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-pro}" ;;
         *)          echo "unknown" ;;
@@ -291,11 +298,11 @@ get_model() {
 # Get emoji for provider
 provider_emoji() {
     case "$1" in
-        gemini)     echo "🔵" ;;
-        openai)     echo "⚪" ;;
-        grok)       echo "🔴" ;;
-        perplexity) echo "🟢" ;;
-        *)          echo "⚫" ;;
+        gemini)     echo "🟦" ;;
+        openai)     echo "🔳" ;;
+        grok)       echo "🟥" ;;
+        perplexity) echo "🟩" ;;
+        *)          echo "⬛" ;;
     esac
 }
 
@@ -378,8 +385,9 @@ for provider in "${PROVIDERS[@]}"; do
         cached=$(echo "$result" | jq -r '.cached // false')
 
         if [[ "$status" == "error" ]]; then
-            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET}" >&2
-            ERRORS+=("$provider: $(echo "$result" | jq -r '.error')")
+            error_msg=$(echo "$result" | jq -r '.error')
+            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET} - ${DIM}${error_msg}${RESET}" >&2
+            ERRORS+=("$provider: $error_msg")
         elif [[ "$cached" == "true" ]]; then
             echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${CYAN}cached${RESET}" >&2
         else

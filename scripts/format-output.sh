@@ -59,11 +59,11 @@ provider_color() {
 
 provider_emoji() {
     case "$1" in
-        gemini)     echo "🔵" ;;
-        openai)     echo "⚪" ;;
-        grok)       echo "🔴" ;;
-        perplexity) echo "🟢" ;;
-        *)          echo "⚫" ;;
+        gemini)     echo "🟦" ;;
+        openai)     echo "🔳" ;;
+        grok)       echo "🟥" ;;
+        perplexity) echo "🟩" ;;
+        *)          echo "⬛" ;;
     esac
 }
 
