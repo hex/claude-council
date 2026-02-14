@@ -46,7 +46,7 @@ Question: "Which AI providers should I consult?"
 Header: "Providers"
 Options (multiSelect: true):
   - Gemini (gemini-3-flash-preview) - Google's fast reasoning model
-  - OpenAI (codex-mini-latest) - OpenAI's code-focused model
+  - OpenAI (gpt-5.2-codex) - OpenAI's code-focused model
 ```
 
 ### 2. Clarify Ambiguous Questions

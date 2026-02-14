@@ -80,7 +80,7 @@ echo ""
 
 # Check each provider
 gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "GEMINI_MODEL" "gemini-3-flash-preview")
-openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "codex-mini-latest")
+openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "gpt-5.2-codex")
 grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "grok-4-1-fast-reasoning")
 perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "sonar-pro")
 
@@ -125,10 +125,10 @@ format_status() {
     echo -e "  ${emoji} ${color}${name}${RESET}\t${status_icon} ${status_text}  ${model_text}"
 }
 
-format_status "🔵" "$BLUE" "Gemini" "$gemini_status"
-format_status "⚪" "$WHITE" "OpenAI" "$openai_status"
-format_status "🔴" "$RED" "Grok" "$grok_status"
-format_status "🟢" "$GREEN" "Perplexity" "$perplexity_status"
+format_status "🟦" "$BLUE" "Gemini" "$gemini_status"
+format_status "🔳" "$WHITE" "OpenAI" "$openai_status"
+format_status "🟥" "$RED" "Grok" "$grok_status"
+format_status "🟩" "$GREEN" "Perplexity" "$perplexity_status"
 
 echo ""
 
