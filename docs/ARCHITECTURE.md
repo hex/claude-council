@@ -199,33 +199,46 @@ User -> Round 1 (parallel queries)
 ```
 claude-council/
 ├── .claude-plugin/
-│   └── plugin.json          # Plugin manifest
+│   └── plugin.json              # Plugin manifest
 ├── agents/
-│   └── council-advisor.md   # Proactive suggestions
+│   └── council-advisor.md       # Proactive suggestions
 ├── commands/
-│   ├── ask.md               # Main /ask command
-│   └── status.md            # /status command
+│   ├── ask.md                   # Main /ask command
+│   └── status.md                # /status command
 ├── config/
-│   └── roles.json           # Role definitions
+│   └── roles.json               # Role definitions
 ├── docs/
-│   └── ARCHITECTURE.md      # This file
+│   └── ARCHITECTURE.md          # This file
 ├── scripts/
-│   ├── query-council.sh     # Main orchestrator
-│   ├── format-output.sh     # Terminal formatter
-│   ├── check-status.sh      # Provider health check
+│   ├── query-council.sh         # Main orchestrator
+│   ├── run-council.sh           # Query + format pipeline
+│   ├── format-output.sh         # Terminal formatter
+│   ├── check-status.sh          # Provider health check
+│   ├── release.sh               # Version bump and tagging
 │   ├── providers/
 │   │   ├── gemini.sh
 │   │   ├── openai.sh
 │   │   ├── grok.sh
 │   │   └── perplexity.sh
 │   └── lib/
-│       ├── cache.sh         # Caching utilities
-│       ├── retry.sh         # Retry with backoff
-│       ├── roles.sh         # Role management
-│       └── export.sh        # Markdown export
+│       ├── cache.sh             # Caching utilities
+│       ├── retry.sh             # Retry with backoff
+│       ├── roles.sh             # Role management
+│       └── export.sh            # Markdown export
 ├── skills/
-│   ├── council-execution/   # Query guidance
-│   └── provider-integration/# Adding providers
+│   ├── council-execution/
+│   │   └── SKILL.md             # Query execution guidance
+│   └── provider-integration/
+│       ├── SKILL.md             # Adding providers guide
+│       └── api-patterns.md      # API integration patterns
+├── tests/
+│   ├── run_tests.sh             # Test runner
+│   ├── test_helper.bash         # Shared test utilities
+│   ├── cache.bats
+│   ├── roles.bats
+│   └── query-council.bats
+├── AGENTS.md
+├── LICENSE
 ├── README.md
 └── TESTING.md
 ```
