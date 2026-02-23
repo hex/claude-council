@@ -39,6 +39,20 @@ teardown() {
     [[ "$output" == *"Unknown flag"* ]]
 }
 
+@test "query-council: accepts --prompt= flag" {
+    export GEMINI_API_KEY="test-key"
+    run bash "$SCRIPT" --prompt="test question" 2>&1
+    [[ "$output" != *"Unknown flag"* ]]
+    [[ "$output" != *"No prompt"* ]]
+}
+
+@test "query-council: accepts --prompt value flag" {
+    export GEMINI_API_KEY="test-key"
+    run bash "$SCRIPT" --prompt "test question" 2>&1
+    [[ "$output" != *"Unknown flag"* ]]
+    [[ "$output" != *"No prompt"* ]]
+}
+
 @test "query-council: errors on empty prompt" {
     run bash "$SCRIPT" ""
     [ "$status" -eq 1 ]
