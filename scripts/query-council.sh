@@ -100,6 +100,14 @@ while [[ $# -gt 0 ]]; do
             LIST_AVAILABLE=true
             shift
             ;;
+        --prompt=*)
+            PROMPT="${1#*=}"
+            shift
+            ;;
+        --prompt)
+            PROMPT="$2"
+            shift 2
+            ;;
         --help|-h)
             usage
             ;;
