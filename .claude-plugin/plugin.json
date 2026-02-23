@@ -1,6 +1,6 @@
 {
   "name": "claude-council",
-  "version": "2026.2.3",
+  "version": "2026.2.4",
   "description": "Consult multiple AI coding agents (Gemini, OpenAI, Grok, Perplexity) to get diverse perspectives on coding problems",
   "author": {
     "name": "hex"
