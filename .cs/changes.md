@@ -1,0 +1,5 @@
+- [2026-02-23 18:35:35] Edit: /Users/alex.geana/.claude-sessions/claude-council/scripts/query-council.sh
+- [2026-02-23 18:35:40] Edit: /Users/alex.geana/.claude-sessions/claude-council/tests/query-council.bats
+- [2026-02-23 18:45:56] Edit: /Users/alex.geana/.claude-sessions/claude-council/.claude-plugin/plugin.json
+- [2026-02-23 18:47:25] Edit: /Users/alex.geana/.claude-sessions/claude-council/TESTING.md
+- [2026-02-23 18:47:37] Edit: /Users/alex.geana/.claude-sessions/claude-council/docs/ARCHITECTURE.md
