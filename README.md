@@ -154,6 +154,7 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 | `--file=path` | Include specific file in context |
 | `--output=path` | Export response to markdown file |
 | `--quiet` | Show only synthesis, hide individual responses |
+| `--agents` | Agent-enhanced analysis with subagents (slower, deeper) |
 | `--no-cache` | Force fresh queries, skip cache |
 | `--no-auto-context` | Disable automatic file detection |
 
@@ -306,6 +307,48 @@ Combine with roles for focused debates:
 ```bash
 /claude-council:ask --debate --roles=security,performance,simplicity "Review this architecture"
 ```
+
+### Agent-Enhanced Analysis (--agents)
+
+For complex decisions where deeper analysis justifies the extra time and cost, `--agents` spawns
+parallel Claude subagents that each independently query, evaluate, and analyze their provider's
+response before the orchestrator synthesizes everything.
+
+```bash
+# Explicit flag
+/claude-council:ask --agents "Should we migrate from REST to GraphQL? What are the tradeoffs?"
+
+# Combine with other flags
+/claude-council:ask --agents --roles=security,scalability --providers=gemini,openai "Review this auth architecture"
+```
+
+**What each subagent does (beyond a simple API call):**
+1. Queries the provider
+2. Evaluates response quality - did it actually address the question?
+3. If the response is vague or off-topic, reformulates and retries
+4. Asks follow-up questions to surface deeper insights
+5. Extracts structured analysis: key recommendations, confidence level, blind spots
+
+**Enhanced synthesis includes:**
+- Confidence-weighted consensus (high-confidence agreement weighted more)
+- Cross-provider blind spot analysis
+- Divergence with context (why providers disagree)
+
+**Natural language triggers**: The command also detects complex questions automatically.
+If your question contains architecture, security review, tradeoff analysis, or similar
+signals, you'll be asked whether to enable agent mode.
+
+**Cost and performance implications**: Agent mode spawns one Claude subagent per provider.
+This means ~4x more Claude API usage and ~15-25 seconds additional latency compared to
+standard mode. Use it for high-stakes decisions, not quick questions.
+
+| | Standard (default) | Agent-enhanced (--agents) |
+|---|---|---|
+| Speed | ~3-5s | ~15-25s |
+| Claude API cost | 1 context | 1 + N providers |
+| Provider API cost | Same | Same |
+| Analysis depth | Raw responses + synthesis | Pre-analyzed + enhanced synthesis |
+| Best for | Quick questions, factual queries | Architecture decisions, security reviews, complex tradeoffs |
 
 ### Proactive Agent
 
