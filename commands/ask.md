@@ -1,7 +1,7 @@
 ---
 description: Query multiple AI agents for diverse perspectives on a coding problem
-argument-hint: [--file=path] [--providers=list] [--roles=list] [--debate] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
-allowed-tools: Bash(*), Read, Glob, Grep, AskUserQuestion, TaskCreate, TaskUpdate
+argument-hint: [--file=path] [--providers=list] [--roles=list] [--debate] [--agents] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
+allowed-tools: Agent, Bash(*), Read, Glob, Grep, AskUserQuestion, TaskCreate, TaskUpdate
 ---
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -72,7 +72,56 @@ Skip auto-context if:
 - `--file=` is specified (explicit context)
 - Question doesn't reference code concepts
 
+## Step 1.5: Agent Mode Detection
+
+Determine if agent-enhanced mode should be used:
+
+### Explicit trigger
+If `--agents` is in $ARGUMENTS, use agent mode.
+
+### Natural language detection
+If `--agents` is NOT explicitly set, check if the question suggests a complex analysis.
+Look for these signals:
+
+**Architecture/design**: "architecture", "design decision", "tradeoffs", "trade-offs",
+"compare approaches", "system design"
+
+**Depth**: "deeply", "thoroughly", "comprehensively", "carefully evaluate",
+"in-depth", "detailed analysis"
+
+**Review**: "security review", "audit", "code review", "implications of",
+"risk assessment"
+
+**Decision**: "should we use X or Y", "which approach", "what are the risks",
+"evaluate the options"
+
+If 2+ signals are present, suggest agent mode:
+```
+AskUserQuestion:
+  Question: "This looks like a complex decision. Use agent-enhanced analysis for deeper insights?"
+  Header: "Analysis Mode"
+  Options:
+    - "Yes - deeper analysis with AI subagents (~20s extra)"
+    - "No - standard fast mode"
+```
+
+If the user selects yes, proceed with agent mode.
+
+**Skip NL detection if:**
+- `--agents` was explicitly passed (already enabled)
+- Only 1 provider is available (agents add less value with single provider)
+- `--quiet` mode is on (user wants fast results)
+
 ## Step 2: Execute and Display
+
+### If Agent Mode is Active
+
+**Invoke the `deep-execution` skill** and follow its instructions. The skill handles
+spawning subagents, collecting results, displaying analyses, and generating synthesis.
+
+Skip Step 3 (synthesis) - the deep-execution skill generates its own enhanced synthesis.
+
+### If Standard Mode (default)
 
 **CRITICAL - Flag Syntax**: All script flags use `=` with NO spaces:
 - CORRECT: `--providers=gemini,openai`
@@ -81,7 +130,7 @@ Skip auto-context if:
 
 **Invoke the `council-execution` skill** and follow its instructions to run the query pipeline and display output.
 
-## Step 3: Generate Synthesis
+## Step 3: Generate Synthesis (standard mode only)
 
 After the formatted output, generate synthesis analyzing the provider responses:
 

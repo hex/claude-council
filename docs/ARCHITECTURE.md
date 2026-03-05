@@ -194,6 +194,45 @@ User -> Round 1 (parallel queries)
         combined output with debate insights
 ```
 
+### Agent-Enhanced Mode (--agents)
+
+```
+User -> ask.md detects --agents flag (or NL trigger)
+             |
+        spawn N parallel Claude subagents (background)
+             |
+    +--------+--------+--------+--------+
+    |        |        |        |        |
+    v        v        v        v        v
+ Agent:   Agent:   Agent:   Agent:   ...
+ Gemini   OpenAI   Grok     Perplexity
+    |        |        |        |
+    | Each agent independently:
+    | 1. Runs provider curl script
+    | 2. Evaluates response quality
+    | 3. Retries with reformulated prompt if poor
+    | 4. Asks follow-up questions for depth
+    | 5. Returns structured analysis:
+    |    - Key recommendations
+    |    - Confidence level
+    |    - Unique perspective
+    |    - Blind spots
+    |        |        |        |
+    +--------+--------+--------+
+             |
+        orchestrator collects all analyses
+             |
+        enhanced synthesis:
+        - confidence-weighted consensus
+        - cross-provider blind spot analysis
+        - divergence with context
+             |
+        save to council-cache
+```
+
+Key difference from standard mode: subagents do meaningful analytical
+work beyond the API call, pre-digesting each response before synthesis.
+
 ## File Structure
 
 ```
@@ -227,7 +266,9 @@ claude-council/
 │       └── export.sh            # Markdown export
 ├── skills/
 │   ├── council-execution/
-│   │   └── SKILL.md             # Query execution guidance
+│   │   └── SKILL.md             # Standard query execution
+│   ├── deep-execution/
+│   │   └── SKILL.md             # Agent-enhanced execution (--agents)
 │   └── provider-integration/
 │       ├── SKILL.md             # Adding providers guide
 │       └── api-patterns.md      # API integration patterns
