@@ -989,3 +989,14 @@ Session management cleanup complete
 
 2026-03-05 17:16:58 - Session ended (source: user_exit, ID: c8b02453-8351-43ad-b6e0-72f62426f614)
   Artifacts collected: 0
+2026-03-08 12:57:04 - Session started (source: startup, ID: 01cdbe2e-763b-4237-a019-172dca535c19)
+  Working directory: /Users/alex.geana/.claude-sessions/claude-council
+
+2026-03-08 12:57:04 - Session started (source: resume, ID: c8b02453-8351-43ad-b6e0-72f62426f614)
+  Working directory: /Users/alex.geana/.claude-sessions/claude-council
+
+[2026-03-08 13:00:54] Tool failure: WebFetch - Request failed with status code 404
+[2026-03-08 13:00:59] Tool failure: WebFetch - Request failed with status code 404
+
+2026-03-08 13:04:46 - Session ended (source: user_exit, ID: c8b02453-8351-43ad-b6e0-72f62426f614)
+  Artifacts collected: 0
