@@ -14,10 +14,10 @@ For each selected provider, gather:
 - Model name (from the get_model function in query-council.sh or provider script defaults)
 
 Provider defaults:
-- gemini: `gemini-3-flash-preview`
-- openai: `gpt-5.2-codex`
-- grok: `grok-4-1-fast-reasoning`
-- perplexity: `sonar-pro`
+- gemini: `gemini-3.1-pro-preview`
+- openai: `gpt-5.4`
+- grok: `grok-4`
+- perplexity: `sonar-reasoning-pro`
 
 ## Step 2: Spawn Provider Agents in Parallel
 

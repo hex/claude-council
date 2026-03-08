@@ -29,7 +29,7 @@ fi
 ENDPOINT="https://api.x.ai/v1/chat/completions"
 
 # Model selection (override via GROK_MODEL env var)
-MODEL="${GROK_MODEL:-grok-4-1-fast-reasoning}"
+MODEL="${GROK_MODEL:-grok-4}"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var)
 TOKENS="${COUNCIL_MAX_TOKENS:-2048}"

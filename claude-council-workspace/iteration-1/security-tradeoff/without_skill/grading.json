@@ -1,0 +1,17 @@
+{
+  "eval_id": 3,
+  "eval_name": "security-tradeoff",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "suggests-council-or-deep-analysis",
+      "passed": false,
+      "evidence": "Provides comprehensive direct recommendation. Never mentions consulting the council, getting diverse AI perspectives, or using /claude-council:ask"
+    },
+    {
+      "text": "addresses-security-ux-tension",
+      "passed": true,
+      "evidence": "Challenges the service worker constraint as potentially false, then provides detailed architecture for both cookie-based and postMessage-based SW auth. Explicitly addresses XSS vs CSRF asymmetry"
+    }
+  ]
+}

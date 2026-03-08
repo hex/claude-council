@@ -1,0 +1,17 @@
+{
+  "eval_id": 2,
+  "eval_name": "stuck-debugging",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "recognizes-stuck-pattern",
+      "passed": true,
+      "evidence": "Opens with 'you've been fighting this for 2 hours and tried three different approaches' - directly acknowledges the user's frustration and failed attempts"
+    },
+    {
+      "text": "suggests-council-for-debugging",
+      "passed": true,
+      "evidence": "Explicitly states 'this is exactly the kind of debugging dead-end where consulting the council of AI agents could help' and provides the exact /claude-council:ask command"
+    }
+  ]
+}

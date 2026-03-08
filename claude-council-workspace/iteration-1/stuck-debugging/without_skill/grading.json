@@ -1,0 +1,17 @@
+{
+  "eval_id": 2,
+  "eval_name": "stuck-debugging",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "recognizes-stuck-pattern",
+      "passed": true,
+      "evidence": "Includes 'Why Your Previous Attempts Failed' table analyzing each approach the user tried, implicitly acknowledging their struggle"
+    },
+    {
+      "text": "suggests-council-for-debugging",
+      "passed": false,
+      "evidence": "Provides direct debugging advice only. Never mentions consulting the council, getting other AI perspectives, or using /claude-council:ask"
+    }
+  ]
+}

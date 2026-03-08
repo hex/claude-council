@@ -1,0 +1,17 @@
+{
+  "eval_id": 3,
+  "eval_name": "security-tradeoff",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "suggests-council-or-deep-analysis",
+      "passed": true,
+      "evidence": "Concludes with 'This is exactly the kind of security architecture decision where getting diverse perspectives could be valuable' and provides /claude-council:ask command"
+    },
+    {
+      "text": "addresses-security-ux-tension",
+      "passed": true,
+      "evidence": "Detailed section on service worker token access via postMessage, BFF pattern for token mediation, and the tradeoff between XSS and CSRF attack surfaces"
+    }
+  ]
+}

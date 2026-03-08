@@ -69,18 +69,18 @@ providers:
 Override default models via environment variables:
 
 ```bash
-export GEMINI_MODEL="gemini-3-flash-preview"       # default
-export OPENAI_MODEL="gpt-5.2-codex"                 # default
-export GROK_MODEL="grok-4-1-fast-reasoning"        # default
-export PERPLEXITY_MODEL="sonar-pro"                # default (search-augmented)
+export GEMINI_MODEL="gemini-3.1-pro-preview"       # default
+export OPENAI_MODEL="gpt-5.4"                       # default
+export GROK_MODEL="grok-4"                          # default
+export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
 ```
 
 Use more powerful models for complex queries:
 
 ```bash
-export GEMINI_MODEL="gemini-3-pro-preview"
-export OPENAI_MODEL="gpt-5.2"
-export GROK_MODEL="grok-4-1-fast-reasoning-latest"
+export GEMINI_MODEL="gemini-3.1-pro-preview"
+export OPENAI_MODEL="gpt-5.4"
+export GROK_MODEL="grok-4"
 export PERPLEXITY_MODEL="sonar-reasoning-pro"      # with chain-of-thought
 ```
 
@@ -95,13 +95,13 @@ export COUNCIL_MAX_TOKENS=1024  # shorter, faster responses
 
 #### OpenAI Reasoning Models
 
-For OpenAI reasoning models (`codex-*`, `*-codex`, `o3-*`, `o4-*`), the token limit is automatically increased to 8x the base value (minimum 32768). This is because these models combine reasoning tokens and output tokens into a single `max_output_tokens` limit.
+For OpenAI reasoning models (`codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*`), the token limit is automatically increased to 8x the base value (minimum 32768). This is because these models combine reasoning tokens and output tokens into a single `max_output_tokens` limit.
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
-| Standard (gpt-5.2) | 2048 (default) | 2048 |
-| Reasoning (gpt-5.2-codex) | 2048 (default) | 32768 |
-| Reasoning (gpt-5.2-codex) | 4096 | 32768 |
+| Standard (gpt-4o) | 2048 (default) | 2048 |
+| Reasoning (gpt-5.4) | 2048 (default) | 32768 |
+| Reasoning (gpt-5.4) | 4096 | 32768 |
 
 Control reasoning effort to balance speed vs thoroughness:
 
@@ -124,9 +124,9 @@ export PERPLEXITY_RECENCY="week"
 
 Available models:
 - `sonar` - Fast, search-enabled
-- `sonar-pro` - More capable, search-enabled (default)
+- `sonar-pro` - More capable, search-enabled
 - `sonar-reasoning` - Chain-of-thought reasoning + search
-- `sonar-reasoning-pro` - Best reasoning + search
+- `sonar-reasoning-pro` - Best reasoning + search (default)
 
 Perplexity is useful when you need current information (latest framework versions, recent best practices) rather than just training-data knowledge.
 

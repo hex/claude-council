@@ -1,0 +1,17 @@
+{
+  "eval_id": 2,
+  "eval_name": "stuck-debugging",
+  "prompt": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried: 1) increasing the timeout in nginx, 2) adding ping/pong frames, 3) switching from ws to socket.io. Nothing works. The nginx logs show 'upstream timed out' but the keep-alive is set to 300s.",
+  "assertions": [
+    {
+      "name": "recognizes-stuck-pattern",
+      "description": "The response recognizes the user has been stuck with multiple failed attempts and suggests fresh perspectives",
+      "type": "qualitative"
+    },
+    {
+      "name": "suggests-council-for-debugging",
+      "description": "The response suggests consulting the council or notes that other AI perspectives might spot something missed",
+      "type": "qualitative"
+    }
+  ]
+}

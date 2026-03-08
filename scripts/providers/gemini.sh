@@ -26,7 +26,7 @@ if [[ -z "$API_KEY" ]]; then
 fi
 
 # Model selection (override via GEMINI_MODEL env var)
-MODEL="${GEMINI_MODEL:-gemini-3-flash-preview}"
+MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
 
 # Gemini API endpoint
 ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent"

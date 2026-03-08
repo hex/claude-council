@@ -1,0 +1,1270 @@
+{
+  "exit_reason": "max_iterations (5)",
+  "original_description": "Use this agent when the user is facing architectural decisions, design choices, or has been stuck debugging a problem after multiple failed attempts. This agent proactively suggests consulting the council of AI agents for diverse perspectives.",
+  "best_description": "Use this agent when the user is facing architectural decisions, design choices, or has been stuck debugging a problem after multiple failed attempts. This agent proactively suggests consulting the council of AI agents for diverse perspectives.",
+  "best_score": "4/7",
+  "best_train_score": "6/11",
+  "best_test_score": "4/7",
+  "final_description": "Use this skill for any message where the user needs help making a technical decision or is stuck debugging after multiple attempts. This is the right skill whenever the user is comparing technologies, architectures, or approaches and asking which to choose \u2014 for example database selection, communication patterns, security strategies, or system design. Also use it when the user describes a persistent bug they cannot solve despite trying several fixes. The key signal is that the user does NOT have a clear path forward and wants guidance choosing between options or escaping a dead end. Do NOT use when the user has a specific task to execute (write code, fix a typo, read a file, add a feature, write a test) or asks a factual/conceptual question with a straightforward answer.",
+  "iterations_run": 5,
+  "holdout": 0.4,
+  "train_size": 11,
+  "test_size": 7,
+  "history": [
+    {
+      "iteration": 1,
+      "description": "Use this agent when the user is facing architectural decisions, design choices, or has been stuck debugging a problem after multiple failed attempts. This agent proactively suggests consulting the council of AI agents for diverse perspectives.",
+      "train_passed": 6,
+      "train_failed": 5,
+      "train_total": 11,
+      "train_results": [
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 3,
+      "test_total": 7,
+      "test_results": [
+        {
+          "query": "This function is 200 lines long. Can you break it into smaller functions? It's in services/orderProcessor.ts, the processOrder method.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I literally cannot figure out why this Next.js app hydration mismatch keeps happening. I've checked server/client date formatting, removed window references, used dynamic imports for client-only components, added suppressHydrationWarning. The error only happens on the /dashboard route and only in production. I'm losing my mind.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Run the test suite and tell me if anything fails. The command is npm test.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "We're debating whether to build our own analytics pipeline or use a managed service like Segment/Mixpanel. We have about 2M monthly events, need real-time dashboards, and want to own our data long-term. The engineering team says they can build it in 6 weeks but I've seen these estimates before...",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I need to pick a message queue for our event-driven architecture. We process about 50k events/second at peak. The candidates are Kafka, RabbitMQ, and Amazon SQS. Our team has experience with RabbitMQ but Kafka seems more future-proof. We're on AWS. Cost matters but reliability matters more.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you review this PR diff and check if I missed any edge cases in the input validation? The changes are in src/validators/email.ts.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "This SQL query is slow. Can you look at it and suggest an index? SELECT * FROM orders WHERE customer_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20;",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 5,
+      "total": 11,
+      "results": [
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "iteration": 2,
+      "description": "Use this skill when the user is weighing multiple competing options or tradeoffs with no obvious winner \u2014 such as choosing between databases, architectures, communication patterns, security approaches, or frameworks. Also use it when the user is stuck or frustrated after trying multiple failed solutions to a problem. Key signals: the user presents 2+ alternatives they're torn between, asks \"which should we pick\" or \"what's the right approach,\" describes complex tradeoffs (e.g., security vs usability, scalability vs simplicity), or expresses frustration after exhausting several debugging attempts. Do NOT use for straightforward implementation tasks, simple questions with clear answers, quick fixes, or requests to read/edit/test specific code.",
+      "train_passed": 6,
+      "train_failed": 5,
+      "train_total": 11,
+      "train_results": [
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 3,
+      "test_total": 7,
+      "test_results": [
+        {
+          "query": "I need to pick a message queue for our event-driven architecture. We process about 50k events/second at peak. The candidates are Kafka, RabbitMQ, and Amazon SQS. Our team has experience with RabbitMQ but Kafka seems more future-proof. We're on AWS. Cost matters but reliability matters more.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "This function is 200 lines long. Can you break it into smaller functions? It's in services/orderProcessor.ts, the processOrder method.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I literally cannot figure out why this Next.js app hydration mismatch keeps happening. I've checked server/client date formatting, removed window references, used dynamic imports for client-only components, added suppressHydrationWarning. The error only happens on the /dashboard route and only in production. I'm losing my mind.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Run the test suite and tell me if anything fails. The command is npm test.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "We're debating whether to build our own analytics pipeline or use a managed service like Segment/Mixpanel. We have about 2M monthly events, need real-time dashboards, and want to own our data long-term. The engineering team says they can build it in 6 weeks but I've seen these estimates before...",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you review this PR diff and check if I missed any edge cases in the input validation? The changes are in src/validators/email.ts.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "This SQL query is slow. Can you look at it and suggest an index? SELECT * FROM orders WHERE customer_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20;",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 5,
+      "total": 11,
+      "results": [
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "iteration": 3,
+      "description": "ALWAYS use this skill when the user's message contains ANY of these patterns: (1) choosing between 2+ named technologies, databases, frameworks, or architectural approaches, (2) describing tradeoffs between competing concerns like security vs usability or scalability vs simplicity, (3) expressing frustration or being stuck after multiple failed debugging attempts. Typical queries mention specific alternatives (\"should we use X or Y or Z\"), ask \"what should we pick\" or \"what's the right approach,\" list pros and cons of different options, or say things like \"I've tried X, Y, and Z and nothing works.\" This skill provides multi-perspective analysis for hard decisions \u2014 it is NOT for simple implementation tasks, reading or editing specific files, writing tests, fixing typos, adding features with clear requirements, or answering factual questions. If the user is torn between real options with real tradeoffs, use this skill.",
+      "train_passed": 6,
+      "train_failed": 5,
+      "train_total": 11,
+      "train_results": [
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 3,
+      "test_total": 7,
+      "test_results": [
+        {
+          "query": "I need to pick a message queue for our event-driven architecture. We process about 50k events/second at peak. The candidates are Kafka, RabbitMQ, and Amazon SQS. Our team has experience with RabbitMQ but Kafka seems more future-proof. We're on AWS. Cost matters but reliability matters more.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "We're debating whether to build our own analytics pipeline or use a managed service like Segment/Mixpanel. We have about 2M monthly events, need real-time dashboards, and want to own our data long-term. The engineering team says they can build it in 6 weeks but I've seen these estimates before...",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "This function is 200 lines long. Can you break it into smaller functions? It's in services/orderProcessor.ts, the processOrder method.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Run the test suite and tell me if anything fails. The command is npm test.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Can you review this PR diff and check if I missed any edge cases in the input validation? The changes are in src/validators/email.ts.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I literally cannot figure out why this Next.js app hydration mismatch keeps happening. I've checked server/client date formatting, removed window references, used dynamic imports for client-only components, added suppressHydrationWarning. The error only happens on the /dashboard route and only in production. I'm losing my mind.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "This SQL query is slow. Can you look at it and suggest an index? SELECT * FROM orders WHERE customer_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20;",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 5,
+      "total": 11,
+      "results": [
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "iteration": 4,
+      "description": "Use this skill whenever the user's message is long, detailed, and centers on a hard choice or unresolved struggle. Trigger signals: the message names multiple specific technologies or approaches as candidates (e.g. \"Kafka vs Istio,\" \"PostgreSQL or CockroachDB or Redis,\" \"shared DB vs separate schemas\"), OR the message describes a security/architecture tradeoff with real constraints and no clear winner, OR the user says they're stuck/frustrated after trying multiple failed fixes. The more context, constraints, and competing options the user provides, the more likely this skill applies. Do NOT use for short requests, clear-cut implementation tasks, writing tests, reading files, fixing typos, factual questions, or tasks where the user already knows what they want built. This skill is for agonizing decisions and dead-end debugging \u2014 not for execution.",
+      "train_passed": 6,
+      "train_failed": 5,
+      "train_total": 11,
+      "train_results": [
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 3,
+      "test_total": 7,
+      "test_results": [
+        {
+          "query": "This function is 200 lines long. Can you break it into smaller functions? It's in services/orderProcessor.ts, the processOrder method.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I literally cannot figure out why this Next.js app hydration mismatch keeps happening. I've checked server/client date formatting, removed window references, used dynamic imports for client-only components, added suppressHydrationWarning. The error only happens on the /dashboard route and only in production. I'm losing my mind.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I need to pick a message queue for our event-driven architecture. We process about 50k events/second at peak. The candidates are Kafka, RabbitMQ, and Amazon SQS. Our team has experience with RabbitMQ but Kafka seems more future-proof. We're on AWS. Cost matters but reliability matters more.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Run the test suite and tell me if anything fails. The command is npm test.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "We're debating whether to build our own analytics pipeline or use a managed service like Segment/Mixpanel. We have about 2M monthly events, need real-time dashboards, and want to own our data long-term. The engineering team says they can build it in 6 weeks but I've seen these estimates before...",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you review this PR diff and check if I missed any edge cases in the input validation? The changes are in src/validators/email.ts.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "This SQL query is slow. Can you look at it and suggest an index? SELECT * FROM orders WHERE customer_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20;",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 5,
+      "total": 11,
+      "results": [
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "iteration": 5,
+      "description": "Use this skill for any message where the user needs help making a technical decision or is stuck debugging after multiple attempts. This is the right skill whenever the user is comparing technologies, architectures, or approaches and asking which to choose \u2014 for example database selection, communication patterns, security strategies, or system design. Also use it when the user describes a persistent bug they cannot solve despite trying several fixes. The key signal is that the user does NOT have a clear path forward and wants guidance choosing between options or escaping a dead end. Do NOT use when the user has a specific task to execute (write code, fix a typo, read a file, add a feature, write a test) or asks a factual/conceptual question with a straightforward answer.",
+      "train_passed": 6,
+      "train_failed": 5,
+      "train_total": 11,
+      "train_results": [
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 3,
+      "test_total": 7,
+      "test_results": [
+        {
+          "query": "I need to pick a message queue for our event-driven architecture. We process about 50k events/second at peak. The candidates are Kafka, RabbitMQ, and Amazon SQS. Our team has experience with RabbitMQ but Kafka seems more future-proof. We're on AWS. Cost matters but reliability matters more.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "This function is 200 lines long. Can you break it into smaller functions? It's in services/orderProcessor.ts, the processOrder method.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Run the test suite and tell me if anything fails. The command is npm test.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I literally cannot figure out why this Next.js app hydration mismatch keeps happening. I've checked server/client date formatting, removed window references, used dynamic imports for client-only components, added suppressHydrationWarning. The error only happens on the /dashboard route and only in production. I'm losing my mind.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "We're debating whether to build our own analytics pipeline or use a managed service like Segment/Mixpanel. We have about 2M monthly events, need real-time dashboards, and want to own our data long-term. The engineering team says they can build it in 6 weeks but I've seen these estimates before...",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you review this PR diff and check if I missed any edge cases in the input validation? The changes are in src/validators/email.ts.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "This SQL query is slow. Can you look at it and suggest an index? SELECT * FROM orders WHERE customer_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20;",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 5,
+      "total": 11,
+      "results": [
+        {
+          "query": "Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I'm not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What's the actual right answer here for a B2B SaaS app?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I'm building a real-time collaborative editor and need to decide on the persistence layer. We're looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We're expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "Can you read src/utils/helpers.ts and tell me what the formatDate function does?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "What's the difference between useMemo and useCallback in React? I keep getting confused about when to use which.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "OK I'm completely stuck. I've been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I've tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "There's a typo on line 42 of components/Header.tsx - it says 'Welcom' instead of 'Welcome'. Can you fix it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}
