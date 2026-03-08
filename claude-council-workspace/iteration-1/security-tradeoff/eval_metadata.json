@@ -1,0 +1,17 @@
+{
+  "eval_id": 3,
+  "eval_name": "security-tradeoff",
+  "prompt": "We're storing JWTs in localStorage right now and I know that's technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit in March. What's the actual right answer here for a B2B SaaS app?",
+  "assertions": [
+    {
+      "name": "suggests-council-or-deep-analysis",
+      "description": "The response suggests consulting the council or recognizes this as a security-critical decision needing diverse expert input",
+      "type": "qualitative"
+    },
+    {
+      "name": "addresses-security-ux-tension",
+      "description": "The response addresses the genuine tension between security and functionality (service worker needs)",
+      "type": "qualitative"
+    }
+  ]
+}

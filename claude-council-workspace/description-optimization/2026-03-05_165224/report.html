@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>council-advisor — Skill Description Optimization</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lora', Georgia, serif;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            background: #faf9f5;
+            color: #141413;
+        }
+        h1 { font-family: 'Poppins', sans-serif; color: #141413; }
+        .explainer {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #e8e6dc;
+            color: #b0aea5;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+        .summary {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #e8e6dc;
+        }
+        .summary p { margin: 5px 0; }
+        .best { color: #788c5d; font-weight: bold; }
+        .table-container {
+            overflow-x: auto;
+            width: 100%;
+        }
+        table {
+            border-collapse: collapse;
+            background: white;
+            border: 1px solid #e8e6dc;
+            border-radius: 6px;
+            font-size: 12px;
+            min-width: 100%;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #e8e6dc;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        th {
+            font-family: 'Poppins', sans-serif;
+            background: #141413;
+            color: #faf9f5;
+            font-weight: 500;
+        }
+        th.test-col {
+            background: #6a9bcc;
+        }
+        th.query-col { min-width: 200px; }
+        td.description {
+            font-family: monospace;
+            font-size: 11px;
+            word-wrap: break-word;
+            max-width: 400px;
+        }
+        td.result {
+            text-align: center;
+            font-size: 16px;
+            min-width: 40px;
+        }
+        td.test-result {
+            background: #f0f6fc;
+        }
+        .pass { color: #788c5d; }
+        .fail { color: #c44; }
+        .rate {
+            font-size: 9px;
+            color: #b0aea5;
+            display: block;
+        }
+        tr:hover { background: #faf9f5; }
+        .score {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+        .score-good { background: #eef2e8; color: #788c5d; }
+        .score-ok { background: #fef3c7; color: #d97706; }
+        .score-bad { background: #fceaea; color: #c44; }
+        .train-label { color: #b0aea5; font-size: 10px; }
+        .test-label { color: #6a9bcc; font-size: 10px; font-weight: bold; }
+        .best-row { background: #f5f8f2; }
+        th.positive-col { border-bottom: 3px solid #788c5d; }
+        th.negative-col { border-bottom: 3px solid #c44; }
+        th.test-col.positive-col { border-bottom: 3px solid #788c5d; }
+        th.test-col.negative-col { border-bottom: 3px solid #c44; }
+        .legend { font-family: 'Poppins', sans-serif; display: flex; gap: 20px; margin-bottom: 10px; font-size: 13px; align-items: center; }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .legend-swatch { width: 16px; height: 16px; border-radius: 3px; display: inline-block; }
+        .swatch-positive { background: #141413; border-bottom: 3px solid #788c5d; }
+        .swatch-negative { background: #141413; border-bottom: 3px solid #c44; }
+        .swatch-test { background: #6a9bcc; }
+        .swatch-train { background: #141413; }
+    </style>
+</head>
+<body>
+    <h1>council-advisor — Skill Description Optimization</h1>
+    <div class="explainer">
+        <strong>Optimizing your skill's description.</strong> This page updates automatically as Claude tests different versions of your skill's description. Each row is an iteration — a new description attempt. The columns show test queries: green checkmarks mean the skill triggered correctly (or correctly didn't trigger), red crosses mean it got it wrong. The "Train" score shows performance on queries used to improve the description; the "Test" score shows performance on held-out queries the optimizer hasn't seen. When it's done, Claude will apply the best-performing description to your skill.
+    </div>
+
+    <div class="summary">
+        <p><strong>Original:</strong> Use this agent when the user is facing architectural decisions, design choices, or has been stuck debugging a problem after multiple failed attempts. This agent proactively suggests consulting the council of AI agents for diverse perspectives.</p>
+        <p class="best"><strong>Best:</strong> Use this agent when the user is facing architectural decisions, design choices, or has been stuck debugging a problem after multiple failed attempts. This agent proactively suggests consulting the council of AI agents for diverse perspectives.</p>
+        <p><strong>Best Score:</strong> 4/7 (test)</p>
+        <p><strong>Iterations:</strong> 5 | <strong>Train:</strong> 11 | <strong>Test:</strong> 7</p>
+    </div>
+
+    <div class="legend">
+        <span style="font-weight:600">Query columns:</span>
+        <span class="legend-item"><span class="legend-swatch swatch-positive"></span> Should trigger</span>
+        <span class="legend-item"><span class="legend-swatch swatch-negative"></span> Should NOT trigger</span>
+        <span class="legend-item"><span class="legend-swatch swatch-train"></span> Train</span>
+        <span class="legend-item"><span class="legend-swatch swatch-test"></span> Test</span>
+    </div>
+
+    <div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Iter</th>
+                <th>Train</th>
+                <th>Test</th>
+                <th class="query-col">Description</th>
+                <th class="positive-col">We&#x27;re storing JWTs in localStorage right now and I know that&#x27;s technically vulnerable to XSS. But httpOnly cookies have their own CSRF problems, and we need the token accessible from JS for our service worker. Our security team says we need to fix this before the SOC2 audit. What&#x27;s the actual right answer here for a B2B SaaS app?</th>
+                <th class="positive-col">Should we go with a multi-tenant shared database with row-level security, or separate schemas per tenant, or fully isolated databases? We&#x27;re expecting 200+ enterprise tenants, each with very different data volumes. Some tenants are in the EU and need data residency guarantees.</th>
+                <th class="positive-col">I&#x27;m building a real-time collaborative editor and need to decide on the persistence layer. We&#x27;re looking at PostgreSQL with LISTEN/NOTIFY, or CockroachDB for horizontal scaling, or maybe just going all-in on Redis with AOF persistence. The team is 4 backend engineers, all comfortable with SQL. What should we pick?</th>
+                <th class="positive-col">Our codebase has grown to 50+ microservices and the inter-service communication is a mess. Some use REST, some gRPC, some direct DB queries across service boundaries. We need to standardize but I&#x27;m not sure if we should go with an event-driven approach using Kafka, or a service mesh with Istio, or maybe just API gateway + REST.</th>
+                <th class="negative-col">Can you read src/utils/helpers.ts and tell me what the formatDate function does?</th>
+                <th class="negative-col">Add a loading spinner to the LoginButton component. Use the existing Spinner component from our design system at components/ui/Spinner.tsx.</th>
+                <th class="negative-col">Write a unit test for the calculateDiscount function in pricing.ts. It takes a price and a coupon code and returns the discounted price.</th>
+                <th class="negative-col">What&#x27;s the difference between useMemo and useCallback in React? I keep getting confused about when to use which.</th>
+                <th class="negative-col">I need to add caching to our API responses. Should be pretty straightforward - just need to cache the GET /api/products endpoint for 5 minutes using Redis.</th>
+                <th class="positive-col">OK I&#x27;m completely stuck. I&#x27;ve been fighting this for 2 hours. The WebSocket connections keep dropping after exactly 30 seconds in production but work fine locally. I&#x27;ve tried increasing the timeout in nginx, adding ping/pong frames, and switching from ws to socket.io. Nothing works.</th>
+                <th class="negative-col">There&#x27;s a typo on line 42 of components/Header.tsx - it says &#x27;Welcom&#x27; instead of &#x27;Welcome&#x27;. Can you fix it?</th>
+                <th class="test-col negative-col">This function is 200 lines long. Can you break it into smaller functions? It&#x27;s in services/orderProcessor.ts, the processOrder method.</th>
+                <th class="test-col positive-col">I literally cannot figure out why this Next.js app hydration mismatch keeps happening. I&#x27;ve checked server/client date formatting, removed window references, used dynamic imports for client-only components, added suppressHydrationWarning. The error only happens on the /dashboard route and only in production. I&#x27;m losing my mind.</th>
+                <th class="test-col negative-col">Run the test suite and tell me if anything fails. The command is npm test.</th>
+                <th class="test-col positive-col">We&#x27;re debating whether to build our own analytics pipeline or use a managed service like Segment/Mixpanel. We have about 2M monthly events, need real-time dashboards, and want to own our data long-term. The engineering team says they can build it in 6 weeks but I&#x27;ve seen these estimates before...</th>
+                <th class="test-col positive-col">I need to pick a message queue for our event-driven architecture. We process about 50k events/second at peak. The candidates are Kafka, RabbitMQ, and Amazon SQS. Our team has experience with RabbitMQ but Kafka seems more future-proof. We&#x27;re on AWS. Cost matters but reliability matters more.</th>
+                <th class="test-col negative-col">Can you review this PR diff and check if I missed any edge cases in the input validation? The changes are in src/validators/email.ts.</th>
+                <th class="test-col negative-col">This SQL query is slow. Can you look at it and suggest an index? SELECT * FROM orders WHERE customer_id = ? AND status = &#x27;pending&#x27; ORDER BY created_at DESC LIMIT 20;</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="best-row">
+                <td>1</td>
+                <td><span class="score score-ok">18/33</span></td>
+                <td><span class="score score-ok">12/21</span></td>
+                <td class="description">Use this agent when the user is facing architectural decisions, design choices, or has been stuck debugging a problem after multiple failed attempts. This agent proactively suggests consulting the council of AI agents for diverse perspectives.</td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+            </tr>
+            <tr class="">
+                <td>2</td>
+                <td><span class="score score-ok">18/33</span></td>
+                <td><span class="score score-ok">12/21</span></td>
+                <td class="description">Use this skill when the user is weighing multiple competing options or tradeoffs with no obvious winner — such as choosing between databases, architectures, communication patterns, security approaches, or frameworks. Also use it when the user is stuck or frustrated after trying multiple failed solutions to a problem. Key signals: the user presents 2+ alternatives they&#x27;re torn between, asks &quot;which should we pick&quot; or &quot;what&#x27;s the right approach,&quot; describes complex tradeoffs (e.g., security vs usability, scalability vs simplicity), or expresses frustration after exhausting several debugging attempts. Do NOT use for straightforward implementation tasks, simple questions with clear answers, quick fixes, or requests to read/edit/test specific code.</td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+            </tr>
+            <tr class="">
+                <td>3</td>
+                <td><span class="score score-ok">18/33</span></td>
+                <td><span class="score score-ok">12/21</span></td>
+                <td class="description">ALWAYS use this skill when the user&#x27;s message contains ANY of these patterns: (1) choosing between 2+ named technologies, databases, frameworks, or architectural approaches, (2) describing tradeoffs between competing concerns like security vs usability or scalability vs simplicity, (3) expressing frustration or being stuck after multiple failed debugging attempts. Typical queries mention specific alternatives (&quot;should we use X or Y or Z&quot;), ask &quot;what should we pick&quot; or &quot;what&#x27;s the right approach,&quot; list pros and cons of different options, or say things like &quot;I&#x27;ve tried X, Y, and Z and nothing works.&quot; This skill provides multi-perspective analysis for hard decisions — it is NOT for simple implementation tasks, reading or editing specific files, writing tests, fixing typos, adding features with clear requirements, or answering factual questions. If the user is torn between real options with real tradeoffs, use this skill.</td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+            </tr>
+            <tr class="">
+                <td>4</td>
+                <td><span class="score score-ok">18/33</span></td>
+                <td><span class="score score-ok">12/21</span></td>
+                <td class="description">Use this skill whenever the user&#x27;s message is long, detailed, and centers on a hard choice or unresolved struggle. Trigger signals: the message names multiple specific technologies or approaches as candidates (e.g. &quot;Kafka vs Istio,&quot; &quot;PostgreSQL or CockroachDB or Redis,&quot; &quot;shared DB vs separate schemas&quot;), OR the message describes a security/architecture tradeoff with real constraints and no clear winner, OR the user says they&#x27;re stuck/frustrated after trying multiple failed fixes. The more context, constraints, and competing options the user provides, the more likely this skill applies. Do NOT use for short requests, clear-cut implementation tasks, writing tests, reading files, fixing typos, factual questions, or tasks where the user already knows what they want built. This skill is for agonizing decisions and dead-end debugging — not for execution.</td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+            </tr>
+            <tr class="">
+                <td>5</td>
+                <td><span class="score score-ok">18/33</span></td>
+                <td><span class="score score-ok">12/21</span></td>
+                <td class="description">Use this skill for any message where the user needs help making a technical decision or is stuck debugging after multiple attempts. This is the right skill whenever the user is comparing technologies, architectures, or approaches and asking which to choose — for example database selection, communication patterns, security strategies, or system design. Also use it when the user describes a persistent bug they cannot solve despite trying several fixes. The key signal is that the user does NOT have a clear path forward and wants guidance choosing between options or escaping a dead end. Do NOT use when the user has a specific task to execute (write code, fix a typo, read a file, add a feature, write a test) or asks a factual/conceptual question with a straightforward answer.</td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result fail">✗<span class="rate">0/3</span></td>
+                <td class="result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result fail">✗<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+                <td class="result test-result pass">✓<span class="rate">0/3</span></td>
+            </tr>
+        </tbody>
+    </table>
+    </div>
+
+</body>
+</html>

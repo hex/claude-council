@@ -1,0 +1,22 @@
+{
+  "eval_id": 1,
+  "eval_name": "architecture-db-choice",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "suggests-council-or-multiple-perspectives",
+      "passed": false,
+      "evidence": "Gives a direct 'PostgreSQL is the right choice' recommendation. Never mentions consulting the council, getting diverse perspectives, or using /claude-council:ask"
+    },
+    {
+      "text": "acknowledges-tradeoffs",
+      "passed": true,
+      "evidence": "Thorough analysis of each option with strengths and weaknesses, plus a comparison table with 8 criteria"
+    },
+    {
+      "text": "references-specific-constraints",
+      "passed": true,
+      "evidence": "References '4-person team', SQL familiarity ('Your team already knows it'), and real-time editing requirements throughout"
+    }
+  ]
+}

@@ -1,1 +1,152 @@
-[]
+[
+  {
+    "filename": "evals.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/evals/evals.json",
+    "timestamp": "2026-03-05T14:04:24Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "trigger-eval.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/evals/trigger-eval.json",
+    "timestamp": "2026-03-05T14:18:54Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "eval_metadata.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/eval_metadata.json",
+    "timestamp": "2026-03-05T14:19:15Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "eval_metadata.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/eval_metadata.json",
+    "timestamp": "2026-03-05T14:19:23Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "eval_metadata.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/eval_metadata.json",
+    "timestamp": "2026-03-05T14:19:31Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "grading.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/with_skill/grading.json",
+    "timestamp": "2026-03-05T14:23:14Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "grading.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/without_skill/grading.json",
+    "timestamp": "2026-03-05T14:23:18Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "grading.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/with_skill/grading.json",
+    "timestamp": "2026-03-05T14:23:20Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "grading.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/without_skill/grading.json",
+    "timestamp": "2026-03-05T14:23:22Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "grading.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/with_skill/grading.json",
+    "timestamp": "2026-03-05T14:23:25Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "grading.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/without_skill/grading.json",
+    "timestamp": "2026-03-05T14:23:27Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/with_skill/timing.json",
+    "timestamp": "2026-03-05T14:23:35Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/without_skill/timing.json",
+    "timestamp": "2026-03-05T14:23:35Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/with_skill/timing.json",
+    "timestamp": "2026-03-05T14:23:35Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/without_skill/timing.json",
+    "timestamp": "2026-03-05T14:23:36Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/with_skill/timing.json",
+    "timestamp": "2026-03-05T14:23:36Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/without_skill/timing.json",
+    "timestamp": "2026-03-05T14:23:37Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "benchmark.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/benchmark.json",
+    "timestamp": "2026-03-05T14:24:33Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/without_skill/timing.json",
+    "timestamp": "2026-03-05T14:26:01Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/with_skill/timing.json",
+    "timestamp": "2026-03-05T14:26:02Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/with_skill/timing.json",
+    "timestamp": "2026-03-05T14:26:03Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/without_skill/timing.json",
+    "timestamp": "2026-03-05T14:26:04Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/without_skill/timing.json",
+    "timestamp": "2026-03-05T14:26:05Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "timing.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/with_skill/timing.json",
+    "timestamp": "2026-03-05T14:26:06Z",
+    "contains_secrets": 0
+  },
+  {
+    "filename": "benchmark.json",
+    "original_path": "/Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/benchmark.json",
+    "timestamp": "2026-03-05T14:26:40Z",
+    "contains_secrets": 0
+  }
+]

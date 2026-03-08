@@ -29,3 +29,963 @@ Session management cleanup complete
 
 2026-03-05 12:58:53 - Session ended (source: user_exit, ID: c8b02453-8351-43ad-b6e0-72f62426f614)
   Artifacts collected: 0
+2026-03-05 12:58:54 - Auto-pushed to remote
+Session management cleanup complete
+================================================================================
+2026-03-05 15:55:54 - Session started (source: startup, ID: d26a3dc4-62e0-411b-b916-5b7b41c25863)
+  Working directory: /Users/alex.geana/.claude-sessions/claude-council
+
+2026-03-05 15:55:54 - Session started (source: resume, ID: c8b02453-8351-43ad-b6e0-72f62426f614)
+  Working directory: /Users/alex.geana/.claude-sessions/claude-council
+
+2026-03-05 16:04:24 - Artifact captured: evals.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/evals/evals.json)
+[2026-03-05 16:18:16] Tool failure: Bash - Exit code 2
+2026-03-05 16:18:54 - Artifact captured: trigger-eval.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/evals/trigger-eval.json)
+2026-03-05 16:19:15 - Artifact captured: eval_metadata.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/eval_metadata.json)
+2026-03-05 16:19:23 - Artifact captured: eval_metadata.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/eval_metadata.json)
+2026-03-05 16:19:31 - Artifact captured: eval_metadata.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/eval_metadata.json)
+2026-03-05 16:22:19 - Session started (source: compact, ID: c8b02453-8351-43ad-b6e0-72f62426f614)
+  Working directory: /Users/alex.geana/.claude-sessions/claude-council
+
+2026-03-05 16:23:14 - Artifact captured: grading.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/with_skill/grading.json)
+2026-03-05 16:23:18 - Artifact captured: grading.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/without_skill/grading.json)
+2026-03-05 16:23:20 - Artifact captured: grading.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/with_skill/grading.json)
+2026-03-05 16:23:22 - Artifact captured: grading.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/without_skill/grading.json)
+2026-03-05 16:23:25 - Artifact captured: grading.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/with_skill/grading.json)
+2026-03-05 16:23:27 - Artifact captured: grading.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/without_skill/grading.json)
+2026-03-05 16:23:35 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/with_skill/timing.json)
+2026-03-05 16:23:35 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/without_skill/timing.json)
+2026-03-05 16:23:36 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/with_skill/timing.json)
+2026-03-05 16:23:36 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/without_skill/timing.json)
+2026-03-05 16:23:36 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/with_skill/timing.json)
+2026-03-05 16:23:37 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/without_skill/timing.json)
+[2026-03-05 16:23:43] Tool failure: Bash - Exit code 2
+2026-03-05 16:24:33 - Artifact captured: benchmark.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/benchmark.json)
+2026-03-05 16:26:01 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/without_skill/timing.json)
+2026-03-05 16:26:02 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/with_skill/timing.json)
+2026-03-05 16:26:03 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/with_skill/timing.json)
+2026-03-05 16:26:04 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/architecture-db-choice/without_skill/timing.json)
+2026-03-05 16:26:05 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/security-tradeoff/without_skill/timing.json)
+2026-03-05 16:26:06 - Artifact captured: timing.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/stuck-debugging/with_skill/timing.json)
+2026-03-05 16:26:40 - Artifact captured: benchmark.json (from /Users/alex.geana/.claude-sessions/claude-council/claude-council-workspace/iteration-1/benchmark.json)
+2026-03-05 16:52:28 - Session started (source: startup, ID: af61e48d-cba2-456b-84e7-36eb7dce6e69)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:28 - Session started (source: startup, ID: d117de91-630f-4516-a8d4-8fc6e3737407)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:28 - Session started (source: startup, ID: c76f9b39-33b3-4410-a8e2-fbe931501e35)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:29 - Session started (source: startup, ID: 5998eb64-6300-433f-aceb-0322c5c0f986)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:29 - Session started (source: startup, ID: cc83b6c5-16e0-439b-84ea-3fed9b0f2fe4)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:30 - Session started (source: startup, ID: 800b0a3c-95cd-49dc-9d98-7a4fdd5448fe)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:30 - Session started (source: startup, ID: 959e4133-f681-4fa4-b9a2-a6f81de03457)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:30 - Session started (source: startup, ID: 47f7a17d-3e4a-4806-bb39-1c6dd305d68e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:31 - Session started (source: startup, ID: 2690e3c8-91f9-483b-8685-57cf713663e7)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:31 - Session started (source: startup, ID: 68170780-7ce1-4064-ae87-e51e03bae827)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: e9db846b-f06e-4cc1-9ea8-834b23cfd6b7)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: a4e08f10-73eb-4006-a1e9-83b5ebba67b7)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: ae48ce46-09a8-4c00-a600-3a4ab3c4efd1)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: da2c8341-6690-4266-8048-1ec7001236c6)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: f4c513d8-0fcc-4b8d-9f48-683bc43ea5bf)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: cc5dcb1a-810d-41b3-b74b-aa47a3ce0c37)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: 599cb2fc-27cd-49dd-bed1-5cac4b7bc651)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: fc0fb9a1-9dd7-4d65-a352-f15a79380b49)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: 473f261a-e732-48a5-8e88-91194f420945)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:52:58 - Session started (source: startup, ID: db352987-d217-426c-9fbd-f7ee6db4ce48)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:05 - Session started (source: startup, ID: 921f0bce-4122-4291-b8cb-6cd6d46fba1d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:06 - Session started (source: startup, ID: c730958c-f18c-47ee-9dd1-6e656ccb0c2b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:06 - Session started (source: startup, ID: dc6cabd2-7191-4824-9e9f-42f14b933309)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:06 - Session started (source: startup, ID: f6d1b707-fabb-4569-b2a2-aa7e3f237107)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:07 - Session started (source: startup, ID: ea931485-0998-4c38-988c-2c4cda448d21)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:11 - Session started (source: startup, ID: ee1923fe-8c62-4e68-bc6d-6c8ce4f40e1c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:13 - Session started (source: startup, ID: 74aa9812-3a6a-434d-a102-c3745dd60d86)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:18 - Session started (source: startup, ID: 4dd2f6e5-0af2-4fe4-9995-be37ce73fac6)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:19 - Session started (source: startup, ID: f5172053-36dc-4cf4-9946-4d13a0b3851b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:22 - Session started (source: startup, ID: 08f1fafd-4063-4f6b-bd2a-5634cb27cf9d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:22 - Session started (source: startup, ID: 53fb2181-7439-476a-9183-12def444bb86)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:24 - Session started (source: startup, ID: a7d26d3e-58fb-4d82-a539-b664e5efce2c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:25 - Session started (source: startup, ID: 3f18fcd5-9a50-48f4-9df4-72c28b3787c3)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:28 - Session started (source: startup, ID: ffa8a9ae-db71-4393-8e69-3eb8431ddcbe)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:28 - Session started (source: startup, ID: f5843800-eb86-40ed-96b0-248d4501efc0)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:28 - Session started (source: startup, ID: 338bef37-30a8-4f0b-92f3-55736ed28a73)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:28 - Session started (source: startup, ID: 253fa753-d07b-4d6e-a07b-b887caec92b5)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:28 - Session started (source: startup, ID: 959f5281-eb5d-4e8d-bac8-fade4bb05eec)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:28 - Session started (source: startup, ID: ee509655-6cb0-4e93-9934-31a8de4eb595)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:30 - Session started (source: startup, ID: 5da94897-55b7-4dd2-9fd4-12665338a8b8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:31 - Session started (source: startup, ID: 8f9b7b70-c92d-4e18-8fa1-6def9c74faf4)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:32 - Session started (source: startup, ID: c8d61b63-2dc3-4e18-bcb8-5d7a602fd533)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:32 - Session started (source: startup, ID: 59ae94a6-6ea4-40fb-b19a-b49fc98dd60c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:38 - Session started (source: startup, ID: b1f2f93a-8dc7-4b85-be6d-0c7ca8f42149)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:43 - Session started (source: startup, ID: c43429c1-42bb-419a-a012-2c3aac45146e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:47 - Session started (source: startup, ID: 674f16e2-1374-4292-8bd7-a1b7cac97a46)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:49 - Session started (source: startup, ID: 8c0d5cf1-e33b-43ec-b33c-1abc2229fb49)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:52 - Session started (source: startup, ID: e9317ea7-433c-41f9-bdef-acd1e04879a8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:55 - Session started (source: startup, ID: b2ca5d54-f7ff-485f-aab9-269a83978aa3)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:56 - Session started (source: startup, ID: 0d1444e9-8df6-46c2-aafe-7f08a3e1ea99)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:57 - Session started (source: startup, ID: fe9cb054-12d0-43a4-9039-d257a3839137)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:57 - Session started (source: startup, ID: 2991e0d3-1467-4a0b-9eb0-9f3d89d7c5cf)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:57 - Session started (source: startup, ID: 89f712d0-8ce0-40da-86bb-a7886e7f828a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:53:57 - Session started (source: startup, ID: d8b8a72e-5da0-4adf-b29c-862bdef54a7b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:40 - Session started (source: startup, ID: b8432bd4-a81f-4f81-bcb1-42009843f1cf)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:40 - Session started (source: startup, ID: 23d2f728-0c09-4aac-8278-d7a9790222e7)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:40 - Session started (source: startup, ID: 27b58ba4-bfa3-42ff-a3ab-2fe46b28907e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:40 - Session started (source: startup, ID: a308e534-1fec-4161-881b-3d8fdff9e03d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:40 - Session started (source: startup, ID: 314c9e8e-d486-4094-919b-056926dbd077)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:40 - Session started (source: startup, ID: eb74035c-c86e-43f4-b267-76c9ae8bcafd)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:40 - Session started (source: startup, ID: a1299afb-676f-4910-b06a-51a134252fee)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:40 - Session started (source: startup, ID: 37edd4c6-addc-45be-b40d-c4a6a466180e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:41 - Session started (source: startup, ID: aaf45c91-4428-4a2d-8305-ae534492a3fd)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:54:41 - Session started (source: startup, ID: 30514c2f-c92b-4f55-9e1f-56eba854a8a2)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:09 - Session started (source: startup, ID: 83493e0e-2310-4114-8148-8dcf39030cc9)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:09 - Session started (source: startup, ID: 32733b78-eef5-4ff5-a6b3-fdca41cb3d65)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:09 - Session started (source: startup, ID: 6cb52a53-1fb9-4c61-9f78-e4f1739df49e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:10 - Session started (source: startup, ID: a5682dea-cb95-4b8d-a8fb-5ff174f6c7a8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:10 - Session started (source: startup, ID: b907cbf4-cb9e-44f3-a7c9-e141ef7cbbd9)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:10 - Session started (source: startup, ID: 0f23c1bf-a74c-4792-bfae-f1d445f4f0f4)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:10 - Session started (source: startup, ID: 4080c806-748a-4766-a299-c0911bd7634e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:10 - Session started (source: startup, ID: 6664f255-aa35-41d9-84ec-d67404523f30)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:10 - Session started (source: startup, ID: 9663d8c0-2913-476c-942a-6e462c5617ba)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:10 - Session started (source: startup, ID: 8f0d554e-6285-4c58-a25c-fe3d37f4ac4b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:18 - Session started (source: startup, ID: cd98d5d4-f864-4043-b955-c3c87c741287)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:19 - Session started (source: startup, ID: cbca0a8d-12af-4d56-9b05-fbc550c6707d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:19 - Session started (source: startup, ID: 7cf85271-313e-4385-a61f-02081471e054)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:19 - Session started (source: startup, ID: 155130a4-17de-4385-a1a9-f8afd17713f1)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:20 - Session started (source: startup, ID: 6575ddaf-b952-4ab1-a28d-ca1e0dd987c7)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:26 - Session started (source: startup, ID: 4cce6e7d-88cd-4077-a212-b398484ddcf5)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:26 - Session started (source: startup, ID: 6ce330f3-2bb5-4f99-89ca-ebd4bd493f28)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:32 - Session started (source: startup, ID: 2b82261b-5dd1-4f3b-8ab9-2a654f3d3238)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:32 - Session started (source: startup, ID: f855cab1-190b-4ce3-9f25-32d3837c3e82)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:37 - Session started (source: startup, ID: 50ba954a-95c7-4af6-90a3-20dc91e6e0cb)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:37 - Session started (source: startup, ID: b2d49bbb-111b-4f94-a1a5-050c04ba55dc)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:37 - Session started (source: startup, ID: 4c84a55e-03e7-46c9-b272-9673589581a1)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:40 - Session started (source: startup, ID: e9f1dfa0-d6bb-4fd6-99c1-588a6784ef4c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:40 - Session started (source: startup, ID: 493bf35a-d68d-4512-b4e8-d1db8bdef98d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:40 - Session started (source: startup, ID: 1acff9b7-7e9b-4fae-a175-9ecbdefe757f)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:40 - Session started (source: startup, ID: 936d41b5-01f5-43e2-b10d-c83f41ba0625)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:41 - Session started (source: startup, ID: 3e323f08-eb08-4b82-87a4-48ba5d8a6f47)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:42 - Session started (source: startup, ID: 63cddf39-10d2-4629-8069-fdf2ad8f2371)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:45 - Session started (source: startup, ID: 5428be98-7fe6-482d-b68b-2bc952992f30)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:45 - Session started (source: startup, ID: 4e108f35-92dd-4659-8592-7427bee9185b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:46 - Session started (source: startup, ID: 573e5e55-d751-4f81-8e7f-8f5bc8b197e8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:47 - Session started (source: startup, ID: 2357f993-43ce-4278-a16e-280b84a62d70)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:49 - Session started (source: startup, ID: 0edb45ec-de48-4417-8569-cadcc07850e1)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:54 - Session started (source: startup, ID: b760ac49-6e2c-4012-92e0-c4c558a8aa1d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:55:56 - Session started (source: startup, ID: 1bcad1b1-07c6-4203-99bd-fce3cc582f5e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:01 - Session started (source: startup, ID: b6e4ae92-80ae-4baa-bba3-64608a1894e9)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:02 - Session started (source: startup, ID: 67b30322-8e07-4335-98ba-301914df0158)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:06 - Session started (source: startup, ID: e8dc0ac0-db74-4af0-9ab7-0a809d540e75)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:07 - Session started (source: startup, ID: c7837807-e2ca-429f-9327-29efe6697eaa)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:08 - Session started (source: startup, ID: 54ff9a7f-007f-4f50-b814-067889fb370e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:08 - Session started (source: startup, ID: 2b2e3d85-62f4-4269-a79d-9059cbe00723)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:08 - Session started (source: startup, ID: 668df311-3986-4cb1-9ffe-6de6c9937bc5)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:10 - Session started (source: startup, ID: 9d11dfb9-1afd-46c1-b6f2-83dba3baf746)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:10 - Session started (source: startup, ID: 4d2b6119-6f43-4e4f-af15-66bb1a989700)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:46 - Session started (source: startup, ID: 512df96c-4af1-49d0-9e3f-78c724b5c262)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:46 - Session started (source: startup, ID: 26034862-8398-4824-a8c3-c28c8d16bc5a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:46 - Session started (source: startup, ID: 34d864ae-1f8d-43d1-adc5-e60594b8dc8a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:47 - Session started (source: startup, ID: e5876dda-b70d-49ce-b0c7-2cae14e3873b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:47 - Session started (source: startup, ID: cd50759a-ef92-49e5-9505-42297701927d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:47 - Session started (source: startup, ID: 1175e336-5afa-4c1b-b0e1-c4d586b813ae)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:47 - Session started (source: startup, ID: 17ea5a08-52e5-4791-979f-955257a82217)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:47 - Session started (source: startup, ID: 8866e670-fe53-474e-95ee-00a1fbc4bd4f)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:47 - Session started (source: startup, ID: e7507d0d-f04a-47fc-9b44-ee361ffdf35c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:47 - Session started (source: startup, ID: 082e6ebf-0d5f-476e-a17f-c9004123905a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:56 - Session started (source: startup, ID: 801e58d3-8f97-4154-b788-fbf4d20b43a5)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:57 - Session started (source: startup, ID: 61adadde-5464-41ee-9e49-3a46c60a986a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:57 - Session started (source: startup, ID: b46bfb74-a6e6-4f8e-a62d-85cc5d692fac)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:57 - Session started (source: startup, ID: 7d5134c0-403a-42f7-9777-43683eb46703)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:58 - Session started (source: startup, ID: f9be5b4f-c3a9-47d1-9ba2-099a04cdf1e7)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:59 - Session started (source: startup, ID: 7ae1876a-9775-4e66-8567-335f88ad017c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:56:59 - Session started (source: startup, ID: 278ffa1c-f584-48b2-bf9b-b92f8a3f0fb4)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:05 - Session started (source: startup, ID: 932dd901-7ba4-430e-b82c-6fb4cd2671a8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:06 - Session started (source: startup, ID: 7ed9fe85-586c-4bc2-a3e9-b6feda6be8ae)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:10 - Session started (source: startup, ID: 7de0ebe9-d045-4940-84d6-8b66c2b1d7c9)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:10 - Session started (source: startup, ID: 047ac10e-fdcd-4403-b2f7-1f6fc6d0ff98)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:12 - Session started (source: startup, ID: 53515589-77e6-4309-828d-339b79b5736d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:15 - Session started (source: startup, ID: b72c4a42-30f4-47d4-bb0b-0370d699259d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:15 - Session started (source: startup, ID: 9f827565-317d-48a5-b294-eabfaa892e0f)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:16 - Session started (source: startup, ID: 90b777db-fad3-4098-994c-773df6bdabc5)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:16 - Session started (source: startup, ID: 4a4ceb80-67b6-4c27-97ad-7ace2539a56d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:17 - Session started (source: startup, ID: 66a01693-e8c8-4150-8aa9-520455d30174)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:18 - Session started (source: startup, ID: faa49397-ec65-4ab8-b980-a83364dc060d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:20 - Session started (source: startup, ID: aa68fdbf-5fbe-4c9c-ad24-9d1d6601fe38)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:22 - Session started (source: startup, ID: 9b2a3e91-9869-4322-be50-3f1c5c588451)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:23 - Session started (source: startup, ID: 47e683a7-d1c9-407a-b278-7e0eb9fc1591)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:23 - Session started (source: startup, ID: 6a2a3a2f-f14d-4978-834c-074d31f9dea1)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:24 - Session started (source: startup, ID: 506f430f-9624-4df9-a66e-45708107d49c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:25 - Session started (source: startup, ID: 44b9c4d4-0e87-4895-8695-db1eb69bfabb)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:26 - Session started (source: startup, ID: 5a1dd65c-31d1-49a2-9f87-599f626453ed)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:28 - Session started (source: startup, ID: 1ff67724-ccac-433a-a8eb-491caef11125)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:30 - Session started (source: startup, ID: 1fe7a110-803d-4604-958e-404924df4a25)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:30 - Session started (source: startup, ID: 6088a941-9120-4fe8-9a6f-37545cb2596f)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:30 - Session started (source: startup, ID: 27bb9f4f-3a40-447e-87b7-95f8f06fbfd6)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:30 - Session started (source: startup, ID: 8f106edd-2e09-4a1e-8fbd-7168acc1d45b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:34 - Session started (source: startup, ID: 8b066f67-3574-41eb-b44e-fcde98f09707)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:34 - Session started (source: startup, ID: 42326087-203b-43bb-9683-e72924d960e4)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:34 - Session started (source: startup, ID: a9b2f026-90ba-4a49-aaaf-7b3b46f35585)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:35 - Session started (source: startup, ID: f483211b-45fc-4bb4-b3a5-9bcf1e526cf8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:38 - Session started (source: startup, ID: 167a32f4-58e5-4a29-bca2-c1ecd1ae6cc3)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:39 - Session started (source: startup, ID: 7d909aab-006a-413c-b70f-58bb419c4ecf)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:40 - Session started (source: startup, ID: eb2d99a8-82f2-4231-9930-d49b04256c7d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:41 - Session started (source: startup, ID: 4e16617d-456e-4043-8521-c518c6b9a799)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:42 - Session started (source: startup, ID: 42177037-ade1-46bd-83e6-7269dd68a735)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:42 - Session started (source: startup, ID: 817093c1-74fa-49d2-ae7a-be42673bcc7a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:42 - Session started (source: startup, ID: 2269af2d-65c8-44e9-9f3e-2c6aa711cc76)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:44 - Session started (source: startup, ID: b3c9ce8d-29df-4158-9f53-f3da1e4daa80)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:46 - Session started (source: startup, ID: b732b4e9-9cb0-43cb-835a-9d63ccc32806)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:57:47 - Session started (source: startup, ID: 489fa40e-8e31-4061-ae7c-be79b9c89b09)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:29 - Session started (source: startup, ID: 6ce43a39-413b-4d81-b994-d1b763c68ce6)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:29 - Session started (source: startup, ID: 372ad2e2-a215-4d8b-a355-9626c7bfb1ee)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:29 - Session started (source: startup, ID: f0e31555-1bfa-4432-a961-54f83924016c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:29 - Session started (source: startup, ID: fa648acf-36c2-4894-830c-88e119d261a8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:30 - Session started (source: startup, ID: cfe4aed4-b4be-4441-802a-8a4f989a3f7f)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:30 - Session started (source: startup, ID: e755ab38-dd20-413f-b2e5-45ba8542b755)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:30 - Session started (source: startup, ID: 8847eee0-4117-47da-85d5-1ff3e6f5839a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:30 - Session started (source: startup, ID: c9fbebbe-c87f-49da-aa5e-e1dd4676a5f2)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:30 - Session started (source: startup, ID: 884ccefe-dfeb-42f4-b0a3-84f3ac18dfd6)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:30 - Session started (source: startup, ID: b71b8e3c-91fa-443c-ae5d-1085ed887b41)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: cbcca4bd-3870-47ee-be39-b487d06a82a1)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: 4a619057-90ea-4dcb-8e23-bdc314575a78)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: 125e5285-a68c-4d17-9b9e-afe3471386f8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: ff285dcf-e765-4005-b0fe-6b04c1f1db4e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: 35d1f143-d55e-4109-9861-3b52cf700ba8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: f259bc48-d354-4bab-ba61-875ab02cc7ea)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: 561ec146-7866-40bf-b0a8-1b67dc94d340)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: 32298aed-3183-42d7-8256-471916ba99d6)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: 8965302c-0ff4-4329-8b93-e5c6dedfe6fa)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:58:58 - Session started (source: startup, ID: 7e51383a-f8bd-498d-af6f-ed0e15aafa09)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:05 - Session started (source: startup, ID: 8bdf0922-9c20-4217-9034-44ce46e678ef)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:05 - Session started (source: startup, ID: f66eadf8-4f75-40cf-b045-f05119e625d3)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:05 - Session started (source: startup, ID: 9e03ec43-ec3d-4794-b185-aac441bd945f)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:05 - Session started (source: startup, ID: b804dd83-2e36-4b13-a0ff-795d8b041c09)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:06 - Session started (source: startup, ID: f368029f-81a3-4667-b162-e48ddb7e9665)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:11 - Session started (source: startup, ID: d2cf7caf-1673-465b-a9b8-b72640d008b7)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:13 - Session started (source: startup, ID: 7745d1cb-2aec-415f-a3ac-b2c604804cc8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:17 - Session started (source: startup, ID: d3079114-019b-4c1d-8afd-6f496985b913)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:18 - Session started (source: startup, ID: 72744cf1-4026-47db-9998-1aff46ba5492)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:19 - Session started (source: startup, ID: 90f97d7c-8488-45ee-933f-21ab166bffe3)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:21 - Session started (source: startup, ID: 45fa7970-d7d8-4584-930d-083fd48c12f3)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:23 - Session started (source: startup, ID: 10d5aa27-4888-46de-aec8-dc1a5e2ce719)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:23 - Session started (source: startup, ID: 75ebce9f-d55b-49ae-be26-bce48f749297)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:24 - Session started (source: startup, ID: dfaf67c9-4165-459b-8f55-c033974bf3ae)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:25 - Session started (source: startup, ID: 01cedb9e-bc8f-40c1-a05e-ddf166ef1bf2)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:26 - Session started (source: startup, ID: 22e6aa83-4e72-4eda-beb6-a71ec8567ead)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:27 - Session started (source: startup, ID: c4f727a0-59ce-47ae-96d8-c7424e9bb9e9)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:27 - Session started (source: startup, ID: c623fe00-2b12-4806-a1e3-8519999f38ed)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:27 - Session started (source: startup, ID: 1cc95b4b-0b6b-44cf-ad14-584fd3faa40e)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:28 - Session started (source: startup, ID: c3b0a3c2-0b20-4511-b403-2d921c82c480)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:29 - Session started (source: startup, ID: 10d31817-2d32-4cb3-8977-6fd762e2ca8c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:30 - Session started (source: startup, ID: 6213c575-1201-477c-8b5a-dc1393616c0a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:32 - Session started (source: startup, ID: 4c9bbc15-9a98-46c8-874a-2eafd7ce4170)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:40 - Session started (source: startup, ID: 732875e9-137d-4c46-99af-95546e2f16fb)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:45 - Session started (source: startup, ID: ce205ce3-bc82-46f4-8e7e-b53c47c6cc72)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:50 - Session started (source: startup, ID: a8955f4b-53ff-4917-aa80-9b3c37c3cbac)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:51 - Session started (source: startup, ID: 202b8864-0a18-404e-a638-63c045890ff2)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:54 - Session started (source: startup, ID: c3706f44-9bf2-4bc0-869b-cb97497346b2)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:55 - Session started (source: startup, ID: 2383332f-f060-4e9a-98c8-b75d4fcddd72)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:55 - Session started (source: startup, ID: 1908814d-2a4b-46de-be9e-502e6a7d3be9)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:56 - Session started (source: startup, ID: bd32137c-3bd9-4a5d-9c54-83abd42413a8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:57 - Session started (source: startup, ID: 12342f71-bd95-49be-8dcc-d8038cd66596)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:57 - Session started (source: startup, ID: 7f9fdbc7-75fe-442d-8682-d36c6a8c5290)
+  Working directory: /Users/alex.geana
+
+2026-03-05 16:59:57 - Session started (source: startup, ID: 8b9df3f1-2b45-43ca-97c4-f99909d16282)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:36 - Session started (source: startup, ID: 09ce8e3c-3e01-4119-a35c-e28a9052324d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:36 - Session started (source: startup, ID: f38d0d1f-1e52-440b-ae84-e3fdc28e374c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:36 - Session started (source: startup, ID: 9aad3550-4b52-446c-97e7-7640e4fb0b71)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:36 - Session started (source: startup, ID: 19374b23-e830-4272-8063-4ce715912c5b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:36 - Session started (source: startup, ID: 603d3f6e-20b3-42e8-b419-a816cc646f65)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:36 - Session started (source: startup, ID: 76ba85ea-b626-4bbc-bc8e-3c42355dd083)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:37 - Session started (source: startup, ID: 0f6d0f25-8a73-4a5f-bbdd-d20d61751b18)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:37 - Session started (source: startup, ID: 5933e42a-4032-4e80-bb26-bed53be84a66)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:37 - Session started (source: startup, ID: 0181140c-9243-42db-840f-aa96538bbdec)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:00:37 - Session started (source: startup, ID: 4fb67e02-cbd7-4096-85b0-0a06c58a6cfc)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: ef515e5c-1384-45dc-88aa-c5a581f42771)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: 842773a9-3f01-4db8-a9f5-5a4472f7b122)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: 63a01b7e-6d3f-44ba-b30e-9836afc40409)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: e7dd93c8-f33b-4647-87fb-11aa528aa693)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: 66b31cf6-2e1e-4761-9a7f-0f61033eaeae)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: 7704d58c-3fb2-4dd2-8508-31347901bc22)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: a09e89fd-bc74-48be-ba5a-31ab64e34d47)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: 09fe2aa7-75fd-432e-9a85-c62cc157d8b3)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: 0c9be647-0cf6-4896-8895-481f8e852b7d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:07 - Session started (source: startup, ID: 3ab8a1f8-4774-44f3-a176-aafa8d3584cc)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:13 - Session started (source: startup, ID: d42dbfe5-c2c4-44f2-a297-cfa41841dd61)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:14 - Session started (source: startup, ID: 2547a2a7-b774-4a99-aee5-159e9478a760)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:14 - Session started (source: startup, ID: 75728dbf-5950-49d0-8466-2a9c9c4d4918)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:15 - Session started (source: startup, ID: b6f12ef7-0b58-4441-976f-baf96bcfc0a6)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:15 - Session started (source: startup, ID: bd897ef5-8273-4295-b818-172aec3a7e43)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:20 - Session started (source: startup, ID: 146344af-84ad-400c-be44-4d2a71529172)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:23 - Session started (source: startup, ID: 08ba1322-cb31-4306-aa8c-b8435f0b1f48)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:27 - Session started (source: startup, ID: 9355a84f-ea30-46da-96f1-e4059eba891d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:28 - Session started (source: startup, ID: 02852dee-e56f-42f1-b347-1704f9513e31)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:29 - Session started (source: startup, ID: 6338856a-cd58-4638-bfd1-5134f23ae396)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:31 - Session started (source: startup, ID: 3f7e1b80-896f-41bc-ab5f-60174cb04bc8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:31 - Session started (source: startup, ID: 47ca96a0-cfb6-4a5c-940a-790f62378d4c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:34 - Session started (source: startup, ID: ea841010-400f-415b-8114-877bec6b3d24)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:35 - Session started (source: startup, ID: 212fcbbd-02d2-4c66-be3f-c91f1a050f01)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:35 - Session started (source: startup, ID: 0d42c704-c8db-4d0a-b1c1-642a3298ffcf)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:37 - Session started (source: startup, ID: 6279ede7-acac-4733-8e17-c24e55429cd8)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:37 - Session started (source: startup, ID: fac47c1d-0e02-4a22-890c-290e12280ab3)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:37 - Session started (source: startup, ID: 2e835127-9d8e-41d5-9839-15ce4f3e1c3c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:37 - Session started (source: startup, ID: ad5f8b90-e9f3-4e4e-94ce-568ab4869f7c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:38 - Session started (source: startup, ID: 58f5707d-3dc4-422b-af1d-713f59ab7bb2)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:39 - Session started (source: startup, ID: 127e0dee-d5b3-4d9e-8291-5625167d2002)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:39 - Session started (source: startup, ID: cf676cce-2829-4c55-87c4-16fd1eb222f2)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:42 - Session started (source: startup, ID: 6f113422-151f-4a36-959f-dd610a71dd1b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:46 - Session started (source: startup, ID: 4bfdda6e-5b35-4636-b763-6bbb33658fc1)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:48 - Session started (source: startup, ID: d6e73f90-c3d1-4906-a24a-32fec3c128db)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:52 - Session started (source: startup, ID: aef5f1bd-3d0c-4659-a029-d6679e197826)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:54 - Session started (source: startup, ID: dfb9e0c2-fcd7-499a-b72b-8a0ea0afcebb)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:01:58 - Session started (source: startup, ID: 0aea1c9b-6fea-44f7-b896-5f1003cbc1ce)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:02:00 - Session started (source: startup, ID: f809c7f5-6c6c-44f1-b3c6-24f9e383a200)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:02:00 - Session started (source: startup, ID: 5a5d6f9a-562b-49af-b2d2-fe0ab4d0e1d6)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:02:02 - Session started (source: startup, ID: 4b5486b1-01f1-4a6f-8247-5349044e743f)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:02:03 - Session started (source: startup, ID: eced7a71-3863-4149-9691-b1733344247a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:02:05 - Session started (source: startup, ID: dca644b4-3fe6-486f-bb25-e08a671c7509)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:02:06 - Session started (source: startup, ID: bfcc99ba-194e-4fa1-b4a9-6edcf5d0a07b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: 497f174d-1e89-4afb-9121-25639efffc6b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: 2a1895bf-7d35-474f-af6a-9b5ed0595911)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: 9aa54857-bdc9-4283-9cec-388c9f3c8c40)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: fbe930a6-8ec1-4484-919f-472327296363)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: 1efa4812-6f30-4cf6-983b-8bcb181a80a9)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: a5bfb263-98d8-4417-95cd-032cdc2d086d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: b6401786-2d87-4236-8bc7-1d1f7df36ed0)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: 5a1e1ec8-bfee-460b-9e2a-3b1201c0cf6a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: 4b2cc4c9-8b68-4975-b7e8-c9985aaabc90)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:13:42 - Session started (source: startup, ID: 7b8604ab-a032-48ec-aa37-70d05645f60a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:11 - Session started (source: startup, ID: 8510d97f-8362-4c8f-994c-5ebcefa2329d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:11 - Session started (source: startup, ID: 8dfffd58-3f40-43d3-ac40-25eab65de564)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:11 - Session started (source: startup, ID: 81af9ecb-7fb9-4177-aaad-ee56988b943a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:11 - Session started (source: startup, ID: 4e1f187c-e118-4136-bff0-e53dc0b05e46)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:11 - Session started (source: startup, ID: 83a5c8ea-81e4-4f3f-bff6-7e0d5dc12295)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:11 - Session started (source: startup, ID: 07c9f04d-48b5-4eb2-8da6-d51230ec362c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:11 - Session started (source: startup, ID: 11af33f0-4d31-425e-ad98-b3f36e42fa5d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:11 - Session started (source: startup, ID: 2662a7b1-55ef-4b08-8126-1c8498ed4d92)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:11 - Session started (source: startup, ID: 6162900d-7ba0-425f-868a-0b134d8bf350)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:12 - Session started (source: startup, ID: 599f3c9f-f8b1-4308-a942-2811b40944e7)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:18 - Session started (source: startup, ID: 94ae805a-4856-4c44-9735-f8f6a304527d)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:19 - Session started (source: startup, ID: 452a2942-dd15-43fd-976e-a45b9633d155)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:19 - Session started (source: startup, ID: 577d3fc6-bf50-426a-ad66-3502a3551e00)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:20 - Session started (source: startup, ID: d2162f7d-427e-43e4-938f-3df1d49d3d41)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:25 - Session started (source: startup, ID: 9a291bc0-ddd6-4eb0-a118-e8e40f393806)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:25 - Session started (source: startup, ID: bdb59d2f-43f5-4db0-8ef0-78b39817110c)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:26 - Session started (source: startup, ID: edf4fd81-588e-4021-a8f3-9b97d4515a05)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:27 - Session started (source: startup, ID: 924530a4-a6f2-47b6-bedf-ac433b585c4b)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:32 - Session started (source: startup, ID: 04631f37-d46e-42f0-b320-8aef95cbc857)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:33 - Session started (source: startup, ID: 3ffbd8f9-bc43-4bfd-bbdf-0d52c3c57e4a)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:33 - Session started (source: startup, ID: ac19b04e-8471-4732-bc4a-234637cafb93)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:39 - Session started (source: startup, ID: 6eb03870-2ca5-4d3f-a3cb-a9cd216a9ed4)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:40 - Session started (source: startup, ID: 258d53b4-cd3e-473b-b5aa-5f61a5153362)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:40 - Session started (source: startup, ID: f19403df-2995-4775-8fc8-e83bc0e1d2a1)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:40 - Session started (source: startup, ID: 69aa45df-2ca1-425f-9344-f20524853230)
+  Working directory: /Users/alex.geana
+
+2026-03-05 17:14:40 - Session started (source: startup, ID: 08e2d02f-ac30-4290-a549-4299070a29eb)
+  Working directory: /Users/alex.geana
+
+
+2026-03-05 17:16:58 - Session ended (source: user_exit, ID: c8b02453-8351-43ad-b6e0-72f62426f614)
+  Artifacts collected: 0

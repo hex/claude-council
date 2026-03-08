@@ -27,7 +27,7 @@ fi
 
 # Model selection (override via PERPLEXITY_MODEL env var)
 # Available: sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro
-MODEL="${PERPLEXITY_MODEL:-sonar-pro}"
+MODEL="${PERPLEXITY_MODEL:-sonar-reasoning-pro}"
 
 # Perplexity API endpoint (OpenAI-compatible)
 ENDPOINT="https://api.perplexity.ai/chat/completions"
