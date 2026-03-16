@@ -137,7 +137,7 @@ Automatic retry on transient failures (429 rate limits, 5xx server errors):
 ```bash
 export COUNCIL_MAX_RETRIES=3    # default: 3 retries
 export COUNCIL_RETRY_DELAY=1    # default: 1 second initial delay (doubles each retry)
-export COUNCIL_TIMEOUT=60       # default: 60 seconds per request
+export COUNCIL_TIMEOUT=120      # default: 120 seconds per request
 ```
 
 Timeouts fail fast (no retry) to prevent blocking on hung providers.
