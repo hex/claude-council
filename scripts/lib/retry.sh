@@ -5,7 +5,7 @@
 # Configuration via environment variables
 COUNCIL_MAX_RETRIES="${COUNCIL_MAX_RETRIES:-3}"
 COUNCIL_RETRY_DELAY="${COUNCIL_RETRY_DELAY:-1}"
-COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-60}"  # seconds per request
+COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-120}"  # seconds per request (reasoning models need more time)
 
 # HTTP status codes that should trigger a retry
 is_retryable_status() {
