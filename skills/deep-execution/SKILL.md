@@ -12,78 +12,15 @@ evaluates response quality, can ask follow-up questions, and returns structured 
 
 For each selected provider, gather:
 - Provider name and script path: `${CLAUDE_PLUGIN_ROOT}/scripts/providers/{name}.sh`
-- Model name (from the get_model function in query-council.sh or provider script defaults)
-
-Provider defaults:
-- gemini: `gemini-3.1-pro-preview`
-- openai: `gpt-5.4`
-- grok: `grok-4`
-- perplexity: `sonar-reasoning-pro`
+- Model name: run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-available` or read the provider script defaults
 
 ## Step 2: Spawn Provider Agents in Parallel
 
 Launch ALL provider agents in a **single message** (multiple Agent tool calls) for parallel execution.
 Use `run_in_background: true` and `subagent_type: "general-purpose"` for each.
 
-**Agent prompt template** (fill in `{PROVIDER}`, `{SCRIPT_PATH}`, and `{QUESTION}`):
-
-```
-You are a council provider analyst for {PROVIDER}.
-
-## Your Task
-
-Query the {PROVIDER} AI provider and deliver a structured analysis of its response.
-
-### Round 1: Initial Query
-
-Run this command:
-```bash
-COUNCIL_TIMEOUT=240 bash {SCRIPT_PATH} "{QUESTION}"
-```
-
-Read the response carefully.
-
-### Round 2: Quality Check and Follow-up
-
-Evaluate the response:
-- Does it directly address the question?
-- Is it substantive (not vague or generic)?
-- Are there obvious gaps or unanswered aspects?
-
-If the response is **off-topic, vague, or missing key aspects**, formulate a targeted
-follow-up that addresses the gaps. Run the script again with the same `COUNCIL_TIMEOUT=240` prefix.
-
-If the response is good, skip the follow-up.
-
-### Round 3: Structured Analysis
-
-Return your analysis in EXACTLY this markdown format:
-
----
-
-### Quality: [good / fair / poor]
-### Retried: [yes / no]
-### Confidence: [high / medium / low]
-
-### Key Recommendations
-- [3-5 bullet points of the most actionable recommendations]
-
-### Unique Perspective
-[What does this provider bring that others might miss? 2-3 sentences.]
-
-### Blind Spots
-[What is this response NOT considering? What assumptions does it make? 2-3 sentences.]
-
-### Full Response
-[The complete provider response text - include the best response if retried]
-
----
-
-IMPORTANT:
-- The Full Response section must contain the complete, unedited provider response
-- Be honest in your quality assessment - "good" means genuinely useful, not just "it returned text"
-- For Blind Spots, think about what a different expert perspective might critique
-```
+**Agent prompt template**: See [agent-prompt-template.md](agent-prompt-template.md) for the full template.
+Read it and fill in `{PROVIDER}`, `{SCRIPT_PATH}`, and `{QUESTION}` for each agent.
 
 **CRITICAL**: If a role was assigned to a provider (via --roles), prepend the role context
 to the question before passing it to the agent. Use the same role injection format as
