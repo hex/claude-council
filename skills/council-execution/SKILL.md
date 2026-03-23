@@ -1,5 +1,6 @@
 ---
-description: Use this skill when executing council queries
+name: querying-council
+description: Executes council queries by running the query pipeline across selected AI providers (Gemini, OpenAI, Grok, Perplexity), displaying formatted responses verbatim, and generating a synthesis of consensus, divergence, and recommendations. Invoked by the ask command during standard (non-agent) council queries.
 ---
 
 # Council Query Execution

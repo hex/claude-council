@@ -1,5 +1,6 @@
 ---
-description: Use this skill when adding a new AI provider to claude-council, configuring provider API settings, troubleshooting provider connections, or understanding the provider script interface. Triggers on "add provider", "new AI agent", "provider not working", "API configuration", or "extend council".
+name: integrating-providers
+description: Adds new AI providers to claude-council, configures provider API settings, troubleshoots provider connections, and documents the provider script interface. Covers creating provider shell scripts, setting API keys, and validating connectivity. Triggers on "add provider", "new AI agent", "provider not working", "API configuration", or "extend council".
 ---
 
 # Adding AI Providers to Claude Council
