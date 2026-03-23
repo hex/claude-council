@@ -45,12 +45,14 @@ After displaying the synthesis, tell the user:
 
 This lets them review the complete responses later.
 
-## Provider Names
+## Output Format: Provider Names
 
-**ALWAYS use emoji + space when mentioning a provider:**
-- 🟦 Gemini (blue square)
-- 🔳 OpenAI (white square button)
-- 🟥 Grok (red square)
-- 🟩 Perplexity (green square)
+The output file uses emoji prefixes to visually distinguish providers.
+Preserve this format when displaying results:
 
-Format: `🟦 Gemini` not `🟦Gemini` - always include the space.
+| Provider | Prefix |
+|----------|--------|
+| Gemini | 🟦 Gemini |
+| OpenAI | 🔳 OpenAI |
+| Grok | 🟥 Grok |
+| Perplexity | 🟩 Perplexity |
