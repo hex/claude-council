@@ -1,5 +1,6 @@
 ---
-description: Use this skill for agent-enhanced council queries (--agents mode)
+name: querying-council-with-agents
+description: Executes agent-enhanced council queries by spawning parallel Claude subagents that each query a provider, evaluate response quality, ask follow-up questions, and return structured insights with confidence ratings and blind spot analysis. Invoked when the --agents flag is used or when complex architectural decisions are detected.
 ---
 
 # Agent-Enhanced Council Execution
