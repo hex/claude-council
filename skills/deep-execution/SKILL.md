@@ -37,7 +37,7 @@ Query the {PROVIDER} AI provider and deliver a structured analysis of its respon
 
 Run this command:
 ```bash
-bash {SCRIPT_PATH} "{QUESTION}"
+COUNCIL_TIMEOUT=240 bash {SCRIPT_PATH} "{QUESTION}"
 ```
 
 Read the response carefully.
@@ -50,7 +50,7 @@ Evaluate the response:
 - Are there obvious gaps or unanswered aspects?
 
 If the response is **off-topic, vague, or missing key aspects**, formulate a targeted
-follow-up that addresses the gaps. Run the script again with the follow-up prompt.
+follow-up that addresses the gaps. Run the script again with the same `COUNCIL_TIMEOUT=240` prefix.
 
 If the response is good, skip the follow-up.
 
