@@ -268,7 +268,8 @@ claude-council/
 │   ├── council-execution/
 │   │   └── SKILL.md             # Standard query execution
 │   ├── deep-execution/
-│   │   └── SKILL.md             # Agent-enhanced execution (--agents)
+│   │   ├── SKILL.md             # Agent-enhanced execution (--agents)
+│   │   └── agent-prompt-template.md  # Subagent prompt template
 │   └── provider-integration/
 │       ├── SKILL.md             # Adding providers guide
 │       └── api-patterns.md      # API integration patterns
