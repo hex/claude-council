@@ -1037,3 +1037,40 @@ Session management cleanup complete
 
 2026-03-23 12:59:09 - Session ended (source: user_exit, ID: c8b02453-8351-43ad-b6e0-72f62426f614)
   Artifacts collected: 0
+[2026-04-08 21:53:27] BASH: git status --short
+[2026-04-08 21:53:34] BASH: ls /Users/hex/.claude-sessions/claude-council/.claude/commands/
+[2026-04-08 21:53:46] BASH: git reset HEAD -- . 2>&1
+[2026-04-08 21:53:51] BASH: git branch -m master main 2>/dev/null; git reset origin/main 2>&1
+[2026-04-08 21:53:54] BASH: git diff --stat
+[2026-04-08 21:54:01] BASH: git add scripts/providers/grok.sh scripts/providers/openai.sh scripts/check-status.sh README.md
+[2026-04-08 21:54:05] BASH: git commit -m "$(cat <<'EOF'
+Upgrade default models for OpenAI and Grok providers
+
+- OpenAI: gpt-5.4 -> gpt-5.4-pro (smarter, more precise variant)
+- Grok: grok-4 -> grok-4.20-reasoning (current flags...
+[2026-04-08 21:55:00] BASH: ls -la /Users/hex/.claude-sessions/claude-council/skills/
+[2026-04-08 21:55:05] BASH: ls -la /Users/hex/.claude-sessions/claude-council/skills/council-execution/ && ls -la /Users/hex/.claude-sessions/claude-council/skills/deep-execution/ && ls -la /Users/hex/.claude-sessions/claude-cou...
+[2026-04-08 21:55:12] BASH: find /Users/hex/.claude-sessions/claude-council -maxdepth 3 -not -path '*/.git/*' | sort
+[2026-04-08 21:55:20] BASH: grep -c "@test" /Users/hex/.claude-sessions/claude-council/tests/cache.bats /Users/hex/.claude-sessions/claude-council/tests/roles.bats /Users/hex/.claude-sessions/claude-council/tests/query-council.b...
+[2026-04-08 21:57:46] BASH: git diff --stat
+[2026-04-08 21:57:54] BASH: git add README.md TESTING.md commands/ask.md docs/ARCHITECTURE.md scripts/query-council.sh skills/provider-integration/SKILL.md && git commit -m "$(cat <<'EOF'
+Fix stale model defaults and documentati...
+[2026-04-08 21:58:08] BASH: git add .claude-plugin/plugin.json && git commit -m "$(cat <<'EOF'
+Release v2026.3.5
+EOF
+)" && git tag v2026.3.5
+[2026-04-08 21:58:12] BASH: git log origin/main..HEAD --oneline
+[2026-04-08 21:59:10] BASH: git tag -d v2026.3.5
+[2026-04-08 21:59:14] BASH: git add .claude-plugin/plugin.json && git commit --amend -m "$(cat <<'EOF'
+Release v2026.4.0
+EOF
+)" && git tag v2026.4.0
+[2026-04-08 21:59:37] BASH: git push -u origin main && git push --tags
+[2026-04-08 21:59:47] BASH: gh release create v2026.4.0 --title "v2026.4.0" --notes "$(cat <<'EOF'
+## Upgraded provider models
+
+- **OpenAI**: `gpt-5.4` → `gpt-5.4-pro` (smarter, more precise variant)
+- **Grok**: `grok-4` → `grok...
+
+2026-04-08 22:00:35 - Session ended (source: user_exit, ID: 42fb0447-09f3-4365-9008-4bf140cc0d3d)
+  Artifacts collected: 0

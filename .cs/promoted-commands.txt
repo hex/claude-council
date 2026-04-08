@@ -1,0 +1,16 @@
+cat /Users/hex/.claude/projects/-Users-hex--claude-sessions-claude-council/42fb0447-09f3-4365-9008-4bf140cc0d3d/tool-results/toolu_01JJzVgotyNJvdeFahCwYgqU.json | python3 -c "
+import json, sys, re
+data = json.load(sys.stdin)
+text = data[0]['text']
+inner = json.loads(text)
+content = inner['content']
+lines = content.split('\n')
+# Print lines 440-600 to find the model ID table
+for i, line in enumerate(lines[440:650], start=440):
+    if line.strip():
+        print(f'{i}: {line.strip()[:200]}')
+" 2>&1 | head -100
+git add .claude-plugin/plugin.json && git commit -m "$(cat <<'EOF'
+Release v2026.3.5
+EOF
+)" && git tag v2026.3.5

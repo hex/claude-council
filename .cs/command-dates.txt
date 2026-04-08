@@ -1,0 +1,38 @@
+curl -s "https://generativelanguage.googleapis.com/v1beta/models" 2>/dev/null | head -100 || echo "No API key available"|2026-04-08
+curl -s "https://ai.google.dev/gemini-api/docs/models" 2>/dev/null | head -200 || echo "Could not fetch"|2026-04-08
+curl -s "https://platform.openai.com/docs/models" 2>/dev/null | head -200|2026-04-08
+curl -s "https://openai.com/api/" 2>/dev/null | head -100|2026-04-08
+curl -s "https://api.x.ai/v1/models" -H "Authorization: Bearer ${XAI_API_KEY}" 2>/dev/null | jq '.' 2>/dev/null || echo "No XAI_API_KEY set or request failed"|2026-04-08
+curl -s "https://docs.x.ai/docs/models" -L --max-time 10 2>/dev/null | head -200 || echo "Failed to fetch docs"|2026-04-08
+curl -s "https://docs.perplexity.ai/docs/model-cards" 2>/dev/null | head -200|2026-04-08
+curl -s "https://api.perplexity.ai/models" 2>/dev/null | head -100|2026-04-08
+cat /Users/hex/.claude/projects/-Users-hex--claude-sessions-claude-council/42fb0447-09f3-4365-9008-4bf140cc0d3d/tool-results/toolu_01JJzVgotyNJvdeFahCwYgqU.json | python3 -c "
+import json, sys, re
+data = json.load(sys.stdin)
+text = data[0]['text']
+inner = json.loads(text)
+content = inner['content']
+lines = content.split('\n')
+# Print lines 440-600 to find the model ID table
+for i, line in enumerate(lines[440:650], start=440):
+    if line.strip():
+        print(f'{i}: {line.strip()[:200]}')
+" 2>&1 | head -100|2026-04-08
+git remote -v 2>/dev/null; echo "---"; git log --oneline -5 2>/dev/null; echo "---"; git tag --list 2>/dev/null | tail -5|2026-04-08
+git init && git remote add origin https://github.com/hex/claude-council.git|2026-04-08
+git fetch origin 2>&1|2026-04-08
+git checkout origin/main -- . 2>&1|2026-04-08
+git reset HEAD -- . 2>&1|2026-04-08
+git add scripts/providers/grok.sh scripts/providers/openai.sh scripts/check-status.sh README.md|2026-04-08
+find /Users/hex/.claude-sessions/claude-council -maxdepth 3 -not -path '*/.git/*' | sort|2026-04-08
+grep -c "@test" /Users/hex/.claude-sessions/claude-council/tests/cache.bats /Users/hex/.claude-sessions/claude-council/tests/roles.bats /Users/hex/.claude-sessions/claude-council/tests/query-council.bats|2026-04-08
+git add .claude-plugin/plugin.json && git commit -m "$(cat <<'EOF'
+Release v2026.3.5
+EOF
+)" && git tag v2026.3.5|2026-04-08
+git tag -d v2026.3.5|2026-04-08
+git add .claude-plugin/plugin.json && git commit --amend -m "$(cat <<'EOF'
+Release v2026.4.0
+EOF
+)" && git tag v2026.4.0|2026-04-08
+git push -u origin main && git push --tags|2026-04-08
