@@ -40,8 +40,8 @@ bats --verbose-run tests/cache.bats
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `cache.bats` | 14 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
-| `roles.bats` | 26 tests | presets, validation, prompt injection, assignment |
+| `cache.bats` | 17 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
+| `roles.bats` | 37 tests | presets, validation, prompt injection, assignment |
 | `query-council.bats` | 18 tests | argument parsing, error cases, flags |
 
 ### Adding Tests

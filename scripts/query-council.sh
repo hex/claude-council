@@ -296,8 +296,8 @@ provider_color() {
 get_model() {
     case "$1" in
         gemini)     echo "${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
-        openai)     echo "${OPENAI_MODEL:-gpt-5.4}" ;;
-        grok)       echo "${GROK_MODEL:-grok-4}" ;;
+        openai)     echo "${OPENAI_MODEL:-gpt-5.4-pro}" ;;
+        grok)       echo "${GROK_MODEL:-grok-4.20-reasoning}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
         *)          echo "unknown" ;;
     esac
