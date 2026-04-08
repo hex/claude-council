@@ -131,7 +131,7 @@ Environment-based configuration:
 ### Cache Layer (`scripts/lib/cache.sh`)
 
 ```
-Cache Key = SHA256(provider + model + prompt)
+Cache Key = SHA256("provider:model:prompt")
 
 cache_get(key) -> response | empty
 cache_set(key, provider, model, prompt, response)
@@ -146,7 +146,7 @@ TTL: $COUNCIL_CACHE_TTL seconds (default 3600)
 ```
 curl_with_retry():
   - Retries on: 429 (rate limit), 5xx (server error)
-  - Fails fast on: timeout, 4xx (client error)
+  - Fails fast on: timeout, other 4xx (client error)
   - Backoff: exponential (1s, 2s, 4s...)
   - Max retries: $COUNCIL_MAX_RETRIES (default 3)
 ```
@@ -297,7 +297,7 @@ claude-council/
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
 | `COUNCIL_RETRY_DELAY` | 1 | Initial retry delay (s) |
-| `COUNCIL_TIMEOUT` | 60 | Request timeout (s) |
+| `COUNCIL_TIMEOUT` | 120 | Request timeout (s) |
 | `COUNCIL_CACHE_DIR` | .claude/council-cache | Cache location |
 | `COUNCIL_CACHE_TTL` | 3600 | Cache lifetime (s) |
 | `COUNCIL_DEBUG` | - | Enable debug output |

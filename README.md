@@ -75,15 +75,6 @@ export GROK_MODEL="grok-4.20-reasoning"             # default
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
 ```
 
-Use more powerful models for complex queries:
-
-```bash
-export GEMINI_MODEL="gemini-3.1-pro-preview"
-export OPENAI_MODEL="gpt-5.4-pro"
-export GROK_MODEL="grok-4.20-reasoning"
-export PERPLEXITY_MODEL="sonar-reasoning-pro"      # with chain-of-thought
-```
-
 ### Response Length
 
 Control max tokens per response (default: 2048):
@@ -100,8 +91,8 @@ For OpenAI reasoning models (`codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
 | Standard (gpt-4o) | 2048 (default) | 2048 |
-| Reasoning (gpt-5.4) | 2048 (default) | 32768 |
-| Reasoning (gpt-5.4) | 4096 | 32768 |
+| Reasoning (gpt-5.4-pro) | 2048 (default) | 32768 |
+| Reasoning (gpt-5.4-pro) | 4096 | 32768 |
 
 Control reasoning effort to balance speed vs thoroughness:
 
