@@ -70,8 +70,8 @@ Override default models via environment variables:
 
 ```bash
 export GEMINI_MODEL="gemini-3.1-pro-preview"       # default
-export OPENAI_MODEL="gpt-5.4"                       # default
-export GROK_MODEL="grok-4"                          # default
+export OPENAI_MODEL="gpt-5.4-pro"                   # default
+export GROK_MODEL="grok-4.20-reasoning"             # default
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
 ```
 
@@ -79,8 +79,8 @@ Use more powerful models for complex queries:
 
 ```bash
 export GEMINI_MODEL="gemini-3.1-pro-preview"
-export OPENAI_MODEL="gpt-5.4"
-export GROK_MODEL="grok-4"
+export OPENAI_MODEL="gpt-5.4-pro"
+export GROK_MODEL="grok-4.20-reasoning"
 export PERPLEXITY_MODEL="sonar-reasoning-pro"      # with chain-of-thought
 ```
 

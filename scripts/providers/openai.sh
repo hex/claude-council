@@ -26,7 +26,7 @@ if [[ -z "$API_KEY" ]]; then
 fi
 
 # Model selection (override via OPENAI_MODEL env var)
-MODEL="${OPENAI_MODEL:-gpt-5.4}"
+MODEL="${OPENAI_MODEL:-gpt-5.4-pro}"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var)
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
