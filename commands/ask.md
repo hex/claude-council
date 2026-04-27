@@ -46,7 +46,7 @@ Question: "Which AI providers should I consult?"
 Header: "Providers"
 Options (multiSelect: true):
   - Gemini (gemini-3.1-pro-preview) - Google's reasoning model
-  - OpenAI (gpt-5.4-pro) - OpenAI's reasoning model
+  - OpenAI (gpt-5.5-pro) - OpenAI's reasoning model
 ```
 
 ### 2. Clarify Ambiguous Questions

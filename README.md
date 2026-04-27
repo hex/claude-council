@@ -70,7 +70,7 @@ Override default models via environment variables:
 
 ```bash
 export GEMINI_MODEL="gemini-3.1-pro-preview"       # default
-export OPENAI_MODEL="gpt-5.4-pro"                   # default
+export OPENAI_MODEL="gpt-5.5-pro"                   # default
 export GROK_MODEL="grok-4.20-reasoning"             # default
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
 ```
@@ -91,8 +91,8 @@ For OpenAI reasoning models (`codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
 | Standard (gpt-4o) | 2048 (default) | 2048 |
-| Reasoning (gpt-5.4-pro) | 2048 (default) | 32768 |
-| Reasoning (gpt-5.4-pro) | 4096 | 32768 |
+| Reasoning (gpt-5.5-pro) | 2048 (default) | 32768 |
+| Reasoning (gpt-5.5-pro) | 4096 | 32768 |
 
 Control reasoning effort to balance speed vs thoroughness:
 
