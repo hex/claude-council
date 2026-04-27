@@ -63,7 +63,7 @@ Manual testing procedures for features that require API calls or Claude Code int
    ```bash
    export GEMINI_API_KEY="your-key"
    export OPENAI_API_KEY="your-key"
-   export GROK_API_KEY="your-key"
+   export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
    ```
 
 2. **Plugin loaded** in Claude Code:
@@ -372,7 +372,7 @@ rm combined-test.md
 
 ### No API Keys
 ```bash
-unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY
+unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY
 bash scripts/query-council.sh "Test question" 2>&1
 ```
 **Expected**: `Error: No providers configured. Set API keys for at least one provider.`

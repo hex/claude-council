@@ -10,6 +10,12 @@
 # Issue tracker (personal)
 .beads/
 
+# Session state (cs session manager)
+.cs/
+
+# Web/page cache (claude-crawl)
+.claude-crawl/
+
 # Skill-creator iteration output
 claude-council-workspace/
 

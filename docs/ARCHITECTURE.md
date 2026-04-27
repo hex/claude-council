@@ -277,9 +277,9 @@ claude-council/
 │   ├── run_tests.sh             # Test runner
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── cache.bats
+│   ├── keys.bats
 │   ├── roles.bats
 │   └── query-council.bats
-├── AGENTS.md
 ├── LICENSE
 ├── README.md
 └── TESTING.md
@@ -291,7 +291,8 @@ claude-council/
 |----------|---------|-------------|
 | `GEMINI_API_KEY` | - | Google AI Studio key |
 | `OPENAI_API_KEY` | - | OpenAI API key |
-| `GROK_API_KEY` | - | xAI API key |
+| `XAI_API_KEY` | - | xAI API key (preferred) |
+| `GROK_API_KEY` | - | xAI API key (legacy alias; `XAI_API_KEY` wins if both set) |
 | `PERPLEXITY_API_KEY` | - | Perplexity API key |
 | `{PROVIDER}_MODEL` | varies | Model override |
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |

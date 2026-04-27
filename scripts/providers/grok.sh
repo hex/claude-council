@@ -4,9 +4,10 @@
 
 set -euo pipefail
 
-# Source shared retry library
+# Source shared libraries
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
+source "$SCRIPT_DIR/../lib/keys.sh"
 
 # Debug mode
 DEBUG="${COUNCIL_DEBUG:-}"
@@ -18,10 +19,10 @@ if [[ -z "$PROMPT" ]]; then
     exit 1
 fi
 
-# Check for API key
+resolve_grok_key
 API_KEY="${GROK_API_KEY:-}"
 if [[ -z "$API_KEY" ]]; then
-    echo "Error: GROK_API_KEY not set" >&2
+    echo "Error: XAI_API_KEY (or GROK_API_KEY) not set" >&2
     exit 1
 fi
 

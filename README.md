@@ -44,7 +44,7 @@ Set environment variables (recommended):
 ```bash
 export GEMINI_API_KEY="your-key"
 export OPENAI_API_KEY="your-key"
-export GROK_API_KEY="your-key"
+export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
 export PERPLEXITY_API_KEY="your-key"
 ```
 

@@ -10,6 +10,8 @@ PROVIDERS_DIR="${SCRIPT_DIR}/providers"
 # Source libraries
 source "${SCRIPT_DIR}/lib/cache.sh"
 source "${SCRIPT_DIR}/lib/roles.sh"
+source "${SCRIPT_DIR}/lib/keys.sh"
+resolve_grok_key
 
 usage() {
     cat >&2 << 'EOF'
@@ -209,7 +211,7 @@ fi
 
 if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
     echo "Error: No providers configured. Set API keys for at least one provider." >&2
-    echo "  GEMINI_API_KEY, OPENAI_API_KEY, GROK_API_KEY, or PERPLEXITY_API_KEY" >&2
+    echo "  GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY (or GROK_API_KEY), or PERPLEXITY_API_KEY" >&2
     exit 1
 fi
 
