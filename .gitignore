@@ -10,6 +10,9 @@
 # Issue tracker (personal)
 .beads/
 
+# Skill-creator iteration output
+claude-council-workspace/
+
 # OS files
 .DS_Store
 

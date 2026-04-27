@@ -149,7 +149,7 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 | `--no-cache` | Force fresh queries, skip cache |
 | `--no-auto-context` | Disable automatic file detection |
 
-### Slash Command
+### Slash Commands
 
 ```bash
 # Query all configured providers
@@ -166,6 +166,9 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 
 # Quiet mode - show only synthesis
 /claude-council:ask --quiet "What's the best caching strategy?"
+
+# Check connectivity and configured models for each provider
+/claude-council:status
 ```
 
 ### Export to File
