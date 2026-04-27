@@ -261,9 +261,10 @@ claude-council/
 │   │   └── perplexity.sh
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
+│       ├── export.sh            # Markdown export
+│       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
 │       ├── retry.sh             # Retry with backoff
-│       ├── roles.sh             # Role management
-│       └── export.sh            # Markdown export
+│       └── roles.sh             # Role management
 ├── skills/
 │   ├── council-execution/
 │   │   └── SKILL.md             # Standard query execution
