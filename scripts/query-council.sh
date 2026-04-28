@@ -392,13 +392,12 @@ if [[ "$NO_PANE" != true ]]; then
         COUNCIL_PANE_DIR="$pane_dir"
     fi
 fi
-# Probe /dev/tty by attempting a no-op write — `-w` filesystem test isn't
-# enough since the device exists but redirects fail without a controlling tty.
+# Probe /dev/tty once — `-w` test passes for the device file even when
+# redirects fail without a controlling tty. Cache the result for the
+# council_signal_* helpers in display.sh.
 COUNCIL_HAS_TTY=0
-if : >/dev/tty 2>/dev/null; then
-    COUNCIL_HAS_TTY=1
-    it2_set_tab_color yellow >/dev/tty 2>&1
-fi
+: >/dev/tty 2>/dev/null && COUNCIL_HAS_TTY=1
+council_signal_state yellow
 COUNCIL_START_MS=$(now_ms)
 
 # Launch all queries in parallel
@@ -586,19 +585,16 @@ if [[ ${#ERRORS[@]} -gt 0 ]]; then
 fi
 
 # Lifecycle closeout: tab color, dock attention, pane handoff to interactive close.
-# Skip iTerm2 wrappers if /dev/tty is unavailable (non-interactive context).
-if [[ $COUNCIL_HAS_TTY -eq 1 ]]; then
-    if [[ ${#ERRORS[@]} -gt 0 ]]; then
-        it2_set_tab_color red >/dev/tty 2>&1
-    else
-        it2_set_tab_color green >/dev/tty 2>&1
-    fi
+if [[ ${#ERRORS[@]} -gt 0 ]]; then
+    council_signal_state red
+else
+    council_signal_state green
 fi
 
 COUNCIL_ELAPSED_MS=$(( $(now_ms) - COUNCIL_START_MS ))
 COUNCIL_ATTENTION_THRESHOLD_MS="${COUNCIL_ATTENTION_THRESHOLD:-2000}"
-if [[ $COUNCIL_ELAPSED_MS -ge $COUNCIL_ATTENTION_THRESHOLD_MS && $COUNCIL_HAS_TTY -eq 1 ]]; then
-    it2_attention start >/dev/tty 2>&1
+if [[ $COUNCIL_ELAPSED_MS -ge $COUNCIL_ATTENTION_THRESHOLD_MS ]]; then
+    council_signal_attention
 fi
 
 if [[ -n "$COUNCIL_PANE_DIR" ]]; then

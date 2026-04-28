@@ -41,6 +41,20 @@ it2_attention() {
     it2attention "$1" 2>/dev/null || true
 }
 
+# ----- Lifecycle signal helpers (consolidate tty-probe + redirect pattern) -----
+
+# Sets the iTerm2 tab color via /dev/tty when a controlling tty is available.
+# Caller must have set COUNCIL_HAS_TTY=1 after probing earlier in the flow.
+council_signal_state() {
+    [[ "${COUNCIL_HAS_TTY:-0}" -eq 1 ]] || return 0
+    it2_set_tab_color "$1" >/dev/tty 2>&1
+}
+
+council_signal_attention() {
+    [[ "${COUNCIL_HAS_TTY:-0}" -eq 1 ]] || return 0
+    it2_attention start >/dev/tty 2>&1
+}
+
 # ----- Manifest writes -----
 
 pane_status_event() {
@@ -237,16 +251,18 @@ declare -A provider_model
 status_lines_processed=0
 shown_responses=""
 spinner_frame=0
-loading_active=0
 SPINNERS=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 
+# Writes the provider's RGB triplet (for OSC 38;2;R;G;B) into the named
+# variable. Avoids subshell forks by using printf -v.
 provider_color_rgb() {
-    case "$1" in
-        gemini)     printf '59;130;246'   ;;
-        openai)     printf '229;231;235'  ;;
-        grok)       printf '248;113;113'  ;;
-        perplexity) printf '74;222;128'   ;;
-        *)          printf '156;163;175'  ;;
+    local __out="$1"
+    case "$2" in
+        gemini)     printf -v "$__out" '59;130;246'   ;;
+        openai)     printf -v "$__out" '229;231;235'  ;;
+        grok)       printf -v "$__out" '248;113;113'  ;;
+        perplexity) printf -v "$__out" '74;222;128'   ;;
+        *)          printf -v "$__out" '156;163;175'  ;;
     esac
 }
 
@@ -256,36 +272,28 @@ draw_loading() {
         [[ "${provider_state[$p]}" == "querying" ]] && pending+=("$p")
     done
     [[ ${#pending[@]} -eq 0 ]] && return 0
-    local frame="${SPINNERS[$((spinner_frame % 10))]}"
+    local frame="${SPINNERS[$((spinner_frame % ${#SPINNERS[@]}))]}"
 
-    # Build provider list with each name in its signature color.
-    local list=""
-    local first=1
+    local list="" first=1 rgb chunk
     for p in "${pending[@]}"; do
-        local rgb
-        rgb=$(provider_color_rgb "$p")
+        provider_color_rgb rgb "$p"
         if [[ $first -eq 1 ]]; then
             first=0
         else
             list+=$'\033[2m, \033[0m'
         fi
-        local chunk
         printf -v chunk '\033[1;38;2;%sm%s\033[0m' "$rgb" "$p"
         list+="$chunk"
     done
 
     local rgb_first
-    rgb_first=$(provider_color_rgb "${pending[0]}")
+    provider_color_rgb rgb_first "${pending[0]}"
     printf '\r\033[K   \033[1;38;2;%sm%s\033[0m   \033[2mcouncil is waiting on\033[0m   %s' \
         "$rgb_first" "$frame" "$list"
-    loading_active=1
 }
 
 clear_loading() {
-    if [[ $loading_active -eq 1 ]]; then
-        printf '\r\033[K'
-        loading_active=0
-    fi
+    printf '\r\033[K'
 }
 
 # Build a banner line into the variable named by $1.
@@ -344,10 +352,7 @@ while true; do
         while [[ $status_lines_processed -lt $new_total ]]; do
             status_lines_processed=$((status_lines_processed + 1))
             line=$(sed -n "${status_lines_processed}p" "$WATCH/status")
-            provider=$(echo "$line" | cut -f1)
-            state=$(echo "$line" | cut -f2)
-            ms=$(echo "$line" | cut -f3)
-            model=$(echo "$line" | cut -f4)
+            IFS=$'\t' read -r provider state ms model <<<"$line"
             provider_state[$provider]="$state"
             [[ -n "$ms" ]] && provider_timing[$provider]="$ms"
             [[ -n "$model" ]] && provider_model[$provider]="$model"
