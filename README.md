@@ -133,6 +133,23 @@ export COUNCIL_TIMEOUT=120      # default: 120 seconds per request
 
 Timeouts fail fast (no retry) to prevent blocking on hung providers.
 
+### Display & Terminal Integration
+
+When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `cached`, `error` with timing) and renders each response as it lands — markdown is piped through `bat` (preferred), `glow`, or plain `cat` depending on what's installed. Press **Esc** to close the pane.
+
+When the outer terminal is iTerm2, council also drives:
+
+- **Tab color** — yellow while querying, green on success, red if any provider errored. Set via `it2setcolor`; ambient state signal without looking at the terminal.
+- **Dock attention** — bounces the iTerm2 dock icon when council finishes if the run took longer than `COUNCIL_ATTENTION_THRESHOLD` (default 2000ms). Useful for slow `--debate` queries when you've switched apps.
+- **`SetMark` navigation** — emits OSC 1337 SetMark before each provider response inside the pane. Cmd+Shift+↑/↓ in iTerm2 jumps between provider sections.
+
+```bash
+export COUNCIL_NO_PANE=1                # disable the streaming pane globally
+export COUNCIL_ATTENTION_THRESHOLD=5000  # only bounce dock if run > 5s
+```
+
+Per-call opt-out via `--no-pane`. iTerm2 features no-op silently outside iTerm2; pane no-ops outside tmux.
+
 ## Usage
 
 ### Quick Reference
@@ -148,6 +165,7 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 | `--agents` | Agent-enhanced analysis with subagents (slower, deeper) |
 | `--no-cache` | Force fresh queries, skip cache |
 | `--no-auto-context` | Disable automatic file detection |
+| `--no-pane` | Disable streaming tmux pane (default: on inside tmux) |
 
 ### Slash Commands
 

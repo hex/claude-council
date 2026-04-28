@@ -16,10 +16,15 @@ fi
 CURRENT_VERSION=$(jq -r '.version' "$PLUGIN_JSON")
 echo "Current version: $CURRENT_VERSION"
 
-# Parse YYYY.M.PATCH and increment patch
+# Compute new version: BUILD resets to 1 when the month rolls over.
+TODAY_YEAR=$(date +%Y)
+TODAY_MONTH=$(date +%-m)
 IFS='.' read -r YEAR MONTH PATCH <<< "$CURRENT_VERSION"
-NEW_PATCH=$((PATCH + 1))
-NEW_VERSION="${YEAR}.${MONTH}.${NEW_PATCH}"
+if [[ "$YEAR.$MONTH" == "$TODAY_YEAR.$TODAY_MONTH" ]]; then
+    NEW_VERSION="${YEAR}.${MONTH}.$((PATCH + 1))"
+else
+    NEW_VERSION="${TODAY_YEAR}.${TODAY_MONTH}.1"
+fi
 
 echo "New version: $NEW_VERSION"
 

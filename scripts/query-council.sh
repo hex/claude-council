@@ -11,7 +11,13 @@ PROVIDERS_DIR="${SCRIPT_DIR}/providers"
 source "${SCRIPT_DIR}/lib/cache.sh"
 source "${SCRIPT_DIR}/lib/roles.sh"
 source "${SCRIPT_DIR}/lib/keys.sh"
+source "${SCRIPT_DIR}/lib/display.sh"
 resolve_grok_key
+
+# Helper: current time in milliseconds (falls back to seconds if python3 missing)
+now_ms() {
+    python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || date +%s
+}
 
 usage() {
     cat >&2 << 'EOF'
@@ -29,6 +35,7 @@ Note: Flags accept both --flag=value and --flag value formats.
   --quiet, -q         Suppress individual responses (passed in metadata)
   --no-cache          Skip cache, force fresh queries
   --no-auto-context   Disable auto file detection (passed in metadata)
+  --no-pane           Disable streaming tmux pane (default: on inside tmux)
   --list-available    List configured providers and exit
 
 Output: JSON with metadata and provider responses
@@ -47,6 +54,7 @@ FILE_PATH=""
 OUTPUT_PATH=""
 QUIET_MODE=false
 AUTO_CONTEXT=true
+NO_PANE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -96,6 +104,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-auto-context)
             AUTO_CONTEXT=false
+            shift
+            ;;
+        --no-pane)
+            NO_PANE=true
             shift
             ;;
         --list-available)
@@ -233,8 +245,13 @@ query_provider() {
 
     if [[ ! -x "$script" ]]; then
         jq -n --arg role "$role" '{status: "error", error: "Script not found or not executable", role: (if $role == "" then null else $role end)}' > "$output_file"
+        [[ -n "${COUNCIL_PANE_DIR:-}" ]] && pane_status_event "$COUNCIL_PANE_DIR" "$provider" error "" "$model"
         return
     fi
+
+    [[ -n "${COUNCIL_PANE_DIR:-}" ]] && pane_status_event "$COUNCIL_PANE_DIR" "$provider" querying "" "$model"
+    local start_ms
+    start_ms=$(now_ms)
 
     # Build the final prompt (with role injection if specified)
     local final_prompt
@@ -253,14 +270,23 @@ query_provider() {
         if [[ -n "$cached_response" ]]; then
             jq -n --arg r "$cached_response" --arg role "$role" \
                 '{status: "success", response: $r, cached: true, role: (if $role == "" then null else $role end)}' > "$output_file"
+            if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+                pane_status_event "$COUNCIL_PANE_DIR" "$provider" cached "" "$model"
+                pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$cached_response"
+            fi
             return
         fi
     fi
 
     # Query provider with role-injected prompt
     if response=$("$script" "$final_prompt" 2>&1); then
+        local elapsed=$(( $(now_ms) - start_ms ))
         jq -n --arg r "$response" --arg role "$role" \
             '{status: "success", response: $r, cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
+        if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+            pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed" "$model"
+            pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$response"
+        fi
         # Store in cache on success
         if [[ "$USE_CACHE" == true ]]; then
             local key
@@ -270,6 +296,10 @@ query_provider() {
     else
         jq -n --arg e "$response" --arg role "$role" \
             '{status: "error", error: $e, cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
+        if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+            pane_error_write "$COUNCIL_PANE_DIR" "$provider" "$response"
+            pane_status_event "$COUNCIL_PANE_DIR" "$provider" error "" "$model"
+        fi
     fi
 }
 
@@ -354,6 +384,22 @@ ${FILE_CONTENT}
 
 ${PROMPT}"
 fi
+
+# Open streaming pane (best effort) and signal "querying" via tab color
+COUNCIL_PANE_DIR=""
+if [[ "$NO_PANE" != true ]]; then
+    if pane_dir=$(display_pane_open 2>/dev/null); then
+        COUNCIL_PANE_DIR="$pane_dir"
+    fi
+fi
+# Probe /dev/tty by attempting a no-op write — `-w` filesystem test isn't
+# enough since the device exists but redirects fail without a controlling tty.
+COUNCIL_HAS_TTY=0
+if : >/dev/tty 2>/dev/null; then
+    COUNCIL_HAS_TTY=1
+    it2_set_tab_color yellow >/dev/tty 2>&1
+fi
+COUNCIL_START_MS=$(now_ms)
 
 # Launch all queries in parallel
 FORMATTED_PROVIDERS=$(format_providers "${PROVIDERS[@]}")
@@ -537,4 +583,24 @@ if [[ ${#ERRORS[@]} -gt 0 ]]; then
     for err in "${ERRORS[@]}"; do
         echo "  - $err" >&2
     done
+fi
+
+# Lifecycle closeout: tab color, dock attention, pane handoff to interactive close.
+# Skip iTerm2 wrappers if /dev/tty is unavailable (non-interactive context).
+if [[ $COUNCIL_HAS_TTY -eq 1 ]]; then
+    if [[ ${#ERRORS[@]} -gt 0 ]]; then
+        it2_set_tab_color red >/dev/tty 2>&1
+    else
+        it2_set_tab_color green >/dev/tty 2>&1
+    fi
+fi
+
+COUNCIL_ELAPSED_MS=$(( $(now_ms) - COUNCIL_START_MS ))
+COUNCIL_ATTENTION_THRESHOLD_MS="${COUNCIL_ATTENTION_THRESHOLD:-2000}"
+if [[ $COUNCIL_ELAPSED_MS -ge $COUNCIL_ATTENTION_THRESHOLD_MS && $COUNCIL_HAS_TTY -eq 1 ]]; then
+    it2_attention start >/dev/tty 2>&1
+fi
+
+if [[ -n "$COUNCIL_PANE_DIR" ]]; then
+    display_pane_close "$COUNCIL_PANE_DIR"
 fi
