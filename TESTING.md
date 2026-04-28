@@ -41,8 +41,10 @@ bats --verbose-run tests/cache.bats
 | File | Tests | Coverage |
 |------|-------|----------|
 | `cache.bats` | 17 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
+| `display.bats` | 17 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating |
+| `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 37 tests | presets, validation, prompt injection, assignment |
-| `query-council.bats` | 18 tests | argument parsing, error cases, flags |
+| `query-council.bats` | 17 tests | argument parsing, error cases, flags |
 
 ### Adding Tests
 

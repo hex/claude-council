@@ -254,6 +254,8 @@ claude-council/
 │   ├── format-output.sh         # Terminal formatter
 │   ├── check-status.sh          # Provider health check
 │   ├── release.sh               # Version bump and tagging
+│   ├── dev/
+│   │   └── demo-pane.sh         # Visual test harness for the streaming pane
 │   ├── providers/
 │   │   ├── gemini.sh
 │   │   ├── openai.sh
@@ -261,6 +263,7 @@ claude-council/
 │   │   └── perplexity.sh
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
+│       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
 │       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
 │       ├── retry.sh             # Retry with backoff
@@ -278,6 +281,7 @@ claude-council/
 │   ├── run_tests.sh             # Test runner
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── cache.bats
+│   ├── display.bats
 │   ├── keys.bats
 │   ├── roles.bats
 │   └── query-council.bats
@@ -303,5 +307,7 @@ claude-council/
 | `COUNCIL_CACHE_DIR` | .claude/council-cache | Cache location |
 | `COUNCIL_CACHE_TTL` | 3600 | Cache lifetime (s) |
 | `COUNCIL_DEBUG` | - | Enable debug output |
+| `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
+| `COUNCIL_ATTENTION_THRESHOLD` | 2000 | iTerm2 dock-bounce threshold in ms (only triggers if total elapsed >= this) |
 | `OPENAI_REASONING_EFFORT` | medium | Reasoning model effort |
 | `PERPLEXITY_RECENCY` | - | Search recency filter |
