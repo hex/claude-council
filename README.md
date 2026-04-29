@@ -84,6 +84,24 @@ export COUNCIL_MAX_TOKENS=4096  # longer responses
 export COUNCIL_MAX_TOKENS=1024  # shorter, faster responses
 ```
 
+### Verbosity
+
+Shape how providers respond by prepending a directive to their system prompts. Affects style and depth, not just length:
+
+```bash
+export COUNCIL_VERBOSITY=brief     # ~3-5 sentences, bullets, no code
+export COUNCIL_VERBOSITY=standard  # default — balanced thoroughness
+export COUNCIL_VERBOSITY=detailed  # thorough analysis with code + edge cases
+```
+
+Or per-call: `--verbosity=brief|standard|detailed`. The slash command also asks via the provider-selection prompt.
+
+| Level | Typical output |
+|-------|----------------|
+| `brief` | 3-5 sentences max, bullets where possible, skips code blocks unless asked |
+| `standard` | Balanced — current default behavior, no directive prepended |
+| `detailed` | Thorough — includes code examples, edge cases, trade-offs, and rationale |
+
 #### Reasoning Models
 
 For reasoning models from any provider, the token limit is automatically increased to 8x the base value (minimum 32768). This is because reasoning models combine internal thinking tokens and visible output tokens into a single `max_output_tokens` limit — without the bump, the model can run out mid-response.
