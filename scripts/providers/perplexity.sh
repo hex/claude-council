@@ -10,6 +10,8 @@ source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 
+verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
+
 # Debug mode
 DEBUG="${COUNCIL_DEBUG:-}"
 
@@ -42,8 +44,7 @@ TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 RECENCY="${PERPLEXITY_RECENCY:-}"
 
 # System instruction
-verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
-SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance. When citing sources, include them inline."
+SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT When citing sources, include them inline."
 
 # Build request payload
 # Perplexity extends OpenAI format with search-specific parameters

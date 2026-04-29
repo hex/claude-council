@@ -49,7 +49,7 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
     EFFORT="${OPENAI_REASONING_EFFORT:-medium}"
 
     # System instruction
-    SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
+    SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
     PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" '{
         model: $model,
@@ -94,7 +94,7 @@ else
     TOKENS="$BASE_TOKENS"
 
     # System instruction
-    SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
+    SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
     PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
         model: $model,

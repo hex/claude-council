@@ -51,3 +51,23 @@ setup() {
     [ -n "$BRIEF" ]
     [ -n "$DETAILED" ]
 }
+
+@test "verbosity: BASE_SYSTEM_PROMPT is exported by the lib" {
+    source "$LIB"
+    [ -n "$BASE_SYSTEM_PROMPT" ]
+    [[ "$BASE_SYSTEM_PROMPT" == *"software engineering"* ]]
+}
+
+@test "validate_verbosity: accepts brief, standard, detailed" {
+    source "$LIB"
+    validate_verbosity brief
+    validate_verbosity standard
+    validate_verbosity detailed
+}
+
+@test "validate_verbosity: rejects unknown levels" {
+    source "$LIB"
+    run validate_verbosity zealous
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"must be one of"* ]]
+}

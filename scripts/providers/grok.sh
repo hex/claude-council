@@ -11,6 +11,8 @@ source "$SCRIPT_DIR/../lib/keys.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 
+verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
+
 # Debug mode
 DEBUG="${COUNCIL_DEBUG:-}"
 
@@ -40,9 +42,7 @@ MODEL="${GROK_MODEL:-grok-4.20-reasoning}"
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*reasoning*' 'grok-4*' 'grok-3-mini-*'
 
-# System instruction (verbosity directive prepended when COUNCIL_VERBOSITY is set)
-verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
-SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
+SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
 # Build request payload
 PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{

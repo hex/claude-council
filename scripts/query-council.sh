@@ -12,6 +12,7 @@ source "${SCRIPT_DIR}/lib/cache.sh"
 source "${SCRIPT_DIR}/lib/roles.sh"
 source "${SCRIPT_DIR}/lib/keys.sh"
 source "${SCRIPT_DIR}/lib/display.sh"
+source "${SCRIPT_DIR}/lib/verbosity.sh"
 resolve_grok_key
 
 # Helper: current time in milliseconds (falls back to seconds if python3 missing)
@@ -192,13 +193,8 @@ fi
 
 # Validate --verbosity if specified, then export so provider scripts see it
 if [[ -n "$VERBOSITY" ]]; then
-    case "$VERBOSITY" in
-        brief|standard|detailed) export COUNCIL_VERBOSITY="$VERBOSITY" ;;
-        *)
-            echo "Error: --verbosity must be one of: brief, standard, detailed (got '$VERBOSITY')" >&2
-            exit 1
-            ;;
-    esac
+    validate_verbosity "$VERBOSITY" || exit 1
+    export COUNCIL_VERBOSITY="$VERBOSITY"
 fi
 
 # Validate --roles if specified
