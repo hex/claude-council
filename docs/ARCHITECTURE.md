@@ -268,7 +268,8 @@ claude-council/
 │       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
 │       ├── retry.sh             # Retry with backoff
 │       ├── roles.sh             # Role management
-│       └── tokens.sh            # Reasoning-model token-cap bumping
+│       ├── tokens.sh            # Reasoning-model token-cap bumping
+│       └── verbosity.sh         # Response verbosity directives
 ├── skills/
 │   ├── council-execution/
 │   │   └── SKILL.md             # Standard query execution
@@ -286,6 +287,7 @@ claude-council/
 │   ├── keys.bats
 │   ├── roles.bats
 │   ├── tokens.bats
+│   ├── verbosity.bats
 │   └── query-council.bats
 ├── LICENSE
 ├── README.md
@@ -312,5 +314,6 @@ claude-council/
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
 | `COUNCIL_AUTO_CLOSE` | - | Set to `1` to auto-close the pane on completion (skip the keypress wait); used by tests/demos |
 | `COUNCIL_ATTENTION_THRESHOLD` | 2000 | iTerm2 dock-bounce threshold in ms (only triggers if total elapsed >= this) |
+| `COUNCIL_VERBOSITY` | standard | Response style: `brief` / `standard` / `detailed` (prepended to all providers' system prompts) |
 | `OPENAI_REASONING_EFFORT` | medium | Reasoning model effort |
 | `PERPLEXITY_RECENCY` | - | Search recency filter |

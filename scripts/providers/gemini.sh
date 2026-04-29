@@ -8,6 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
+source "$SCRIPT_DIR/../lib/verbosity.sh"
 
 # Debug mode
 DEBUG="${COUNCIL_DEBUG:-}"
@@ -38,8 +39,9 @@ ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:gener
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'gemini-3*' '*thinking*'
 
-# System instruction
-SYSTEM="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
+# System instruction (verbosity directive prepended when COUNCIL_VERBOSITY is set)
+verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
+SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
 
 # Build request payload
 PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{

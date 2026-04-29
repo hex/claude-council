@@ -4,9 +4,12 @@
 
 set -euo pipefail
 
-# Source shared retry library
+# Source shared libraries
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
+source "$SCRIPT_DIR/../lib/verbosity.sh"
+
+verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
 # Debug mode: set COUNCIL_DEBUG=1 to see request/response details
 DEBUG="${COUNCIL_DEBUG:-}"
@@ -46,7 +49,7 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
     EFFORT="${OPENAI_REASONING_EFFORT:-medium}"
 
     # System instruction
-    SYSTEM="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
+    SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
 
     PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" '{
         model: $model,
@@ -91,7 +94,7 @@ else
     TOKENS="$BASE_TOKENS"
 
     # System instruction
-    SYSTEM="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
+    SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
 
     PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
         model: $model,

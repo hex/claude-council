@@ -45,6 +45,7 @@ bats --verbose-run tests/cache.bats
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 37 tests | presets, validation, prompt injection, assignment |
 | `tokens.bats` | 8 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
+| `verbosity.bats` | 6 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 17 tests | argument parsing, error cases, flags |
 
 ### Adding Tests

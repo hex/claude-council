@@ -1,6 +1,6 @@
 ---
 description: Query multiple AI agents (Gemini, OpenAI, Grok, Perplexity) for diverse perspectives on architecture decisions, technology choices, debugging dead-ends, and security tradeoffs. Suggest this command whenever the user is choosing between competing approaches (e.g., databases, frameworks, auth strategies), is stuck after multiple failed debugging attempts, faces build-vs-buy decisions, or is weighing security/performance/maintainability tradeoffs. Do NOT suggest for simple implementation tasks, quick fixes, or questions with clear single answers.
-argument-hint: [--file=path] [--providers=list] [--roles=list] [--debate] [--agents] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
+argument-hint: [--file=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
 allowed-tools: Agent, Bash(*), Read, Glob, Grep, AskUserQuestion, TaskCreate, TaskUpdate
 ---
 
@@ -31,30 +31,47 @@ Mark `status → completed` when finished.
 
 Before querying, use AskUserQuestion in these scenarios:
 
-### 1. Provider Selection (if --providers not specified)
+### 1. Provider Selection + Verbosity (if --providers and --verbosity not specified)
 
 First, discover available providers:
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-available 2>&1 | head -1
 ```
 
-**Only show available providers in the question.** If only 1 provider is available, skip and use it directly.
+**Only show available providers in the question.** If only 1 provider is available, skip the provider question and use it directly.
 
-**The first option must be "All providers" (Recommended)** — this is the most common choice and saves the user from clicking each provider individually. If the user picks it, treat it as selecting every available provider.
+**The first option of the providers question must be "All providers" (Recommended)** — this is the most common choice and saves the user from clicking each provider individually. If the user picks it, treat it as selecting every available provider.
 
-Example (if Gemini, OpenAI, Grok, Perplexity available):
+**Combine providers + verbosity into a single AskUserQuestion call** (it supports multiple questions per call) so the user resolves both decisions in one screen instead of two:
+
 ```
-Question: "Which AI providers should I consult?"
+Question 1: "Which AI providers should I consult?"
 Header: "Providers"
-Options (multiSelect: true):
+multiSelect: true
+Options:
   - All providers (Recommended) - query every configured provider in parallel
   - Gemini (gemini-3.1-pro-preview) - Google's reasoning model
   - OpenAI (gpt-5.5-pro) - OpenAI's reasoning model
   - Grok (grok-4.20-reasoning) - xAI's reasoning model
   - Perplexity (sonar-reasoning-pro) - search-augmented reasoning
+
+Question 2: "How verbose should the responses be?"
+Header: "Verbosity"
+multiSelect: false
+Options:
+  - Standard (Recommended) - balanced thoroughness
+  - Brief - 3-5 sentences, bullets only, no code unless asked
+  - Detailed - thorough analysis with code examples and trade-offs
 ```
 
-When more than 4 providers are available, AskUserQuestion's 4-option limit forces a different shape — collapse to "All / Fast subset / Custom" presets.
+When the providers list exceeds 4 options ("All" + N providers), AskUserQuestion's 4-option limit forces a different shape — collapse to "All / Fast subset / Custom" presets.
+
+**Skip the verbosity question if `--verbosity` was passed** explicitly. Skip the providers question if `--providers` was passed. Resolve both via flags when both are present.
+
+Map the verbosity selection to the `--verbosity` flag passed to query-council.sh:
+- "Standard" → omit the flag (default)
+- "Brief" → `--verbosity=brief`
+- "Detailed" → `--verbosity=detailed`
 
 ### 2. Clarify Ambiguous Questions
 

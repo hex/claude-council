@@ -27,6 +27,7 @@ Options:
   --providers LIST    Comma-separated providers (gemini,openai,grok,perplexity)
   --roles LIST        Assign roles to providers (security,performance,maintainability)
                       Or use preset: balanced, security-focused, architecture, review
+  --verbosity LEVEL   Response verbosity: brief, standard (default), detailed
   --debate            Enable two-round debate mode
   --file PATH         Include file contents in query context
   --output PATH       Export destination (passed in metadata for caller)
@@ -55,6 +56,7 @@ OUTPUT_PATH=""
 QUIET_MODE=false
 AUTO_CONTEXT=true
 NO_PANE=false
+VERBOSITY=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -72,6 +74,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --roles)
             ROLES="$2"
+            shift 2
+            ;;
+        --verbosity=*)
+            VERBOSITY="${1#*=}"
+            shift
+            ;;
+        --verbosity)
+            VERBOSITY="$2"
             shift 2
             ;;
         --debate)
@@ -178,6 +188,17 @@ if [[ -n "$OUTPUT_PATH" ]]; then
             exit 1
         fi
     fi
+fi
+
+# Validate --verbosity if specified, then export so provider scripts see it
+if [[ -n "$VERBOSITY" ]]; then
+    case "$VERBOSITY" in
+        brief|standard|detailed) export COUNCIL_VERBOSITY="$VERBOSITY" ;;
+        *)
+            echo "Error: --verbosity must be one of: brief, standard, detailed (got '$VERBOSITY')" >&2
+            exit 1
+            ;;
+    esac
 fi
 
 # Validate --roles if specified

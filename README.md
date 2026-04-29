@@ -173,6 +173,7 @@ Per-call opt-out via `--no-pane`. iTerm2 features no-op silently outside iTerm2;
 | `--no-cache` | Force fresh queries, skip cache |
 | `--no-auto-context` | Disable automatic file detection |
 | `--no-pane` | Disable streaming tmux pane (default: on inside tmux) |
+| `--verbosity=LEVEL` | Response style: `brief` / `standard` / `detailed` |
 
 ### Slash Commands
 
