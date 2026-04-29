@@ -1,5 +1,5 @@
-# Local settings with API keys
-.claude/*.local.md
+# Local per-developer settings (md, json, etc.)
+.claude/*.local.*
 
 # Local commands (dev workflows)
 .claude/commands/
