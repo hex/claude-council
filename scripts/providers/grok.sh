@@ -8,6 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/keys.sh"
+source "$SCRIPT_DIR/../lib/tokens.sh"
 
 # Debug mode
 DEBUG="${COUNCIL_DEBUG:-}"
@@ -32,8 +33,11 @@ ENDPOINT="https://api.x.ai/v1/chat/completions"
 # Model selection (override via GROK_MODEL env var)
 MODEL="${GROK_MODEL:-grok-4.20-reasoning}"
 
-# Token limit (override via COUNCIL_MAX_TOKENS env var)
-TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
+# Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models
+# (*-reasoning, grok-4*, grok-3-mini-*) need a higher cap since the
+# combined thinking + output share max_tokens.
+BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*reasoning*' 'grok-4*' 'grok-3-mini-*'
 
 # System instruction
 SYSTEM="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."

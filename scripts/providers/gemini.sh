@@ -4,9 +4,10 @@
 
 set -euo pipefail
 
-# Source shared retry library
+# Source shared libraries
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
+source "$SCRIPT_DIR/../lib/tokens.sh"
 
 # Debug mode
 DEBUG="${COUNCIL_DEBUG:-}"
@@ -31,8 +32,11 @@ MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
 # Gemini API endpoint
 ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent"
 
-# Token limit (override via COUNCIL_MAX_TOKENS env var)
-TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
+# Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models
+# (gemini-3*, *-thinking-*) need a much higher cap since maxOutputTokens
+# combines reasoning + output.
+BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'gemini-3*' '*thinking*'
 
 # System instruction
 SYSTEM="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."

@@ -267,7 +267,8 @@ claude-council/
 │       ├── export.sh            # Markdown export
 │       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
 │       ├── retry.sh             # Retry with backoff
-│       └── roles.sh             # Role management
+│       ├── roles.sh             # Role management
+│       └── tokens.sh            # Reasoning-model token-cap bumping
 ├── skills/
 │   ├── council-execution/
 │   │   └── SKILL.md             # Standard query execution
@@ -284,6 +285,7 @@ claude-council/
 │   ├── display.bats
 │   ├── keys.bats
 │   ├── roles.bats
+│   ├── tokens.bats
 │   └── query-council.bats
 ├── LICENSE
 ├── README.md

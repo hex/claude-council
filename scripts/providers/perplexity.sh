@@ -4,9 +4,10 @@
 
 set -euo pipefail
 
-# Source shared retry library
+# Source shared libraries
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
+source "$SCRIPT_DIR/../lib/tokens.sh"
 
 # Debug mode
 DEBUG="${COUNCIL_DEBUG:-}"
