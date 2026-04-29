@@ -84,9 +84,16 @@ export COUNCIL_MAX_TOKENS=4096  # longer responses
 export COUNCIL_MAX_TOKENS=1024  # shorter, faster responses
 ```
 
-#### OpenAI Reasoning Models
+#### Reasoning Models
 
-For OpenAI reasoning models (`codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*`), the token limit is automatically increased to 8x the base value (minimum 32768). This is because these models combine reasoning tokens and output tokens into a single `max_output_tokens` limit.
+For reasoning models from any provider, the token limit is automatically increased to 8x the base value (minimum 32768). This is because reasoning models combine internal thinking tokens and visible output tokens into a single `max_output_tokens` limit — without the bump, the model can run out mid-response.
+
+The bump applies to:
+
+- **OpenAI**: `codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*`
+- **Gemini**: `gemini-3*`, `*thinking*`
+- **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`
+- **Perplexity**: `sonar-reasoning*`, `*deep-research*`
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|

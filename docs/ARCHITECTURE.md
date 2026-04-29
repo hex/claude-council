@@ -310,6 +310,7 @@ claude-council/
 | `COUNCIL_CACHE_TTL` | 3600 | Cache lifetime (s) |
 | `COUNCIL_DEBUG` | - | Enable debug output |
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
+| `COUNCIL_AUTO_CLOSE` | - | Set to `1` to auto-close the pane on completion (skip the keypress wait); used by tests/demos |
 | `COUNCIL_ATTENTION_THRESHOLD` | 2000 | iTerm2 dock-bounce threshold in ms (only triggers if total elapsed >= this) |
 | `OPENAI_REASONING_EFFORT` | medium | Reasoning model effort |
 | `PERPLEXITY_RECENCY` | - | Search recency filter |
