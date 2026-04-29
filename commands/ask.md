@@ -40,14 +40,21 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-available 2>&1 | head
 
 **Only show available providers in the question.** If only 1 provider is available, skip and use it directly.
 
-Example (if Gemini and OpenAI available):
+**The first option must be "All providers" (Recommended)** — this is the most common choice and saves the user from clicking each provider individually. If the user picks it, treat it as selecting every available provider.
+
+Example (if Gemini, OpenAI, Grok, Perplexity available):
 ```
 Question: "Which AI providers should I consult?"
 Header: "Providers"
 Options (multiSelect: true):
+  - All providers (Recommended) - query every configured provider in parallel
   - Gemini (gemini-3.1-pro-preview) - Google's reasoning model
   - OpenAI (gpt-5.5-pro) - OpenAI's reasoning model
+  - Grok (grok-4.20-reasoning) - xAI's reasoning model
+  - Perplexity (sonar-reasoning-pro) - search-augmented reasoning
 ```
+
+When more than 4 providers are available, AskUserQuestion's 4-option limit forces a different shape — collapse to "All / Fast subset / Custom" presets.
 
 ### 2. Clarify Ambiguous Questions
 
