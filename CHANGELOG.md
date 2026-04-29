@@ -4,6 +4,45 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.4.5
+
+### Features
+
+- **Verbosity controls** — new `COUNCIL_VERBOSITY` env var and `--verbosity`
+  flag let you shape provider responses by style and depth, not just length:
+  - `brief` — 3-5 sentences max, bullets where possible, no code unless asked
+  - `standard` — current default, balanced thoroughness (no directive prepended)
+  - `detailed` — thorough analysis with code examples, edge cases, trade-offs
+
+  The `/ask` slash command now combines provider selection and verbosity into
+  a single AskUserQuestion screen so both decisions resolve in one prompt.
+  Standard is the recommended default; the question is skipped when
+  `--verbosity` is passed explicitly.
+
+### Other
+
+- New `scripts/lib/verbosity.sh` houses both the verbosity directive helper
+  AND a `BASE_SYSTEM_PROMPT` constant shared by all four providers. The base
+  prompt was previously duplicated 5× across provider scripts. One source of
+  truth now — future prompt-engineering changes touch one location instead
+  of five. Perplexity continues to append its citation clause inline.
+- `validate_verbosity` helper extracted to verbosity.sh, mirroring the
+  existing `validate_roles` pattern.
+- All providers now follow a consistent "compute verbosity prefix once at
+  startup, reuse in SYSTEM=" pattern.
+- `tests/verbosity.bats` — 9 tests covering directive content, fallback,
+  validation, and base-prompt presence.
+
+### Docs
+
+- README: new "Verbosity" section with the level → output mapping.
+- ARCHITECTURE.md: `verbosity.sh` in lib tree, `verbosity.bats` in tests
+  tree, `COUNCIL_VERBOSITY` in config table.
+- TESTING.md: `verbosity.bats` row.
+- `commands/ask.md`: spec includes the verbosity AskUserQuestion step.
+
+**Full Changelog**: https://github.com/hex/claude-council/compare/v2026.4.4...v2026.4.5
+
 ## 2026.4.4
 
 ### Fixes
