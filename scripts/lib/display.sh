@@ -403,12 +403,16 @@ done
 
 clear_loading
 
-printf '\n\033[2m[esc/ctrl-d] close\033[0m '
-esc=$(printf '\033')
-while true; do
-    read -n1 -s -r key || break
-    [[ "$key" = "$esc" ]] && break
-done
+# Skip the keypress wait for tests/demos that set COUNCIL_AUTO_CLOSE=1.
+# Interactive runs default to the keypress wait so users can scroll back.
+if [[ "${COUNCIL_AUTO_CLOSE:-0}" != 1 ]]; then
+    printf '\n\033[2m[esc/ctrl-d] close\033[0m '
+    esc=$(printf '\033')
+    while true; do
+        read -n1 -s -r key || break
+        [[ "$key" = "$esc" ]] && break
+    done
+fi
 WATCHEREOF
     chmod +x "$watch_dir/watcher.sh"
 
@@ -421,7 +425,10 @@ WATCHEREOF
         target_args=(-t "$TMUX_PANE")
     fi
 
+    # Forward COUNCIL_AUTO_CLOSE explicitly — the new tmux pane gets the
+    # tmux server's environment, not this shell's, unless we pass it.
     if ! tmux split-window -h -l '40%' "${target_args[@]}" \
+        -e "COUNCIL_AUTO_CLOSE=${COUNCIL_AUTO_CLOSE:-0}" \
         "bash $safe_watcher $safe_dir" >/dev/null 2>&1; then
         rm -rf "$watch_dir"
         return 1

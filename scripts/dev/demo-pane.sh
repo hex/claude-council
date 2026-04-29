@@ -14,6 +14,9 @@ if ! is_tmux; then
     exit 1
 fi
 
+# Demos always auto-close — caller can override by exporting COUNCIL_AUTO_CLOSE=0.
+export COUNCIL_AUTO_CLOSE="${COUNCIL_AUTO_CLOSE:-1}"
+
 PANE=$(display_pane_open) || { echo "display_pane_open failed" >&2; exit 1; }
 echo "Demo pane opened: $PANE" >&2
 
