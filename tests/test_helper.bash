@@ -16,6 +16,13 @@ export TEST_FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures"
 export COUNCIL_CACHE_DIR="$TEST_CACHE_DIR"
 export COUNCIL_CACHE_TTL=3600
 
+# Tests should never spawn the streaming tmux pane — it spawns a real
+# split that waits for keypress, leaving orphans that accumulate across
+# bats runs. NO_PANE skips opening; AUTO_CLOSE is a belt-and-suspenders
+# fallback if any code path bypasses NO_PANE in the future.
+export COUNCIL_NO_PANE=1
+export COUNCIL_AUTO_CLOSE=1
+
 # Setup - runs before each test
 setup() {
     mkdir -p "$TEST_TMP_DIR"
