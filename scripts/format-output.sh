@@ -4,6 +4,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Colors (only if output is a terminal)
 if [[ -t 1 ]]; then
     BLUE='\033[34m'
@@ -47,25 +49,8 @@ BOX_WIDTH=80
 INNER_WIDTH=78
 
 # Provider styling
-provider_color() {
-    case "$1" in
-        gemini)     echo -e "${BLUE}" ;;
-        openai)     echo -e "${WHITE}" ;;
-        grok)       echo -e "${RED}" ;;
-        perplexity) echo -e "${GREEN}" ;;
-        *)          echo -e "${CYAN}" ;;
-    esac
-}
-
-provider_emoji() {
-    case "$1" in
-        gemini)     echo "🟦" ;;
-        openai)     echo "🔳" ;;
-        grok)       echo "🟥" ;;
-        perplexity) echo "🟩" ;;
-        *)          echo "⬛" ;;
-    esac
-}
+# provider_color and provider_emoji are defined in lib/providers.sh
+source "${SCRIPT_DIR}/lib/providers.sh"
 
 # Draw horizontal line of box characters
 draw_hline() {

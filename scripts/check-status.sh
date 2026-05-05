@@ -77,6 +77,29 @@ check_provider() {
     fi
 }
 
+# Check a CLI-based provider by binary presence + --version
+# Usage: check_cli_provider <name> <binary>
+check_cli_provider() {
+    local name="$1"
+    local binary="$2"
+
+    if ! command -v "$binary" >/dev/null 2>&1; then
+        echo "no_binary"
+        return
+    fi
+
+    local start_time end_time duration version
+    start_time=$(python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || date +%s)
+
+    if version=$("$binary" --version 2>/dev/null | head -1); then
+        end_time=$(python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || date +%s)
+        duration=$((end_time - start_time))
+        echo "ok:${duration}:${version:-cli}"
+    else
+        echo "error:exec_failed"
+    fi
+}
+
 # Main output
 echo ""
 echo -e "${DIM}Provider Status:${RESET}"
@@ -87,6 +110,8 @@ gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "GEMINI_MODEL" "gemini-
 openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "gpt-5.5-pro")
 grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "grok-4.20-reasoning")
 perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "sonar-reasoning-pro")
+codex_status=$(check_cli_provider "codex" "codex")
+gemini_cli_status=$(check_cli_provider "gemini-cli" "gemini")
 
 # Format output
 format_status() {
@@ -101,6 +126,10 @@ format_status() {
         no_key)
             status_icon="${DIM}--${RESET}"
             status_text="${DIM}API key not set${RESET}"
+            ;;
+        no_binary)
+            status_icon="${DIM}--${RESET}"
+            status_text="${DIM}CLI not installed${RESET}"
             ;;
         timeout)
             status_icon="${RED}x${RESET}"
@@ -133,6 +162,8 @@ format_status "🟦" "$BLUE" "Gemini" "$gemini_status"
 format_status "🔳" "$WHITE" "OpenAI" "$openai_status"
 format_status "🟥" "$RED" "Grok" "$grok_status"
 format_status "🟩" "$GREEN" "Perplexity" "$perplexity_status"
+format_status "🔳" "$WHITE" "Codex CLI" "$codex_status"
+format_status "🟦" "$BLUE" "Gemini CLI" "$gemini_cli_status"
 
 echo ""
 
@@ -142,6 +173,8 @@ available=0
 [[ "$openai_status" == ok:* ]] && ((available++))
 [[ "$grok_status" == ok:* ]] && ((available++))
 [[ "$perplexity_status" == ok:* ]] && ((available++))
+[[ "$codex_status" == ok:* ]] && ((available++))
+[[ "$gemini_cli_status" == ok:* ]] && ((available++))
 
-echo -e "${DIM}${available}/4 providers available${RESET}"
+echo -e "${DIM}${available}/6 providers available${RESET}"
 echo ""

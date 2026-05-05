@@ -5,6 +5,7 @@ A Claude Code plugin that consults multiple AI coding agents to get diverse pers
 ## Features
 
 - Query Gemini, OpenAI (GPT/Codex), Grok, and Perplexity simultaneously
+- Use the `codex` and `gemini` CLIs (subscription auth) when installed — preferred over their API siblings
 - Side-by-side comparison of responses
 - Extensible provider system - add new AI agents easily
 - Proactive suggestions for architecture decisions and debugging
@@ -63,6 +64,24 @@ providers:
     api_key: "your-key"
 ---
 ```
+
+### CLI Providers (subscription auth, no API key)
+
+If `codex` or `gemini` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
+
+- `codex` (OpenAI Codex CLI) shadows the `openai` API provider
+- `gemini` (Google Gemini CLI) shadows the `gemini` API provider
+
+CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai` or `--providers=gemini`. Listing both API and CLI together (e.g., `--providers=gemini,gemini-cli`) runs them side-by-side for comparison.
+
+Override CLI model selection:
+
+```bash
+export CODEX_MODEL="gpt-5-codex"                # default: gpt-5.5
+export GEMINI_CLI_MODEL="gemini-3-pro"          # default: gemini-3-flash-preview
+```
+
+The defaults mirror what the CLIs themselves pick when invoked without `-m`. They're hardcoded in the provider scripts (and `get_model` in `query-council.sh`) so the model name is known up front — needed for accurate cache keys and pane headers.
 
 ### Model Selection
 

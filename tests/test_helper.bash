@@ -39,6 +39,20 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Helper: compute a PATH that excludes the directories holding codex and gemini.
+# Use when a test needs to assert "no providers available" on a developer machine
+# that has the CLI agents installed.
+path_without_clis() {
+    local clean=$PATH
+    local cli dir
+    for cli in codex gemini; do
+        dir=$(dirname "$(command -v "$cli" 2>/dev/null)" 2>/dev/null || true)
+        [[ -n "$dir" ]] || continue
+        clean=$(echo "$clean" | tr ':' '\n' | grep -vF -- "$dir" | tr '\n' ':')
+    done
+    echo "${clean%:}"
+}
+
 # Helper: assert JSON field equals value
 # Usage: assert_json_eq "$json" ".field" "expected"
 assert_json_eq() {

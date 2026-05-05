@@ -258,11 +258,11 @@ SPINNERS=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 provider_color_rgb() {
     local __out="$1"
     case "$2" in
-        gemini)     printf -v "$__out" '59;130;246'   ;;
-        openai)     printf -v "$__out" '229;231;235'  ;;
-        grok)       printf -v "$__out" '248;113;113'  ;;
-        perplexity) printf -v "$__out" '74;222;128'   ;;
-        *)          printf -v "$__out" '156;163;175'  ;;
+        gemini|gemini-cli) printf -v "$__out" '59;130;246'   ;;
+        openai|codex)      printf -v "$__out" '229;231;235'  ;;
+        grok)              printf -v "$__out" '248;113;113'  ;;
+        perplexity)        printf -v "$__out" '74;222;128'   ;;
+        *)                 printf -v "$__out" '156;163;175'  ;;
     esac
 }
 
@@ -307,11 +307,11 @@ build_banner_line() {
     # accent is a lighter shade of bg, used for the model name (secondary text).
     local bg fg accent
     case "$name" in
-        gemini)     bg='30;64;175';   fg='255;255;255'; accent='147;197;253' ;;  # blue-700/300
-        openai)     bg='229;231;235'; fg='31;41;55';    accent='100;116;139' ;;  # gray-200/slate-500
-        grok)       bg='185;28;28';   fg='255;255;255'; accent='252;165;165' ;;  # red-700/300
-        perplexity) bg='21;128;61';   fg='255;255;255'; accent='134;239;172' ;;  # green-700/300
-        *)          bg='55;65;81';    fg='255;255;255'; accent='156;163;175' ;;  # gray-700/400
+        gemini|gemini-cli) bg='30;64;175';   fg='255;255;255'; accent='147;197;253' ;;  # blue-700/300
+        openai|codex)      bg='229;231;235'; fg='31;41;55';    accent='100;116;139' ;;  # gray-200/slate-500
+        grok)              bg='185;28;28';   fg='255;255;255'; accent='252;165;165' ;;  # red-700/300
+        perplexity)        bg='21;128;61';   fg='255;255;255'; accent='134;239;172' ;;  # green-700/300
+        *)                 bg='55;65;81';    fg='255;255;255'; accent='156;163;175' ;;  # gray-700/400
     esac
     local upper
     upper=$(echo "$name" | tr '[:lower:]' '[:upper:]')

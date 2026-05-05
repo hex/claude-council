@@ -20,6 +20,8 @@ now_ms() {
     python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || date +%s
 }
 
+source "${SCRIPT_DIR}/lib/providers.sh"
+
 usage() {
     cat >&2 << 'EOF'
 Usage: query-council.sh [OPTIONS] [--] <prompt>
@@ -160,12 +162,7 @@ done
 
 # Handle --list-available flag
 if [[ "$LIST_AVAILABLE" == true ]]; then
-    available=()
-    [[ -n "${GEMINI_API_KEY:-}" ]] && available+=("gemini")
-    [[ -n "${OPENAI_API_KEY:-}" ]] && available+=("openai")
-    [[ -n "${GROK_API_KEY:-}" ]] && available+=("grok")
-    [[ -n "${PERPLEXITY_API_KEY:-}" ]] && available+=("perplexity")
-    echo "${available[*]}"
+    discover_providers
     exit 0
 fi
 
@@ -206,41 +203,18 @@ if [[ -n "$ROLES" ]]; then
     ROLES=$(normalize_roles "$ROLES")
 fi
 
-# Discover available providers
-discover_providers() {
-    local available=()
-
-    for script in "${PROVIDERS_DIR}"/*.sh; do
-        [[ -f "$script" ]] || continue
-        local name=$(basename "$script" .sh)
-
-        # Check if provider has API key configured
-        local key_var=""
-        case "$name" in
-            gemini) key_var="GEMINI_API_KEY" ;;
-            openai) key_var="OPENAI_API_KEY" ;;
-            grok)   key_var="GROK_API_KEY" ;;
-            *)      key_var="${name^^}_API_KEY" ;;
-        esac
-
-        if [[ -n "${!key_var:-}" ]]; then
-            available+=("$name")
-        fi
-    done
-
-    echo "${available[@]+"${available[@]}"}"
-}
-
 # Get list of providers to query
 if [[ -n "$FILTER_PROVIDERS" ]]; then
     IFS=',' read -ra PROVIDERS <<< "$FILTER_PROVIDERS"
 else
-    read -ra PROVIDERS <<< "$(discover_providers)"
+    read -ra DISCOVERED <<< "$(discover_providers)"
+    read -ra PROVIDERS <<< "$(prefer_cli_over_api "${DISCOVERED[@]+"${DISCOVERED[@]}"}")"
 fi
 
 if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
-    echo "Error: No providers configured. Set API keys for at least one provider." >&2
-    echo "  GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY (or GROK_API_KEY), or PERPLEXITY_API_KEY" >&2
+    echo "Error: No providers configured." >&2
+    echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)" >&2
+    echo "  or install a CLI agent (codex, gemini)." >&2
     exit 1
 fi
 
@@ -331,15 +305,8 @@ ITALIC='\033[3m'
 DIM='\033[2m'
 RESET='\033[0m'
 
-provider_color() {
-    case "$1" in
-        gemini)     echo -e "${BLUE}" ;;
-        openai)     echo -e "${WHITE}" ;;
-        grok)       echo -e "${RED}" ;;
-        perplexity) echo -e "${GREEN}" ;;
-        *)          echo -e "${CYAN}" ;;
-    esac
-}
+# provider_color and provider_emoji are defined in lib/providers.sh
+# (sourced near the top of this file).
 
 # Get model name for provider (mirrors logic in provider scripts)
 get_model() {
@@ -348,20 +315,15 @@ get_model() {
         openai)     echo "${OPENAI_MODEL:-gpt-5.5-pro}" ;;
         grok)       echo "${GROK_MODEL:-grok-4.20-reasoning}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
+        # CLI provider defaults must match the constants in providers/*.sh
+        # so the cache key matches the model actually passed.
+        codex)      echo "${CODEX_MODEL:-gpt-5.5}" ;;
+        gemini-cli) echo "${GEMINI_CLI_MODEL:-gemini-3-flash-preview}" ;;
         *)          echo "unknown" ;;
     esac
 }
 
 # Get emoji for provider
-provider_emoji() {
-    case "$1" in
-        gemini)     echo "🟦" ;;
-        openai)     echo "🔳" ;;
-        grok)       echo "🟥" ;;
-        perplexity) echo "🟩" ;;
-        *)          echo "⬛" ;;
-    esac
-}
 
 # Format provider list with colors and emojis
 format_providers() {
