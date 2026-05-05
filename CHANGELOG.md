@@ -4,6 +4,69 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.5.1
+
+### Features
+
+- **Codex and gemini CLI providers.** `codex` and `gemini` CLIs are now
+  first-class council members alongside the existing API providers,
+  discovered automatically when their binaries are on `PATH`. They use
+  your existing CLI subscription auth — no API key, no per-call cost.
+
+  When both an API and a CLI sibling are configured, the council prefers
+  the CLI by default: `codex` shadows `openai`, `gemini-cli` shadows
+  `gemini`. Explicit `--providers=openai` (or `gemini`) bypasses the
+  policy. Listing both in `--providers=gemini,gemini-cli` runs them
+  side-by-side for direct comparison.
+
+  Vendor-grouped colors and emojis: codex shares OpenAI's white square
+  (🔳), gemini-cli shares Gemini's blue square (🟦) — across both the
+  rendered output and the streaming tmux pane. Real model names
+  (`gpt-5.5`, `gemini-3-flash-preview`) flow through to pane headers and
+  JSON metadata via constants matching the CLIs' own current defaults.
+
+### Fixes
+
+- **`discover_providers` portability.** Replaced bash 4+ `${name^^}`
+  with portable `tr` so the script's fallback case runs cleanly under
+  `/bin/bash` 3.2 (macOS system bash). Was a latent crash for users
+  whose only configured provider was perplexity.
+
+- **`query-council.bats` setup leak.** Now also unsets `XAI_API_KEY`,
+  which was silently aliased to `GROK_API_KEY` via `keys.sh`'s
+  `resolve_grok_key`. On developer machines with `XAI_API_KEY` set, grok
+  was sneaking through "no providers" tests.
+
+- **`display.bats: should_open_pane is true inside tmux by default`**
+  now unsets the global `COUNCIL_NO_PANE=1` test guard before exercising
+  the default code path. Test was contradicting itself silently.
+
+### Docs
+
+- README: new "CLI Providers (subscription auth, no API key)" section
+  with the prefer-CLI policy and override examples.
+- ARCHITECTURE.md: file structure and tests trees include the new
+  providers, lib, and bats file; query box updated to show 6 providers;
+  config table adds `CODEX_MODEL` and `GEMINI_CLI_MODEL`.
+- TESTING.md: test coverage table includes `cli-providers.bats` (16),
+  refreshed counts for `query-council.bats` (18) and `verbosity.bats`
+  (9). New "CLI Providers" feature test scenario added.
+- `plugin.json` description and keywords now mention codex / cli.
+
+### Other
+
+- New `scripts/lib/providers.sh` is the single source of truth for
+  everything keyed on provider name: discovery, the CLI-prefers-API
+  policy, `get_model` defaults, and the vendor `provider_color` /
+  `provider_emoji` helpers. Previously these were duplicated across
+  `query-council.sh`, `format-output.sh`, and `check-status.sh`.
+- `check-status.sh` adds a `check_cli_provider` for binary-presence +
+  `--version` health probes, and now uses the consolidated emoji/color
+  helpers instead of hardcoded literals.
+- `tests/cli-providers.bats` — 16 tests covering CLI discovery, the
+  CLI-prefers-API policy, flag parsing, plus 2 gated end-to-end tests
+  behind `COUNCIL_E2E=1`.
+
 ## 2026.4.5
 
 ### Features
