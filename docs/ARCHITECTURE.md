@@ -16,9 +16,10 @@
 |                        query-council.sh                                 |
 |------------------------------------------------------------------------|
 |  1. Parse Arguments (--providers, --roles, --debate, --file, etc.)     |
-|  2. Discover Available Providers (check API keys)                      |
-|  3. Resolve Roles (expand presets, assign to providers)                |
-|  4. Build Context (--file content, auto-context detection)             |
+|  2. Discover Available Providers (API key OR CLI binary on PATH)       |
+|  3. Apply CLI-prefers-API policy (codex shadows openai, etc.)          |
+|  4. Resolve Roles (expand presets, assign to providers)                |
+|  5. Build Context (--file content, auto-context detection)             |
 +------------------------------------------------------------------------+
                                 |
                                 v
@@ -26,13 +27,14 @@
                     |     ROUND 1: Query     |
                     +------------------------+
                                 |
-        +---------------+-------+-------+---------------+
-        |               |               |               |
-        v               v               v               v
-  +-----------+   +-----------+   +-----------+   +-----------+
-  |  gemini   |   |  openai   |   |   grok    |   | perplexity|
-  |   .sh     |   |   .sh     |   |   .sh     |   |    .sh    |
-  +-----------+   +-----------+   +-----------+   +-----------+
+        +-------+-------+-------+-------+-------+-------+
+        |       |       |       |       |       |       |
+        v       v       v       v       v       v       v
+   +--------+ +-----+ +------+ +-----+ +------+ +-----------+
+   | gemini | |open | | grok | |perp | |codex | | gemini-cli|
+   |  .sh   | | .sh | |  .sh | |.sh  | |  .sh | |    .sh    |
+   +--------+ +-----+ +------+ +-----+ +------+ +-----------+
+   (API)      (API)   (API)    (API)   (CLI)    (CLI)
         |               |               |               |
         |    +----------+----------+----------+        |
         +--->|      lib/cache.sh   |<---------+--------+
@@ -122,10 +124,21 @@ OUTPUT: stdout = AI response text
 EXIT:   0 = success, non-zero = failure (error to stderr)
 ```
 
+Two flavors share the interface:
+
+- **API providers** (`gemini`, `openai`, `grok`, `perplexity`) — gated on
+  `{PROVIDER}_API_KEY`, talk to vendor APIs over HTTPS, charge per call.
+- **CLI providers** (`codex`, `gemini-cli`) — gated on the binary being on
+  `PATH`, use the user's existing CLI subscription auth, no per-call cost.
+  When both an API and CLI sibling exist (codex+openai, gemini-cli+gemini),
+  the orchestrator prefers the CLI by default; explicit `--providers` wins
+  over the policy.
+
 Environment-based configuration:
-- `{PROVIDER}_API_KEY` - Required authentication
-- `{PROVIDER}_MODEL` - Model override
-- `COUNCIL_MAX_TOKENS` - Response length limit
+- `{PROVIDER}_API_KEY` - Required authentication for API providers
+- `{PROVIDER}_MODEL` - Model override (also applies to CLI providers via
+  `CODEX_MODEL` / `GEMINI_CLI_MODEL`)
+- `COUNCIL_MAX_TOKENS` - Response length limit (API providers only)
 - `COUNCIL_DEBUG` - Enable verbose logging
 
 ### Cache Layer (`scripts/lib/cache.sh`)
@@ -257,15 +270,18 @@ claude-council/
 │   ├── dev/
 │   │   └── demo-pane.sh         # Visual test harness for the streaming pane
 │   ├── providers/
-│   │   ├── gemini.sh
-│   │   ├── openai.sh
-│   │   ├── grok.sh
-│   │   └── perplexity.sh
+│   │   ├── gemini.sh            # API
+│   │   ├── openai.sh            # API
+│   │   ├── grok.sh              # API
+│   │   ├── perplexity.sh        # API
+│   │   ├── codex.sh             # CLI (subscription auth, shadows openai)
+│   │   └── gemini-cli.sh        # CLI (subscription auth, shadows gemini)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
 │       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
+│       ├── providers.sh         # Discovery + CLI-prefers-API policy + vendor display
 │       ├── retry.sh             # Retry with backoff
 │       ├── roles.sh             # Role management
 │       ├── tokens.sh            # Reasoning-model token-cap bumping
@@ -283,6 +299,7 @@ claude-council/
 │   ├── run_tests.sh             # Test runner
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── cache.bats
+│   ├── cli-providers.bats       # CLI providers (codex, gemini-cli)
 │   ├── display.bats
 │   ├── keys.bats
 │   ├── roles.bats
@@ -303,7 +320,9 @@ claude-council/
 | `XAI_API_KEY` | - | xAI API key (preferred) |
 | `GROK_API_KEY` | - | xAI API key (legacy alias; `XAI_API_KEY` wins if both set) |
 | `PERPLEXITY_API_KEY` | - | Perplexity API key |
-| `{PROVIDER}_MODEL` | varies | Model override |
+| `{PROVIDER}_MODEL` | varies | Model override (API providers) |
+| `CODEX_MODEL` | gpt-5.5 | Model passed to `codex exec -m` |
+| `GEMINI_CLI_MODEL` | gemini-3-flash-preview | Model passed to `gemini -m` |
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
 | `COUNCIL_RETRY_DELAY` | 1 | Initial retry delay (s) |

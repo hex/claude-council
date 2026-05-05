@@ -41,12 +41,13 @@ bats --verbose-run tests/cache.bats
 | File | Tests | Coverage |
 |------|-------|----------|
 | `cache.bats` | 17 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
+| `cli-providers.bats` | 16 tests | codex/gemini-cli discovery, CLI-prefers-API policy, flag parsing, gated E2E |
 | `display.bats` | 17 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 37 tests | presets, validation, prompt injection, assignment |
 | `tokens.bats` | 8 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
-| `verbosity.bats` | 6 tests | brief/standard/detailed directives, fallback to standard |
-| `query-council.bats` | 17 tests | argument parsing, error cases, flags |
+| `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
+| `query-council.bats` | 18 tests | argument parsing, error cases, flags |
 
 ### Adding Tests
 
@@ -63,12 +64,15 @@ Manual testing procedures for features that require API calls or Claude Code int
 
 ### Prerequisites
 
-1. **API Keys configured** (at least one):
+1. **API Keys configured** (at least one) OR a CLI agent installed:
    ```bash
    export GEMINI_API_KEY="your-key"
    export OPENAI_API_KEY="your-key"
    export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
    ```
+
+   Alternatively, install `codex` and/or `gemini` CLIs — they're discovered
+   automatically via PATH and use your existing subscription auth.
 
 2. **Plugin loaded** in Claude Code:
    ```bash
@@ -161,6 +165,31 @@ echo '{"metadata":{"quiet_mode":true},"round1":{"gemini":{"status":"success","re
 - [ ] Only queries Gemini and OpenAI
 - [ ] Grok not included in output
 - [ ] Synthesis only references queried providers
+
+---
+
+### 2b. CLI Providers (codex / gemini-cli)
+
+**Test A**: CLI providers explicitly
+```bash
+/claude-council:ask --providers=codex,gemini-cli "What is the most common cause of a SIGSEGV in C?"
+```
+
+**Expected**:
+- [ ] Only queries Codex CLI and Gemini CLI (no API calls made)
+- [ ] Header banners show real model names (e.g. `gpt-5.5`, `gemini-3-flash-preview`)
+- [ ] Codex banner uses OpenAI's white square (🔳); Gemini-cli uses Gemini's blue square (🟦)
+
+**Test B**: Default flow with CLI shadowing
+```bash
+# With BOTH GEMINI_API_KEY/OPENAI_API_KEY set AND codex/gemini binaries installed:
+/claude-council:ask "Should I use UUID or BIGINT for primary keys?"
+```
+
+**Expected**:
+- [ ] Discovery finds 6 providers but only 4 are queried (codex, gemini-cli, grok, perplexity)
+- [ ] No `openai` or `gemini` (API) entry in the output — they were shadowed
+- [ ] To force the API instead, use `--providers=openai,gemini` explicitly
 
 ---
 
@@ -374,12 +403,14 @@ rm combined-test.md
 
 ## Edge Cases
 
-### No API Keys
+### No API Keys and no CLI agents
 ```bash
-unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY
+unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
+# Strip /opt/homebrew/bin and ~/.nvm from PATH so codex/gemini aren't discovered
 bash scripts/query-council.sh "Test question" 2>&1
 ```
-**Expected**: `Error: No providers configured. Set API keys for at least one provider.`
+**Expected**: `Error: No providers configured.` followed by a hint to set an
+API key OR install a CLI agent.
 
 ### Invalid Provider
 ```bash
