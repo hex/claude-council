@@ -144,6 +144,9 @@ teardown() {
 
 @test "display: should_open_pane is true inside tmux by default" {
     source "$LIB"
+    # test_helper.bash exports COUNCIL_NO_PANE=1 globally as an orphan-pane
+    # guard; unset it here so we genuinely exercise the default code path.
+    unset COUNCIL_NO_PANE
     export TMUX="/tmp/tmux-501/default,12345,0"
     run should_open_pane
     [ "$status" -eq 0 ]
