@@ -309,21 +309,7 @@ RESET='\033[0m'
 # (sourced near the top of this file).
 
 # Get model name for provider (mirrors logic in provider scripts)
-get_model() {
-    case "$1" in
-        gemini)     echo "${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
-        openai)     echo "${OPENAI_MODEL:-gpt-5.5-pro}" ;;
-        grok)       echo "${GROK_MODEL:-grok-4.20-reasoning}" ;;
-        perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
-        # CLI provider defaults must match the constants in providers/*.sh
-        # so the cache key matches the model actually passed.
-        codex)      echo "${CODEX_MODEL:-gpt-5.5}" ;;
-        gemini-cli) echo "${GEMINI_CLI_MODEL:-gemini-3-flash-preview}" ;;
-        *)          echo "unknown" ;;
-    esac
-}
-
-# Get emoji for provider
+# get_model is defined in lib/providers.sh (sourced near the top of this file).
 
 # Format provider list with colors and emojis
 format_providers() {

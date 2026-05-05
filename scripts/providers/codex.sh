@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -26,9 +27,7 @@ FULL_PROMPT="${SYSTEM}
 
 ${PROMPT}"
 
-# Mirror the codex CLI's own current default. Override via CODEX_MODEL env var.
-# Bump this constant when codex ships a new default we want to track.
-MODEL="${CODEX_MODEL:-gpt-5.5}"
+MODEL=$(get_model codex)
 ARGS=(exec -m "$MODEL" "$FULL_PROMPT")
 
 ERR_TMP=$(mktemp)

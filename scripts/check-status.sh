@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/keys.sh"
+source "$SCRIPT_DIR/lib/providers.sh"
 resolve_grok_key
 
 # Colors
@@ -158,12 +159,12 @@ format_status() {
     echo -e "  ${emoji} ${color}${name}${RESET}\t${status_icon} ${status_text}  ${model_text}"
 }
 
-format_status "🟦" "$BLUE" "Gemini" "$gemini_status"
-format_status "🔳" "$WHITE" "OpenAI" "$openai_status"
-format_status "🟥" "$RED" "Grok" "$grok_status"
-format_status "🟩" "$GREEN" "Perplexity" "$perplexity_status"
-format_status "🔳" "$WHITE" "Codex CLI" "$codex_status"
-format_status "🟦" "$BLUE" "Gemini CLI" "$gemini_cli_status"
+format_status "$(provider_emoji gemini)"     "$(provider_color gemini)"     "Gemini"     "$gemini_status"
+format_status "$(provider_emoji openai)"     "$(provider_color openai)"     "OpenAI"     "$openai_status"
+format_status "$(provider_emoji grok)"       "$(provider_color grok)"       "Grok"       "$grok_status"
+format_status "$(provider_emoji perplexity)" "$(provider_color perplexity)" "Perplexity" "$perplexity_status"
+format_status "$(provider_emoji codex)"      "$(provider_color codex)"      "Codex CLI"  "$codex_status"
+format_status "$(provider_emoji gemini-cli)" "$(provider_color gemini-cli)" "Gemini CLI" "$gemini_cli_status"
 
 echo ""
 

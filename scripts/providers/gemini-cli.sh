@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -29,10 +30,7 @@ ${PROMPT}"
 # --skip-trust bypasses the trusted-folders guardrail for non-interactive use.
 # The council only sends text and reads text; gemini gets no filesystem access
 # from us, so the guardrail is overcautious for this code path.
-#
-# Mirror the gemini CLI's own current default. Override via GEMINI_CLI_MODEL.
-# Bump this constant when the CLI ships a new default we want to track.
-MODEL="${GEMINI_CLI_MODEL:-gemini-3-flash-preview}"
+MODEL=$(get_model gemini-cli)
 ARGS=(--skip-trust -m "$MODEL" -p "$FULL_PROMPT")
 
 ERR_TMP=$(mktemp)

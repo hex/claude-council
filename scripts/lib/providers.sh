@@ -61,6 +61,21 @@ prefer_cli_over_api() {
     echo "${out[@]+"${out[@]}"}"
 }
 
+# Default model per provider. CLI defaults mirror what the CLI itself picks
+# when invoked without -m, so the cache key and pane header match what's
+# actually run. Bump when the CLI ships a new default we want to track.
+get_model() {
+    case "$1" in
+        gemini)     echo "${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
+        openai)     echo "${OPENAI_MODEL:-gpt-5.5-pro}" ;;
+        grok)       echo "${GROK_MODEL:-grok-4.20-reasoning}" ;;
+        perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
+        codex)      echo "${CODEX_MODEL:-gpt-5.5}" ;;
+        gemini-cli) echo "${GEMINI_CLI_MODEL:-gemini-3-flash-preview}" ;;
+        *)          echo "unknown" ;;
+    esac
+}
+
 # Vendor color for a provider name. CLI variants share their vendor's color
 # (codex with openai, gemini-cli with gemini) since they speak for the same vendor.
 # Caller is responsible for defining BLUE/WHITE/RED/GREEN/CYAN globals.
