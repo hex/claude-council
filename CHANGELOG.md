@@ -4,6 +4,41 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.5.2
+
+### Features
+
+- **`--list-default` flag** for `query-council.sh` — returns the providers
+  that would actually run for a default query (post CLI-prefers-API filter).
+  The slash command (`/ask`) now uses it to size its provider-selection
+  AskUserQuestion correctly: with both API keys and CLIs configured, it shows
+  4 options (the queryable set) instead of 6 (the full discovered set).
+
+- **`--list-available` is now human-readable**: multi-line output with the
+  default query set and a "Shadowed by CLI policy" section that names which
+  CLI is preferred. Use `--list-default` for tooling.
+
+### Docs
+
+- **README restructured** for marketplace readers. Quick start (install +
+  example query + sample output) now leads, followed by Usage above
+  Configuration, with deep config (model selection, reasoning models,
+  Perplexity recency, retry/timeout, terminal integration) consolidated
+  under a new "Reference" section. Added a small ToC after the tagline.
+
+### Other
+
+- New `shadow_origin` helper in `lib/providers.sh` — single source of truth
+  for the API↔CLI shadow pairs (codex⇄openai, gemini-cli⇄gemini). Both
+  `prefer_cli_over_api` and the `--list-available` display annotation now
+  use it. Adding a future pair is a one-line change instead of three.
+- New `default_provider_set` helper — collapses the
+  `discover_providers | prefer_cli_over_api` chain that appeared at three
+  call sites into a single function call.
+- Two new tests (`cli-providers.bats` is now 18, up from 16) covering
+  `--list-available`'s shadow annotation and `--list-default`'s
+  machine-readable contract.
+
 ## 2026.5.1
 
 ### Features
