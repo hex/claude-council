@@ -40,7 +40,8 @@ Note: Flags accept both --flag=value and --flag value formats.
   --no-cache          Skip cache, force fresh queries
   --no-auto-context   Disable auto file detection (passed in metadata)
   --no-pane           Disable streaming tmux pane (default: on inside tmux)
-  --list-available    List configured providers and exit
+  --list-available    List configured providers (human-readable, with policy info)
+  --list-default      List providers that would be queried by default (machine-readable)
 
 Output: JSON with metadata and provider responses
 EOF
@@ -51,6 +52,7 @@ EOF
 FILTER_PROVIDERS=""
 PROMPT=""
 LIST_AVAILABLE=false
+LIST_DEFAULT=false
 USE_CACHE=true
 ROLES=""
 DEBATE_MODE=false
@@ -127,6 +129,10 @@ while [[ $# -gt 0 ]]; do
             LIST_AVAILABLE=true
             shift
             ;;
+        --list-default)
+            LIST_DEFAULT=true
+            shift
+            ;;
         --prompt=*)
             PROMPT="${1#*=}"
             shift
@@ -160,9 +166,47 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Handle --list-available flag
+# --list-default: machine-readable list of providers that a default query
+# would actually run (post CLI-prefers-API filter). For tooling.
+if [[ "$LIST_DEFAULT" == true ]]; then
+    read -ra DISCOVERED <<< "$(discover_providers)"
+    prefer_cli_over_api "${DISCOVERED[@]+"${DISCOVERED[@]}"}"
+    exit 0
+fi
+
+# --list-available: human-readable view of everything configured, grouped by
+# whether the CLI-prefers-API policy would query them or shadow them.
 if [[ "$LIST_AVAILABLE" == true ]]; then
-    discover_providers
+    read -ra DISCOVERED <<< "$(discover_providers)"
+    if [[ ${#DISCOVERED[@]} -eq 0 ]]; then
+        echo "No providers configured."
+        echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)"
+        echo "  or install a CLI agent (codex, gemini)."
+        exit 0
+    fi
+    read -ra DEFAULT_SET <<< "$(prefer_cli_over_api "${DISCOVERED[@]+"${DISCOVERED[@]}"}")"
+    declare -A in_default=()
+    for p in "${DEFAULT_SET[@]+"${DEFAULT_SET[@]}"}"; do in_default[$p]=1; done
+    SHADOWED=()
+    for p in "${DISCOVERED[@]}"; do
+        [[ -z "${in_default[$p]:-}" ]] && SHADOWED+=("$p")
+    done
+
+    echo "Default query set (${#DEFAULT_SET[@]}):"
+    for p in "${DEFAULT_SET[@]+"${DEFAULT_SET[@]}"}"; do
+        echo "  $p"
+    done
+    if [[ ${#SHADOWED[@]} -gt 0 ]]; then
+        echo ""
+        echo "Shadowed by CLI policy (use --providers=<name> to force):"
+        for p in "${SHADOWED[@]}"; do
+            case "$p" in
+                openai) echo "  openai     (codex preferred)" ;;
+                gemini) echo "  gemini     (gemini-cli preferred)" ;;
+                *)      echo "  $p" ;;
+            esac
+        done
+    fi
     exit 0
 fi
 

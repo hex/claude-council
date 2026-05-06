@@ -156,6 +156,33 @@ source_lib_and_call() {
     fi
 }
 
+@test "query-council: --list-available annotates shadowed API providers" {
+    # When both OPENAI_API_KEY and codex are present, the human-readable
+    # listing must show codex in the default set AND openai in the shadowed
+    # section so the user can see both exist.
+    if ! command_exists codex; then skip "codex CLI not installed"; fi
+    export OPENAI_API_KEY="test-key"
+    run bash "$SCRIPT" --list-available
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Default query set"* ]]
+    [[ "$output" == *"codex"* ]]
+    [[ "$output" == *"Shadowed"* ]]
+    [[ "$output" == *"openai"* ]]
+}
+
+@test "query-council: --list-default returns post-policy set, machine-readable" {
+    # Single space-separated line; CLI siblings drop their API counterparts.
+    if ! command_exists codex; then skip "codex CLI not installed"; fi
+    export OPENAI_API_KEY="test-key"
+    run bash "$SCRIPT" --list-default
+    [ "$status" -eq 0 ]
+    # Exactly one line of output
+    [[ $(echo "$output" | wc -l | tr -d ' ') == "1" ]]
+    [[ "$output" == *"codex"* ]]
+    # openai is shadowed, must not appear
+    [[ ! "$output" =~ (^|[[:space:]])openai([[:space:]]|$) ]]
+}
+
 @test "query-council: --providers codex flag is accepted" {
     run bash "$SCRIPT" --providers=codex "test prompt" 2>&1
     [[ "$output" != *"Unknown flag"* ]]

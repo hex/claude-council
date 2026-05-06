@@ -33,12 +33,12 @@ Before querying, use AskUserQuestion in these scenarios:
 
 ### 1. Provider Selection + Verbosity (if --providers and --verbosity not specified)
 
-First, discover available providers:
+First, discover the providers that would be queried by default (post CLI-prefers-API policy — `--list-default` is the right flag here, NOT `--list-available`, which includes shadowed API siblings that won't run by default):
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-available 2>&1 | head -1
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default 2>&1 | head -1
 ```
 
-**Only show available providers in the question.** If only 1 provider is available, skip the provider question and use it directly.
+**Only show default-queried providers in the question.** If only 1 provider is available, skip the provider question and use it directly. If the user wants a shadowed API provider (e.g., `openai` when codex is installed), they can pass `--providers=openai` explicitly.
 
 **The first option of the providers question must be "All providers" (Recommended)** — this is the most common choice and saves the user from clicking each provider individually. If the user picks it, treat it as selecting every available provider.
 
