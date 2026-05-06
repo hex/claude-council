@@ -1,14 +1,60 @@
 # claude-council
 
-A Claude Code plugin that consults multiple AI coding agents to get diverse perspectives on coding problems.
+A Claude Code plugin that consults multiple AI coding agents in parallel and shows you their answers side-by-side. Useful when one model's bias could mislead you and the right call depends on cross-checking — architecture decisions, debugging dead ends, security reviews, framework picks.
+
+[Quick start](#quick-start) · [Usage](#usage) · [Configuration](#configuration) · [Reference](#reference) · [Development](#development)
+
+## Quick start
+
+```bash
+# 1. Install via Claude Code plugin marketplace
+/plugin marketplace add hex/claude-marketplace
+/plugin install claude-council
+
+# 2. Configure at least one provider — any of these works:
+export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY
+                                    # OR install the codex / gemini CLIs (uses your existing
+                                    # subscription — no API key needed)
+
+# 3. Ask anything
+/claude-council:ask "Should I use UUID or BIGINT primary keys for a SaaS users table?"
+```
+
+You get side-by-side responses from each configured provider:
+
+```
+🔳 Codex - gpt-5.5
+   Use UUID primary keys — they avoid enumeration, work across distributed
+   services, and survive imports/exports cleanly.
+
+🟦 Gemini-cli - gemini-3-flash-preview
+   UUIDv7 specifically: security of non-guessable IDs plus the index
+   locality of time-ordered sequences.
+
+🟥 Grok - grok-4.20-reasoning
+   BIGINT autoincrement — smaller index, faster joins. Handle public-
+   exposure concerns with a separate UUID slug column.
+
+🟩 Perplexity - sonar-reasoning-pro
+   BIGINT: 25% smaller than UUID, better cache locality, with citations
+   to Postgres benchmarks.
+
+## Synthesis
+Two providers prefer UUID(v7), two prefer BIGINT. Choice depends on
+whether you need distributed ID generation.
+```
+
+Inside tmux, results stream into a side pane in real time with vendor-colored banners. Run `/claude-council:status` to confirm what's configured and connected.
 
 ## Features
 
 - Query Gemini, OpenAI (GPT/Codex), Grok, and Perplexity simultaneously
 - Use the `codex` and `gemini` CLIs (subscription auth) when installed — preferred over their API siblings
-- Side-by-side comparison of responses
-- Extensible provider system - add new AI agents easily
-- Proactive suggestions for architecture decisions and debugging
+- Side-by-side comparison of responses with vendor-colored headers
+- Streaming tmux pane that renders responses as they land
+- Specialized roles, debate mode, and agent-enhanced deep analysis for high-stakes decisions
+- Extensible provider system — add new AI agents easily
+- Proactive agent that suggests consulting the council on architecture / debugging dead ends
 
 ## Installation
 
@@ -36,181 +82,7 @@ git clone https://github.com/hex/claude-council.git
 claude --plugin-dir /path/to/claude-council
 ```
 
-## Configuration
-
-### API Keys
-
-Set environment variables (recommended):
-
-```bash
-export GEMINI_API_KEY="your-key"
-export OPENAI_API_KEY="your-key"
-export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
-export PERPLEXITY_API_KEY="your-key"
-```
-
-Or create `.claude/claude-council.local.md` in your project:
-
-```yaml
----
-providers:
-  gemini:
-    api_key: "your-key"
-  openai:
-    api_key: "your-key"
-  grok:
-    api_key: "your-key"
-  perplexity:
-    api_key: "your-key"
----
-```
-
-### CLI Providers (subscription auth, no API key)
-
-If `codex` or `gemini` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
-
-- `codex` (OpenAI Codex CLI) shadows the `openai` API provider
-- `gemini` (Google Gemini CLI) shadows the `gemini` API provider
-
-CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai` or `--providers=gemini`. Listing both API and CLI together (e.g., `--providers=gemini,gemini-cli`) runs them side-by-side for comparison.
-
-Override CLI model selection:
-
-```bash
-export CODEX_MODEL="gpt-5-codex"                # default: gpt-5.5
-export GEMINI_CLI_MODEL="gemini-3-pro"          # default: gemini-3-flash-preview
-```
-
-The defaults mirror what the CLIs themselves pick when invoked without `-m`. They're hardcoded in the provider scripts (and `get_model` in `query-council.sh`) so the model name is known up front — needed for accurate cache keys and pane headers.
-
-### Model Selection
-
-Override default models via environment variables:
-
-```bash
-export GEMINI_MODEL="gemini-3.1-pro-preview"       # default
-export OPENAI_MODEL="gpt-5.5-pro"                   # default
-export GROK_MODEL="grok-4.20-reasoning"             # default
-export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
-```
-
-### Response Length
-
-Control max tokens per response (default: 2048):
-
-```bash
-export COUNCIL_MAX_TOKENS=4096  # longer responses
-export COUNCIL_MAX_TOKENS=1024  # shorter, faster responses
-```
-
-### Verbosity
-
-Shape how providers respond by prepending a directive to their system prompts. Affects style and depth, not just length:
-
-```bash
-export COUNCIL_VERBOSITY=brief     # ~3-5 sentences, bullets, no code
-export COUNCIL_VERBOSITY=standard  # default — balanced thoroughness
-export COUNCIL_VERBOSITY=detailed  # thorough analysis with code + edge cases
-```
-
-Or per-call: `--verbosity=brief|standard|detailed`. The slash command also asks via the provider-selection prompt.
-
-| Level | Typical output |
-|-------|----------------|
-| `brief` | 3-5 sentences max, bullets where possible, skips code blocks unless asked |
-| `standard` | Balanced — current default behavior, no directive prepended |
-| `detailed` | Thorough — includes code examples, edge cases, trade-offs, and rationale |
-
-#### Reasoning Models
-
-For reasoning models from any provider, the token limit is automatically increased to 8x the base value (minimum 32768). This is because reasoning models combine internal thinking tokens and visible output tokens into a single `max_output_tokens` limit — without the bump, the model can run out mid-response.
-
-The bump applies to:
-
-- **OpenAI**: `codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*`
-- **Gemini**: `gemini-3*`, `*thinking*`
-- **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`
-- **Perplexity**: `sonar-reasoning*`, `*deep-research*`
-
-| Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
-|------------|-------------------|--------------|
-| Standard (gpt-4o) | 2048 (default) | 2048 |
-| Reasoning (gpt-5.5-pro) | 2048 (default) | 32768 |
-| Reasoning (gpt-5.5-pro) | 4096 | 32768 |
-
-Control reasoning effort to balance speed vs thoroughness:
-
-```bash
-export OPENAI_REASONING_EFFORT="low"     # faster, less reasoning overhead
-export OPENAI_REASONING_EFFORT="medium"  # default - balanced
-export OPENAI_REASONING_EFFORT="high"    # thorough reasoning, slower
-```
-
-Gemini and Grok handle reasoning/thinking tokens separately, so they use the base limit directly.
-
-#### Perplexity Search Features
-
-Perplexity's sonar models are search-augmented, providing web-grounded responses with citations:
-
-```bash
-# Filter search results by recency: day, week, month, year
-export PERPLEXITY_RECENCY="week"
-```
-
-Available models:
-- `sonar` - Fast, search-enabled
-- `sonar-pro` - More capable, search-enabled
-- `sonar-reasoning` - Chain-of-thought reasoning + search
-- `sonar-reasoning-pro` - Best reasoning + search (default)
-
-Perplexity is useful when you need current information (latest framework versions, recent best practices) rather than just training-data knowledge.
-
-### Retry & Timeout Configuration
-
-Automatic retry on transient failures (429 rate limits, 5xx server errors):
-
-```bash
-export COUNCIL_MAX_RETRIES=3    # default: 3 retries
-export COUNCIL_RETRY_DELAY=1    # default: 1 second initial delay (doubles each retry)
-export COUNCIL_TIMEOUT=120      # default: 120 seconds per request
-```
-
-Timeouts fail fast (no retry) to prevent blocking on hung providers.
-
-### Display & Terminal Integration
-
-When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `cached`, `error` with timing) and renders each response as it lands — markdown is piped through `bat` (preferred), `glow`, or plain `cat` depending on what's installed. Press **Esc** to close the pane.
-
-When the outer terminal is iTerm2, council also drives:
-
-- **Tab color** — yellow while querying, green on success, red if any provider errored. Set via `it2setcolor`; ambient state signal without looking at the terminal.
-- **Dock attention** — bounces the iTerm2 dock icon when council finishes if the run took longer than `COUNCIL_ATTENTION_THRESHOLD` (default 2000ms). Useful for slow `--debate` queries when you've switched apps.
-- **`SetMark` navigation** — emits OSC 1337 SetMark before each provider response inside the pane. Cmd+Shift+↑/↓ in iTerm2 jumps between provider sections.
-
-```bash
-export COUNCIL_NO_PANE=1                # disable the streaming pane globally
-export COUNCIL_ATTENTION_THRESHOLD=5000  # only bounce dock if run > 5s
-```
-
-Per-call opt-out via `--no-pane`. iTerm2 features no-op silently outside iTerm2; pane no-ops outside tmux.
-
 ## Usage
-
-### Quick Reference
-
-| Flag | Description |
-|------|-------------|
-| `--providers=list` | Query specific providers (e.g., `gemini,openai`) |
-| `--roles=list` | Assign roles to providers (e.g., `security,performance` or `balanced`) |
-| `--debate` | Enable two-round debate mode |
-| `--file=path` | Include specific file in context |
-| `--output=path` | Export response to markdown file |
-| `--quiet` | Show only synthesis, hide individual responses |
-| `--agents` | Agent-enhanced analysis with subagents (slower, deeper) |
-| `--no-cache` | Force fresh queries, skip cache |
-| `--no-auto-context` | Disable automatic file detection |
-| `--no-pane` | Disable streaming tmux pane (default: on inside tmux) |
-| `--verbosity=LEVEL` | Response style: `brief` / `standard` / `detailed` |
 
 ### Slash Commands
 
@@ -234,83 +106,21 @@ Per-call opt-out via `--no-pane`. iTerm2 features no-op silently outside iTerm2;
 /claude-council:status
 ```
 
-### Export to File
+### Quick Reference
 
-Save council responses as clean markdown files for documentation or sharing:
-
-```bash
-/claude-council:ask --output=docs/decision.md "Should we use REST or GraphQL?"
-```
-
-The exported file includes:
-- Metadata header (query, date, providers)
-- Each provider's full response
-- Synthesis with consensus/divergence analysis
-
-Great for:
-- Documenting architectural decisions
-- Sharing with team members who aren't using Claude
-- Creating an audit trail of AI-assisted decisions
-
-### Quiet Mode
-
-Get just the bottom line without individual provider responses:
-
-```bash
-/claude-council:ask --quiet "Should I use Redis or Memcached?"
-```
-
-Quiet mode still queries all providers and analyzes their responses, but only shows the synthesis with consensus/divergence analysis. Use when you want a quick answer without scrolling through multiple perspectives.
-
-### Response Caching
-
-Responses are automatically cached to speed up repeated queries and save API costs:
-
-```bash
-# Uses cache if available (default)
-/claude-council:ask "What's the best testing framework?"
-
-# Force fresh queries, skip cache
-/claude-council:ask --no-cache "What's the best testing framework?"
-```
-
-Cache configuration:
-```bash
-export COUNCIL_CACHE_DIR=".claude/council-cache"  # Cache location (default)
-export COUNCIL_CACHE_TTL=3600                      # Cache lifetime in seconds (default: 1 hour)
-```
-
-Cached responses show `cached` instead of `success` in the status output. Cache is keyed by prompt + provider + model + role, so:
-- Changing models invalidates the cache
-- Using `--roles` creates separate cache entries (same prompt with different role = cache miss)
-- Debate mode round 2 rebuttals are never cached (they depend on round 1 content)
-
-### Auto-Context Injection
-
-The council automatically detects and includes relevant files based on your question:
-
-```bash
-/claude-council:ask "How should I refactor the authentication flow?"
-# Auto-detects and includes: src/auth/*.ts, middleware/auth.ts, etc.
-```
-
-Before querying, you'll see which files were auto-included:
-```
-Auto-included context (3 files):
-  - src/auth/handler.ts (keyword: "auth")
-  - middleware/session.ts (keyword: "session")
-  - types/user.ts (keyword: "user")
-```
-
-To disable auto-context (for general questions not about your code):
-```bash
-/claude-council:ask --no-auto-context "What are best practices for API design?"
-```
-
-Auto-context limits:
-- Maximum 5 files included
-- Maximum ~10,000 tokens of context
-- Skipped if you provide `--file=` explicitly
+| Flag | Description |
+|------|-------------|
+| `--providers=list` | Query specific providers (e.g., `gemini,openai,codex`) |
+| `--roles=list` | Assign roles (e.g., `security,performance` or preset like `balanced`) |
+| `--debate` | Enable two-round debate mode |
+| `--file=path` | Include specific file in context |
+| `--output=path` | Export response to markdown file |
+| `--quiet` | Show only synthesis, hide individual responses |
+| `--agents` | Agent-enhanced analysis with subagents (slower, deeper) |
+| `--no-cache` | Force fresh queries, skip cache |
+| `--no-auto-context` | Disable automatic file detection |
+| `--no-pane` | Disable streaming tmux pane (default: on inside tmux) |
+| `--verbosity=LEVEL` | Response style: `brief` / `standard` / `detailed` |
 
 ### Specialized Roles
 
@@ -407,11 +217,247 @@ standard mode. Use it for high-stakes decisions, not quick questions.
 | Analysis depth | Raw responses + synthesis | Pre-analyzed + enhanced synthesis |
 | Best for | Quick questions, factual queries | Architecture decisions, security reviews, complex tradeoffs |
 
+### Quiet Mode
+
+Get just the bottom line without individual provider responses:
+
+```bash
+/claude-council:ask --quiet "Should I use Redis or Memcached?"
+```
+
+Quiet mode still queries all providers and analyzes their responses, but only shows the synthesis with consensus/divergence analysis. Use when you want a quick answer without scrolling through multiple perspectives.
+
+### Auto-Context Injection
+
+The council automatically detects and includes relevant files based on your question:
+
+```bash
+/claude-council:ask "How should I refactor the authentication flow?"
+# Auto-detects and includes: src/auth/*.ts, middleware/auth.ts, etc.
+```
+
+Before querying, you'll see which files were auto-included:
+```
+Auto-included context (3 files):
+  - src/auth/handler.ts (keyword: "auth")
+  - middleware/session.ts (keyword: "session")
+  - types/user.ts (keyword: "user")
+```
+
+To disable auto-context (for general questions not about your code):
+```bash
+/claude-council:ask --no-auto-context "What are best practices for API design?"
+```
+
+Auto-context limits:
+- Maximum 5 files included
+- Maximum ~10,000 tokens of context
+- Skipped if you provide `--file=` explicitly
+
+### Response Caching
+
+Responses are automatically cached to speed up repeated queries and save API costs:
+
+```bash
+# Uses cache if available (default)
+/claude-council:ask "What's the best testing framework?"
+
+# Force fresh queries, skip cache
+/claude-council:ask --no-cache "What's the best testing framework?"
+```
+
+Cache configuration:
+```bash
+export COUNCIL_CACHE_DIR=".claude/council-cache"  # Cache location (default)
+export COUNCIL_CACHE_TTL=3600                      # Cache lifetime in seconds (default: 1 hour)
+```
+
+Cached responses show `cached` instead of `success` in the status output. Cache is keyed by prompt + provider + model + role, so:
+- Changing models invalidates the cache
+- Using `--roles` creates separate cache entries (same prompt with different role = cache miss)
+- Debate mode round 2 rebuttals are never cached (they depend on round 1 content)
+
+### Export to File
+
+Save council responses as clean markdown files for documentation or sharing:
+
+```bash
+/claude-council:ask --output=docs/decision.md "Should we use REST or GraphQL?"
+```
+
+The exported file includes:
+- Metadata header (query, date, providers)
+- Each provider's full response
+- Synthesis with consensus/divergence analysis
+
+Great for:
+- Documenting architectural decisions
+- Sharing with team members who aren't using Claude
+- Creating an audit trail of AI-assisted decisions
+
 ### Proactive Agent
 
 The `council-advisor` agent will suggest consulting the council when:
 - Discussing architecture or design decisions
 - Stuck debugging after multiple failed attempts
+
+## Configuration
+
+### API Keys
+
+Set environment variables (recommended):
+
+```bash
+export GEMINI_API_KEY="your-key"
+export OPENAI_API_KEY="your-key"
+export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
+export PERPLEXITY_API_KEY="your-key"
+```
+
+Or create `.claude/claude-council.local.md` in your project:
+
+```yaml
+---
+providers:
+  gemini:
+    api_key: "your-key"
+  openai:
+    api_key: "your-key"
+  grok:
+    api_key: "your-key"
+  perplexity:
+    api_key: "your-key"
+---
+```
+
+### CLI Providers (subscription auth, no API key)
+
+If `codex` or `gemini` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
+
+- `codex` (OpenAI Codex CLI) shadows the `openai` API provider
+- `gemini` (Google Gemini CLI) shadows the `gemini` API provider
+
+CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai` or `--providers=gemini`. Listing both API and CLI together (e.g., `--providers=gemini,gemini-cli`) runs them side-by-side for comparison.
+
+Override CLI model selection (defaults mirror what each CLI picks itself):
+
+```bash
+export CODEX_MODEL="gpt-5-codex"                # default: gpt-5.5
+export GEMINI_CLI_MODEL="gemini-3-pro"          # default: gemini-3-flash-preview
+```
+
+### Verbosity
+
+Shape how providers respond by prepending a directive to their system prompts. Affects style and depth, not just length:
+
+```bash
+export COUNCIL_VERBOSITY=brief     # ~3-5 sentences, bullets, no code
+export COUNCIL_VERBOSITY=standard  # default — balanced thoroughness
+export COUNCIL_VERBOSITY=detailed  # thorough analysis with code + edge cases
+```
+
+Or per-call: `--verbosity=brief|standard|detailed`. The slash command also asks via the provider-selection prompt.
+
+| Level | Typical output |
+|-------|----------------|
+| `brief` | 3-5 sentences max, bullets where possible, skips code blocks unless asked |
+| `standard` | Balanced — current default behavior, no directive prepended |
+| `detailed` | Thorough — includes code examples, edge cases, trade-offs, and rationale |
+
+## Reference
+
+Detail-heavy knobs you'll only need occasionally. The defaults are sensible for most workflows.
+
+### Model Selection
+
+Override default models via environment variables:
+
+```bash
+export GEMINI_MODEL="gemini-3.1-pro-preview"       # default
+export OPENAI_MODEL="gpt-5.5-pro"                   # default
+export GROK_MODEL="grok-4.20-reasoning"             # default
+export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
+```
+
+Response length cap (default: 2048):
+
+```bash
+export COUNCIL_MAX_TOKENS=4096  # longer responses
+export COUNCIL_MAX_TOKENS=1024  # shorter, faster responses
+```
+
+### Reasoning Models
+
+For reasoning models from any provider, the token limit is automatically increased to 8x the base value (minimum 32768). This is because reasoning models combine internal thinking tokens and visible output tokens into a single `max_output_tokens` limit — without the bump, the model can run out mid-response.
+
+The bump applies to:
+
+- **OpenAI**: `codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*`
+- **Gemini**: `gemini-3*`, `*thinking*`
+- **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`
+- **Perplexity**: `sonar-reasoning*`, `*deep-research*`
+
+| Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
+|------------|-------------------|--------------|
+| Standard (gpt-4o) | 2048 (default) | 2048 |
+| Reasoning (gpt-5.5-pro) | 2048 (default) | 32768 |
+| Reasoning (gpt-5.5-pro) | 4096 | 32768 |
+
+Control reasoning effort to balance speed vs thoroughness:
+
+```bash
+export OPENAI_REASONING_EFFORT="low"     # faster, less reasoning overhead
+export OPENAI_REASONING_EFFORT="medium"  # default - balanced
+export OPENAI_REASONING_EFFORT="high"    # thorough reasoning, slower
+```
+
+Gemini and Grok handle reasoning/thinking tokens separately, so they use the base limit directly.
+
+### Perplexity Search Features
+
+Perplexity's sonar models are search-augmented, providing web-grounded responses with citations:
+
+```bash
+# Filter search results by recency: day, week, month, year
+export PERPLEXITY_RECENCY="week"
+```
+
+Available models:
+- `sonar` - Fast, search-enabled
+- `sonar-pro` - More capable, search-enabled
+- `sonar-reasoning` - Chain-of-thought reasoning + search
+- `sonar-reasoning-pro` - Best reasoning + search (default)
+
+Perplexity is useful when you need current information (latest framework versions, recent best practices) rather than just training-data knowledge.
+
+### Retry & Timeout
+
+Automatic retry on transient failures (429 rate limits, 5xx server errors):
+
+```bash
+export COUNCIL_MAX_RETRIES=3    # default: 3 retries
+export COUNCIL_RETRY_DELAY=1    # default: 1 second initial delay (doubles each retry)
+export COUNCIL_TIMEOUT=120      # default: 120 seconds per request
+```
+
+Timeouts fail fast (no retry) to prevent blocking on hung providers.
+
+### Display & Terminal Integration
+
+When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `cached`, `error` with timing) and renders each response as it lands using a built-in perl-based markdown renderer (cyan headings, yellow code, vendor-colored banners). Press **Esc** to close the pane.
+
+When the outer terminal is iTerm2, council also drives:
+
+- **Tab color** — yellow while querying, green on success, red if any provider errored. Set via `it2setcolor`; ambient state signal without looking at the terminal.
+- **Dock attention** — bounces the iTerm2 dock icon when council finishes if the run took longer than `COUNCIL_ATTENTION_THRESHOLD` (default 2000ms). Useful for slow `--debate` queries when you've switched apps.
+- **`SetMark` navigation** — emits OSC 1337 SetMark before each provider response inside the pane. Cmd+Shift+↑/↓ in iTerm2 jumps between provider sections.
+
+```bash
+export COUNCIL_NO_PANE=1                # disable the streaming pane globally
+export COUNCIL_ATTENTION_THRESHOLD=5000  # only bounce dock if run > 5s
+```
+
+Per-call opt-out via `--no-pane`. iTerm2 features no-op silently outside iTerm2; pane no-ops outside tmux.
 
 ## Adding New Providers
 
@@ -433,6 +479,12 @@ bash scripts/query-council.sh --providers=gemini -- "Question" 2>/dev/null | bas
 
 # Check provider status
 bash scripts/check-status.sh
+
+# List configured providers (human-readable, with policy info)
+bash scripts/query-council.sh --list-available
+
+# List the providers that would be queried by default (machine-readable)
+bash scripts/query-council.sh --list-default
 ```
 
 **JSON output structure:**
@@ -456,7 +508,7 @@ bash scripts/check-status.sh
 ## Requirements
 
 - `curl` and `jq` for API calls
-- Valid API keys for desired providers
+- Valid API keys for at least one provider, OR `codex` / `gemini` CLI installed
 
 ## Development
 
@@ -490,6 +542,7 @@ Format: `YYYY.M.PATCH` where PATCH increments with each release. Examples: `2026
 
 # Run specific test suite
 bats tests/cache.bats
+bats tests/cli-providers.bats
 bats tests/roles.bats
 ```
 
