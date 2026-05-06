@@ -39,26 +39,45 @@ discover_providers() {
     echo "${available[@]+"${available[@]}"}"
 }
 
+# Single source of truth for the API↔CLI shadowing pairs. Returns the name
+# of the CLI provider that shadows the given API provider (or empty if the
+# provider has no CLI sibling). Adding a new pair is a one-line change here
+# that automatically propagates to prefer_cli_over_api and to the human
+# display in query-council.sh's --list-available output.
+shadow_origin() {
+    case "$1" in
+        openai) echo "codex" ;;
+        gemini) echo "gemini-cli" ;;
+        *)      echo "" ;;
+    esac
+}
+
 # Apply the CLI-prefers-API policy to a list of provider names.
-# Pairs: codex shadows openai; gemini-cli shadows gemini.
-# When the CLI variant of a pair is in the input, drop the API variant.
-# This only runs when --providers is NOT specified — explicit user filters
-# always win over the policy (e.g. `--providers openai` still queries the API).
+# When a provider's CLI shadow (per shadow_origin) is also in the input,
+# drop that API provider. Explicit --providers always wins over this policy.
 #
 # Args: provider names (one per arg)
 # Stdout: filtered names, space-separated, original order preserved
 prefer_cli_over_api() {
-    local p has_codex=false has_gemini_cli=false out=()
+    declare -A available=()
+    local p
+    for p in "$@"; do available[$p]=1; done
+    local out=() shadow_cli
     for p in "$@"; do
-        [[ "$p" == codex ]] && has_codex=true
-        [[ "$p" == gemini-cli ]] && has_gemini_cli=true
-    done
-    for p in "$@"; do
-        [[ "$p" == openai && "$has_codex" == true ]] && continue
-        [[ "$p" == gemini && "$has_gemini_cli" == true ]] && continue
+        shadow_cli=$(shadow_origin "$p")
+        if [[ -n "$shadow_cli" && -n "${available[$shadow_cli]:-}" ]]; then
+            continue
+        fi
         out+=("$p")
     done
     echo "${out[@]+"${out[@]}"}"
+}
+
+# Discovery + policy in one step: the providers a default query would run.
+default_provider_set() {
+    local discovered
+    read -ra discovered <<< "$(discover_providers)"
+    prefer_cli_over_api "${discovered[@]+"${discovered[@]}"}"
 }
 
 # Default model per provider. CLI defaults mirror what the CLI itself picks

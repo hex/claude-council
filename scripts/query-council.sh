@@ -169,8 +169,7 @@ done
 # --list-default: machine-readable list of providers that a default query
 # would actually run (post CLI-prefers-API filter). For tooling.
 if [[ "$LIST_DEFAULT" == true ]]; then
-    read -ra DISCOVERED <<< "$(discover_providers)"
-    prefer_cli_over_api "${DISCOVERED[@]+"${DISCOVERED[@]}"}"
+    default_provider_set
     exit 0
 fi
 
@@ -200,11 +199,12 @@ if [[ "$LIST_AVAILABLE" == true ]]; then
         echo ""
         echo "Shadowed by CLI policy (use --providers=<name> to force):"
         for p in "${SHADOWED[@]}"; do
-            case "$p" in
-                openai) echo "  openai     (codex preferred)" ;;
-                gemini) echo "  gemini     (gemini-cli preferred)" ;;
-                *)      echo "  $p" ;;
-            esac
+            cli=$(shadow_origin "$p")
+            if [[ -n "$cli" ]]; then
+                printf '  %-10s (%s preferred)\n' "$p" "$cli"
+            else
+                printf '  %s\n' "$p"
+            fi
         done
     fi
     exit 0
@@ -251,8 +251,7 @@ fi
 if [[ -n "$FILTER_PROVIDERS" ]]; then
     IFS=',' read -ra PROVIDERS <<< "$FILTER_PROVIDERS"
 else
-    read -ra DISCOVERED <<< "$(discover_providers)"
-    read -ra PROVIDERS <<< "$(prefer_cli_over_api "${DISCOVERED[@]+"${DISCOVERED[@]}"}")"
+    read -ra PROVIDERS <<< "$(default_provider_set)"
 fi
 
 if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
