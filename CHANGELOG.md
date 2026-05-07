@@ -4,6 +4,40 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.5.3
+
+### Fixes
+
+- **Bash 3.2 silent corruption fixed.** Three sites used `declare -A`
+  (associative arrays, bash 4+) which crashed on macOS system bash 3.2
+  (`/bin/bash`). Worse than a clean error: bash 3.2 evaluates string
+  subscripts arithmetically on unset names, collapsing every key to
+  index 0 and silently corrupting membership lookups. Concrete user-
+  visible bug: a user with only `OPENAI_API_KEY` configured (no codex
+  CLI) had openai silently dropped from every council query because
+  `prefer_cli_over_api` thought every provider's CLI shadow was already
+  present. Affected: `prefer_cli_over_api`, `--list-available`, the
+  watcher.sh streaming-pane state map.
+
+- **codex CLI: bypass trusted-directory guard.** Pass
+  `--skip-git-repo-check` to `codex exec` so the council can run from
+  any cwd. The guard exists for interactive coding sessions that may
+  edit files; our headless exec only reads stdout. Mirrors the existing
+  `--skip-trust` flag in gemini-cli.sh.
+
+- **Default request timeout raised: 120s → 300s.** Reasoning models
+  (gpt-5.5-pro, grok-4.20-reasoning, sonar-reasoning-pro) routinely
+  exceeded 120s on hard architectural questions, surfacing as confusing
+  timeouts. The deep-execution per-agent override is also raised
+  (240s → 500s).
+
+### Other
+
+- Internal: `display.sh` watcher's per-provider state moved from three
+  associative arrays to parallel arrays + `provider_index` helper using
+  the `printf -v` out-variable idiom (matches existing
+  `provider_color_rgb` pattern). No behavior change.
+
 ## 2026.5.2
 
 ### Features
