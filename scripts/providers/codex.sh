@@ -28,7 +28,10 @@ FULL_PROMPT="${SYSTEM}
 ${PROMPT}"
 
 MODEL=$(get_model codex)
-ARGS=(exec -m "$MODEL" "$FULL_PROMPT")
+# --skip-git-repo-check: codex refuses to run from non-trusted dirs as a
+# safety guard for interactive sessions; for headless `exec` we only read
+# stdout, so the check is pure friction.
+ARGS=(exec --skip-git-repo-check -m "$MODEL" "$FULL_PROMPT")
 
 ERR_TMP=$(mktemp)
 trap 'rm -f "$ERR_TMP"' EXIT
