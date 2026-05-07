@@ -253,9 +253,9 @@ provider_states=()
 provider_timings=()
 provider_models=()
 
-# Write the index of $2 in provider_names into the variable named by $1.
-# Creates a new entry if absent. Uses printf -v to avoid the command-substitution
-# subshell, which would lose array mutations.
+# Writes the index of $2 in provider_names into the variable named by $1,
+# registering a new entry if absent. printf -v avoids the command-substitution
+# subshell that would lose array mutations.
 provider_index() {
     local __out="$1" name="$2" i=0
     while [[ $i -lt ${#provider_names[@]} ]]; do
@@ -263,9 +263,6 @@ provider_index() {
         i=$((i + 1))
     done
     provider_names[$i]="$name"
-    provider_states[$i]=""
-    provider_timings[$i]=""
-    provider_models[$i]=""
     printf -v "$__out" '%d' "$i"
 }
 
