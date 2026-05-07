@@ -326,7 +326,7 @@ claude-council/
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
 | `COUNCIL_RETRY_DELAY` | 1 | Initial retry delay (s) |
-| `COUNCIL_TIMEOUT` | 120 | Request timeout (s) |
+| `COUNCIL_TIMEOUT` | 300 | Request timeout (s) |
 | `COUNCIL_CACHE_DIR` | .claude/council-cache | Cache location |
 | `COUNCIL_CACHE_TTL` | 3600 | Cache lifetime (s) |
 | `COUNCIL_DEBUG` | - | Enable debug output |
