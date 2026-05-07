@@ -59,13 +59,13 @@ shadow_origin() {
 # Args: provider names (one per arg)
 # Stdout: filtered names, space-separated, original order preserved
 prefer_cli_over_api() {
-    declare -A available=()
-    local p
-    for p in "$@"; do available[$p]=1; done
-    local out=() shadow_cli
+    # Space-padded set string for bash 3.2 compat (no associative arrays).
+    # Padding ensures word-boundary matches (e.g., "ai" won't match in "openai").
+    local available=" $* "
+    local p out=() shadow_cli
     for p in "$@"; do
         shadow_cli=$(shadow_origin "$p")
-        if [[ -n "$shadow_cli" && -n "${available[$shadow_cli]:-}" ]]; then
+        if [[ -n "$shadow_cli" && "$available" == *" $shadow_cli "* ]]; then
             continue
         fi
         out+=("$p")

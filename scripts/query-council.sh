@@ -184,11 +184,11 @@ if [[ "$LIST_AVAILABLE" == true ]]; then
         exit 0
     fi
     read -ra DEFAULT_SET <<< "$(prefer_cli_over_api "${DISCOVERED[@]+"${DISCOVERED[@]}"}")"
-    declare -A in_default=()
-    for p in "${DEFAULT_SET[@]+"${DEFAULT_SET[@]}"}"; do in_default[$p]=1; done
+    # Space-padded set for bash 3.2 compat (no associative arrays).
+    in_default=" ${DEFAULT_SET[*]+${DEFAULT_SET[*]}} "
     SHADOWED=()
     for p in "${DISCOVERED[@]}"; do
-        [[ -z "${in_default[$p]:-}" ]] && SHADOWED+=("$p")
+        [[ "$in_default" != *" $p "* ]] && SHADOWED+=("$p")
     done
 
     echo "Default query set (${#DEFAULT_SET[@]}):"

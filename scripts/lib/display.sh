@@ -245,9 +245,30 @@ RENDEREOF
 WATCH="$1"
 trap 'rm -rf "$WATCH"' EXIT
 
-declare -A provider_state
-declare -A provider_timing
-declare -A provider_model
+# Parallel arrays keyed by index in provider_names. bash 3.2 has no
+# associative arrays; provider_index() does linear lookup and registers
+# new entries on first sight. With <=6 providers, this is effectively free.
+provider_names=()
+provider_states=()
+provider_timings=()
+provider_models=()
+
+# Write the index of $2 in provider_names into the variable named by $1.
+# Creates a new entry if absent. Uses printf -v to avoid the command-substitution
+# subshell, which would lose array mutations.
+provider_index() {
+    local __out="$1" name="$2" i=0
+    while [[ $i -lt ${#provider_names[@]} ]]; do
+        [[ "${provider_names[$i]}" == "$name" ]] && { printf -v "$__out" '%d' "$i"; return; }
+        i=$((i + 1))
+    done
+    provider_names[$i]="$name"
+    provider_states[$i]=""
+    provider_timings[$i]=""
+    provider_models[$i]=""
+    printf -v "$__out" '%d' "$i"
+}
+
 status_lines_processed=0
 shown_responses=""
 spinner_frame=0
@@ -267,9 +288,10 @@ provider_color_rgb() {
 }
 
 draw_loading() {
-    local pending=()
-    for p in "${!provider_state[@]}"; do
-        [[ "${provider_state[$p]}" == "querying" ]] && pending+=("$p")
+    local pending=() i=0
+    while [[ $i -lt ${#provider_names[@]} ]]; do
+        [[ "${provider_states[$i]}" == "querying" ]] && pending+=("${provider_names[$i]}")
+        i=$((i + 1))
     done
     [[ ${#pending[@]} -eq 0 ]] && return 0
     local frame="${SPINNERS[$((spinner_frame % ${#SPINNERS[@]}))]}"
@@ -301,9 +323,11 @@ clear_loading() {
 # Uses 24-bit RGB for theme-independent WCAG AA contrast.
 build_banner_line() {
     local out_var="$1" name="$2"
-    local state="${provider_state[$name]:-}"
-    local ms="${provider_timing[$name]:-}"
-    local model="${provider_model[$name]:-}"
+    local idx
+    provider_index idx "$name"
+    local state="${provider_states[$idx]}"
+    local ms="${provider_timings[$idx]}"
+    local model="${provider_models[$idx]}"
     # accent is a lighter shade of bg, used for the model name (secondary text).
     local bg fg accent
     case "$name" in
@@ -353,9 +377,10 @@ while true; do
             status_lines_processed=$((status_lines_processed + 1))
             line=$(sed -n "${status_lines_processed}p" "$WATCH/status")
             IFS=$'\t' read -r provider state ms model <<<"$line"
-            provider_state[$provider]="$state"
-            [[ -n "$ms" ]] && provider_timing[$provider]="$ms"
-            [[ -n "$model" ]] && provider_model[$provider]="$model"
+            provider_index idx "$provider"
+            provider_states[$idx]="$state"
+            [[ -n "$ms" ]] && provider_timings[$idx]="$ms"
+            [[ -n "$model" ]] && provider_models[$idx]="$model"
             if [[ "$state" == "error" ]]; then
                 clear_loading
                 printf '\n\033[1;38;2;185;28;28m✗ %s error\033[0m\n' "$provider"
