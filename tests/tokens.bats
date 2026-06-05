@@ -28,6 +28,12 @@ setup() {
     [ "$BUMPED" = "32768" ]
 }
 
+@test "tokens: bump_for_reasoning matches grok-build-* glob" {
+    source "$LIB"
+    bump_for_reasoning BUMPED "grok-build-0.1" 2048 'grok-build-*'
+    [ "$BUMPED" = "32768" ]
+}
+
 @test "tokens: bump_for_reasoning matches sonar-reasoning prefix" {
     source "$LIB"
     bump_for_reasoning BUMPED "sonar-reasoning-pro" 2048 'sonar-reasoning*'

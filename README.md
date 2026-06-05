@@ -394,7 +394,7 @@ The bump applies to:
 
 - **OpenAI**: `codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*`
 - **Gemini**: `gemini-3*`, `*thinking*`
-- **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`
+- **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`, `grok-build-*`
 - **Perplexity**: `sonar-reasoning*`, `*deep-research*`
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
@@ -411,7 +411,7 @@ export OPENAI_REASONING_EFFORT="medium"  # default - balanced
 export OPENAI_REASONING_EFFORT="high"    # thorough reasoning, slower
 ```
 
-Gemini and Grok handle reasoning/thinking tokens separately, so they use the base limit directly.
+Grok accounts thinking tokens separately from `max_tokens`, which caps only the visible output — so its bump guards against long answers (not internal thinking) being cut off mid-response.
 
 ### Perplexity Search Features
 
