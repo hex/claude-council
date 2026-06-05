@@ -36,8 +36,11 @@ MODEL="${PERPLEXITY_MODEL:-sonar-reasoning-pro}"
 # Perplexity API endpoint (OpenAI-compatible)
 ENDPOINT="https://api.perplexity.ai/chat/completions"
 
-# Token limit (override via COUNCIL_MAX_TOKENS env var)
-TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
+# Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models
+# (sonar-reasoning*, *deep-research*) emit visible <think> output that shares
+# the max_tokens budget, so bump the cap to avoid mid-response truncation.
+BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'sonar-reasoning*' '*deep-research*'
 
 # Search recency filter: day, week, month, year (override via PERPLEXITY_RECENCY)
 # Empty means no filter (all time)
