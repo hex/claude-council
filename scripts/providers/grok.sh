@@ -37,11 +37,8 @@ ENDPOINT="https://api.x.ai/v1/chat/completions"
 MODEL="${GROK_MODEL:-grok-4.20-reasoning}"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models
-# (*-reasoning, grok-4*, grok-3-mini-*, grok-build-*) need a higher cap: their
-# response can exhaust a 2048 cap mid-sentence, causing silent truncation. For
-# *-reasoning/grok-4/grok-3-mini the thinking tokens share max_tokens; for
-# grok-build, max_tokens caps the visible output alone (thinking is uncapped),
-# so the bump guards against long answers being cut off.
+# (*-reasoning, grok-4*, grok-3-mini-*, grok-build-*) need a higher cap; for
+# grok-build max_tokens caps visible output only (thinking uncapped), else shared.
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*reasoning*' 'grok-4*' 'grok-3-mini-*' 'grok-build-*'
 
