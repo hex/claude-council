@@ -4,6 +4,31 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.6.1
+
+### Fixes
+
+- **`grok-build` models now get the reasoning token bump.** `grok-build-*`
+  (e.g. `grok-build-0.1`) is a reasoning model that was missing from Grok's
+  token-bump list, so responses were capped at the 2048 default and truncated
+  long answers mid-sentence. It now gets the 32768 cap. xAI caps `max_tokens`
+  on grok-build's *visible* output only (internal thinking is uncapped), so the
+  bump guards against long answers being cut off.
+
+- **Perplexity reasoning models now get the token bump.** `sonar-reasoning*`
+  and `*deep-research*` were documented and unit-tested as bump-eligible, but
+  the logic was never wired into `perplexity.sh` — so the default
+  `sonar-reasoning-pro` stayed capped at 2048, risking truncation of its visible
+  `<think>` chain-of-thought. The bump is now applied (verified live: default
+  model sends `max_tokens=32768` with search and citations intact).
+
+### Docs
+
+- Corrected a stale README claim that Gemini and Grok "use the base limit
+  directly" — both apply the bump (Gemini combines reasoning+output; Grok caps
+  visible output only).
+- Fixed the `tokens.bats` test count in TESTING.md (8 → 9).
+
 ## 2026.5.3
 
 ### Fixes
