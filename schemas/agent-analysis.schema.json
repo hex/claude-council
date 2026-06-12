@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Council agent analysis",
+  "description": "Structured analysis a deep-execution provider agent returns after querying its provider. Enforced by scripts/validate-analysis.sh; replies that fail validation are rendered raw, never silently accepted.",
+  "type": "object",
+  "required": [
+    "quality",
+    "retried",
+    "confidence",
+    "key_recommendations",
+    "unique_perspective",
+    "blind_spots",
+    "full_response"
+  ],
+  "properties": {
+    "quality": {
+      "type": "string",
+      "enum": ["good", "fair", "poor"],
+      "description": "Honest assessment of the provider response; good means genuinely useful"
+    },
+    "retried": {
+      "type": "boolean",
+      "description": "Whether a follow-up query was needed to fill gaps"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"]
+    },
+    "key_recommendations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "maxItems": 5,
+      "description": "Most actionable recommendations from the response"
+    },
+    "unique_perspective": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What this provider brings that others might miss"
+    },
+    "blind_spots": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What the response is not considering; assumptions it makes"
+    },
+    "full_response": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Complete, unedited provider response text (best response if retried)"
+    }
+  }
+}

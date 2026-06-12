@@ -29,16 +29,29 @@ the standard flow.
 **CRITICAL**: If file context was gathered (via --file or auto-context), include it in
 the question passed to each agent.
 
-## Step 3: Collect Results
+## Step 3: Collect and Validate Results
 
 As each background agent completes, you will be automatically notified.
 Wait for ALL agents to complete before proceeding to display.
 
 If an agent fails or times out, note the failure and continue with available results.
 
+Validate each agent's reply against the contract before using it:
+
+```bash
+echo "$AGENT_REPLY_JSON" | bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-analysis.sh
+```
+
+- **Exit 0**: the reply is a valid analysis; use its fields in Steps 4-5.
+- **Exit 1**: do NOT silently accept or paraphrase the reply. Display it raw
+  under the provider's header inside a fenced block, marked
+  `[invalid agent analysis - raw reply preserved]`, list the validator's
+  reasons, and exclude that provider from confidence-weighted synthesis
+  (mention it under Divergence/failures instead).
+
 ## Step 4: Display Results
 
-For each provider, display the agent's structured analysis using this format:
+For each provider with a valid analysis, display it using this format:
 
 ```
 ## {EMOJI} {PROVIDER} ({MODEL}) — Agent Analysis
