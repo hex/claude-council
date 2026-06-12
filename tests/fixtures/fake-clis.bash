@@ -5,6 +5,7 @@
 #   valid          - deterministic success response (default)
 #   empty          - exit 0 with no output
 #   malformed-json - syntactically broken JSON on stdout
+#   block-verdict  - stop-gate reviewer reply whose first line is BLOCK:
 #   rate-limit     - 429 message on stderr, exit 1
 #   auth-failure   - login-required message on stderr, exit 1
 #   slow           - sleep COUNCIL_FAKE_SLEEP (default 5s) then respond
@@ -47,6 +48,7 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     valid)          echo "$marker: deterministic answer" ;;
     empty)          ;;
     malformed-json) echo '{"unterminated": ' ;;
+    block-verdict)  echo "BLOCK: tests are failing in the changed module" ;;
     rate-limit)     echo "Error: 429 Too Many Requests" >&2; exit 1 ;;
     auth-failure)   echo "Error: not logged in" >&2; exit 1 ;;
     slow)           sleep "\${COUNCIL_FAKE_SLEEP:-5}"; echo "$marker: slow answer" ;;
