@@ -69,7 +69,7 @@ teardown() {
     export COUNCIL_FAKE_BEHAVIOR=empty
     run "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
     [ "$status" -eq 0 ]
-    [[ -z "$(echo -n "$output" | tr -d '[:space:]')" ]]
+    assert_blank "$output"
 }
 
 # ============================================================================

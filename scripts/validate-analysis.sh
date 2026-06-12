@@ -13,30 +13,23 @@ fi
 
 # Mirrors the contract in schemas/agent-analysis.schema.json. jq cannot run
 # JSON Schema directly, so each rule is restated here; the bats suite keeps
-# the two in sync via the schema's required-fields list.
+# the two in sync via the schema's required-fields list and bounds.
 VIOLATIONS=$(echo "$INPUT" | jq -r '
-    [
-        (if type == "object" then empty else "document must be a JSON object" end),
-        (if (type == "object") and ((.quality? // "") | IN("good","fair","poor"))
+    if type != "object" then ["document must be a JSON object"]
+    else [
+        (if (.quality? // "") | IN("good","fair","poor")
             then empty else "quality must be one of good|fair|poor" end),
-        (if (type == "object") and ((.retried? | type) == "boolean")
+        (if (.retried? | type) == "boolean"
             then empty else "retried must be a boolean" end),
-        (if (type == "object") and ((.confidence? // "") | IN("high","medium","low"))
+        (if (.confidence? // "") | IN("high","medium","low")
             then empty else "confidence must be one of high|medium|low" end),
-        (if (type == "object") and ((.key_recommendations? | type) == "array")
-            and ((.key_recommendations // []) | length >= 1)
-            and ((.key_recommendations // []) | all(type == "string"))
-            then empty else "key_recommendations must be a non-empty array of strings" end),
-        (if (type == "object") and ((.unique_perspective? | type) == "string")
-            and ((.unique_perspective // "") | length >= 1)
-            then empty else "unique_perspective must be a non-empty string" end),
-        (if (type == "object") and ((.blind_spots? | type) == "string")
-            and ((.blind_spots // "") | length >= 1)
-            then empty else "blind_spots must be a non-empty string" end),
-        (if (type == "object") and ((.full_response? | type) == "string")
-            and ((.full_response // "") | length >= 1)
-            then empty else "full_response must be a non-empty string" end)
-    ] | .[]
+        (if (.key_recommendations? | type) == "array"
+            and (.key_recommendations | length >= 1 and length <= 5 and all(type == "string"))
+            then empty else "key_recommendations must be an array of 1-5 strings" end),
+        (["unique_perspective", "blind_spots", "full_response"][] as $f |
+            if (.[$f]? | type == "string" and length >= 1)
+                then empty else "\($f) must be a non-empty string" end)
+    ] end | .[]
 ')
 
 if [[ -n "$VIOLATIONS" ]]; then

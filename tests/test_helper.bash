@@ -39,6 +39,16 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Helper: clear every provider API key so discovery sees none of them
+unset_provider_keys() {
+    unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
+}
+
+# Helper: assert a string is empty or whitespace-only
+assert_blank() {
+    [[ -z "${1//[[:space:]]/}" ]]
+}
+
 # Helper: compute a PATH that excludes the directories holding codex and gemini.
 # Use when a test needs to assert "no providers available" on a developer machine
 # that has the CLI agents installed.

@@ -10,7 +10,7 @@ PROVIDERS_DIR_REAL="${SCRIPTS_DIR}/providers"
 
 setup() {
     mkdir -p "$TEST_CACHE_DIR"
-    unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY PERPLEXITY_API_KEY
+    unset_provider_keys
 }
 
 teardown() {
@@ -91,7 +91,7 @@ source_lib_and_call() {
 @test "prefer_cli_over_api: identity when input is empty" {
     run source_lib_and_call 'prefer_cli_over_api'
     [ "$status" -eq 0 ]
-    [[ -z "$(echo -n "$output" | tr -d '[:space:]')" ]]
+    assert_blank "$output"
 }
 
 @test "prefer_cli_over_api: identity when neither CLI is in input" {

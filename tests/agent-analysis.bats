@@ -67,8 +67,23 @@ valid_doc() {
     [[ "$output" == *"blind_spots"* ]]
 }
 
+@test "validate-analysis: rejects more than five key_recommendations" {
+    run bash "$VALIDATOR" <<< "$(valid_doc | jq '.key_recommendations = ["a","b","c","d","e","f"]')"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"key_recommendations"* ]]
+}
+
 @test "schema: declares the same required fields the validator enforces" {
     run jq -r '.required | sort | join(",")' "$SCHEMA"
     [ "$status" -eq 0 ]
     [[ "$output" == "blind_spots,confidence,full_response,key_recommendations,quality,retried,unique_perspective" ]]
+}
+
+@test "schema: bounds and enums match what the validator enforces" {
+    run jq -r '.properties.key_recommendations | "\(.minItems)-\(.maxItems)"' "$SCHEMA"
+    [ "$output" == "1-5" ]
+    run jq -r '.properties.quality.enum | join(",")' "$SCHEMA"
+    [ "$output" == "good,fair,poor" ]
+    run jq -r '.properties.confidence.enum | join(",")' "$SCHEMA"
+    [ "$output" == "high,medium,low" ]
 }

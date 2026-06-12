@@ -10,7 +10,7 @@ SCRIPT="${SCRIPTS_DIR}/check-status.sh"
 setup() {
     mkdir -p "$TEST_TMP_DIR" "$TEST_CACHE_DIR"
     install_fake_clis
-    unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
+    unset_provider_keys
 }
 
 @test "fixture: --version succeeds even under auth-failure behavior" {

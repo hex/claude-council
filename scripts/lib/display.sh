@@ -138,6 +138,9 @@ display_write_renderer() {
 my $theme  = $ENV{COUNCIL_THEME_RESOLVED} // 'unknown';
 my $strong = $theme eq 'dark' ? '1;97' : $theme eq 'light' ? '1;30' : '1';
 my $em     = $theme eq 'dark' ? '3;97' : $theme eq 'light' ? '3;30' : '3';
+# Headings/table headers: bright cyan pops on dark but washes out on light,
+# where plain cyan holds contrast (also the safe pick when unknown)
+my $head   = $theme eq 'dark' ? '96' : '36';
 my $in_code = 0;
 my $in_think = 0;
 my @table_buf;
@@ -183,7 +186,7 @@ sub flush_table {
         for my $j (0 .. $#widths) {
             my $cell = $cells->[$j] // '';
             my $pad = ' ' x ($widths[$j] - visual_width($cell));
-            if ($is_header) { push @parts, "\033[1;96m$cell\033[0m$pad"; }
+            if ($is_header) { push @parts, "\033[1;${head}m$cell\033[0m$pad"; }
             else            { push @parts, "$cell$pad"; }
         }
         print join($sep_v, @parts), "\n";
@@ -256,8 +259,8 @@ while (my $line = <STDIN>) {
     $line =~ s/^##### (.*)$/\033[1;3m$1\033[0m/;
     $line =~ s/^#### (.*)$/\033[1m$1\033[0m/;
     $line =~ s/^### (.*)$/\033[1;36m$1\033[0m/;
-    $line =~ s/^## (.*)$/\033[1;96m$1\033[0m/;
-    $line =~ s/^# (.*)$/\033[1;7;96m $1 \033[0m/;
+    $line =~ s/^## (.*)$/\033[1;${head}m$1\033[0m/;
+    $line =~ s/^# (.*)$/\033[1;7;${head}m $1 \033[0m/;
     $line =~ s/^(\s*)(\d+)\. /$1\033[36m$2.\033[0m /;
     $line =~ s/^(\s*)[-*] /$1\033[36m•\033[0m /;
     $line =~ s/^> (.*)$/\033[35m▌\033[0m \033[3m$1\033[0m/;
@@ -280,10 +283,6 @@ display_pane_open() {
     mkdir -p "$watch_dir/responses"
 
     display_write_renderer "$watch_dir/render.sh"
-    # Only an explicit override is decided here; this process often has no
-    # tty and a stale COLORFGBG, so live detection happens in the watcher,
-    # which owns the pane's tty.
-    printf '%s' "${COUNCIL_THEME:-}" > "$watch_dir/theme"
 
     # Watcher script (runs inside the tmux pane).
     # Tracks provider state/timing silently; only prints when a response
@@ -296,14 +295,11 @@ WATCH="$1"
 DISPLAY_LIB="$2"
 trap 'rm -rf "$WATCH"' EXIT
 
-# render.sh picks emphasis colors by theme. An explicit COUNCIL_THEME is
-# forwarded via the theme file; otherwise detect here, where the pane's
-# own tty answers the OSC 11 background query.
-COUNCIL_THEME_RESOLVED=$(cat "$WATCH/theme" 2>/dev/null || echo "")
-if [[ "$COUNCIL_THEME_RESOLVED" != light && "$COUNCIL_THEME_RESOLVED" != dark ]]; then
-    source "$DISPLAY_LIB"
-    COUNCIL_THEME_RESOLVED=$(council_detect_theme)
-fi
+# render.sh picks emphasis colors by theme. Detection runs here because the
+# pane's own tty answers the OSC 11 background query; an explicit
+# COUNCIL_THEME (forwarded via tmux -e) wins inside council_detect_theme.
+source "$DISPLAY_LIB"
+COUNCIL_THEME_RESOLVED=$(council_detect_theme)
 export COUNCIL_THEME_RESOLVED
 
 # Parallel arrays keyed by index in provider_names. bash 3.2 has no
@@ -516,6 +512,7 @@ WATCHEREOF
     # tmux server's environment, not this shell's, unless we pass it.
     if ! tmux split-window -h -l '40%' "${target_args[@]}" \
         -e "COUNCIL_AUTO_CLOSE=${COUNCIL_AUTO_CLOSE:-0}" \
+        -e "COUNCIL_THEME=${COUNCIL_THEME:-}" \
         "bash $safe_watcher $safe_dir $safe_lib" >/dev/null 2>&1; then
         rm -rf "$watch_dir"
         return 1
@@ -527,6 +524,8 @@ WATCHEREOF
 # Signals the watcher to stop polling and switch to interactive close prompt.
 display_pane_close() {
     local pane_dir="$1"
-    [[ -d "$pane_dir" ]] || return 1
+    # A missing dir means the watcher already exited and cleaned up;
+    # closed is closed, so this never reports failure
+    [[ -d "$pane_dir" ]] || return 0
     touch "$pane_dir/.done"
 }

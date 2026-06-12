@@ -5,6 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/jobs.sh"
 
 MODE=sync
 JOB_ID=""
@@ -41,7 +42,6 @@ run_sync() {
 # Detach a worker for the same query and return immediately. Stdout is the
 # job id (machine-readable); the fetch hint goes to stderr.
 run_async() {
-    source "${SCRIPT_DIR}/lib/jobs.sh"
     JOB_ID=$(jobs_generate_id)
     job_write "$JOB_ID" queued
     job_set "$JOB_ID" args "${PASS[*]+"${PASS[*]}"}"
@@ -56,7 +56,6 @@ run_async() {
 # Detached worker: runs the query under job tracking. Any exit while the
 # record still says running (crash, kill) flips it to failed.
 run_worker() {
-    source "${SCRIPT_DIR}/lib/jobs.sh"
     job_write "$JOB_ID" running
     job_set "$JOB_ID" pid "$$"
     trap 'if [[ "$(job_status "$JOB_ID" 2>/dev/null)" == "running" ]]; then job_write "$JOB_ID" failed; fi' EXIT
@@ -69,18 +68,17 @@ run_worker() {
 # Print the outfile path of a completed job (same contract as sync mode).
 # Exit 2 while the job is in flight, exit 1 on unknown/failed/cancelled.
 run_result() {
-    source "${SCRIPT_DIR}/lib/jobs.sh"
     local file
     file=$(job_file "$JOB_ID")
     if [[ ! -f "$file" ]]; then
         echo "Error: unknown job: $JOB_ID" >&2
         exit 1
     fi
-    local status
-    status=$(job_status "$JOB_ID")
+    local status outfile
+    IFS=$'\t' read -r status outfile < <(jq -r '[.status, .outfile // ""] | @tsv' "$file")
     case "$status" in
         completed)
-            jq -r '.outfile' "$file"
+            echo "$outfile"
             ;;
         queued|running)
             echo "Job $JOB_ID is still ${status}." >&2
@@ -95,27 +93,23 @@ run_result() {
 }
 
 run_list() {
-    source "${SCRIPT_DIR}/lib/jobs.sh"
     jobs_list
 }
 
 run_cancel() {
-    source "${SCRIPT_DIR}/lib/jobs.sh"
     local file
     file=$(job_file "$JOB_ID")
     if [[ ! -f "$file" ]]; then
         echo "Error: unknown job: $JOB_ID" >&2
         exit 1
     fi
-    local status
-    status=$(job_status "$JOB_ID")
+    local status pid
+    IFS=$'\t' read -r status pid < <(jq -r '[.status, .pid // ""] | @tsv' "$file")
     case "$status" in
         queued|running)
             # Mark first so the worker's exit trap sees a terminal status
             # and does not race it back to failed
             job_write "$JOB_ID" cancelled
-            local pid
-            pid=$(jq -r '.pid // empty' "$file")
             [[ -n "$pid" ]] && kill_tree "$pid"
             echo "Cancelled $JOB_ID"
             ;;

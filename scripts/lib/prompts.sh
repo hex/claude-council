@@ -31,6 +31,8 @@ interpolate_template() {
         out=${out//"{{${key}}}"/"$val"}
     done
     # Unfilled slots collapse to empty
-    out=$(printf '%s' "$out" | perl -pe 's/\{\{[A-Za-z0-9_]+\}\}//g')
+    while [[ "$out" =~ \{\{[A-Za-z0-9_]+\}\} ]]; do
+        out=${out//"${BASH_REMATCH[0]}"/}
+    done
     printf '%s\n' "$out"
 }

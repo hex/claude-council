@@ -17,6 +17,11 @@ GREEN='\033[32m'
 DIM='\033[2m'
 RESET='\033[0m'
 
+# Millisecond timestamp; falls back to second resolution without python3
+now_ms() {
+    python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || date +%s
+}
+
 # Check a single provider
 # Usage: check_provider <name> <api_key_var> <model_var> <default_model> <test_endpoint> <test_payload>
 check_provider() {
@@ -33,7 +38,7 @@ check_provider() {
 
     # Measure response time with a minimal request
     local start_time end_time duration
-    start_time=$(python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || date +%s)
+    start_time=$(now_ms)
 
     local http_code
     case "$name" in
@@ -62,7 +67,7 @@ check_provider() {
             ;;
     esac
 
-    end_time=$(python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || date +%s)
+    end_time=$(now_ms)
 
     # Calculate duration
     duration=$((end_time - start_time))
@@ -93,7 +98,7 @@ check_cli_provider() {
     fi
 
     local start_time end_time duration version
-    start_time=$(python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || date +%s)
+    start_time=$(now_ms)
 
     if ! version=$("$binary" --version 2>/dev/null | head -1); then
         echo "error:exec_failed"
@@ -105,7 +110,7 @@ check_cli_provider() {
         return
     fi
 
-    end_time=$(python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || date +%s)
+    end_time=$(now_ms)
     duration=$((end_time - start_time))
     echo "ok:${duration}:${version:-cli}"
 }
@@ -142,13 +147,15 @@ codex_status=$(check_cli_provider "codex" "codex" login status)
 gemini_cli_status=$(check_cli_provider "gemini-cli" "gemini")
 
 # Format output
+# Usage: format_status <display_name> <provider_id> <status>
 format_status() {
-    local emoji="$1"
-    local color="$2"
-    local name="$3"
-    local provider_id="$4"
-    local status="$5"
+    local name="$1"
+    local provider_id="$2"
+    local status="$3"
 
+    local emoji color
+    emoji=$(provider_emoji "$provider_id")
+    color=$(provider_color "$provider_id")
     local status_icon status_text model_text=""
     local state="$status"
     [[ "$status" == auth_error:* ]] && state="auth_error"
@@ -196,12 +203,12 @@ format_status() {
     echo -e "  ${emoji} ${color}${name}${RESET}\t${status_icon} ${status_text}  ${model_text}"
 }
 
-format_status "$(provider_emoji gemini)"     "$(provider_color gemini)"     "Gemini"     "gemini"     "$gemini_status"
-format_status "$(provider_emoji openai)"     "$(provider_color openai)"     "OpenAI"     "openai"     "$openai_status"
-format_status "$(provider_emoji grok)"       "$(provider_color grok)"       "Grok"       "grok"       "$grok_status"
-format_status "$(provider_emoji perplexity)" "$(provider_color perplexity)" "Perplexity" "perplexity" "$perplexity_status"
-format_status "$(provider_emoji codex)"      "$(provider_color codex)"      "Codex CLI"  "codex"      "$codex_status"
-format_status "$(provider_emoji gemini-cli)" "$(provider_color gemini-cli)" "Gemini CLI" "gemini-cli" "$gemini_cli_status"
+format_status "Gemini"     "gemini"     "$gemini_status"
+format_status "OpenAI"     "openai"     "$openai_status"
+format_status "Grok"       "grok"       "$grok_status"
+format_status "Perplexity" "perplexity" "$perplexity_status"
+format_status "Codex CLI"  "codex"      "$codex_status"
+format_status "Gemini CLI" "gemini-cli" "$gemini_cli_status"
 
 echo ""
 

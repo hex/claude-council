@@ -4,17 +4,21 @@
 
 # State directory resolution: explicit override, else plugin data dir, else
 # tmp - namespaced by a hash of the workspace root so concurrent projects
-# never share job state.
+# never share job state. Memoized: every helper calls this, and the hash
+# fork plus mkdir only need to happen once per process.
 jobs_state_dir() {
-    local dir="${COUNCIL_JOBS_DIR:-}"
-    if [[ -z "$dir" ]]; then
-        local root="${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}/claude-council}"
-        local hash
-        hash=$(pwd | shasum -a 256 | cut -c1-16)
-        dir="${root}/jobs/${hash}"
+    if [[ -z "${_COUNCIL_JOBS_STATE_DIR:-}" ]]; then
+        local dir="${COUNCIL_JOBS_DIR:-}"
+        if [[ -z "$dir" ]]; then
+            local root="${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}/claude-council}"
+            local hash
+            hash=$(pwd | shasum -a 256 | cut -c1-16)
+            dir="${root}/jobs/${hash}"
+        fi
+        mkdir -p "$dir"
+        _COUNCIL_JOBS_STATE_DIR="$dir"
     fi
-    mkdir -p "$dir"
-    echo "$dir"
+    echo "$_COUNCIL_JOBS_STATE_DIR"
 }
 
 job_file() { echo "$(jobs_state_dir)/$1.json"; }
@@ -33,12 +37,11 @@ job_write() {
     file=$(job_file "$id")
     now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     tmp=$(mktemp)
-    local existing='{}'
-    [[ -f "$file" ]] && existing=$(cat "$file")
-    echo "$existing" | jq --arg id "$id" --arg status "$status" --arg now "$now" '
+    [[ -f "$file" ]] || echo '{}' > "$file"
+    jq --arg id "$id" --arg status "$status" --arg now "$now" '
         . + {id: $id, status: $status, updated_at: $now}
         | if .created_at then . else . + {created_at: $now} end
-    ' > "$tmp" && mv "$tmp" "$file"
+    ' "$file" > "$tmp" && mv "$tmp" "$file"
 }
 
 # Set one string field on an existing job record.
@@ -60,12 +63,11 @@ job_status() {
 
 # One line per job: id, status, created_at - newest first.
 jobs_list() {
-    local dir f
+    local dir
     dir=$(jobs_state_dir)
-    for f in "$dir"/*.json; do
-        [[ -f "$f" ]] || continue
-        jq -r '[.id, .status, .created_at // ""] | @tsv' "$f"
-    done | sort -t $'\t' -k3 -r
+    local files=("$dir"/*.json)
+    [[ -f "${files[0]}" ]] || return 0
+    jq -r '[.id, .status, .created_at // ""] | @tsv' "${files[@]}" | sort -t $'\t' -k3 -r
 }
 
 # Drop the oldest terminal-status jobs beyond COUNCIL_MAX_JOBS. Queued and
@@ -81,6 +83,8 @@ jobs_prune() {
         esac
         rm -f "$f" "${f%.json}.log"
     done
+    # Stop-gate session counters share this dir; drop ones past their session
+    find "$dir" -name 'stop-gate-*.count' -mtime +1 -delete 2>/dev/null || true
 }
 
 # Terminate a process and all of its descendants, leaves first.

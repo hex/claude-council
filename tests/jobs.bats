@@ -12,7 +12,7 @@ setup() {
     mkdir -p "$TEST_TMP_DIR" "$TEST_CACHE_DIR"
     install_fake_clis
     export COUNCIL_JOBS_DIR="${BATS_TEST_TMPDIR}/jobs"
-    unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
+    unset_provider_keys
     # run-council writes its outfile relative to CWD
     cd "$BATS_TEST_TMPDIR"
 }

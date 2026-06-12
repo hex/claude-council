@@ -8,19 +8,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 EVENT=$(cat)
 
-# Off unless the project explicitly opts in
+# Off unless the project explicitly opts in. A malformed config reads as
+# disabled - the gate fails open by design.
 CONFIG=".claude/council-stop-gate.json"
 [[ -f "$CONFIG" ]] || exit 0
-jq -e '.enabled == true' "$CONFIG" >/dev/null 2>&1 || exit 0
+ENABLED="" PROVIDER="" MAX_ITER=""
+IFS=$'\t' read -r ENABLED PROVIDER MAX_ITER < <(
+    jq -r '[(.enabled // false), (.provider // "codex"), (.max_iterations // 1)] | @tsv' "$CONFIG" 2>/dev/null
+) || true
+[[ "$ENABLED" == "true" ]] || exit 0
 
 # Guard 1: never re-gate a continuation already triggered by a stop hook
-if [[ "$(echo "$EVENT" | jq -r '.stop_hook_active // false')" == "true" ]]; then
-    exit 0
-fi
+SESSION_ID=""
+IFS=$'\t' read -r ACTIVE SESSION_ID < <(
+    echo "$EVENT" | jq -r '[(.stop_hook_active // false), (.session_id // "unknown")] | @tsv'
+) || true
+[[ "$ACTIVE" == "true" ]] && exit 0
+[[ -n "$SESSION_ID" ]] || SESSION_ID=unknown
 
 # Guard 2: hard cap on blocks per session, persisted in the job state dir
-SESSION_ID=$(echo "$EVENT" | jq -r '.session_id // "unknown"')
-MAX_ITER=$(jq -r '.max_iterations // 1' "$CONFIG")
 source "${SCRIPT_DIR}/lib/jobs.sh"
 COUNTER="$(jobs_state_dir)/stop-gate-${SESSION_ID}.count"
 COUNT=0
@@ -33,7 +39,6 @@ fi
 DIFF=$(git diff HEAD 2>/dev/null || true)
 [[ -z "$DIFF" ]] && exit 0
 
-PROVIDER=$(jq -r '.provider // "codex"' "$CONFIG")
 PROVIDER_SCRIPT="${SCRIPT_DIR}/providers/${PROVIDER}.sh"
 [[ -f "$PROVIDER_SCRIPT" ]] || exit 0
 
@@ -44,8 +49,8 @@ PROMPT=$(interpolate_template "$TEMPLATE" "DIFF=$DIFF")
 # A reviewer failure must never trap the user at the stop
 REVIEW=$(bash "$PROVIDER_SCRIPT" "$PROMPT" 2>/dev/null) || exit 0
 
-FIRST_LINE=$(echo "$REVIEW" | head -1)
-if [[ "$FIRST_LINE" == BLOCK:* ]]; then
+# Verdict contract: the reply's very first characters decide
+if [[ "$REVIEW" == BLOCK:* ]]; then
     echo $((COUNT + 1)) > "$COUNTER"
     REASON=$(echo "$REVIEW" | head -c 1500)
     jq -n --arg r "Council stop-gate reviewer (${PROVIDER}): ${REASON}" \
