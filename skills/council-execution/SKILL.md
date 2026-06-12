@@ -31,10 +31,10 @@ Simply copy-paste the entire file content into your response.
 
 ## Step 3: Complete the Synthesis Section
 
-The file ends with a `## Synthesis` header. Write your synthesis UNDER that header:
-- **Consensus**: Where providers agree
-- **Divergence**: Where they disagree
-- **Recommendation**: Best approach
+The file ends with a `## Synthesis` header. Read
+`${CLAUDE_PLUGIN_ROOT}/prompts/synthesis.md` and write your synthesis UNDER
+that header following its structure (Consensus / Divergence / Recommendation)
+and calibration rules.
 
 ## Step 4: Notify User of Saved Output
 

@@ -6,6 +6,7 @@ set -euo pipefail
 
 ROLES_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROLES_CONFIG="${ROLES_SCRIPT_DIR}/../../config/roles.json"
+source "${ROLES_SCRIPT_DIR}/prompts.sh"
 
 # Check if roles config exists
 roles_config_exists() {
@@ -126,13 +127,12 @@ build_prompt_with_role() {
         return
     fi
 
-    cat <<EOF
-[ROLE: ${role_name}]
-${role_prompt}
-
-[USER QUESTION]
-${base_prompt}
-EOF
+    local template
+    template=$(load_prompt_template role-injection)
+    interpolate_template "$template" \
+        "ROLE_NAME=$role_name" \
+        "ROLE_PROMPT=$role_prompt" \
+        "QUESTION=$base_prompt"
 }
 
 # Assign roles to providers in order
