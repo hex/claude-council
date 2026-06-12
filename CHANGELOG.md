@@ -4,7 +4,7 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.6.2
 
 Patterns adopted from an analysis of openai/codex-plugin-cc, adapted to
 claude-council's bash architecture.
@@ -69,7 +69,15 @@ claude-council's bash architecture.
 - **Closing the streaming pane early failed the query.** `display_pane_close`
   returned 1 once the watcher had cleaned up its watch dir, and as the last
   command under `set -e` that became query-council's exit code, making
-  run-council swallow the outfile path. Pane closeout is now best-effort.
+  run-council swallow the outfile path. The function now treats a missing
+  watch dir as already closed.
+
+### Other
+
+- Simplify pass: memoized job-state resolution, single-jq JSON reads in the
+  stop gate and job commands, theme forwarded via `tmux -e` instead of a
+  file, shared `unset_provider_keys`/`assert_blank` test helpers, and the
+  validator now enforces the schema's 1-5 recommendation bound.
 
 ## 2026.6.1
 
