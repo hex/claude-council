@@ -273,14 +273,17 @@ SPINNERS=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 
 # Writes the provider's RGB triplet (for OSC 38;2;R;G;B) into the named
 # variable. Avoids subshell forks by using printf -v.
+# These render as foreground text over the user's unknown terminal
+# background, so each is a mid-tone shade readable on both light and
+# dark themes (the banner's light/dark pairs live in build_banner_line).
 provider_color_rgb() {
     local __out="$1"
     case "$2" in
-        gemini|gemini-cli) printf -v "$__out" '59;130;246'   ;;
-        openai|codex)      printf -v "$__out" '229;231;235'  ;;
-        grok)              printf -v "$__out" '248;113;113'  ;;
-        perplexity)        printf -v "$__out" '74;222;128'   ;;
-        *)                 printf -v "$__out" '156;163;175'  ;;
+        gemini|gemini-cli) printf -v "$__out" '59;130;246'   ;;  # blue-500
+        openai|codex)      printf -v "$__out" '100;116;139'  ;;  # slate-500
+        grok)              printf -v "$__out" '239;68;68'    ;;  # red-500
+        perplexity)        printf -v "$__out" '22;163;74'    ;;  # green-600
+        *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
     esac
 }
 
