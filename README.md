@@ -489,6 +489,11 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 
 When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `cached`, `error` with timing) and renders each response as it lands using a built-in perl-based markdown renderer (cyan headings, yellow code, vendor-colored banners). Press **Esc** to close the pane.
 
+Emphasis colors adapt to your terminal theme: the pane detects the background
+(OSC 11 query, `COLORFGBG` fallback) and renders bold/italic bright on dark
+themes, dark on light themes, and attribute-only when undetectable. Force it
+with `COUNCIL_THEME=light` or `COUNCIL_THEME=dark`.
+
 When the outer terminal is iTerm2, council also drives:
 
 - **Tab color** — yellow while querying, green on success, red if any provider errored. Set via `it2setcolor`; ambient state signal without looking at the terminal.

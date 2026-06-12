@@ -369,6 +369,7 @@ claude-council/
 │   ├── prompts.bats
 │   ├── roles.bats
 │   ├── stop-gate.bats
+│   ├── theme.bats
 │   ├── tokens.bats
 │   ├── verbosity.bats
 │   └── query-council.bats
