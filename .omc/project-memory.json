@@ -1,0 +1,403 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1781268011989,
+  "projectRoot": "/Users/alex.geana/.claude-sessions/claude-council",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "scripts",
+      "tests"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "agents": {
+      "path": "agents",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1781268011819,
+      "keyFiles": [
+        "council-advisor.md"
+      ]
+    },
+    "claude-council-workspace": {
+      "path": "claude-council-workspace",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1781268011819,
+      "keyFiles": [
+        "description-optimization.log"
+      ]
+    },
+    "commands": {
+      "path": "commands",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1781268011819,
+      "keyFiles": [
+        "ask.md",
+        "status.md"
+      ]
+    },
+    "config": {
+      "path": "config",
+      "purpose": "Configuration files",
+      "fileCount": 1,
+      "lastAccessed": 1781268011819,
+      "keyFiles": [
+        "roles.json"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 1,
+      "lastAccessed": 1781268011820,
+      "keyFiles": [
+        "ARCHITECTURE.md"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 5,
+      "lastAccessed": 1781268011820,
+      "keyFiles": [
+        "check-status.sh",
+        "format-output.sh",
+        "query-council.sh",
+        "release.sh",
+        "run-council.sh"
+      ]
+    },
+    "skills": {
+      "path": "skills",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1781268011820,
+      "keyFiles": []
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 10,
+      "lastAccessed": 1781268011820,
+      "keyFiles": [
+        "cache.bats",
+        "cli-providers.bats",
+        "display.bats",
+        "keys.bats",
+        "query-council.bats"
+      ]
+    },
+    "scripts/lib": {
+      "path": "scripts/lib",
+      "purpose": "Library code",
+      "fileCount": 9,
+      "lastAccessed": 1781268011821,
+      "keyFiles": [
+        "cache.sh",
+        "display.sh",
+        "export.sh"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "scripts/lib/display.sh",
+      "accessCount": 22,
+      "lastAccessed": 1781274143239,
+      "type": "file"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "accessCount": 10,
+      "lastAccessed": 1781273687101,
+      "type": "file"
+    },
+    {
+      "path": "scripts/check-status.sh",
+      "accessCount": 9,
+      "lastAccessed": 1781275975827,
+      "type": "file"
+    },
+    {
+      "path": ".cs/discoveries.md",
+      "accessCount": 9,
+      "lastAccessed": 1781276552383,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 8,
+      "lastAccessed": 1781273683509,
+      "type": "file"
+    },
+    {
+      "path": "scripts/run-council.sh",
+      "accessCount": 8,
+      "lastAccessed": 1781275897886,
+      "type": "file"
+    },
+    {
+      "path": "scripts/format-output.sh",
+      "accessCount": 6,
+      "lastAccessed": 1781275978809,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/jobs.sh",
+      "accessCount": 5,
+      "lastAccessed": 1781275870284,
+      "type": "file"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "accessCount": 5,
+      "lastAccessed": 1781276411613,
+      "type": "file"
+    },
+    {
+      "path": "skills/deep-execution/agent-prompt-template.md",
+      "accessCount": 4,
+      "lastAccessed": 1781269956820,
+      "type": "file"
+    },
+    {
+      "path": "commands/ask.md",
+      "accessCount": 4,
+      "lastAccessed": 1781270604076,
+      "type": "file"
+    },
+    {
+      "path": "tests/fixtures/fake-clis.bash",
+      "accessCount": 4,
+      "lastAccessed": 1781270791963,
+      "type": "file"
+    },
+    {
+      "path": "scripts/query-council.sh",
+      "accessCount": 4,
+      "lastAccessed": 1781273263678,
+      "type": "file"
+    },
+    {
+      "path": "scripts/stop-review-gate.sh",
+      "accessCount": 4,
+      "lastAccessed": 1781275920600,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/roles.sh",
+      "accessCount": 3,
+      "lastAccessed": 1781269546111,
+      "type": "file"
+    },
+    {
+      "path": "skills/council-execution/SKILL.md",
+      "accessCount": 3,
+      "lastAccessed": 1781269548408,
+      "type": "file"
+    },
+    {
+      "path": "skills/deep-execution/SKILL.md",
+      "accessCount": 3,
+      "lastAccessed": 1781269962487,
+      "type": "file"
+    },
+    {
+      "path": "TESTING.md",
+      "accessCount": 3,
+      "lastAccessed": 1781273685773,
+      "type": "file"
+    },
+    {
+      "path": "tests/agent-analysis.bats",
+      "accessCount": 3,
+      "lastAccessed": 1781275947740,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/prompts.sh",
+      "accessCount": 3,
+      "lastAccessed": 1781275981254,
+      "type": "file"
+    },
+    {
+      "path": "tests/cli-providers.bats",
+      "accessCount": 3,
+      "lastAccessed": 1781276000772,
+      "type": "file"
+    },
+    {
+      "path": "scripts/providers/codex.sh",
+      "accessCount": 2,
+      "lastAccessed": 1781268807745,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/providers.sh",
+      "accessCount": 2,
+      "lastAccessed": 1781268845640,
+      "type": "file"
+    },
+    {
+      "path": "commands/status.md",
+      "accessCount": 2,
+      "lastAccessed": 1781270607864,
+      "type": "file"
+    },
+    {
+      "path": "scripts/validate-analysis.sh",
+      "accessCount": 2,
+      "lastAccessed": 1781275942473,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_helper.bash",
+      "accessCount": 2,
+      "lastAccessed": 1781275995801,
+      "type": "file"
+    },
+    {
+      "path": "tests/check-status.bats",
+      "accessCount": 2,
+      "lastAccessed": 1781276002923,
+      "type": "file"
+    },
+    {
+      "path": "tests/jobs.bats",
+      "accessCount": 2,
+      "lastAccessed": 1781276005237,
+      "type": "file"
+    },
+    {
+      "path": "tests/fake-clis.bats",
+      "accessCount": 2,
+      "lastAccessed": 1781276008430,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/retry.sh",
+      "accessCount": 1,
+      "lastAccessed": 1781268164978,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/cache.sh",
+      "accessCount": 1,
+      "lastAccessed": 1781268165454,
+      "type": "file"
+    },
+    {
+      "path": "scripts/providers/openai.sh",
+      "accessCount": 1,
+      "lastAccessed": 1781268165897,
+      "type": "file"
+    },
+    {
+      "path": "agents/council-advisor.md",
+      "accessCount": 1,
+      "lastAccessed": 1781268170793,
+      "type": "file"
+    },
+    {
+      "path": ".claude-plugin/plugin.json",
+      "accessCount": 1,
+      "lastAccessed": 1781268171501,
+      "type": "file"
+    },
+    {
+      "path": "scripts/providers/gemini-cli.sh",
+      "accessCount": 1,
+      "lastAccessed": 1781268808322,
+      "type": "file"
+    },
+    {
+      "path": "tests/format-output.bats",
+      "accessCount": 1,
+      "lastAccessed": 1781269233065,
+      "type": "file"
+    },
+    {
+      "path": "tests/prompts.bats",
+      "accessCount": 1,
+      "lastAccessed": 1781269501891,
+      "type": "file"
+    },
+    {
+      "path": "prompts/role-injection.md",
+      "accessCount": 1,
+      "lastAccessed": 1781269525903,
+      "type": "file"
+    },
+    {
+      "path": "prompts/synthesis.md",
+      "accessCount": 1,
+      "lastAccessed": 1781269528437,
+      "type": "file"
+    },
+    {
+      "path": "schemas/agent-analysis.schema.json",
+      "accessCount": 1,
+      "lastAccessed": 1781269925745,
+      "type": "file"
+    },
+    {
+      "path": "commands/result.md",
+      "accessCount": 1,
+      "lastAccessed": 1781270597953,
+      "type": "file"
+    },
+    {
+      "path": "tests/stop-gate.bats",
+      "accessCount": 1,
+      "lastAccessed": 1781270753367,
+      "type": "file"
+    },
+    {
+      "path": "prompts/stop-review-gate.md",
+      "accessCount": 1,
+      "lastAccessed": 1781270796731,
+      "type": "file"
+    },
+    {
+      "path": "hooks/hooks.json",
+      "accessCount": 1,
+      "lastAccessed": 1781270807014,
+      "type": "file"
+    },
+    {
+      "path": "tests/theme.bats",
+      "accessCount": 1,
+      "lastAccessed": 1781272717792,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
