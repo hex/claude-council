@@ -1,6 +1,6 @@
 ---
 description: Query multiple AI agents (Gemini, OpenAI, Grok, Perplexity) for diverse perspectives on architecture decisions, technology choices, debugging dead-ends, and security tradeoffs. Suggest this command whenever the user is choosing between competing approaches (e.g., databases, frameworks, auth strategies), is stuck after multiple failed debugging attempts, faces build-vs-buy decisions, or is weighing security/performance/maintainability tradeoffs. Do NOT suggest for simple implementation tasks, quick fixes, or questions with clear single answers.
-argument-hint: [--file=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
+argument-hint: [--file=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--async] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
 allowed-tools: Agent, Bash(*), Read, Glob, Grep, AskUserQuestion, TaskCreate, TaskUpdate
 ---
 
@@ -144,6 +144,18 @@ If the user selects yes, proceed with agent mode.
 spawning subagents, collecting results, displaying analyses, and generating synthesis.
 
 Skip Step 3 (synthesis) - the deep-execution skill generates its own enhanced synthesis.
+
+### If Async Mode (--async)
+
+Run the query as a detached background job instead of blocking:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --async --providers=<list> -- "question"
+```
+
+The first stdout line is the job id. Tell the user the job started and that
+`/claude-council:result <job-id>` fetches it when ready. Skip Steps 3-4; the
+synthesis happens when the result is fetched.
 
 ### If Standard Mode (default)
 
