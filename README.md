@@ -53,6 +53,8 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 - Side-by-side comparison of responses with vendor-colored headers
 - Streaming tmux pane that renders responses as they land
 - Specialized roles, debate mode, and agent-enhanced deep analysis for high-stakes decisions
+- Background jobs (`--async`) for long-running queries, with `/claude-council:result` to fetch, list, and cancel
+- Opt-in stop-gate: a second model reviews your uncommitted diff before Claude ends its turn
 - Extensible provider system — add new AI agents easily
 - Proactive agent that suggests consulting the council on architecture / debugging dead ends
 
@@ -104,6 +106,10 @@ claude --plugin-dir /path/to/claude-council
 
 # Check connectivity and configured models for each provider
 /claude-council:status
+
+# Run a long query in the background, fetch it later
+/claude-council:ask --async "Deep-dive the tradeoffs of event sourcing here"
+/claude-council:result <job-id>
 ```
 
 ### Quick Reference
@@ -117,6 +123,7 @@ claude --plugin-dir /path/to/claude-council
 | `--output=path` | Export response to markdown file |
 | `--quiet` | Show only synthesis, hide individual responses |
 | `--agents` | Agent-enhanced analysis with subagents (slower, deeper) |
+| `--async` | Detach the query as a background job; fetch with `/claude-council:result` |
 | `--no-cache` | Force fresh queries, skip cache |
 | `--no-auto-context` | Disable automatic file detection |
 | `--no-pane` | Disable streaming tmux pane (default: on inside tmux) |
@@ -295,6 +302,25 @@ Great for:
 - Sharing with team members who aren't using Claude
 - Creating an audit trail of AI-assisted decisions
 
+### Background Jobs (--async)
+
+Reasoning and deep-research models can take minutes. `--async` detaches the
+query as a tracked background job instead of blocking the conversation:
+
+```bash
+/claude-council:ask --async "Compare migration strategies for this schema"
+# → job id, returned immediately
+
+/claude-council:result              # list jobs
+/claude-council:result <job-id>     # fetch a finished result (synthesis included)
+/claude-council:result cancel <id>  # terminate a running job
+```
+
+Each job persists as a JSON record plus log under a per-workspace state
+directory (`$CLAUDE_PLUGIN_DATA`, falling back to tmp). A crashed worker is
+marked `failed` automatically; finished jobs are pruned beyond
+`COUNCIL_MAX_JOBS` (default 20).
+
 ### Proactive Agent
 
 The `council-advisor` agent will suggest consulting the council when:
@@ -357,6 +383,23 @@ export COUNCIL_VERBOSITY=detailed  # thorough analysis with code + edge cases
 ```
 
 Or per-call: `--verbosity=brief|standard|detailed`. The slash command also asks via the provider-selection prompt.
+
+### Stop-Gate Review (opt-in, off by default)
+
+A Stop hook can ask one council provider to review your uncommitted `git diff`
+before Claude ends its turn, blocking only on a first-line `BLOCK:` verdict.
+Enable it per project:
+
+```bash
+cat > .claude/council-stop-gate.json <<'EOF'
+{"enabled": true, "provider": "codex", "max_iterations": 1}
+EOF
+```
+
+Safety properties: it never blocks on a clean tree, never re-gates a
+continuation already triggered by a stop hook, caps blocks per session at
+`max_iterations`, and any reviewer failure allows the stop. Delete the file
+(or set `"enabled": false`) to turn it off.
 
 | Level | Typical output |
 |-------|----------------|
@@ -545,6 +588,12 @@ bats tests/cache.bats
 bats tests/cli-providers.bats
 bats tests/roles.bats
 ```
+
+CLI-provider paths are tested hermetically: `tests/fixtures/fake-clis.bash`
+installs fake `codex`/`gemini` executables onto `PATH` whose behavior is
+switched via `COUNCIL_FAKE_BEHAVIOR` and which record every invocation, so
+provider scripts, async jobs, and the stop gate run end-to-end with no
+network and no real CLIs.
 
 See `TESTING.md` for complete test documentation including manual test procedures.
 

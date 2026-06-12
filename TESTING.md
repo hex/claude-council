@@ -48,6 +48,33 @@ bats --verbose-run tests/cache.bats
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 18 tests | argument parsing, error cases, flags |
+| `fake-clis.bats` | 11 tests | fixture self-checks, codex.sh/gemini-cli.sh against fake binaries |
+| `format-output.bats` | 9 tests | defensive parsing: empty/missing/non-string responses, raw preservation |
+| `prompts.bats` | 9 tests | template loading, {{VAR}} interpolation, role-injection rendering |
+| `agent-analysis.bats` | 9 tests | validate-analysis.sh contract enforcement, schema sync |
+| `check-status.bats` | 6 tests | two-tier CLI availability, remediation strings |
+| `jobs.bats` | 12 tests | job store, --async lifecycle, --result/--jobs/--cancel |
+| `stop-gate.bats` | 8 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
+
+### Hermetic CLI Fixture
+
+`tests/fixtures/fake-clis.bash` installs real fake `codex`/`gemini`
+executables into a temp dir prepended to `PATH`, so provider scripts, async
+jobs, and the stop gate run end-to-end with no network or real CLIs:
+
+```bash
+load fixtures/fake-clis
+setup() { install_fake_clis; }
+```
+
+- `COUNCIL_FAKE_BEHAVIOR` switches scenarios: `valid` (default), `empty`,
+  `malformed-json`, `block-verdict`, `rate-limit`, `auth-failure`,
+  `slow` (honors `COUNCIL_FAKE_SLEEP`), `error`.
+- `--version` always succeeds, mirroring real CLIs where the version probe
+  works even when logged out.
+- Every invocation appends `{bin, args}` to
+  `$COUNCIL_FAKE_STATE_DIR/calls.jsonl`, so tests can assert exactly what a
+  provider script sent (model flag, prompt assembly, subcommands).
 
 ### Adding Tests
 

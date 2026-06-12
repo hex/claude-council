@@ -175,6 +175,50 @@ Role injection prepends instructions to prompt:
   "As a [ROLE], focus on [CONCERNS]..."
 ```
 
+### Prompt Templates (`scripts/lib/prompts.sh`, `prompts/*.md`)
+
+```
+load_prompt_template(name):  reads prompts/<name>.md
+interpolate_template(t, KEY=VALUE...): fills {{KEY}} slots
+  - unfilled slots collapse to empty
+Templates: role-injection, synthesis (calibration rules),
+           stop-review-gate (ALLOW:/BLOCK: first-line contract)
+```
+
+### Job Store (`scripts/lib/jobs.sh`)
+
+```
+State dir: $COUNCIL_JOBS_DIR, else
+           $CLAUDE_PLUGIN_DATA/jobs/<cwd-hash>, else tmp
+Per job:   <id>.json (status, pid, outfile, timestamps) + <id>.log
+Lifecycle: queued -> running -> completed | failed | cancelled
+  - run-council.sh --async re-execs itself detached as --job-worker=<id>
+  - worker exit trap converts crashes to failed
+  - --result echoes the outfile path (exit 2 while in flight)
+  - --cancel marks cancelled first, then kills the process tree
+  - jobs_prune drops oldest terminal jobs beyond COUNCIL_MAX_JOBS
+```
+
+### Output Contract (`schemas/`, `scripts/validate-analysis.sh`)
+
+```
+schemas/agent-analysis.schema.json documents the deep-execution
+agent reply shape; validate-analysis.sh enforces it with jq,
+listing every violation. Invalid replies render raw under a
+visible marker - model output is never silently dropped
+(same rule as format-output.sh's render_response).
+```
+
+### Stop Gate (`hooks/hooks.json`, `scripts/stop-review-gate.sh`)
+
+```
+Stop hook, opt-in via .claude/council-stop-gate.json.
+Reviews `git diff HEAD` through one provider using the
+stop-review-gate prompt; blocks only on first-line BLOCK:.
+Loop guards: stop_hook_active check + per-session block
+counter capped at max_iterations. Reviewer failure => allow.
+```
+
 ## Data Flow
 
 ### Standard Query
@@ -256,16 +300,27 @@ claude-council/
 │   └── council-advisor.md       # Proactive suggestions
 ├── commands/
 │   ├── ask.md                   # Main /ask command
+│   ├── result.md                # /result — fetch/list/cancel background jobs
 │   └── status.md                # /status command
 ├── config/
 │   └── roles.json               # Role definitions
 ├── docs/
 │   └── ARCHITECTURE.md          # This file
+├── hooks/
+│   └── hooks.json               # Stop hook registration (stop gate)
+├── prompts/
+│   ├── role-injection.md        # {{VAR}} template for role-wrapped prompts
+│   ├── synthesis.md             # Synthesis structure + calibration rules
+│   └── stop-review-gate.md      # Stop-gate reviewer contract
+├── schemas/
+│   └── agent-analysis.schema.json  # Deep-execution agent reply contract
 ├── scripts/
 │   ├── query-council.sh         # Main orchestrator
-│   ├── run-council.sh           # Query + format pipeline
+│   ├── run-council.sh           # Query + format pipeline, sync and --async
 │   ├── format-output.sh         # Terminal formatter
 │   ├── check-status.sh          # Provider health check
+│   ├── stop-review-gate.sh      # Opt-in Stop hook reviewer
+│   ├── validate-analysis.sh     # Enforces the agent-analysis schema
 │   ├── release.sh               # Version bump and tagging
 │   ├── dev/
 │   │   └── demo-pane.sh         # Visual test harness for the streaming pane
@@ -280,7 +335,9 @@ claude-council/
 │       ├── cache.sh             # Caching utilities
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
+│       ├── jobs.sh              # Background job store
 │       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
+│       ├── prompts.sh           # Template loading + {{VAR}} interpolation
 │       ├── providers.sh         # Discovery + CLI-prefers-API policy + vendor display
 │       ├── retry.sh             # Retry with backoff
 │       ├── roles.sh             # Role management
@@ -298,11 +355,20 @@ claude-council/
 ├── tests/
 │   ├── run_tests.sh             # Test runner
 │   ├── test_helper.bash         # Shared test utilities
+│   ├── fixtures/
+│   │   └── fake-clis.bash       # Fake codex/gemini binaries on PATH
+│   ├── agent-analysis.bats
 │   ├── cache.bats
+│   ├── check-status.bats
 │   ├── cli-providers.bats       # CLI providers (codex, gemini-cli)
 │   ├── display.bats
+│   ├── fake-clis.bats
+│   ├── format-output.bats
+│   ├── jobs.bats
 │   ├── keys.bats
+│   ├── prompts.bats
 │   ├── roles.bats
+│   ├── stop-gate.bats
 │   ├── tokens.bats
 │   ├── verbosity.bats
 │   └── query-council.bats
@@ -329,6 +395,9 @@ claude-council/
 | `COUNCIL_TIMEOUT` | 300 | Request timeout (s) |
 | `COUNCIL_CACHE_DIR` | .claude/council-cache | Cache location |
 | `COUNCIL_CACHE_TTL` | 3600 | Cache lifetime (s) |
+| `COUNCIL_JOBS_DIR` | per-workspace under `$CLAUDE_PLUGIN_DATA` | Background job state location |
+| `COUNCIL_MAX_JOBS` | 20 | Terminal-status jobs kept before pruning |
+| `COUNCIL_PROMPTS_DIR` | prompts/ | Prompt template location |
 | `COUNCIL_DEBUG` | - | Enable debug output |
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
 | `COUNCIL_AUTO_CLOSE` | - | Set to `1` to auto-close the pane on completion (skip the keypress wait); used by tests/demos |

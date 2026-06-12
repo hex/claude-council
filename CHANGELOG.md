@@ -4,6 +4,59 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+Patterns adopted from an analysis of openai/codex-plugin-cc, adapted to
+claude-council's bash architecture.
+
+### Added
+
+- **Background jobs (`--async`).** `run-council.sh --async` detaches the
+  query as a tracked job (json + log per job in a workspace-hashed state dir
+  under `$CLAUDE_PLUGIN_DATA`) and returns a job id immediately.
+  `--result=<id>` returns the outfile path (exit 2 while in flight),
+  `--jobs` lists, `--cancel=<id>` terminates the worker process tree. New
+  `/claude-council:result` command fetches, lists, and cancels;
+  `/claude-council:status` now lists jobs.
+
+- **Opt-in stop-gate review hook (off by default).** A `Stop` hook asks one
+  council provider to review the uncommitted diff and blocks the stop only
+  on a first-line `BLOCK:` verdict. Enabled per project via
+  `.claude/council-stop-gate.json`; guarded by a `stop_hook_active` check
+  and a per-session block cap, and any reviewer failure allows the stop.
+
+- **Enforced agent-mode output contract.** Deep-execution agents now return
+  JSON matching `schemas/agent-analysis.schema.json`;
+  `scripts/validate-analysis.sh` checks every field and invalid replies are
+  rendered raw under a visible marker instead of silently accepted.
+
+- **Prompt templates.** `prompts/*.md` with `{{VAR}}` slots filled by
+  `scripts/lib/prompts.sh`; role injection and the synthesis instructions
+  (now with calibration rules) moved out of heredocs and skill prose.
+
+- **Hermetic CLI test fixture.** Fake `codex`/`gemini` binaries on `PATH`
+  (behavior via `COUNCIL_FAKE_BEHAVIOR`, invocations recorded as JSONL) let
+  provider scripts, async jobs, and the stop gate run end-to-end in bats
+  with no network. Suite grew from 132 to 196 tests.
+
+### Changed
+
+- **Malformed provider output is preserved, never dropped.**
+  `format-output.sh` marks empty responses (`[empty response]`) and prints
+  off-shape entries raw in a fenced block (`[unparseable response]`); a
+  missing `round1` no longer crashes the formatter.
+
+- **Provider status is two-tier with fix commands.** `check-status.sh`
+  distinguishes installed-but-unauthenticated codex (via `codex login
+  status`) from available, and every failure state prints the exact
+  remediation (`export KEY=...`, `codex login`, install command).
+
+### Fixes
+
+- **`check-status.sh` died before its summary line.** `((available++))`
+  under `set -e` aborted the script as soon as any provider was available;
+  the summary now always prints.
+
 ## 2026.6.1
 
 ### Fixes
