@@ -57,7 +57,7 @@ check_provider() {
                 -X POST \
                 -H "Authorization: Bearer ${api_key}" \
                 -H "Content-Type: application/json" \
-                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":1}' \
+                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":16}' \
                 "https://api.perplexity.ai/chat/completions" 2>/dev/null || echo "000")
             ;;
     esac
