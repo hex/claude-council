@@ -98,6 +98,39 @@ draw_synthesis_header() {
     echo "## Synthesis"
 }
 
+# Render one provider entry's body. Output is never dropped: error status
+# shows the error, empty text gets a visible marker, and anything off-shape
+# is preserved raw in a fenced block so the user can see what came back.
+render_response() {
+    local entry="$1"
+
+    local status
+    status=$(echo "$entry" | jq -r '.status // empty')
+
+    if [[ "$status" == "error" ]]; then
+        local error
+        error=$(echo "$entry" | jq -r '.error // "Unknown error"')
+        echo -e "${RED}Error: ${error}${RESET}"
+        return
+    fi
+
+    if echo "$entry" | jq -e '.response | type == "string"' >/dev/null 2>&1; then
+        local response
+        response=$(echo "$entry" | jq -r '.response')
+        if [[ -z "$(echo -n "$response" | tr -d '[:space:]')" ]]; then
+            echo "[empty response]"
+        else
+            echo "$response"
+        fi
+        return
+    fi
+
+    echo "[unparseable response] raw provider entry preserved:"
+    echo '```json'
+    echo "$entry" | jq .
+    echo '```'
+}
+
 # Format and display JSON council output
 format_output() {
     local json="$1"
@@ -107,6 +140,14 @@ format_output() {
     quiet=$(echo "$json" | jq -r '.metadata.quiet_mode // false')
     local debate
     debate=$(echo "$json" | jq -r '.metadata.debate_mode // false')
+
+    if ! echo "$json" | jq -e '.round1 | type == "object"' >/dev/null 2>&1; then
+        echo "[unparseable council output] raw input preserved:"
+        echo '```json'
+        echo "$json" | jq . 2>/dev/null || echo "$json"
+        echo '```'
+        return 0
+    fi
 
     # Get providers list from round1
     local providers
@@ -129,20 +170,11 @@ format_output() {
             model=$(echo "$json" | jq -r ".round1[\"${provider}\"].model // \"unknown\"")
             local role
             role=$(echo "$json" | jq -r ".round1[\"${provider}\"].role // empty")
-            local response
-            response=$(echo "$json" | jq -r ".round1[\"${provider}\"].response // \"No response\"")
-            local status
-            status=$(echo "$json" | jq -r ".round1[\"${provider}\"].status")
+            local entry
+            entry=$(echo "$json" | jq -c ".round1[\"${provider}\"]")
 
             draw_header "$emoji" "$provider" "$model" "$role" "normal"
-
-            if [[ "$status" == "error" ]]; then
-                local error
-                error=$(echo "$json" | jq -r ".round1[\"${provider}\"].error // \"Unknown error\"")
-                echo -e "${RED}Error: ${error}${RESET}"
-            else
-                echo "$response"
-            fi
+            render_response "$entry"
             echo ""
         done
 
@@ -162,20 +194,12 @@ format_output() {
                     emoji=$(provider_emoji "$provider")
                     local model
                     model=$(echo "$json" | jq -r ".round2[\"${provider}\"].model // \"unknown\"")
-                    local response
-                    response=$(echo "$json" | jq -r ".round2[\"${provider}\"].response // \"No rebuttal\"")
-                    local status
-                    status=$(echo "$json" | jq -r ".round2[\"${provider}\"].status // \"error\"")
+                    local entry
+                    # A provider absent from round2 renders as an error entry
+                    entry=$(echo "$json" | jq -c ".round2[\"${provider}\"] // {\"status\": \"error\"}")
 
                     draw_header "$emoji" "$provider" "$model" "" "rebuttal"
-
-                    if [[ "$status" == "error" ]]; then
-                        local error
-                        error=$(echo "$json" | jq -r ".round2[\"${provider}\"].error // \"Unknown error\"")
-                        echo -e "${RED}Error: ${error}${RESET}"
-                    else
-                        echo "$response"
-                    fi
+                    render_response "$entry"
                     echo ""
                 done
             fi
