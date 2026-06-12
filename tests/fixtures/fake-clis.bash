@@ -37,6 +37,12 @@ write_fake_cli() {
 set -euo pipefail
 jq -cn --arg bin "$bin" '{bin: \$bin, args: \$ARGS.positional}' --args -- "\$@" \\
     >> "\${COUNCIL_FAKE_STATE_DIR:?}/calls.jsonl"
+# Version probes succeed regardless of behavior, mirroring real CLIs where
+# --version works even when logged out
+if [[ "\${1:-}" == "--version" ]]; then
+    echo "fake-$bin 0.0.1"
+    exit 0
+fi
 case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     valid)          echo "$marker: deterministic answer" ;;
     empty)          ;;
