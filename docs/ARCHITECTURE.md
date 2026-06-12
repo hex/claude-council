@@ -400,6 +400,7 @@ claude-council/
 | `COUNCIL_PROMPTS_DIR` | prompts/ | Prompt template location |
 | `COUNCIL_DEBUG` | - | Enable debug output |
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
+| `COUNCIL_THEME` | auto-detected | Force pane emphasis palette: `light` / `dark` (else OSC 11 query, then `COLORFGBG`, else attribute-only emphasis) |
 | `COUNCIL_AUTO_CLOSE` | - | Set to `1` to auto-close the pane on completion (skip the keypress wait); used by tests/demos |
 | `COUNCIL_ATTENTION_THRESHOLD` | 2000 | iTerm2 dock-bounce threshold in ms (only triggers if total elapsed >= this) |
 | `COUNCIL_VERBOSITY` | standard | Response style: `brief` / `standard` / `detailed` (prepended to all providers' system prompts) |

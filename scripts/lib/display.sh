@@ -88,23 +88,56 @@ pane_error_write() {
 
 # ----- Pane lifecycle -----
 
-# Opens a tmux split pane with a watcher that streams status + responses.
-# Prints the watch directory path to stdout (caller stores in COUNCIL_PANE_DIR).
-# Returns 1 if pane could not be opened (caller falls back gracefully).
-display_pane_open() {
-    should_open_pane || return 1
+# Detect the terminal's background theme: "light", "dark", or "unknown".
+# Order: explicit COUNCIL_THEME, OSC 11 background-color query on the
+# controlling tty, COLORFGBG hint, else unknown. The OSC query outranks
+# COLORFGBG because the env var goes stale when the user switches terminal
+# themes mid-session, while the query reflects the live background.
+# COUNCIL_NO_TTY_QUERY=1 skips the tty query (tests, non-interactive runs).
+council_detect_theme() {
+    case "${COUNCIL_THEME:-}" in
+        light|dark) echo "$COUNCIL_THEME"; return ;;
+    esac
 
-    local watch_dir
-    watch_dir=$(mktemp -d "${TMPDIR:-/tmp}/council_pane.XXXXXX")
-    mkdir -p "$watch_dir/responses"
+    if [[ "${COUNCIL_NO_TTY_QUERY:-0}" != 1 && -r /dev/tty && -w /dev/tty ]]; then
+        local reply=""
+        printf '\033]11;?\033\\' > /dev/tty 2>/dev/null || true
+        IFS= read -rs -t 0.2 -d $'\\' reply < /dev/tty 2>/dev/null || true
+        if [[ "$reply" =~ rgb:([0-9a-fA-F]+)/([0-9a-fA-F]+)/([0-9a-fA-F]+) ]]; then
+            local r=$((16#${BASH_REMATCH[1]:0:2}))
+            local g=$((16#${BASH_REMATCH[2]:0:2}))
+            local b=$((16#${BASH_REMATCH[3]:0:2}))
+            local lum=$(( (r * 299 + g * 587 + b * 114) / 1000 ))
+            if (( lum > 127 )); then echo light; else echo dark; fi
+            return
+        fi
+    fi
 
-    # Per-response renderer (called by watcher with response file on stdin).
-    # In-house perl-based markdown renderer — fast, dependency-free, matches
-    # the council's visual language (cyan headings, yellow code, etc).
-    cat > "$watch_dir/render.sh" <<'RENDEREOF'
+    if [[ -n "${COLORFGBG:-}" ]]; then
+        local bg="${COLORFGBG##*;}"
+        case "$bg" in
+            7|15) echo light; return ;;
+            [0-9]|1[0-4]) echo dark; return ;;
+        esac
+    fi
+
+    echo unknown
+}
+
+# Writes the per-response markdown renderer to the given path.
+# In-house perl-based renderer — fast, dependency-free, matches the
+# council's visual language (cyan headings, yellow code, etc).
+# Emphasis adapts to COUNCIL_THEME_RESOLVED: bright white on dark themes,
+# black on light themes, attribute-only (inherits foreground) when unknown.
+display_write_renderer() {
+    local path="$1"
+    cat > "$path" <<'RENDEREOF'
 #!/usr/bin/env perl
 # ANSI: 1=bold 3=italic 4=under 7=inverse 9=strikethrough
 # 36=cyan 33=yellow 35=magenta 90=bright-black 96=bright-cyan 97=bright-white
+my $theme  = $ENV{COUNCIL_THEME_RESOLVED} // 'unknown';
+my $strong = $theme eq 'dark' ? '1;97' : $theme eq 'light' ? '1;30' : '1';
+my $em     = $theme eq 'dark' ? '3;97' : $theme eq 'light' ? '3;30' : '3';
 my $in_code = 0;
 my $in_think = 0;
 my @table_buf;
@@ -118,8 +151,8 @@ sub apply_inline {
     $s =~ s/`([^`]+)`/\033[7;33m$1\033[0m/g;
     $s =~ s/\[([^\]]+)\]\(([^)]+)\)/\033[4;36m$1\033[24m \033[90m($2)\033[0m/g;
     $s =~ s/~~([^~]+)~~/\033[9m$1\033[29m/g;
-    $s =~ s/\*\*([^*]+)\*\*/\033[1;97m$1\033[0m/g;
-    $s =~ s/(?<!\*)\*([^*]+)\*(?!\*)/\033[3;97m$1\033[0m/g;
+    $s =~ s/\*\*([^*]+)\*\*/\033[${strong}m$1\033[0m/g;
+    $s =~ s/(?<!\*)\*([^*]+)\*(?!\*)/\033[${em}m$1\033[0m/g;
     return $s;
 }
 
@@ -233,7 +266,24 @@ while (my $line = <STDIN>) {
 }
 flush_table();
 RENDEREOF
-    chmod +x "$watch_dir/render.sh"
+    chmod +x "$path"
+}
+
+# Opens a tmux split pane with a watcher that streams status + responses.
+# Prints the watch directory path to stdout (caller stores in COUNCIL_PANE_DIR).
+# Returns 1 if pane could not be opened (caller falls back gracefully).
+display_pane_open() {
+    should_open_pane || return 1
+
+    local watch_dir
+    watch_dir=$(mktemp -d "${TMPDIR:-/tmp}/council_pane.XXXXXX")
+    mkdir -p "$watch_dir/responses"
+
+    display_write_renderer "$watch_dir/render.sh"
+    # Only an explicit override is decided here; this process often has no
+    # tty and a stale COLORFGBG, so live detection happens in the watcher,
+    # which owns the pane's tty.
+    printf '%s' "${COUNCIL_THEME:-}" > "$watch_dir/theme"
 
     # Watcher script (runs inside the tmux pane).
     # Tracks provider state/timing silently; only prints when a response
@@ -243,7 +293,18 @@ RENDEREOF
     cat > "$watch_dir/watcher.sh" <<'WATCHEREOF'
 #!/bin/bash
 WATCH="$1"
+DISPLAY_LIB="$2"
 trap 'rm -rf "$WATCH"' EXIT
+
+# render.sh picks emphasis colors by theme. An explicit COUNCIL_THEME is
+# forwarded via the theme file; otherwise detect here, where the pane's
+# own tty answers the OSC 11 background query.
+COUNCIL_THEME_RESOLVED=$(cat "$WATCH/theme" 2>/dev/null || echo "")
+if [[ "$COUNCIL_THEME_RESOLVED" != light && "$COUNCIL_THEME_RESOLVED" != dark ]]; then
+    source "$DISPLAY_LIB"
+    COUNCIL_THEME_RESOLVED=$(council_detect_theme)
+fi
+export COUNCIL_THEME_RESOLVED
 
 # Parallel arrays keyed by index in provider_names. bash 3.2 has no
 # associative arrays; provider_index() does linear lookup and registers
@@ -441,9 +502,10 @@ fi
 WATCHEREOF
     chmod +x "$watch_dir/watcher.sh"
 
-    local safe_dir safe_watcher
+    local safe_dir safe_watcher safe_lib
     safe_dir=$(printf '%q' "$watch_dir")
     safe_watcher=$(printf '%q' "$watch_dir/watcher.sh")
+    safe_lib=$(printf '%q' "${BASH_SOURCE[0]}")
 
     local -a target_args=()
     if [[ -n "${TMUX_PANE:-}" ]]; then
@@ -454,7 +516,7 @@ WATCHEREOF
     # tmux server's environment, not this shell's, unless we pass it.
     if ! tmux split-window -h -l '40%' "${target_args[@]}" \
         -e "COUNCIL_AUTO_CLOSE=${COUNCIL_AUTO_CLOSE:-0}" \
-        "bash $safe_watcher $safe_dir" >/dev/null 2>&1; then
+        "bash $safe_watcher $safe_dir $safe_lib" >/dev/null 2>&1; then
         rm -rf "$watch_dir"
         return 1
     fi

@@ -606,5 +606,7 @@ if [[ $COUNCIL_ELAPSED_MS -ge $COUNCIL_ATTENTION_THRESHOLD_MS ]]; then
 fi
 
 if [[ -n "$COUNCIL_PANE_DIR" ]]; then
-    display_pane_close "$COUNCIL_PANE_DIR"
+    # Best-effort: the user closing the pane early already removed the watch
+    # dir, and a missing display must not fail an otherwise successful query
+    display_pane_close "$COUNCIL_PANE_DIR" || true
 fi

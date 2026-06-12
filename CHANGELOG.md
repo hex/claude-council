@@ -57,6 +57,20 @@ claude-council's bash architecture.
   under `set -e` aborted the script as soon as any provider was available;
   the summary now always prints.
 
+- **Perplexity status probe rejected by the API.** Perplexity now requires
+  `max_tokens >= 16` for sonar; the probe sent 1 and read as HTTP 400.
+
+- **Pane text was invisible on light terminal themes.** The waiting-list
+  provider colors are now mid-tone shades, and the markdown renderer's
+  bold/italic emphasis adapts to the detected terminal theme (OSC 11
+  background query in the pane, `COLORFGBG` fallback, attribute-only when
+  unknown; force with `COUNCIL_THEME=light|dark`).
+
+- **Closing the streaming pane early failed the query.** `display_pane_close`
+  returned 1 once the watcher had cleaned up its watch dir, and as the last
+  command under `set -e` that became query-council's exit code, making
+  run-council swallow the outfile path. Pane closeout is now best-effort.
+
 ## 2026.6.1
 
 ### Fixes
