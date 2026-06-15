@@ -42,7 +42,7 @@ bats --verbose-run tests/cache.bats
 |------|-------|----------|
 | `cache.bats` | 17 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
 | `cli-providers.bats` | 18 tests | codex/gemini-cli discovery, CLI-prefers-API policy, --list-available / --list-default, flag parsing, gated E2E |
-| `display.bats` | 17 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating |
+| `display.bats` | 21 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 37 tests | presets, validation, prompt injection, assignment |
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
@@ -51,7 +51,7 @@ bats --verbose-run tests/cache.bats
 | `fake-clis.bats` | 11 tests | fixture self-checks, codex.sh/gemini-cli.sh against fake binaries |
 | `format-output.bats` | 9 tests | defensive parsing: empty/missing/non-string responses, raw preservation |
 | `prompts.bats` | 9 tests | template loading, {{VAR}} interpolation, role-injection rendering |
-| `agent-analysis.bats` | 9 tests | validate-analysis.sh contract enforcement, schema sync |
+| `agent-analysis.bats` | 11 tests | validate-analysis.sh contract enforcement, schema sync |
 | `check-status.bats` | 6 tests | two-tier CLI availability, remediation strings |
 | `jobs.bats` | 12 tests | job store, --async lifecycle, --result/--jobs/--cancel |
 | `stop-gate.bats` | 8 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
