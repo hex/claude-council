@@ -485,7 +485,7 @@ The bump applies to:
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
-| Standard (gpt-4o) | 2048 (default) | 2048 |
+| Standard (gpt-5.1) | 2048 (default) | 2048 |
 | Reasoning (gpt-5.5-pro) | 2048 (default) | 32768 |
 | Reasoning (gpt-5.5-pro) | 4096 | 32768 |
 
