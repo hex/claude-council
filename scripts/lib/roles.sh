@@ -105,20 +105,46 @@ normalize_roles() {
     fi
 }
 
-# Resolve the role set for a local (provider-less) council. Honors an explicit
-# roles string (expanding a preset via normalize_roles), or falls back to a
-# diverse default trio chosen to pull in different directions for solo
-# brainstorming: a contrarian, a minimalist, and a risk-spotter.
-# Usage: local_council_roles ""        -> "devil,simplicity,security"
-#        local_council_roles "balanced" -> "security,performance,maintainability"
-LOCAL_COUNCIL_DEFAULT_ROLES="devil,simplicity,security"
+# Resolve the role set for a local (provider-less) council.
+#
+# An explicit roles string always wins (expanding a preset via normalize_roles).
+# Otherwise the council is sized by <count> — the first <count> lenses from a
+# diverse ordering that leads with the ones most useful for "what am I missing"
+# brainstorming (contrarian, minimalist, risk-spotter) and trails off into the
+# more niche ones. count is clamped to 1..(pool size); a missing or non-numeric
+# count falls back to the default size.
+# Usage: local_council_roles ""          -> "devil,simplicity,security,scalability"  (default size)
+#        local_council_roles "" 5        -> "devil,simplicity,security,scalability,maintainability"
+#        local_council_roles "balanced"  -> "security,performance,maintainability"  (count ignored)
+LOCAL_COUNCIL_ROLE_ORDER="devil,simplicity,security,scalability,maintainability,performance,dx,compliance"
+LOCAL_COUNCIL_DEFAULT_COUNT=4
 local_council_roles() {
-    local roles_str="$1"
-    if [[ -z "$roles_str" ]]; then
-        echo "$LOCAL_COUNCIL_DEFAULT_ROLES"
+    local roles_str="${1:-}"
+    local count="${2:-}"
+
+    if [[ -n "$roles_str" ]]; then
+        normalize_roles "$roles_str"
         return
     fi
-    normalize_roles "$roles_str"
+
+    if ! [[ "$count" =~ ^[0-9]+$ ]]; then
+        count=$LOCAL_COUNCIL_DEFAULT_COUNT
+    fi
+
+    local order
+    IFS=',' read -ra order <<< "$LOCAL_COUNCIL_ROLE_ORDER"
+    local max=${#order[@]}
+    if (( count < 1 )); then count=1; fi
+    if (( count > max )); then count=$max; fi
+
+    local picked=()
+    local i
+    for (( i = 0; i < count; i++ )); do
+        picked+=("${order[$i]}")
+    done
+
+    local IFS=,
+    echo "${picked[*]}"
 }
 
 # Build role-injected prompt for a provider

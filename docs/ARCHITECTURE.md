@@ -295,16 +295,17 @@ work beyond the API call, pre-digesting each response before synthesis.
 ```
 User -> ask.md (--local, or accepts the offer when no providers found)
              |
-        local_council_roles resolves roles (default: devil,simplicity,security)
+        skill asks how many members (unless --roles given); local_council_roles
+        resolves that many from a diverse order (default 4, up to 8)
              |
         spawn one council-member subagent per role (background, blind to each other)
              |
     +--------+--------+--------+
     |        |        |        |
     v        v        v        v
- Member:  Member:  Member:  ...
- devil    simplicity security
-    |        |        |
+ Member:  Member:  Member:  Member:
+ devil    simplicity security scalability
+    |        |        |        |
     | Each member (Claude, read-only tools):
     | - Answers the role-injected question on its own
     | - Returns Position / Key points / Risks & blind spots / Confidence

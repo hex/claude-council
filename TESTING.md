@@ -44,7 +44,7 @@ bats --verbose-run tests/cache.bats
 | `cli-providers.bats` | 18 tests | codex/gemini-cli discovery, CLI-prefers-API policy, --list-available / --list-default, flag parsing, gated E2E |
 | `display.bats` | 21 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
-| `roles.bats` | 41 tests | presets, validation, prompt injection, assignment, local-council role resolution |
+| `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 19 tests | argument parsing, error cases, flags, local-council fallback hint |

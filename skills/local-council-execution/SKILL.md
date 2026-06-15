@@ -17,19 +17,45 @@ MUST NOT present member agreement as if it were cross-vendor corroboration.
 
 ## Step 1: Resolve the roles
 
-Use the `--roles` value if the user passed one; otherwise take the default trio.
-This one command does both (expanding presets, defaulting when empty):
+Source the libs once:
 
 ```bash
 source ${CLAUDE_PLUGIN_ROOT}/scripts/lib/prompts.sh
 source ${CLAUDE_PLUGIN_ROOT}/scripts/lib/roles.sh
-local_council_roles "<value of --roles, or empty>"
 ```
 
-The result is a comma-separated role list (e.g. `devil,simplicity,security`).
-Each role becomes one council member. N = number of roles.
+**If the user passed `--roles`**, it already says both which lenses and how many
+members — use it directly and skip the size question:
 
-If the user passed `--roles`, it has already been validated upstream; if you want
+```bash
+local_council_roles "<--roles value>"
+```
+
+**Otherwise, ask the user how many members to convene**, then resolve that many:
+
+```
+AskUserQuestion:
+  Question: "How many independent perspectives should the local council convene? More members means broader angle coverage, but a longer run and synthesis."
+  Header: "Members"
+  multiSelect: false
+  Options:
+    - "4 (Recommended) - balanced breadth"
+    - "3 - quick, three sharpest lenses"
+    - "5 - thorough"
+    - "6 - exhaustive"
+```
+
+Then pass the chosen number as the count:
+
+```bash
+local_council_roles "" "<chosen number>"
+```
+
+`local_council_roles` returns a comma-separated role list (e.g.
+`devil,simplicity,security,scalability`). Each role becomes one council member;
+N = number of roles. It draws from a diverse ordering and clamps to the 8
+available roles — a user who wants more or specific lenses can pass `--roles`
+(e.g. `--roles=security,devil,simplicity,scalability,dx,compliance`). If you want
 to be safe, `validate_roles "<list>"` returns non-zero on an unknown role.
 
 ## Step 2: Assemble the question + context

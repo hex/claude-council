@@ -248,14 +248,17 @@ still convene a council — locally, using Claude alone:
 # Explicit
 /claude-council:ask --local "Is event sourcing worth it for this order service?"
 
-# Pick the lenses (otherwise defaults to devil's-advocate + simplicity + security)
+# Pick the exact lenses yourself (skips the size prompt)
 /claude-council:ask --local --roles=architecture "How should we shard this database?"
 ```
 
 It spawns several Claude subagents in parallel, each pinned to a different role
-and **blind to the others**, then synthesizes their perspectives. You don't need
-to pass `--local` explicitly: when a query finds no configured providers, the
-command offers a local council instead of erroring.
+and **blind to the others**, then synthesizes their perspectives. When you don't
+pass `--roles`, it asks **how many members** to convene (default 4, up to 8) and
+fills them from a diverse ordering led by the sharpest lenses (devil's-advocate,
+simplicity, security, …). You don't need to pass `--local` explicitly: when a
+query finds no configured providers, the command offers a local council instead
+of erroring.
 
 > **Honest caveat:** every member is Claude, so they share priors and training.
 > Agreement between them is a *shared starting point to pressure-test*, not

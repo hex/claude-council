@@ -35,7 +35,9 @@ any provider questions:
 1. **If `--local` is in $ARGUMENTS → local mode.** Skip the provider and agent
    questions and go straight to "If Local Mode is Active" in Step 2. Local mode
    honors `--roles`, `--file`, `--verbosity`, `--quiet`, and auto-context; it
-   ignores `--providers`, `--debate`, `--agents`, and `--async`.
+   ignores `--providers`, `--debate`, `--agents`, and `--async`. When `--roles`
+   is not passed, the local-council skill asks the user how many members to
+   convene before spawning them.
 
 2. **Otherwise, check what providers are configured:**
    ```bash

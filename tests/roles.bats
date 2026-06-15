@@ -218,9 +218,9 @@ teardown() {
 # pull in different directions for solo brainstorming.
 # ============================================================================
 
-@test "local_council_roles: defaults to a diverse trio when no roles given" {
+@test "local_council_roles: defaults to a diverse set when no roles given" {
     local result=$(local_council_roles "")
-    [ "$result" = "devil,simplicity,security" ]
+    [ "$result" = "devil,simplicity,security,scalability" ]
 }
 
 @test "local_council_roles: honors an explicit role list verbatim" {
@@ -233,8 +233,42 @@ teardown() {
     [ "$result" = "security,performance,maintainability" ]
 }
 
-@test "local_council_roles: default trio is all valid, known roles" {
+@test "local_council_roles: default set is all valid, known roles" {
     validate_roles "$(local_council_roles "")"
+}
+
+@test "local_council_roles: count selects that many lenses from the diverse order" {
+    local result=$(local_council_roles "" 5)
+    [ "$result" = "devil,simplicity,security,scalability,maintainability" ]
+}
+
+@test "local_council_roles: count of 1 yields a single lens" {
+    local result=$(local_council_roles "" 1)
+    [ "$result" = "devil" ]
+}
+
+@test "local_council_roles: count above the pool size is clamped to all roles" {
+    local result=$(local_council_roles "" 99)
+    validate_roles "$result"
+    # 8 roles exist; expect all of them
+    [ "$(echo "$result" | tr ',' '\n' | wc -l | tr -d ' ')" = "8" ]
+}
+
+@test "local_council_roles: explicit roles ignore the count" {
+    local result=$(local_council_roles "balanced" 5)
+    [ "$result" = "security,performance,maintainability" ]
+}
+
+@test "local_council_roles: non-numeric count falls back to the default set" {
+    local result=$(local_council_roles "" "abc")
+    [ "$result" = "devil,simplicity,security,scalability" ]
+}
+
+@test "local_council_roles: every count from 1..8 resolves to valid roles" {
+    local n
+    for n in 1 2 3 4 5 6 7 8; do
+        validate_roles "$(local_council_roles "" "$n")"
+    done
 }
 
 # ============================================================================
