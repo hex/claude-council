@@ -31,10 +31,16 @@ setup() {
     [ "$output" == "light" ]
 }
 
-@test "theme: COLORFGBG dark background detected" {
+@test "theme: COLORFGBG dark/ambiguous background yields unknown" {
+    # COLORFGBG is unreliable — it goes stale (this very session reported
+    # "15;0" (dark bg) while the terminal was actually light). Forcing a
+    # "dark" pick renders bright-white emphasis that is invisible on a light
+    # background, so an ambiguous COLORFGBG yields "unknown" and emphasis
+    # falls back to attribute-only (readable on any theme). Only an explicit
+    # COUNCIL_THEME or a live OSC 11 query may assert "dark".
     export COLORFGBG="15;0"
     run council_detect_theme
-    [ "$output" == "dark" ]
+    [ "$output" == "unknown" ]
 }
 
 @test "theme: COLORFGBG three-field form uses last field" {

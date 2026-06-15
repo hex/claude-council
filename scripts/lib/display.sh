@@ -43,6 +43,17 @@ it2_attention() {
 
 # ----- Lifecycle signal helpers (consolidate tty-probe + redirect pattern) -----
 
+# Probes whether a controlling tty is writable. A bare `-w /dev/tty` test passes
+# for the device node even when there is no controlling terminal, so we attempt
+# an actual no-op write and let the open succeed or fail. stderr is silenced
+# BEFORE the write redirect because bash applies redirects left to right: a
+# trailing `2>/dev/null` would not catch the failed open of an absent tty, which
+# reports "Device not configured" (ENXIO) on the still-live stderr. Callers cache
+# the result in COUNCIL_HAS_TTY for the council_signal_* helpers below.
+council_probe_tty() {
+    : 2>/dev/null >"${1:-/dev/tty}"
+}
+
 # Sets the iTerm2 tab color via /dev/tty when a controlling tty is available.
 # Caller must have set COUNCIL_HAS_TTY=1 after probing earlier in the flow.
 council_signal_state() {
@@ -113,11 +124,17 @@ council_detect_theme() {
         fi
     fi
 
+    # COLORFGBG may only assert "light" (background 7 or 15). It is too
+    # unreliable to assert "dark": it goes stale when the user switches themes
+    # (reporting e.g. "15;0" on a now-light terminal), and a wrong "dark" pick
+    # renders bright-white emphasis that is invisible on a light background. An
+    # ambiguous value therefore falls through to "unknown", where emphasis is
+    # attribute-only and inherits the terminal's real foreground — readable on
+    # any theme.
     if [[ -n "${COLORFGBG:-}" ]]; then
         local bg="${COLORFGBG##*;}"
         case "$bg" in
             7|15) echo light; return ;;
-            [0-9]|1[0-4]) echo dark; return ;;
         esac
     fi
 

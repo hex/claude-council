@@ -92,6 +92,26 @@ teardown() {
     [ -z "$output" ]
 }
 
+# ----- tty probe -----
+
+@test "display: council_probe_tty succeeds and is silent on a writable target" {
+    source "$LIB"
+    run council_probe_tty /dev/null
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "display: council_probe_tty fails silently when the target cannot be opened" {
+    source "$LIB"
+    # A path under a nonexistent directory can never be opened for writing, so
+    # the probe must fail (nonzero) AND leak nothing to stderr. This guards the
+    # redirection ordering: stderr has to be silenced before the write redirect,
+    # or the failed open prints "No such file or directory" to the real stderr.
+    run council_probe_tty "$TEST_TMP_DIR/nope/missing/tty"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+}
+
 # ----- Manifest writes -----
 
 @test "display: pane_status_event appends a tab-separated line" {

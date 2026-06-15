@@ -400,11 +400,9 @@ if [[ "$NO_PANE" != true ]]; then
         COUNCIL_PANE_DIR="$pane_dir"
     fi
 fi
-# Probe /dev/tty once — `-w` test passes for the device file even when
-# redirects fail without a controlling tty. Cache the result for the
-# council_signal_* helpers in display.sh.
+# Probe /dev/tty once and cache the result for the council_signal_* helpers.
 COUNCIL_HAS_TTY=0
-: >/dev/tty 2>/dev/null && COUNCIL_HAS_TTY=1
+council_probe_tty && COUNCIL_HAS_TTY=1
 council_signal_state yellow
 COUNCIL_START_MS=$(now_ms)
 
