@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"rg \\\"coerce_result_json\\\\|validate.*json\\\\|jq.*type.*object\\\\|jq -e\\\\|is_valid_json\\\\|json_valid\\\" /Users/alex.geana/.claude-sessions/claude-council/scripts/ -rn --include=\\\"*.sh\\\"\",\"descr...",
+  "error": "Exit code 2\nrg: unrecognized flag --include\n\nsimilar flags that are available: --include-zero",
+  "timestamp": "2026-06-15T10:02:19.953Z",
+  "retry_count": 1
+}

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1781268011989,
+  "lastScanned": 1781504745484,
   "projectRoot": "/Users/alex.geana/.claude-sessions/claude-council",
   "techStack": {
     "languages": [],
@@ -40,7 +40,7 @@
       "path": "agents",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1781268011819,
+      "lastAccessed": 1781504745304,
       "keyFiles": [
         "council-advisor.md"
       ]
@@ -49,7 +49,7 @@
       "path": "claude-council-workspace",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1781268011819,
+      "lastAccessed": 1781504745305,
       "keyFiles": [
         "description-optimization.log"
       ]
@@ -57,10 +57,11 @@
     "commands": {
       "path": "commands",
       "purpose": null,
-      "fileCount": 2,
-      "lastAccessed": 1781268011819,
+      "fileCount": 3,
+      "lastAccessed": 1781504745305,
       "keyFiles": [
         "ask.md",
+        "result.md",
         "status.md"
       ]
     },
@@ -68,7 +69,7 @@
       "path": "config",
       "purpose": "Configuration files",
       "fileCount": 1,
-      "lastAccessed": 1781268011819,
+      "lastAccessed": 1781504745306,
       "keyFiles": [
         "roles.json"
       ]
@@ -77,16 +78,45 @@
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 1,
-      "lastAccessed": 1781268011820,
+      "lastAccessed": 1781504745306,
       "keyFiles": [
         "ARCHITECTURE.md"
+      ]
+    },
+    "hooks": {
+      "path": "hooks",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1781504745306,
+      "keyFiles": [
+        "hooks.json"
+      ]
+    },
+    "prompts": {
+      "path": "prompts",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1781504745306,
+      "keyFiles": [
+        "role-injection.md",
+        "stop-review-gate.md",
+        "synthesis.md"
+      ]
+    },
+    "schemas": {
+      "path": "schemas",
+      "purpose": "Schema definitions",
+      "fileCount": 1,
+      "lastAccessed": 1781504745306,
+      "keyFiles": [
+        "agent-analysis.schema.json"
       ]
     },
     "scripts": {
       "path": "scripts",
       "purpose": "Build/utility scripts",
-      "fileCount": 5,
-      "lastAccessed": 1781268011820,
+      "fileCount": 7,
+      "lastAccessed": 1781504745307,
       "keyFiles": [
         "check-status.sh",
         "format-output.sh",
@@ -99,45 +129,96 @@
       "path": "skills",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1781268011820,
+      "lastAccessed": 1781504745307,
       "keyFiles": []
     },
     "tests": {
       "path": "tests",
       "purpose": "Test files",
-      "fileCount": 10,
-      "lastAccessed": 1781268011820,
+      "fileCount": 18,
+      "lastAccessed": 1781504745307,
       "keyFiles": [
+        "agent-analysis.bats",
         "cache.bats",
+        "check-status.bats",
         "cli-providers.bats",
-        "display.bats",
-        "keys.bats",
-        "query-council.bats"
+        "display.bats"
       ]
     },
     "scripts/lib": {
       "path": "scripts/lib",
       "purpose": "Library code",
-      "fileCount": 9,
-      "lastAccessed": 1781268011821,
+      "fileCount": 11,
+      "lastAccessed": 1781504745308,
       "keyFiles": [
         "cache.sh",
         "display.sh",
         "export.sh"
+      ]
+    },
+    "tests/fixtures": {
+      "path": "tests/fixtures",
+      "purpose": "Test fixtures",
+      "fileCount": 1,
+      "lastAccessed": 1781504745308,
+      "keyFiles": [
+        "fake-clis.bash"
       ]
     }
   },
   "hotPaths": [
     {
       "path": "scripts/lib/display.sh",
-      "accessCount": 22,
-      "lastAccessed": 1781274143239,
+      "accessCount": 42,
+      "lastAccessed": 1781508665630,
       "type": "file"
     },
     {
       "path": "docs/ARCHITECTURE.md",
+      "accessCount": 20,
+      "lastAccessed": 1781514979719,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 19,
+      "lastAccessed": 1781517662497,
+      "type": "file"
+    },
+    {
+      "path": "scripts/query-council.sh",
+      "accessCount": 16,
+      "lastAccessed": 1781517751701,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/roles.sh",
+      "accessCount": 13,
+      "lastAccessed": 1781517950953,
+      "type": "file"
+    },
+    {
+      "path": ".cs/discoveries.md",
+      "accessCount": 12,
+      "lastAccessed": 1781505386577,
+      "type": "file"
+    },
+    {
+      "path": "TESTING.md",
+      "accessCount": 11,
+      "lastAccessed": 1781517669025,
+      "type": "file"
+    },
+    {
+      "path": "commands/ask.md",
       "accessCount": 10,
-      "lastAccessed": 1781273687101,
+      "lastAccessed": 1781514879514,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/providers.sh",
+      "accessCount": 10,
+      "lastAccessed": 1781517751916,
       "type": "file"
     },
     {
@@ -147,15 +228,15 @@
       "type": "file"
     },
     {
-      "path": ".cs/discoveries.md",
+      "path": "tests/cli-providers.bats",
       "accessCount": 9,
-      "lastAccessed": 1781276552383,
+      "lastAccessed": 1781511358794,
       "type": "file"
     },
     {
-      "path": "README.md",
-      "accessCount": 8,
-      "lastAccessed": 1781273683509,
+      "path": "CHANGELOG.md",
+      "accessCount": 9,
+      "lastAccessed": 1781518214406,
       "type": "file"
     },
     {
@@ -171,39 +252,45 @@
       "type": "file"
     },
     {
-      "path": "scripts/lib/jobs.sh",
-      "accessCount": 5,
-      "lastAccessed": 1781275870284,
+      "path": "tests/fixtures/fake-clis.bash",
+      "accessCount": 6,
+      "lastAccessed": 1781509772218,
       "type": "file"
     },
     {
-      "path": "CHANGELOG.md",
+      "path": "scripts/lib/jobs.sh",
+      "accessCount": 6,
+      "lastAccessed": 1781511262657,
+      "type": "file"
+    },
+    {
+      "path": "tests/roles.bats",
+      "accessCount": 6,
+      "lastAccessed": 1781514956600,
+      "type": "file"
+    },
+    {
+      "path": "scripts/providers/gemini-cli.sh",
+      "accessCount": 6,
+      "lastAccessed": 1781517757233,
+      "type": "file"
+    },
+    {
+      "path": "tests/fake-clis.bats",
       "accessCount": 5,
-      "lastAccessed": 1781276411613,
+      "lastAccessed": 1781510208599,
       "type": "file"
     },
     {
       "path": "skills/deep-execution/agent-prompt-template.md",
-      "accessCount": 4,
-      "lastAccessed": 1781269956820,
+      "accessCount": 5,
+      "lastAccessed": 1781513482500,
       "type": "file"
     },
     {
-      "path": "commands/ask.md",
-      "accessCount": 4,
-      "lastAccessed": 1781270604076,
-      "type": "file"
-    },
-    {
-      "path": "tests/fixtures/fake-clis.bash",
-      "accessCount": 4,
-      "lastAccessed": 1781270791963,
-      "type": "file"
-    },
-    {
-      "path": "scripts/query-council.sh",
-      "accessCount": 4,
-      "lastAccessed": 1781273263678,
+      "path": ".claude-plugin/plugin.json",
+      "accessCount": 5,
+      "lastAccessed": 1781518188561,
       "type": "file"
     },
     {
@@ -213,27 +300,15 @@
       "type": "file"
     },
     {
-      "path": "scripts/lib/roles.sh",
-      "accessCount": 3,
-      "lastAccessed": 1781269546111,
+      "path": "skills/deep-execution/SKILL.md",
+      "accessCount": 4,
+      "lastAccessed": 1781512718752,
       "type": "file"
     },
     {
       "path": "skills/council-execution/SKILL.md",
       "accessCount": 3,
       "lastAccessed": 1781269548408,
-      "type": "file"
-    },
-    {
-      "path": "skills/deep-execution/SKILL.md",
-      "accessCount": 3,
-      "lastAccessed": 1781269962487,
-      "type": "file"
-    },
-    {
-      "path": "TESTING.md",
-      "accessCount": 3,
-      "lastAccessed": 1781273685773,
       "type": "file"
     },
     {
@@ -249,21 +324,27 @@
       "type": "file"
     },
     {
-      "path": "tests/cli-providers.bats",
+      "path": "tests/test_helper.bash",
       "accessCount": 3,
-      "lastAccessed": 1781276000772,
+      "lastAccessed": 1781504956962,
+      "type": "file"
+    },
+    {
+      "path": "tests/theme.bats",
+      "accessCount": 3,
+      "lastAccessed": 1781507286597,
+      "type": "file"
+    },
+    {
+      "path": "tests/display.bats",
+      "accessCount": 3,
+      "lastAccessed": 1781507857997,
       "type": "file"
     },
     {
       "path": "scripts/providers/codex.sh",
       "accessCount": 2,
       "lastAccessed": 1781268807745,
-      "type": "file"
-    },
-    {
-      "path": "scripts/lib/providers.sh",
-      "accessCount": 2,
-      "lastAccessed": 1781268845640,
       "type": "file"
     },
     {
@@ -279,12 +360,6 @@
       "type": "file"
     },
     {
-      "path": "tests/test_helper.bash",
-      "accessCount": 2,
-      "lastAccessed": 1781275995801,
-      "type": "file"
-    },
-    {
       "path": "tests/check-status.bats",
       "accessCount": 2,
       "lastAccessed": 1781276002923,
@@ -297,9 +372,9 @@
       "type": "file"
     },
     {
-      "path": "tests/fake-clis.bats",
+      "path": "tests/query-council.bats",
       "accessCount": 2,
-      "lastAccessed": 1781276008430,
+      "lastAccessed": 1781513431947,
       "type": "file"
     },
     {
@@ -324,18 +399,6 @@
       "path": "agents/council-advisor.md",
       "accessCount": 1,
       "lastAccessed": 1781268170793,
-      "type": "file"
-    },
-    {
-      "path": ".claude-plugin/plugin.json",
-      "accessCount": 1,
-      "lastAccessed": 1781268171501,
-      "type": "file"
-    },
-    {
-      "path": "scripts/providers/gemini-cli.sh",
-      "accessCount": 1,
-      "lastAccessed": 1781268808322,
       "type": "file"
     },
     {
@@ -393,9 +456,15 @@
       "type": "file"
     },
     {
-      "path": "tests/theme.bats",
+      "path": "config/roles.json",
       "accessCount": 1,
-      "lastAccessed": 1781272717792,
+      "lastAccessed": 1781512727325,
+      "type": "file"
+    },
+    {
+      "path": "agents/council-member.md",
+      "accessCount": 1,
+      "lastAccessed": 1781513501861,
       "type": "file"
     }
   ],

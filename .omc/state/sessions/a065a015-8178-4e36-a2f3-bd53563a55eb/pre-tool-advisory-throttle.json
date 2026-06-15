@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "entries": {
+    "79a93d4a2f8f50b95f852280616242fee1855dc99a3c75211917f55e72e95fae": {
+      "last_emitted_at_ms": 1781518219541,
+      "message": "Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
+    },
+    "445ed27a3872b681d98190bae61ccb84954e1bc4e140df5370be958dee776b3a": {
+      "last_emitted_at_ms": 1781518188387,
+      "message": "Verify changes work after editing. Test functionality before marking complete."
+    },
+    "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
+      "last_emitted_at_ms": 1781518183674,
+      "message": "Read multiple files in parallel when possible for faster analysis."
+    },
+    "1c2c06b08b27b96a7667b390d626aa678eeb9c02343a4034efcf27388a555512": {
+      "last_emitted_at_ms": 1781517747415,
+      "message": "Spawning agent: Explore (inherit) | Task: Altitude review of release diff"
+    },
+    "4c6c1b8b7bb034dc266ac45ff0eb53331c8f312e4214a90a6e41ae7cfafb452e": {
+      "last_emitted_at_ms": 1781517739912,
+      "message": "Spawning agent: Explore (inherit) | Task: Efficiency review of release diff"
+    },
+    "036becd69f3cf3a550aa5e87dc039133460ad5a6dac294a68aec116115c5e659": {
+      "last_emitted_at_ms": 1781517732884,
+      "message": "Spawning agent: Explore (inherit) | Task: Simplification review of release diff"
+    },
+    "a37ee1dfd1d71e91e58b79dff09819189ded07ab22d22cd0149f356c38043b0e": {
+      "last_emitted_at_ms": 1781517726320,
+      "message": "Spawning agent: Explore (inherit) | Task: Reuse review of release diff"
+    }
+  },
+  "updated_at": "2026-06-15T10:10:19.541Z"
+}
