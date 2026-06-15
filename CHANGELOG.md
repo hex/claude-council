@@ -4,6 +4,34 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.6.3
+
+Streaming-pane robustness fixes for the tty probe and light-terminal rendering.
+
+### Fixed
+
+- **Streaming pane no longer leaks a `/dev/tty` error.** The tty-writability
+  probe silenced stderr *after* the failing redirect, so headless runs printed
+  a stray `query-council.sh: line 407: /dev/tty: Device not configured`.
+  Extracted into `council_probe_tty()` with stderr silenced first.
+
+- **Light-theme contrast.** Bold/italic were rendered invisible bright-white on
+  light terminals because `COLORFGBG` goes stale (reports `15;0` "dark" on a
+  light terminal). `council_detect_theme` now trusts `COLORFGBG` only to assert
+  *light*; anything ambiguous falls back to attribute-only emphasis that
+  inherits the real foreground — readable on any theme.
+
+- **`COUNCIL_THEME` no longer clobbered when forwarding to the pane.**
+  `display_pane_open` passed `-e COUNCIL_THEME=` unconditionally, overwriting a
+  theme the pane could otherwise inherit or auto-detect with an empty value. It
+  is now forwarded only when set.
+
+### Changed
+
+- Documentation: corrected `display.bats` (17→21) and `agent-analysis.bats`
+  (9→11) test counts; tightened the `COUNCIL_THEME` description in
+  `ARCHITECTURE.md`.
+
 ## 2026.6.2
 
 Patterns adopted from an analysis of openai/codex-plugin-cc, adapted to
