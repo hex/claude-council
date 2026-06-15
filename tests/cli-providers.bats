@@ -139,6 +139,42 @@ source_lib_and_call() {
 }
 
 # ============================================================================
+# coerce_result_json — collection-loop JSON guard (issue #3)
+#
+# The result-collection loop reads provider output files and feeds them to
+# `jq --argjson`. Under `set -e`, a single invalid-JSON file aborts the whole
+# council run. coerce_result_json guarantees valid JSON (merging .model) so one
+# misbehaving provider can no longer take down every other provider's result.
+# ============================================================================
+
+@test "coerce_result_json: valid JSON passes through with model merged" {
+    run source_lib_and_call $'coerce_result_json \'{"status":"success","response":"hi"}\' gpt-5'
+    [ "$status" -eq 0 ]
+    [[ "$(echo "$output" | jq -r '.status')" == "success" ]]
+    [[ "$(echo "$output" | jq -r '.response')" == "hi" ]]
+    [[ "$(echo "$output" | jq -r '.model')" == "gpt-5" ]]
+}
+
+@test "coerce_result_json: invalid JSON is coerced to an error result, not a crash" {
+    # ANSI-coloured plain text — exactly the agy-provider repro from issue #3.
+    run source_lib_and_call $'coerce_result_json "$(printf \'\\033[33mconnection refused\\033[0m\')" gemini-2.5-flash'
+    [ "$status" -eq 0 ]
+    # Output is itself valid JSON (so --argjson downstream cannot crash)
+    echo "$output" | jq empty
+    [[ "$(echo "$output" | jq -r '.status')" == "error" ]]
+    [[ "$(echo "$output" | jq -r '.error')" == *"invalid JSON"* ]]
+    [[ "$(echo "$output" | jq -r '.model')" == "gemini-2.5-flash" ]]
+}
+
+@test "coerce_result_json: empty input is coerced to an error result" {
+    run source_lib_and_call 'coerce_result_json "" some-model'
+    [ "$status" -eq 0 ]
+    echo "$output" | jq empty
+    [[ "$(echo "$output" | jq -r '.status')" == "error" ]]
+    [[ "$(echo "$output" | jq -r '.model')" == "some-model" ]]
+}
+
+# ============================================================================
 # query-council.sh integration
 # ============================================================================
 

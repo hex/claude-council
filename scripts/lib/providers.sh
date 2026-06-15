@@ -95,6 +95,26 @@ get_model() {
     esac
 }
 
+# Merge the model name into a provider's raw result, guaranteeing valid JSON.
+# Provider scripts can write arbitrary bytes to their result file; feeding
+# invalid JSON straight to the collection loop's `jq --argjson` aborts the whole
+# run under `set -e`, so one broken provider would take down every other
+# provider's result. Invalid input is coerced into a structured error instead.
+# Usage: coerce_result_json <raw> <model>
+# Stdout: a valid JSON object carrying a .model field
+coerce_result_json() {
+    local raw="$1" model="$2"
+    # The result must be a JSON object: `. + {model}` is a type error on a
+    # scalar (e.g. a bare `42`) or array, and empty input yields no value at
+    # all — both produce empty output that crashes the downstream --argjson the
+    # same way unparseable bytes do. One `type == "object"` check covers them.
+    if ! jq -e 'type == "object"' <<<"$raw" >/dev/null 2>&1; then
+        raw=$(jq -n --arg e "Provider returned invalid JSON: $(head -c 120 <<<"$raw")" \
+            '{status: "error", error: $e, cached: false}')
+    fi
+    jq --arg m "$model" '. + {model: $m}' <<<"$raw"
+}
+
 # Vendor color for a provider name. CLI variants share their vendor's color
 # (codex with openai, gemini-cli with gemini) since they speak for the same vendor.
 # Caller is responsible for defining BLUE/WHITE/RED/GREEN/CYAN globals.

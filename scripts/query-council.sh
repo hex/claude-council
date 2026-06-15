@@ -436,9 +436,9 @@ for provider in "${PROVIDERS[@]}"; do
     model=$(get_model "$provider")
 
     if [[ -f "$result_file" ]]; then
-        result=$(cat "$result_file")
-        # Add model to result
-        result=$(echo "$result" | jq --arg m "$model" '. + {model: $m}')
+        # coerce_result_json adds the model and guarantees valid JSON, so a
+        # provider that wrote malformed output can't crash the whole run here.
+        result=$(coerce_result_json "$(cat "$result_file")" "$model")
         RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --argjson r "$result" '.[$p] = $r')
 
         # Track errors and show status
@@ -522,8 +522,7 @@ if [[ "$DEBATE_MODE" == true ]]; then
         model=$(get_model "$provider")
 
         if [[ -f "$result_file" ]]; then
-            result=$(cat "$result_file")
-            result=$(echo "$result" | jq --arg m "$model" '. + {model: $m}')
+            result=$(coerce_result_json "$(cat "$result_file")" "$model")
             ROUND2_RESULTS=$(echo "$ROUND2_RESULTS" | jq --arg p "$provider" --argjson r "$result" '.[$p] = $r')
 
             status=$(echo "$result" | jq -r '.status')
