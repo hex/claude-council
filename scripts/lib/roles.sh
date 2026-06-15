@@ -137,14 +137,8 @@ local_council_roles() {
     if (( count < 1 )); then count=1; fi
     if (( count > max )); then count=$max; fi
 
-    local picked=()
-    local i
-    for (( i = 0; i < count; i++ )); do
-        picked+=("${order[$i]}")
-    done
-
     local IFS=,
-    echo "${picked[*]}"
+    echo "${order[*]:0:count}"
 }
 
 # Build role-injected prompt for a provider
