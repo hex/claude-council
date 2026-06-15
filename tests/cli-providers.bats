@@ -205,10 +205,18 @@ source_lib_and_call() {
     [[ "$output" == *"OK"* ]]
 }
 
-@test "gemini-cli.sh: returns response for trivial prompt (E2E)" {
-    [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
+# ============================================================================
+# Real-CLI guard validation — runs whenever the real gemini is present.
+# Exercises the --skip-trust version guard against the actual installed CLI:
+# a wrong decision surfaces as an "Unknown argument: skip-trust" abort. Gated
+# on presence (not COUNCIL_E2E) so the guard is checked against the real CLI
+# on any machine that has it.
+# ============================================================================
+
+@test "gemini-cli.sh: real gemini accepts the args we send (skip-trust guard)" {
     if ! command_exists gemini; then skip "gemini CLI not installed"; fi
     run "${PROVIDERS_DIR_REAL}/gemini-cli.sh" "Reply with exactly the word: OK"
     [ "$status" -eq 0 ]
+    [[ "$output" != *"Unknown argument"* ]]
     [[ "$output" == *"OK"* ]]
 }

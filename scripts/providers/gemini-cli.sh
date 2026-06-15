@@ -30,9 +30,9 @@ ${PROMPT}"
 # --skip-trust bypasses the trusted-folders guardrail for non-interactive use.
 # The council only sends text and reads text; gemini gets no filesystem access
 # from us, so the guardrail is overcautious for this code path.
-# Gemini CLI >= 0.37 removed --skip-trust; only pass it when the installed
-# binary still advertises it, otherwise headless -p mode aborts with an
-# "Unknown argument: skip-trust" error and the provider fails for every query.
+# Some Gemini CLI builds dropped --skip-trust; only pass it when the installed
+# binary still advertises it (probed via --help), otherwise headless -p mode
+# aborts with "Unknown argument: skip-trust" and the provider fails every query.
 MODEL=$(get_model gemini-cli)
 ARGS=(-m "$MODEL" -p "$FULL_PROMPT")
 if gemini --help 2>&1 | grep -q -- '--skip-trust'; then

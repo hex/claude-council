@@ -83,15 +83,18 @@ teardown() {
     [[ "$output" == *"FAKE-GEMINI-RESPONSE"* ]]
 }
 
-@test "gemini-cli.sh: sends --skip-trust, model flag, and -p prompt to the CLI" {
+@test "gemini-cli.sh: sends model flag and -p prompt to the CLI" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     export GEMINI_CLI_MODEL="test-model-y"
     run "${PROVIDERS_DIR_REAL}/gemini-cli.sh" "another question"
     [ "$status" -eq 0 ]
     local call
+    # The last recorded call is the query; the fake's --help probe call precedes
+    # it. --skip-trust is intentionally not asserted here: the fake's --help does
+    # not advertise it, so the provider's version guard correctly omits it. That
+    # guard is exercised against the real CLI by the E2E test in cli-providers.bats.
     call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
     assert_json_eq "$call" '.bin' "gemini"
-    [[ "$(echo "$call" | jq -r '.args | index("--skip-trust")')" != "null" ]]
     [[ "$(echo "$call" | jq -r '.args | index("-m") as $i | .[$i+1]')" == "test-model-y" ]]
     [[ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"another question"* ]]
 }
