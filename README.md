@@ -76,13 +76,27 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 /plugin install hex/claude-council
 ```
 
-### Manual
+### Manual (run from a local clone)
+
+For normal use, prefer the marketplace or GitHub install above — both persist
+across sessions. A manual clone is for running from a local working copy
+(development, or offline). Clone the repo **anywhere**, then point Claude Code
+at the repo root for the current session:
 
 ```bash
-# Clone to your plugins directory
 git clone https://github.com/hex/claude-council.git
-claude --plugin-dir /path/to/claude-council
+claude --plugin-dir /path/to/claude-council    # repo root; loaded for this session only
 ```
+
+> **Cloned it and nothing loads?** Two traps to avoid:
+> 1. **Don't clone into `~/.claude/plugins/`** (Windows:
+>    `%USERPROFILE%\.claude\plugins\`). That's Claude Code's managed install
+>    *cache* — it is never scanned for manually-added plugins, so the plugin
+>    won't appear in the Installed tab or respond to its slash commands.
+> 2. **`pluginDirectories` in `settings.json` does nothing** — it isn't a real
+>    setting, so it's silently ignored (no error shown). Use `--plugin-dir`
+>    above for a local clone, or install via the marketplace / GitHub for a
+>    persistent setup.
 
 ## Usage
 
