@@ -137,6 +137,7 @@ claude --plugin-dir /path/to/claude-council    # repo root; loaded for this sess
 | `--output=path` | Export response to markdown file |
 | `--quiet` | Show only synthesis, hide individual responses |
 | `--agents` | Agent-enhanced analysis with subagents (slower, deeper) |
+| `--local` | Local Claude-only council when you have no provider keys (see below) |
 | `--async` | Detach the query as a background job; fetch with `/claude-council:result` |
 | `--no-cache` | Force fresh queries, skip cache |
 | `--no-auto-context` | Disable automatic file detection |
@@ -237,6 +238,31 @@ standard mode. Use it for high-stakes decisions, not quick questions.
 | Provider API cost | Same | Same |
 | Analysis depth | Raw responses + synthesis | Pre-analyzed + enhanced synthesis |
 | Best for | Quick questions, factual queries | Architecture decisions, security reviews, complex tradeoffs |
+
+### Local Council (--local)
+
+If you have no provider keys and no `codex` / `gemini` CLI installed, you can
+still convene a council — locally, using Claude alone:
+
+```bash
+# Explicit
+/claude-council:ask --local "Is event sourcing worth it for this order service?"
+
+# Pick the lenses (otherwise defaults to devil's-advocate + simplicity + security)
+/claude-council:ask --local --roles=architecture "How should we shard this database?"
+```
+
+It spawns several Claude subagents in parallel, each pinned to a different role
+and **blind to the others**, then synthesizes their perspectives. You don't need
+to pass `--local` explicitly: when a query finds no configured providers, the
+command offers a local council instead of erroring.
+
+> **Honest caveat:** every member is Claude, so they share priors and training.
+> Agreement between them is a *shared starting point to pressure-test*, not
+> cross-vendor corroboration. The value is independent angles and blind-spot
+> coverage — for genuinely independent models, configure a provider key or a CLI
+> (`/claude-council:status` shows what's available). The synthesis is framed
+> around angles and tensions, not "consensus", to keep this distinction clear.
 
 ### Quiet Mode
 

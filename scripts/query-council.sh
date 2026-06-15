@@ -258,6 +258,7 @@ if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
     echo "Error: No providers configured." >&2
     echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)" >&2
     echo "  or install a CLI agent (codex, gemini)." >&2
+    echo "  Or run '/claude-council:ask --local' for a local Claude-only council (same-model, no API keys)." >&2
     exit 1
 fi
 

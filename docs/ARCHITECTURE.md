@@ -290,6 +290,43 @@ User -> ask.md detects --agents flag (or NL trigger)
 Key difference from standard mode: subagents do meaningful analytical
 work beyond the API call, pre-digesting each response before synthesis.
 
+### Local Council Mode (--local / no providers)
+
+```
+User -> ask.md (--local, or accepts the offer when no providers found)
+             |
+        local_council_roles resolves roles (default: devil,simplicity,security)
+             |
+        spawn one council-member subagent per role (background, blind to each other)
+             |
+    +--------+--------+--------+
+    |        |        |        |
+    v        v        v        v
+ Member:  Member:  Member:  ...
+ devil    simplicity security
+    |        |        |
+    | Each member (Claude, read-only tools):
+    | - Answers the role-injected question on its own
+    | - Returns Position / Key points / Risks & blind spots / Confidence
+    |        |        |
+    +--------+--------+
+             |
+        orchestrator collects all perspectives
+             |
+        honest synthesis (angles, NOT consensus):
+        - shared starting points to pressure-test
+        - genuine tensions between roles
+        - cross-member blind spots
+             |
+        save to council-cache
+```
+
+Key difference from agent mode: members do **not** call any provider — each one
+*is* the answerer (Claude under a role). Because they share a model, the
+synthesis is framed around independent angles and blind-spot coverage, never as
+cross-vendor consensus. This is the zero-provider fallback so the plugin is
+usable on a Claude subscription alone.
+
 ## File Structure
 
 ```
@@ -297,7 +334,8 @@ claude-council/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
 ├── agents/
-│   └── council-advisor.md       # Proactive suggestions
+│   ├── council-advisor.md       # Proactive suggestions
+│   └── council-member.md        # One independent member of a local council (--local)
 ├── commands/
 │   ├── ask.md                   # Main /ask command
 │   ├── result.md                # /result — fetch/list/cancel background jobs
@@ -349,6 +387,9 @@ claude-council/
 │   ├── deep-execution/
 │   │   ├── SKILL.md             # Agent-enhanced execution (--agents)
 │   │   └── agent-prompt-template.md  # Subagent prompt template
+│   ├── local-council-execution/
+│   │   ├── SKILL.md             # Local Claude-only council (--local / no providers)
+│   │   └── agent-prompt-template.md  # Council-member prompt template
 │   └── provider-integration/
 │       ├── SKILL.md             # Adding providers guide
 │       └── api-patterns.md      # API integration patterns

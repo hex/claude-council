@@ -79,6 +79,12 @@ teardown() {
     [[ "$output" == *"No configured providers"* ]] || [[ "$output" == *"No providers"* ]]
 }
 
+@test "query-council: no-providers error points to local council fallback" {
+    run bash "$SCRIPT" "test prompt"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"--local"* ]]
+}
+
 # ============================================================================
 # Role validation tests
 # ============================================================================

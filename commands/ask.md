@@ -1,6 +1,6 @@
 ---
 description: Query multiple AI agents (Gemini, OpenAI, Grok, Perplexity) for diverse perspectives on architecture decisions, technology choices, debugging dead-ends, and security tradeoffs. Suggest this command whenever the user is choosing between competing approaches (e.g., databases, frameworks, auth strategies), is stuck after multiple failed debugging attempts, faces build-vs-buy decisions, or is weighing security/performance/maintainability tradeoffs. Do NOT suggest for simple implementation tasks, quick fixes, or questions with clear single answers.
-argument-hint: [--file=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--async] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
+argument-hint: [--file=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--local] [--async] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
 allowed-tools: Agent, Bash(*), Read, Glob, Grep, AskUserQuestion, TaskCreate, TaskUpdate
 ---
 
@@ -26,6 +26,42 @@ Update `activeForm` as you progress through phases:
 - `"Synthesizing recommendations..."` - during synthesis generation
 
 Mark `status → completed` when finished.
+
+## Step 0: Local Mode & Provider Availability
+
+Decide up front whether this is a local (Claude-only) council run, before asking
+any provider questions:
+
+1. **If `--local` is in $ARGUMENTS → local mode.** Skip the provider and agent
+   questions and go straight to "If Local Mode is Active" in Step 2. Local mode
+   honors `--roles`, `--file`, `--verbosity`, `--quiet`, and auto-context; it
+   ignores `--providers`, `--debate`, `--agents`, and `--async`.
+
+2. **Otherwise, check what providers are configured:**
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default 2>&1 | head -1
+   ```
+   - If this lists one or more providers → continue with the normal flow below.
+   - If it is empty or reports `No providers configured` → do NOT hard-fail.
+     Offer the local council:
+     ```
+     AskUserQuestion:
+       Question: "No AI providers are configured. Run a local council instead? It's several Claude subagents, each playing a different role — independent angles, but same-model, not cross-vendor."
+       Header: "No providers"
+       Options:
+         - "Run local council (Recommended) - independent Claude perspectives, no API keys needed"
+         - "How to add a provider - show what to configure for a real cross-vendor council"
+         - "Cancel"
+     ```
+     - "Run local council" → local mode (Step 2).
+     - "How to add a provider" → show the setup hint (set an API key, or install
+       the `codex` / `gemini` CLI; `/claude-council:status` shows what's
+       available) and stop.
+     - "Cancel" → stop.
+
+**Never pass `--local` to query-council.sh or run-council.sh** — it is a
+command-layer flag with no meaning to those scripts. Strip it from $ARGUMENTS
+before constructing any script invocation.
 
 ## Pre-Query Interaction
 
@@ -137,6 +173,14 @@ If the user selects yes, proceed with agent mode.
 - `--quiet` mode is on (user wants fast results)
 
 ## Step 2: Execute and Display
+
+### If Local Mode is Active
+
+**Invoke the `local-council-execution` skill** and follow its instructions. The
+skill resolves roles, spawns the council-member subagents in parallel, displays
+each perspective, and generates its own honest (angles-not-consensus) synthesis.
+
+Skip Step 3 (synthesis) — the local-council-execution skill generates its own.
 
 ### If Agent Mode is Active
 

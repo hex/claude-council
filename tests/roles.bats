@@ -211,6 +211,33 @@ teardown() {
 }
 
 # ============================================================================
+# local_council_roles tests (issue #1 — local Claude-subagent fallback)
+#
+# Resolves the role set for a local (provider-less) council: honor an explicit
+# --roles value (expanding presets), else default to a diverse trio chosen to
+# pull in different directions for solo brainstorming.
+# ============================================================================
+
+@test "local_council_roles: defaults to a diverse trio when no roles given" {
+    local result=$(local_council_roles "")
+    [ "$result" = "devil,simplicity,security" ]
+}
+
+@test "local_council_roles: honors an explicit role list verbatim" {
+    local result=$(local_council_roles "security,performance")
+    [ "$result" = "security,performance" ]
+}
+
+@test "local_council_roles: expands a preset" {
+    local result=$(local_council_roles "balanced")
+    [ "$result" = "security,performance,maintainability" ]
+}
+
+@test "local_council_roles: default trio is all valid, known roles" {
+    validate_roles "$(local_council_roles "")"
+}
+
+# ============================================================================
 # assign_roles_to_providers tests
 # ============================================================================
 

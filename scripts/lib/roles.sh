@@ -105,6 +105,22 @@ normalize_roles() {
     fi
 }
 
+# Resolve the role set for a local (provider-less) council. Honors an explicit
+# roles string (expanding a preset via normalize_roles), or falls back to a
+# diverse default trio chosen to pull in different directions for solo
+# brainstorming: a contrarian, a minimalist, and a risk-spotter.
+# Usage: local_council_roles ""        -> "devil,simplicity,security"
+#        local_council_roles "balanced" -> "security,performance,maintainability"
+LOCAL_COUNCIL_DEFAULT_ROLES="devil,simplicity,security"
+local_council_roles() {
+    local roles_str="$1"
+    if [[ -z "$roles_str" ]]; then
+        echo "$LOCAL_COUNCIL_DEFAULT_ROLES"
+        return
+    fi
+    normalize_roles "$roles_str"
+}
+
 # Build role-injected prompt for a provider
 # Usage: build_prompt_with_role "user question" "security"
 # Returns the modified prompt with role prefix
