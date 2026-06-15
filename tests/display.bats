@@ -112,6 +112,28 @@ teardown() {
     [ -z "$output" ]
 }
 
+# ----- pane env forwarding -----
+
+@test "display: council_pane_env_args always forwards COUNCIL_AUTO_CLOSE" {
+    source "$LIB"
+    run council_pane_env_args
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"COUNCIL_AUTO_CLOSE="* ]]
+}
+
+@test "display: council_pane_env_args forwards COUNCIL_THEME only when set" {
+    source "$LIB"
+    # Unset: must NOT emit COUNCIL_THEME at all. An empty `-e COUNCIL_THEME=`
+    # would overwrite a theme the pane could otherwise inherit or auto-detect.
+    unset COUNCIL_THEME
+    run council_pane_env_args
+    [[ "$output" != *"COUNCIL_THEME"* ]]
+    # Set: forwarded with its value.
+    export COUNCIL_THEME=light
+    run council_pane_env_args
+    [[ "$output" == *"COUNCIL_THEME=light"* ]]
+}
+
 # ----- Manifest writes -----
 
 @test "display: pane_status_event appends a tab-separated line" {

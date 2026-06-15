@@ -289,6 +289,19 @@ RENDEREOF
     chmod +x "$path"
 }
 
+# Emits the `-e VAR=VAL` flags to forward into the streaming pane, one token
+# per line (read back into an array by the caller — bash 3.2 has no mapfile).
+# A new tmux pane inherits the tmux server's environment, not this shell's, so
+# values we depend on are passed explicitly. COUNCIL_THEME is forwarded ONLY
+# when set: an empty `-e COUNCIL_THEME=` would overwrite a theme the pane could
+# otherwise inherit from the server environment or auto-detect via OSC 11.
+council_pane_env_args() {
+    printf '%s\n' -e "COUNCIL_AUTO_CLOSE=${COUNCIL_AUTO_CLOSE:-0}"
+    if [[ -n "${COUNCIL_THEME:-}" ]]; then
+        printf '%s\n' -e "COUNCIL_THEME=$COUNCIL_THEME"
+    fi
+}
+
 # Opens a tmux split pane with a watcher that streams status + responses.
 # Prints the watch directory path to stdout (caller stores in COUNCIL_PANE_DIR).
 # Returns 1 if pane could not be opened (caller falls back gracefully).
@@ -525,11 +538,13 @@ WATCHEREOF
         target_args=(-t "$TMUX_PANE")
     fi
 
-    # Forward COUNCIL_AUTO_CLOSE explicitly — the new tmux pane gets the
-    # tmux server's environment, not this shell's, unless we pass it.
+    # Forward env the new pane needs explicitly — it inherits the tmux server's
+    # environment, not this shell's. council_pane_env_args omits COUNCIL_THEME
+    # when unset so it never clobbers an inherited/auto-detected theme.
+    local -a pane_env=()
+    while IFS= read -r tok; do pane_env+=("$tok"); done < <(council_pane_env_args)
     if ! tmux split-window -h -l '40%' "${target_args[@]}" \
-        -e "COUNCIL_AUTO_CLOSE=${COUNCIL_AUTO_CLOSE:-0}" \
-        -e "COUNCIL_THEME=${COUNCIL_THEME:-}" \
+        "${pane_env[@]}" \
         "bash $safe_watcher $safe_dir $safe_lib" >/dev/null 2>&1; then
         rm -rf "$watch_dir"
         return 1
