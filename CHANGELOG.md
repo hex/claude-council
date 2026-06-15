@@ -4,6 +4,41 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.6.4
+
+A local Claude-only council for users without provider keys, plus collection-loop
+and gemini-CLI robustness fixes.
+
+### Added
+
+- **Local council (`--local`).** Convene a council using Claude alone when no
+  provider keys or CLIs are configured. Spawns N independent subagents — each a
+  different role from `config/roles.json`, blind to the others — and synthesizes
+  them. When a query finds no providers, the command now *offers* a local council
+  instead of erroring. You choose how many members to convene (default 4, up to
+  8); `--roles` still selects specific lenses. Output is explicitly framed as
+  same-model *angles and blind-spot coverage*, not cross-vendor consensus.
+
+### Fixed
+
+- **One bad provider no longer crashes the whole run.** The result-collection
+  loops fed raw provider output straight to `jq --argjson`; a single non-JSON
+  result aborted the entire council under `set -e`. Output is now coerced into a
+  structured error via `coerce_result_json`, so every other provider's result
+  survives.
+
+- **`gemini-cli` only passes `--skip-trust` when the installed CLI advertises
+  it.** Newer Gemini builds dropped the flag, so headless mode aborted with
+  `Unknown argument: skip-trust`. It is now probed via `--help` before use.
+  (Thanks @Deal-Phoenix.)
+
+### Changed
+
+- **Manual-install docs corrected.** Don't clone into `~/.claude/plugins/` (the
+  managed install cache, never scanned for manual plugins); `pluginDirectories`
+  is not a real settings key. Documented the per-session `--plugin-dir` path and
+  the two traps. Refreshed test counts and the token-table standard-model example.
+
 ## 2026.6.3
 
 Streaming-pane robustness fixes for the tty probe and light-terminal rendering.
