@@ -4,6 +4,23 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.6.5
+
+Correctness fix for the local council shipped in 2026.6.4.
+
+### Fixed
+
+- **The local council no longer hijacks queries when real providers are
+  available.** 2026.6.4 shipped council members as a standalone `council-member`
+  agent type; because a registered agent is directly spawnable by the model,
+  asking to "use the council" could spawn a local Claude-only council directly —
+  bypassing provider detection, so real providers (Gemini/OpenAI/…) were skipped
+  even when configured. The agent type is removed; the local council now runs
+  **only** through its gated path — when no providers are configured, when the
+  user accepts the offer, or with explicit `--local` — and a skill-level guard
+  enforces this even if the skill is reached directly. Local members are now
+  `general-purpose` subagents (matching `--agents` mode).
+
 ## 2026.6.4
 
 A local Claude-only council for users without provider keys, plus collection-loop
