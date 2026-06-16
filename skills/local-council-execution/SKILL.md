@@ -15,6 +15,27 @@ signal*, not validation. The value here is **independent angles and blind-spot
 coverage**, not consensus. The output you produce MUST make this explicit and
 MUST NOT present member agreement as if it were cross-vendor corroboration.
 
+## Step 0: Confirm this is a local-council context (guard)
+
+A local council is the **fallback** for when no real providers exist — it is not
+a default way to "use the council". Only proceed if one of these holds:
+
+1. The user explicitly passed `--local`, or
+2. There are no configured providers and the user accepted the local-council
+   offer.
+
+If you reached this skill any other way, verify providers are actually absent
+before spawning anything:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default 2>&1 | head -1
+```
+
+If that lists one or more providers and the user did **not** ask for `--local`,
+**STOP** — do not spawn local members. Run the standard cross-vendor flow
+(`council-execution`) so the real providers answer, since same-model role-play is
+strictly weaker than the cross-vendor council the user can actually get.
+
 ## Step 1: Resolve the roles
 
 Source the libs once:
@@ -74,10 +95,12 @@ For **each** role, build the role-injected prompt and spawn one member. See
 `build_prompt_with_role` call.
 
 Launch **all members in a single message** (multiple Agent tool calls) with:
-- `subagent_type: "council-member"`
+- `subagent_type: "general-purpose"`
 - `run_in_background: true`
 
-This runs them concurrently and keeps each one blind to the others.
+The member framing (independent, blind to the others, commit to the assigned
+lens, return format) lives in the prompt itself — see the template. Launching
+them together runs them concurrently and keeps each one blind to the others.
 
 ## Step 4: Collect results
 

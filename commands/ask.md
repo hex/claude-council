@@ -179,8 +179,9 @@ If the user selects yes, proceed with agent mode.
 ### If Local Mode is Active
 
 **Invoke the `local-council-execution` skill** and follow its instructions. The
-skill resolves roles, spawns the council-member subagents in parallel, displays
-each perspective, and generates its own honest (angles-not-consensus) synthesis.
+skill resolves roles, spawns the council members (general-purpose subagents) in
+parallel, displays each perspective, and generates its own honest
+(angles-not-consensus) synthesis.
 
 Skip Step 3 (synthesis) — the local-council-execution skill generates its own.
 

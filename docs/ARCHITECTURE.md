@@ -298,7 +298,7 @@ User -> ask.md (--local, or accepts the offer when no providers found)
         skill asks how many members (unless --roles given); local_council_roles
         resolves that many from a diverse order (default 4, up to 8)
              |
-        spawn one council-member subagent per role (background, blind to each other)
+        spawn one general-purpose subagent per role (background, blind to each other)
              |
     +--------+--------+--------+
     |        |        |        |
@@ -306,7 +306,7 @@ User -> ask.md (--local, or accepts the offer when no providers found)
  Member:  Member:  Member:  Member:
  devil    simplicity security scalability
     |        |        |        |
-    | Each member (Claude, read-only tools):
+    | Each member (Claude, general-purpose subagent):
     | - Answers the role-injected question on its own
     | - Returns Position / Key points / Risks & blind spots / Confidence
     |        |        |
@@ -335,8 +335,7 @@ claude-council/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
 ├── agents/
-│   ├── council-advisor.md       # Proactive suggestions
-│   └── council-member.md        # One independent member of a local council (--local)
+│   └── council-advisor.md       # Proactive suggestions
 ├── commands/
 │   ├── ask.md                   # Main /ask command
 │   ├── result.md                # /result — fetch/list/cancel background jobs
