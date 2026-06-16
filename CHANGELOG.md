@@ -4,6 +4,21 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.6.6
+
+Streaming-pane fix: the waiting-list spinner no longer waterfalls.
+
+### Fixed
+
+- **The "council is waiting on …" spinner no longer prints a new line every
+  frame.** Whenever the waiting line was wider than the pane it wrapped, and the
+  carriage-return redraw (`\r\033[K`) could only reclaim the last physical row —
+  leaving one stale row per animation frame (a waterfall). The line now disables
+  autowrap (DECAWM) so it clips at the right margin instead of wrapping, and the
+  provider list is truncated to fit the pane width with a `…` overflow. Live pane
+  width comes from `stty size` (the pane tty's winsize); `tput cols` returns the
+  static terminfo default in a non-interactive pane process, not the real width.
+
 ## 2026.6.5
 
 Correctness fix for the local council shipped in 2026.6.4.
