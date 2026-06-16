@@ -112,6 +112,53 @@ teardown() {
     [ -z "$output" ]
 }
 
+@test "display: waiting line disables autowrap so a too-wide list clips, not wraps" {
+    # Regression guard for the spinner waterfall. The watcher's draw_loading is
+    # inside an un-sourceable heredoc, so this asserts the no-wrap guard is
+    # present in source: the waiting line must bracket its output with DECAWM-off
+    # (\033[?7l) and DECAWM-on (\033[?7h). Without it, a list wider than the pane
+    # wraps, and \r\033[K (which reclaims only the current row) leaves one stale
+    # spinner line per frame. Verified behaviorally via tmux capture-pane.
+    # Match the actual printf sequence, not the explanatory comment: the line
+    # clears with \033[K then disables wrap, and re-enables right after the list.
+    run grep -F '\033[K\033[?7l' "$LIB"
+    [ "$status" -eq 0 ]
+    run grep -F '%s\033[?7h' "$LIB"
+    [ "$status" -eq 0 ]
+}
+
+@test "council_waiting_list: includes every provider when the budget is ample" {
+    source "$LIB"
+    local out; council_waiting_list out 100 codex gemini-cli grok
+    [[ "$out" == *codex* ]]
+    [[ "$out" == *gemini-cli* ]]
+    [[ "$out" == *grok* ]]
+    [[ "$out" != *"…"* ]]
+}
+
+@test "council_waiting_list: truncates with an ellipsis when the budget is tight" {
+    source "$LIB"
+    local out; council_waiting_list out 12 codex gemini-cli grok perplexity
+    [[ "$out" == *"…"* ]]
+    [[ "$out" == *codex* ]]
+    [[ "$out" != *perplexity* ]]
+}
+
+@test "council_waiting_list: empty when there are no providers" {
+    source "$LIB"
+    local out="sentinel"; council_waiting_list out 50
+    [ -z "$out" ]
+}
+
+@test "council_waiting_list: visible width stays within budget" {
+    source "$LIB"
+    local out; council_waiting_list out 40 codex grok
+    # Strip ANSI; the remainder is the ASCII visible text, which must fit.
+    local clean; clean=$(printf '%s' "$out" | sed $'s/\033\\[[0-9;]*m//g')
+    [ "$clean" = "codex, grok" ]
+    [ "${#clean}" -le 40 ]
+}
+
 # ----- pane env forwarding -----
 
 @test "display: council_pane_env_args always forwards COUNCIL_AUTO_CLOSE" {

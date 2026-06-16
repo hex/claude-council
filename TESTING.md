@@ -42,7 +42,7 @@ bats --verbose-run tests/cache.bats
 |------|-------|----------|
 | `cache.bats` | 17 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
 | `cli-providers.bats` | 21 tests | codex/gemini-cli discovery, CLI-prefers-API policy, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, gated E2E |
-| `display.bats` | 21 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding |
+| `display.bats` | 26 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, waiting-line truncation + autowrap guard |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |

@@ -302,6 +302,48 @@ council_pane_env_args() {
     fi
 }
 
+# Provider vendor RGB triplet for 24-bit foreground text over the user's unknown
+# terminal background — each a mid-tone shade readable on light and dark themes.
+# Writes the triplet into the variable named by $1 (printf -v avoids a subshell).
+provider_color_rgb() {
+    local __out="$1"
+    case "$2" in
+        gemini|gemini-cli) printf -v "$__out" '59;130;246'   ;;  # blue-500
+        openai|codex)      printf -v "$__out" '100;116;139'  ;;  # slate-500
+        grok)              printf -v "$__out" '239;68;68'    ;;  # red-500
+        perplexity)        printf -v "$__out" '22;163;74'    ;;  # green-600
+        *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
+    esac
+}
+
+# Build the colored "waiting on" provider list, fit to <budget> visible columns.
+# Names join with ", " in vendor color; a dim "…" stands in for the overflow so
+# the rendered line never needs more than <budget> columns. Provider names are
+# ASCII, so byte length equals column width. Writes the result into $1.
+# Usage: council_waiting_list <out_var> <budget> <name>...
+council_waiting_list() {
+    local __out="$1" __budget="$2"; shift 2
+    # All internals are __-prefixed so the caller's chosen output-var name (and
+    # any normal var) cannot collide with and shadow them.
+    local __names=("$@") __n=$# __i __vis=0 __first=1 __acc="" __rgb __chunk __p __sep __reserve
+    for (( __i = 0; __i < __n; __i++ )); do
+        __p="${__names[$__i]}"
+        __sep=0; (( __first == 0 )) && __sep=2          # width of ", "
+        __reserve=0; (( __i < __n - 1 )) && __reserve=2 # leave room for ", …"
+        if (( __vis + __sep + ${#__p} + __reserve > __budget )); then
+            if (( __first == 0 )); then __acc+=$'\033[2m, …\033[0m'; else __acc+=$'\033[2m…\033[0m'; fi
+            printf -v "$__out" '%s' "$__acc"
+            return
+        fi
+        if (( __first == 1 )); then __first=0; else __acc+=$'\033[2m, \033[0m'; fi
+        provider_color_rgb __rgb "$__p"
+        printf -v __chunk '\033[1;38;2;%sm%s\033[0m' "$__rgb" "$__p"
+        __acc+="$__chunk"
+        __vis=$(( __vis + __sep + ${#__p} ))
+    done
+    printf -v "$__out" '%s' "$__acc"
+}
+
 # Opens a tmux split pane with a watcher that streams status + responses.
 # Prints the watch directory path to stdout (caller stores in COUNCIL_PANE_DIR).
 # Returns 1 if pane could not be opened (caller falls back gracefully).
@@ -358,22 +400,6 @@ shown_responses=""
 spinner_frame=0
 SPINNERS=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 
-# Writes the provider's RGB triplet (for OSC 38;2;R;G;B) into the named
-# variable. Avoids subshell forks by using printf -v.
-# These render as foreground text over the user's unknown terminal
-# background, so each is a mid-tone shade readable on both light and
-# dark themes (the banner's light/dark pairs live in build_banner_line).
-provider_color_rgb() {
-    local __out="$1"
-    case "$2" in
-        gemini|gemini-cli) printf -v "$__out" '59;130;246'   ;;  # blue-500
-        openai|codex)      printf -v "$__out" '100;116;139'  ;;  # slate-500
-        grok)              printf -v "$__out" '239;68;68'    ;;  # red-500
-        perplexity)        printf -v "$__out" '22;163;74'    ;;  # green-600
-        *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
-    esac
-}
-
 draw_loading() {
     local pending=() i=0
     while [[ $i -lt ${#provider_names[@]} ]]; do
@@ -383,21 +409,24 @@ draw_loading() {
     [[ ${#pending[@]} -eq 0 ]] && return 0
     local frame="${SPINNERS[$((spinner_frame % ${#SPINNERS[@]}))]}"
 
-    local list="" first=1 rgb chunk
-    for p in "${pending[@]}"; do
-        provider_color_rgb rgb "$p"
-        if [[ $first -eq 1 ]]; then
-            first=0
-        else
-            list+=$'\033[2m, \033[0m'
-        fi
-        printf -v chunk '\033[1;38;2;%sm%s\033[0m' "$rgb" "$p"
-        list+="$chunk"
-    done
+    # Fit the provider list to the pane. The prefix
+    # "   <spinner>   council is waiting on   " is 31 visible columns; reserve
+    # one more so the line never reaches the right margin. Live width comes from
+    # stty size (the pane tty's winsize) — tput cols returns the static terminfo
+    # default (usually 80), not the actual pane width.
+    local cols=""; read -r _ cols < <(stty size 2>/dev/null) || true
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    local budget=$(( cols - 32 )); (( budget < 8 )) && budget=8
+    local list; council_waiting_list list "$budget" "${pending[@]}"
 
     local rgb_first
     provider_color_rgb rgb_first "${pending[0]}"
-    printf '\r\033[K   \033[1;38;2;%sm%s\033[0m   \033[2mcouncil is waiting on\033[0m   %s' \
+    # Disable autowrap (DECAWM, \033[?7l) while drawing the line: a waiting list
+    # wider than the pane must CLIP at the right margin, not wrap. \r\033[K only
+    # reclaims the current physical row, so a wrapped line would leave a stale
+    # row every frame (a waterfall of spinner lines). Re-enable (\033[?7h) after
+    # so response text below still wraps for readability.
+    printf '\r\033[K\033[?7l   \033[1;38;2;%sm%s\033[0m   \033[2mcouncil is waiting on\033[0m   %s\033[?7h' \
         "$rgb_first" "$frame" "$list"
 }
 
