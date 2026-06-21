@@ -41,7 +41,7 @@ bats --verbose-run tests/cache.bats
 | File | Tests | Coverage |
 |------|-------|----------|
 | `cache.bats` | 17 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
-| `cli-providers.bats` | 31 tests | codex/antigravity discovery, CLI-prefers-API policy, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, gated E2E |
+| `cli-providers.bats` | 38 tests | codex/antigravity discovery, CLI-prefers-API policy, shadow_origin↔api_sibling single source, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, CLI→API fallback (dedup, cache reuse, missing-script, round 2), gated E2E |
 | `display.bats` | 26 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, waiting-line truncation + autowrap guard |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
@@ -49,7 +49,7 @@ bats --verbose-run tests/cache.bats
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 19 tests | argument parsing, error cases, flags, local-council fallback hint |
 | `fake-clis.bats` | 11 tests | fixture self-checks, codex.sh/antigravity.sh against fake binaries |
-| `format-output.bats` | 9 tests | defensive parsing: empty/missing/non-string responses, raw preservation |
+| `format-output.bats` | 11 tests | defensive parsing: empty/missing/non-string responses, raw preservation, fallback-note rendering |
 | `prompts.bats` | 9 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh contract enforcement, schema sync |
 | `check-status.bats` | 6 tests | two-tier CLI availability, remediation strings |

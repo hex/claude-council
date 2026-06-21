@@ -27,7 +27,7 @@ You get side-by-side responses from each configured provider:
    Use UUID primary keys — they avoid enumeration, work across distributed
    services, and survive imports/exports cleanly.
 
-🟦 Gemini-cli - gemini-3-flash-preview
+🟦 Antigravity - Gemini 3.5 Flash (High)
    UUIDv7 specifically: security of non-guessable IDs plus the index
    locality of time-ordered sequences.
 
