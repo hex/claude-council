@@ -401,12 +401,14 @@ providers:
 
 ### CLI Providers (subscription auth, no API key)
 
-If `codex` or `gemini` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
+If `codex` or `agy` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
 
 - `codex` (OpenAI Codex CLI) shadows the `openai` API provider
-- `gemini` (Google Gemini CLI) shadows the `gemini` API provider
+- `antigravity` (Antigravity CLI, `agy`) shadows the `gemini` API provider
 
 CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai` or `--providers=gemini`. Listing both API and CLI together (e.g., `--providers=gemini,antigravity`) runs them side-by-side for comparison.
+
+If a CLI provider fails at query time and its API sibling's key is set, the council automatically retries through that API sibling and marks the slot as a fallback (the answer is shown under the CLI slot with the API model's name and a "fell back to … API" note). The fallback is skipped when the sibling is already in your selected providers, so you never get the same vendor's answer twice.
 
 Override CLI model selection (defaults mirror what each CLI picks itself):
 
