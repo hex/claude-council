@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# ABOUTME: Tests for codex/gemini-cli provider integration and CLI-prefers-API policy
+# ABOUTME: Tests for codex/antigravity provider integration and CLI-prefers-API policy
 # ABOUTME: Covers lib/providers.sh discovery + filter, plus query-council.sh wiring
 
 load test_helper
@@ -39,11 +39,11 @@ source_lib_and_call() {
     [[ "$output" == *"codex"* ]]
 }
 
-@test "discover_providers: includes gemini-cli when gemini binary is on PATH" {
-    if ! command_exists gemini; then skip "gemini CLI not installed"; fi
+@test "discover_providers: includes antigravity when agy binary is on PATH" {
+    if ! command_exists agy; then skip "agy CLI not installed"; fi
     run source_lib_and_call 'discover_providers'
     [ "$status" -eq 0 ]
-    [[ "$output" == *"gemini-cli"* ]]
+    [[ "$output" == *"antigravity"* ]]
 }
 
 @test "discover_providers: excludes codex when binary is missing" {
@@ -57,7 +57,7 @@ source_lib_and_call() {
     "
     [ "$status" -eq 0 ]
     [[ "$output" != *"codex"* ]]
-    [[ "$output" != *"gemini-cli"* ]]
+    [[ "$output" != *"antigravity"* ]]
 }
 
 @test "discover_providers: excludes API providers when keys unset" {
@@ -110,22 +110,19 @@ source_lib_and_call() {
     [[ "$output" != *"openai"* ]]
 }
 
-@test "prefer_cli_over_api: drops gemini when gemini-cli is present" {
-    run source_lib_and_call 'prefer_cli_over_api gemini-cli gemini perplexity'
+@test "prefer_cli_over_api: drops gemini when antigravity is present" {
+    run source_lib_and_call 'prefer_cli_over_api antigravity gemini perplexity'
     [ "$status" -eq 0 ]
-    [[ "$output" == *"gemini-cli"* ]]
+    [[ "$output" == *"antigravity"* ]]
     [[ "$output" == *"perplexity"* ]]
-    # The policy drops the API "gemini" but keeps "gemini-cli". A loose
-    # substring match would falsely succeed (gemini-cli contains "gemini"),
-    # so check word boundaries.
     [[ ! "$output" =~ (^|[[:space:]])gemini([[:space:]]|$) ]]
 }
 
 @test "prefer_cli_over_api: drops both API siblings when both CLIs present" {
-    run source_lib_and_call 'prefer_cli_over_api codex gemini-cli openai gemini grok'
+    run source_lib_and_call 'prefer_cli_over_api codex antigravity openai gemini grok'
     [ "$status" -eq 0 ]
     [[ "$output" == *"codex"* ]]
-    [[ "$output" == *"gemini-cli"* ]]
+    [[ "$output" == *"antigravity"* ]]
     [[ "$output" == *"grok"* ]]
     [[ "$output" != *"openai"* ]]
     [[ ! "$output" =~ (^|[[:space:]])gemini([[:space:]]|$) ]]
@@ -136,6 +133,18 @@ source_lib_and_call() {
     [ "$status" -eq 0 ]
     # Expect "perplexity codex grok" — order preserved, nothing dropped
     [[ "$output" =~ perplexity[[:space:]]+codex[[:space:]]+grok ]]
+}
+
+@test "shadow_origin: gemini is shadowed by antigravity" {
+    run source_lib_and_call 'shadow_origin gemini'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "antigravity" ]]
+}
+
+@test "get_model: antigravity default is a Gemini Flash model" {
+    run source_lib_and_call 'get_model antigravity'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "Gemini 3.5 Flash (High)" ]]
 }
 
 # ============================================================================
@@ -223,7 +232,7 @@ source_lib_and_call() {
 # ============================================================================
 
 @test "query-council: --list-available shows CLI providers when binaries present" {
-    if ! command_exists codex && ! command_exists gemini; then
+    if ! command_exists codex && ! command_exists agy; then
         skip "no CLI providers installed on this machine"
     fi
     run bash "$SCRIPT" --list-available
@@ -231,8 +240,8 @@ source_lib_and_call() {
     if command_exists codex; then
         [[ "$output" == *"codex"* ]]
     fi
-    if command_exists gemini; then
-        [[ "$output" == *"gemini-cli"* ]]
+    if command_exists agy; then
+        [[ "$output" == *"antigravity"* ]]
     fi
 }
 
@@ -268,8 +277,8 @@ source_lib_and_call() {
     [[ "$output" != *"Unknown flag"* ]]
 }
 
-@test "query-council: --providers gemini-cli flag is accepted" {
-    run bash "$SCRIPT" --providers=gemini-cli "test prompt" 2>&1
+@test "query-council: --providers antigravity flag is accepted" {
+    run bash "$SCRIPT" --providers=antigravity "test prompt" 2>&1
     [[ "$output" != *"Unknown flag"* ]]
 }
 
@@ -286,17 +295,16 @@ source_lib_and_call() {
 }
 
 # ============================================================================
-# Real-CLI guard validation — runs whenever the real gemini is present.
-# Exercises the --skip-trust version guard against the actual installed CLI:
-# a wrong decision surfaces as an "Unknown argument: skip-trust" abort. Gated
-# on presence (not COUNCIL_E2E) so the guard is checked against the real CLI
-# on any machine that has it.
+# Real-CLI guard — runs whenever the real agy is present (not COUNCIL_E2E).
+# Verifies the flag ordering + tool-suppression guard against the actual CLI:
+# agy must answer inline (no artifact pointer) and accept our flags.
 # ============================================================================
 
-@test "gemini-cli.sh: real gemini accepts the args we send (skip-trust guard)" {
-    if ! command_exists gemini; then skip "gemini CLI not installed"; fi
-    run "${PROVIDERS_DIR_REAL}/gemini-cli.sh" "Reply with exactly the word: OK"
+@test "antigravity.sh: real agy answers inline for a trivial prompt" {
+    if ! command_exists agy; then skip "agy CLI not installed"; fi
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "Reply with exactly the word: OK"
     [ "$status" -eq 0 ]
-    [[ "$output" != *"Unknown argument"* ]]
     [[ "$output" == *"OK"* ]]
+    # Inline answer, not an artifact pointer
+    [[ "$output" != *"file:///"* ]]
 }

@@ -4,7 +4,7 @@
 
 # Discover which provider scripts are available to query.
 # API providers are gated on their <NAME>_API_KEY env var; subscription-auth
-# CLI providers (codex, gemini-cli) are gated on their binary being on PATH.
+# CLI providers (codex, antigravity) are gated on their binary being on PATH.
 discover_providers() {
     local available=()
 
@@ -18,8 +18,8 @@ discover_providers() {
             codex)
                 command -v codex >/dev/null 2>&1 && is_available=true
                 ;;
-            gemini-cli)
-                command -v gemini >/dev/null 2>&1 && is_available=true
+            antigravity)
+                command -v agy >/dev/null 2>&1 && is_available=true
                 ;;
             gemini)     [[ -n "${GEMINI_API_KEY:-}" ]] && is_available=true ;;
             openai)     [[ -n "${OPENAI_API_KEY:-}" ]] && is_available=true ;;
@@ -47,7 +47,7 @@ discover_providers() {
 shadow_origin() {
     case "$1" in
         openai) echo "codex" ;;
-        gemini) echo "gemini-cli" ;;
+        gemini) echo "antigravity" ;;
         *)      echo "" ;;
     esac
 }
@@ -113,7 +113,7 @@ get_model() {
         grok)       echo "${GROK_MODEL:-grok-4.20-reasoning}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
         codex)      echo "${CODEX_MODEL:-gpt-5.5}" ;;
-        gemini-cli) echo "${GEMINI_CLI_MODEL:-gemini-3-flash-preview}" ;;
+        antigravity) echo "${ANTIGRAVITY_MODEL:-Gemini 3.5 Flash (High)}" ;;
         *)          echo "unknown" ;;
     esac
 }
@@ -139,11 +139,11 @@ coerce_result_json() {
 }
 
 # Vendor color for a provider name. CLI variants share their vendor's color
-# (codex with openai, gemini-cli with gemini) since they speak for the same vendor.
+# (codex with openai, antigravity with gemini) since they speak for the same vendor.
 # Caller is responsible for defining BLUE/WHITE/RED/GREEN/CYAN globals.
 provider_color() {
     case "$1" in
-        gemini|gemini-cli) echo -e "${BLUE}" ;;
+        gemini|antigravity) echo -e "${BLUE}" ;;
         openai|codex)      echo -e "${WHITE}" ;;
         grok)              echo -e "${RED}" ;;
         perplexity)        echo -e "${GREEN}" ;;
@@ -154,7 +154,7 @@ provider_color() {
 # Vendor emoji for a provider name. Same grouping as provider_color.
 provider_emoji() {
     case "$1" in
-        gemini|gemini-cli) echo "🟦" ;;
+        gemini|antigravity) echo "🟦" ;;
         openai|codex)      echo "🔳" ;;
         grok)              echo "🟥" ;;
         perplexity)        echo "🟩" ;;
