@@ -139,6 +139,50 @@ source_lib_and_call() {
 }
 
 # ============================================================================
+# api_sibling — reverse of shadow_origin (CLI → API fallback target)
+# ============================================================================
+
+@test "api_sibling: codex falls back to openai" {
+    run source_lib_and_call 'api_sibling codex'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "openai" ]]
+}
+
+@test "api_sibling: antigravity falls back to gemini" {
+    run source_lib_and_call 'api_sibling antigravity'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "gemini" ]]
+}
+
+@test "api_sibling: provider with no sibling yields empty" {
+    run source_lib_and_call 'api_sibling grok'
+    [ "$status" -eq 0 ]
+    assert_blank "$output"
+}
+
+@test "api_key_present: true when the env var is set" {
+    run bash -c "
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        source '${PROVIDERS_LIB}'
+        export GEMINI_API_KEY=x
+        api_key_present gemini && echo YES
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "YES" ]]
+}
+
+@test "api_key_present: false when the env var is unset" {
+    run bash -c "
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        source '${PROVIDERS_LIB}'
+        unset GEMINI_API_KEY
+        api_key_present gemini || echo NO
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "NO" ]]
+}
+
+# ============================================================================
 # coerce_result_json — collection-loop JSON guard (issue #3)
 #
 # The result-collection loop reads provider output files and feeds them to

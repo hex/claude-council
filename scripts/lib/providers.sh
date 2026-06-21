@@ -52,6 +52,29 @@ shadow_origin() {
     esac
 }
 
+# Reverse of shadow_origin: the API provider a failed CLI provider falls back
+# to (or empty if none). Kept adjacent to shadow_origin as its paired inverse —
+# the two enumerate the same CLI↔API pairs and must stay in sync.
+api_sibling() {
+    case "$1" in
+        codex)       echo "openai" ;;
+        antigravity) echo "gemini" ;;
+        *)           echo "" ;;
+    esac
+}
+
+# True (exit 0) if the API key env var for an API provider is set. Mirrors the
+# per-provider gating in discover_providers.
+api_key_present() {
+    case "$1" in
+        gemini)     [[ -n "${GEMINI_API_KEY:-}" ]] ;;
+        openai)     [[ -n "${OPENAI_API_KEY:-}" ]] ;;
+        grok)       [[ -n "${GROK_API_KEY:-}" ]] ;;
+        perplexity) [[ -n "${PERPLEXITY_API_KEY:-}" ]] ;;
+        *)          return 1 ;;
+    esac
+}
+
 # Apply the CLI-prefers-API policy to a list of provider names.
 # When a provider's CLI shadow (per shadow_origin) is also in the input,
 # drop that API provider. Explicit --providers always wins over this policy.
