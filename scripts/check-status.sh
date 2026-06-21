@@ -125,7 +125,7 @@ remediation_for() {
         perplexity:no_key)    echo "export PERPLEXITY_API_KEY=<key>" ;;
         codex:no_binary)      echo "npm install -g @openai/codex" ;;
         codex:unauthed)       echo "codex login" ;;
-        gemini-cli:no_binary) echo "npm install -g @google/gemini-cli" ;;
+        antigravity:no_binary) echo "install the Antigravity CLI (agy)" ;;
         *:auth_error)         echo "key rejected - regenerate it" ;;
         *)                    echo "" ;;
     esac
@@ -141,10 +141,10 @@ gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "GEMINI_MODEL" "gemini-
 openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "gpt-5.5-pro")
 grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "grok-4.20-reasoning")
 perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "sonar-reasoning-pro")
-# codex login status exits non-zero when logged out; gemini has no
+# codex login status exits non-zero when logged out; agy has no
 # equivalent offline auth probe, so it stays a single-tier check
 codex_status=$(check_cli_provider "codex" "codex" login status)
-gemini_cli_status=$(check_cli_provider "gemini-cli" "gemini")
+antigravity_status=$(check_cli_provider "antigravity" "agy")
 
 # Format output
 # Usage: format_status <display_name> <provider_id> <status>
@@ -208,7 +208,7 @@ format_status "OpenAI"     "openai"     "$openai_status"
 format_status "Grok"       "grok"       "$grok_status"
 format_status "Perplexity" "perplexity" "$perplexity_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
-format_status "Gemini CLI" "gemini-cli" "$gemini_cli_status"
+format_status "Antigravity" "antigravity" "$antigravity_status"
 
 echo ""
 
@@ -220,7 +220,7 @@ available=0
 [[ "$grok_status" == ok:* ]] && available=$((available + 1))
 [[ "$perplexity_status" == ok:* ]] && available=$((available + 1))
 [[ "$codex_status" == ok:* ]] && available=$((available + 1))
-[[ "$gemini_cli_status" == ok:* ]] && available=$((available + 1))
+[[ "$antigravity_status" == ok:* ]] && available=$((available + 1))
 
 echo -e "${DIM}${available}/6 providers available${RESET}"
 echo ""

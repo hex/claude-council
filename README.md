@@ -13,7 +13,7 @@ A Claude Code plugin that consults multiple AI coding agents in parallel and sho
 
 # 2. Configure at least one provider — any of these works:
 export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY
-                                    # OR install the codex / gemini CLIs (uses your existing
+                                    # OR install the codex / antigravity (agy) CLIs (uses your existing
                                     # subscription — no API key needed)
 
 # 3. Ask anything
@@ -406,13 +406,13 @@ If `codex` or `gemini` CLIs are installed and on `PATH`, they're discovered auto
 - `codex` (OpenAI Codex CLI) shadows the `openai` API provider
 - `gemini` (Google Gemini CLI) shadows the `gemini` API provider
 
-CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai` or `--providers=gemini`. Listing both API and CLI together (e.g., `--providers=gemini,gemini-cli`) runs them side-by-side for comparison.
+CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai` or `--providers=gemini`. Listing both API and CLI together (e.g., `--providers=gemini,antigravity`) runs them side-by-side for comparison.
 
 Override CLI model selection (defaults mirror what each CLI picks itself):
 
 ```bash
 export CODEX_MODEL="gpt-5-codex"                # default: gpt-5.5
-export GEMINI_CLI_MODEL="gemini-3-pro"          # default: gemini-3-flash-preview
+export ANTIGRAVITY_MODEL="Gemini 3.1 Pro (High)"  # default: Gemini 3.5 Flash (High)
 ```
 
 ### Verbosity

@@ -1,8 +1,9 @@
 #!/usr/bin/env bats
-# ABOUTME: Tests for codex/gemini-cli provider integration and CLI-prefers-API policy
+# ABOUTME: Tests for codex/antigravity provider integration and CLI-prefers-API policy
 # ABOUTME: Covers lib/providers.sh discovery + filter, plus query-council.sh wiring
 
 load test_helper
+bats_require_minimum_version 1.5.0
 
 SCRIPT="${SCRIPTS_DIR}/query-council.sh"
 PROVIDERS_LIB="${LIB_DIR}/providers.sh"
@@ -39,11 +40,11 @@ source_lib_and_call() {
     [[ "$output" == *"codex"* ]]
 }
 
-@test "discover_providers: includes gemini-cli when gemini binary is on PATH" {
-    if ! command_exists gemini; then skip "gemini CLI not installed"; fi
+@test "discover_providers: includes antigravity when agy binary is on PATH" {
+    if ! command_exists agy; then skip "agy CLI not installed"; fi
     run source_lib_and_call 'discover_providers'
     [ "$status" -eq 0 ]
-    [[ "$output" == *"gemini-cli"* ]]
+    [[ "$output" == *"antigravity"* ]]
 }
 
 @test "discover_providers: excludes codex when binary is missing" {
@@ -57,7 +58,7 @@ source_lib_and_call() {
     "
     [ "$status" -eq 0 ]
     [[ "$output" != *"codex"* ]]
-    [[ "$output" != *"gemini-cli"* ]]
+    [[ "$output" != *"antigravity"* ]]
 }
 
 @test "discover_providers: excludes API providers when keys unset" {
@@ -110,22 +111,19 @@ source_lib_and_call() {
     [[ "$output" != *"openai"* ]]
 }
 
-@test "prefer_cli_over_api: drops gemini when gemini-cli is present" {
-    run source_lib_and_call 'prefer_cli_over_api gemini-cli gemini perplexity'
+@test "prefer_cli_over_api: drops gemini when antigravity is present" {
+    run source_lib_and_call 'prefer_cli_over_api antigravity gemini perplexity'
     [ "$status" -eq 0 ]
-    [[ "$output" == *"gemini-cli"* ]]
+    [[ "$output" == *"antigravity"* ]]
     [[ "$output" == *"perplexity"* ]]
-    # The policy drops the API "gemini" but keeps "gemini-cli". A loose
-    # substring match would falsely succeed (gemini-cli contains "gemini"),
-    # so check word boundaries.
     [[ ! "$output" =~ (^|[[:space:]])gemini([[:space:]]|$) ]]
 }
 
 @test "prefer_cli_over_api: drops both API siblings when both CLIs present" {
-    run source_lib_and_call 'prefer_cli_over_api codex gemini-cli openai gemini grok'
+    run source_lib_and_call 'prefer_cli_over_api codex antigravity openai gemini grok'
     [ "$status" -eq 0 ]
     [[ "$output" == *"codex"* ]]
-    [[ "$output" == *"gemini-cli"* ]]
+    [[ "$output" == *"antigravity"* ]]
     [[ "$output" == *"grok"* ]]
     [[ "$output" != *"openai"* ]]
     [[ ! "$output" =~ (^|[[:space:]])gemini([[:space:]]|$) ]]
@@ -136,6 +134,62 @@ source_lib_and_call() {
     [ "$status" -eq 0 ]
     # Expect "perplexity codex grok" — order preserved, nothing dropped
     [[ "$output" =~ perplexity[[:space:]]+codex[[:space:]]+grok ]]
+}
+
+@test "shadow_origin: gemini is shadowed by antigravity" {
+    run source_lib_and_call 'shadow_origin gemini'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "antigravity" ]]
+}
+
+@test "get_model: antigravity default is a Gemini Flash model" {
+    run source_lib_and_call 'get_model antigravity'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "Gemini 3.5 Flash (High)" ]]
+}
+
+# ============================================================================
+# api_sibling — reverse of shadow_origin (CLI → API fallback target)
+# ============================================================================
+
+@test "api_sibling: codex falls back to openai" {
+    run source_lib_and_call 'api_sibling codex'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "openai" ]]
+}
+
+@test "api_sibling: antigravity falls back to gemini" {
+    run source_lib_and_call 'api_sibling antigravity'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "gemini" ]]
+}
+
+@test "api_sibling: provider with no sibling yields empty" {
+    run source_lib_and_call 'api_sibling grok'
+    [ "$status" -eq 0 ]
+    assert_blank "$output"
+}
+
+@test "api_key_present: true when the env var is set" {
+    run bash -c "
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        source '${PROVIDERS_LIB}'
+        export GEMINI_API_KEY=x
+        api_key_present gemini && echo YES
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "YES" ]]
+}
+
+@test "api_key_present: false when the env var is unset" {
+    run bash -c "
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        source '${PROVIDERS_LIB}'
+        unset GEMINI_API_KEY
+        api_key_present gemini || echo NO
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "NO" ]]
 }
 
 # ============================================================================
@@ -174,12 +228,93 @@ source_lib_and_call() {
     [[ "$(echo "$output" | jq -r '.model')" == "some-model" ]]
 }
 
+@test "coerce_result_json: a model already in the result is preserved, not overwritten" {
+    run source_lib_and_call $'coerce_result_json \'{"status":"success","response":"hi","model":"gemini-3.1-pro-preview"}\' some-default-model'
+    [ "$status" -eq 0 ]
+    [[ "$(echo "$output" | jq -r '.model')" == "gemini-3.1-pro-preview" ]]
+}
+
+# ============================================================================
+# CLI→API fallback — a failing CLI provider retries through its API sibling.
+# Hermetic: a temp PROVIDERS_DIR with a failing antigravity.sh and a stub
+# gemini.sh, driven through the real query-council.sh orchestration.
+# ============================================================================
+
+@test "query-council: antigravity failure falls back to the gemini API sibling" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-providers"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "Error from antigravity CLI: boom" >&2
+exit 1
+EOF
+    cat > "$fakedir/gemini.sh" <<'EOF'
+#!/bin/bash
+echo "FALLBACK-GEMINI-ANSWER"
+EOF
+    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+        bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    local slot
+    slot=$(echo "$output" | jq -c '.round1.antigravity')
+    [[ "$(echo "$slot" | jq -r '.status')" == "success" ]]
+    [[ "$(echo "$slot" | jq -r '.response')" == *"FALLBACK-GEMINI-ANSWER"* ]]
+    [[ "$(echo "$slot" | jq -r '.fallback')" == "gemini" ]]
+    [[ "$(echo "$slot" | jq -r '.model')" == "gemini-3.1-pro-preview" ]]
+}
+
+@test "query-council: antigravity failure with no gemini key stays an error" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-nokey"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "Error from antigravity CLI: boom" >&2
+exit 1
+EOF
+    chmod +x "$fakedir/antigravity.sh"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" bash "$SCRIPT" \
+        --no-cache --no-pane --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    local slot
+    slot=$(echo "$output" | jq -c '.round1.antigravity')
+    [[ "$(echo "$slot" | jq -r '.status')" == "error" ]]
+    [[ "$(echo "$slot" | jq -r '.error')" == *"boom"* ]]
+}
+
+@test "query-council: antigravity failure falls back to gemini in round 2 (debate)" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-r2"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "Error from antigravity CLI: boom" >&2
+exit 1
+EOF
+    cat > "$fakedir/gemini.sh" <<'EOF'
+#!/bin/bash
+echo "FALLBACK-GEMINI-ANSWER"
+EOF
+    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+        bash "$SCRIPT" --no-cache --no-pane --debate --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    local r2
+    r2=$(echo "$output" | jq -c '.round2.antigravity')
+    [[ "$(echo "$r2" | jq -r '.status')" == "success" ]]
+    [[ "$(echo "$r2" | jq -r '.response')" == *"FALLBACK-GEMINI-ANSWER"* ]]
+    [[ "$(echo "$r2" | jq -r '.fallback')" == "gemini" ]]
+    [[ "$(echo "$r2" | jq -r '.model')" == "gemini-3.1-pro-preview" ]]
+}
+
 # ============================================================================
 # query-council.sh integration
 # ============================================================================
 
 @test "query-council: --list-available shows CLI providers when binaries present" {
-    if ! command_exists codex && ! command_exists gemini; then
+    if ! command_exists codex && ! command_exists agy; then
         skip "no CLI providers installed on this machine"
     fi
     run bash "$SCRIPT" --list-available
@@ -187,8 +322,8 @@ source_lib_and_call() {
     if command_exists codex; then
         [[ "$output" == *"codex"* ]]
     fi
-    if command_exists gemini; then
-        [[ "$output" == *"gemini-cli"* ]]
+    if command_exists agy; then
+        [[ "$output" == *"antigravity"* ]]
     fi
 }
 
@@ -224,8 +359,8 @@ source_lib_and_call() {
     [[ "$output" != *"Unknown flag"* ]]
 }
 
-@test "query-council: --providers gemini-cli flag is accepted" {
-    run bash "$SCRIPT" --providers=gemini-cli "test prompt" 2>&1
+@test "query-council: --providers antigravity flag is accepted" {
+    run bash "$SCRIPT" --providers=antigravity "test prompt" 2>&1
     [[ "$output" != *"Unknown flag"* ]]
 }
 
@@ -242,17 +377,16 @@ source_lib_and_call() {
 }
 
 # ============================================================================
-# Real-CLI guard validation — runs whenever the real gemini is present.
-# Exercises the --skip-trust version guard against the actual installed CLI:
-# a wrong decision surfaces as an "Unknown argument: skip-trust" abort. Gated
-# on presence (not COUNCIL_E2E) so the guard is checked against the real CLI
-# on any machine that has it.
+# Real-CLI guard — runs whenever the real agy is present (not COUNCIL_E2E).
+# Verifies the flag ordering + tool-suppression guard against the actual CLI:
+# agy must answer inline (no artifact pointer) and accept our flags.
 # ============================================================================
 
-@test "gemini-cli.sh: real gemini accepts the args we send (skip-trust guard)" {
-    if ! command_exists gemini; then skip "gemini CLI not installed"; fi
-    run "${PROVIDERS_DIR_REAL}/gemini-cli.sh" "Reply with exactly the word: OK"
+@test "antigravity.sh: real agy answers inline for a trivial prompt" {
+    if ! command_exists agy; then skip "agy CLI not installed"; fi
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "Reply with exactly the word: OK"
     [ "$status" -eq 0 ]
-    [[ "$output" != *"Unknown argument"* ]]
     [[ "$output" == *"OK"* ]]
+    # Inline answer, not an artifact pointer
+    [[ "$output" != *"file:///"* ]]
 }

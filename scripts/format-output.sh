@@ -60,7 +60,7 @@ draw_hline() {
 }
 
 # Draw header bar (markdown compatible)
-# Args: emoji provider_name model [role] [header_type]
+# Args: emoji provider_name model [role] [header_type] [fallback]
 # header_type: normal, rebuttal
 draw_header() {
     local emoji="$1"
@@ -68,6 +68,7 @@ draw_header() {
     local model="${3:-}"
     local role="${4:-}"
     local header_type="${5:-normal}"
+    local fallback="${6:-}"
 
     # Capitalize provider name
     local provider_cap
@@ -83,6 +84,9 @@ draw_header() {
     fi
     if [[ -n "$model" ]] && [[ "$model" != "null" ]]; then
         header_text="${header_text} - ${model}"
+    fi
+    if [[ -n "$fallback" ]] && [[ "$fallback" != "null" ]]; then
+        header_text="${header_text} (fell back to ${fallback} API)"
     fi
 
     # Draw markdown header
@@ -170,10 +174,12 @@ format_output() {
             model=$(echo "$json" | jq -r ".round1[\"${provider}\"].model // \"unknown\"")
             local role
             role=$(echo "$json" | jq -r ".round1[\"${provider}\"].role // empty")
+            local fallback
+            fallback=$(echo "$json" | jq -r ".round1[\"${provider}\"].fallback // empty")
             local entry
             entry=$(echo "$json" | jq -c ".round1[\"${provider}\"]")
 
-            draw_header "$emoji" "$provider" "$model" "$role" "normal"
+            draw_header "$emoji" "$provider" "$model" "$role" "normal" "$fallback"
             render_response "$entry"
             echo ""
         done
@@ -194,11 +200,13 @@ format_output() {
                     emoji=$(provider_emoji "$provider")
                     local model
                     model=$(echo "$json" | jq -r ".round2[\"${provider}\"].model // \"unknown\"")
+                    local fallback
+                    fallback=$(echo "$json" | jq -r ".round2[\"${provider}\"].fallback // empty")
                     local entry
                     # A provider absent from round2 renders as an error entry
                     entry=$(echo "$json" | jq -c ".round2[\"${provider}\"] // {\"status\": \"error\"}")
 
-                    draw_header "$emoji" "$provider" "$model" "" "rebuttal"
+                    draw_header "$emoji" "$provider" "$model" "" "rebuttal" "$fallback"
                     render_response "$entry"
                     echo ""
                 done

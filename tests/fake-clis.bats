@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# ABOUTME: Hermetic CLI-provider tests driven by fake codex/gemini binaries on PATH
+# ABOUTME: Hermetic CLI-provider tests driven by fake codex/agy binaries on PATH
 # ABOUTME: Fixture installs real executables; behavior switches via COUNCIL_FAKE_BEHAVIOR
 
 load test_helper
@@ -27,10 +27,10 @@ teardown() {
     [[ "$output" == "$FAKE_BIN_DIR/codex" ]]
 }
 
-@test "fixture: fake gemini shadows any real gemini on PATH" {
-    run command -v gemini
+@test "fixture: fake agy shadows any real agy on PATH" {
+    run command -v agy
     [ "$status" -eq 0 ]
-    [[ "$output" == "$FAKE_BIN_DIR/gemini" ]]
+    [[ "$output" == "$FAKE_BIN_DIR/agy" ]]
 }
 
 # ============================================================================
@@ -73,35 +73,35 @@ teardown() {
 }
 
 # ============================================================================
-# gemini-cli.sh against the fake binary
+# antigravity.sh against the fake binary
 # ============================================================================
 
-@test "gemini-cli.sh: returns fake response on valid behavior" {
+@test "antigravity.sh: returns fake response on valid behavior" {
     export COUNCIL_FAKE_BEHAVIOR=valid
-    run "${PROVIDERS_DIR_REAL}/gemini-cli.sh" "test prompt"
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "test prompt"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"FAKE-GEMINI-RESPONSE"* ]]
+    [[ "$output" == *"FAKE-AGY-RESPONSE"* ]]
 }
 
-@test "gemini-cli.sh: sends model flag and -p prompt to the CLI" {
+@test "antigravity.sh: sends --sandbox, model flag, and -p prompt with guard, flags before prompt" {
     export COUNCIL_FAKE_BEHAVIOR=valid
-    export GEMINI_CLI_MODEL="test-model-y"
-    run "${PROVIDERS_DIR_REAL}/gemini-cli.sh" "another question"
+    export ANTIGRAVITY_MODEL="test-model-z"
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "another question"
     [ "$status" -eq 0 ]
     local call
-    # The last recorded call is the query; the fake's --help probe call precedes
-    # it. --skip-trust is intentionally not asserted here: the fake's --help does
-    # not advertise it, so the provider's version guard correctly omits it. That
-    # guard is exercised against the real CLI by the E2E test in cli-providers.bats.
     call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
-    assert_json_eq "$call" '.bin' "gemini"
-    [[ "$(echo "$call" | jq -r '.args | index("-m") as $i | .[$i+1]')" == "test-model-y" ]]
-    [[ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"another question"* ]]
+    assert_json_eq "$call" '.bin' "agy"
+    [[ "$(echo "$call" | jq -r '.args[0]')" == "--sandbox" ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--model") as $i | .[$i+1]')" == "test-model-z" ]]
+    # -p is the last flag; the prompt is the final positional arg and carries the guard
+    [[ "$(echo "$call" | jq -r '.args[-2]')" == "-p" ]]
+    [[ "$(echo "$call" | jq -r '.args[-1]')" == *"another question"* ]]
+    [[ "$(echo "$call" | jq -r '.args[-1]')" == *"Do NOT use any tools"* ]]
 }
 
-@test "gemini-cli.sh: surfaces stderr and exits 1 on auth-failure behavior" {
+@test "antigravity.sh: surfaces stderr and exits 1 on auth-failure behavior" {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
-    run "${PROVIDERS_DIR_REAL}/gemini-cli.sh" "test prompt"
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "test prompt"
     [ "$status" -eq 1 ]
     [[ "$output" == *"not logged in"* ]]
 }
@@ -119,7 +119,7 @@ teardown() {
     "
     [ "$status" -eq 0 ]
     [[ "$output" == *"codex"* ]]
-    [[ "$output" == *"gemini-cli"* ]]
+    [[ "$output" == *"antigravity"* ]]
 }
 
 @test "fixture: slow behavior delays the response" {
