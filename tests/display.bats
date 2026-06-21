@@ -129,16 +129,16 @@ teardown() {
 
 @test "council_waiting_list: includes every provider when the budget is ample" {
     source "$LIB"
-    local out; council_waiting_list out 100 codex gemini-cli grok
+    local out; council_waiting_list out 100 codex antigravity grok
     [[ "$out" == *codex* ]]
-    [[ "$out" == *gemini-cli* ]]
+    [[ "$out" == *antigravity* ]]
     [[ "$out" == *grok* ]]
     [[ "$out" != *"…"* ]]
 }
 
 @test "council_waiting_list: truncates with an ellipsis when the budget is tight" {
     source "$LIB"
-    local out; council_waiting_list out 12 codex gemini-cli grok perplexity
+    local out; council_waiting_list out 12 codex antigravity grok perplexity
     [[ "$out" == *"…"* ]]
     [[ "$out" == *codex* ]]
     [[ "$out" != *perplexity* ]]

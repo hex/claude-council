@@ -31,7 +31,7 @@
         |       |       |       |       |       |       |
         v       v       v       v       v       v       v
    +--------+ +-----+ +------+ +-----+ +------+ +-----------+
-   | gemini | |open | | grok | |perp | |codex | | gemini-cli|
+   | gemini | |open | | grok | |perp | |codex | |antigravity|
    |  .sh   | | .sh | |  .sh | |.sh  | |  .sh | |    .sh    |
    +--------+ +-----+ +------+ +-----+ +------+ +-----------+
    (API)      (API)   (API)    (API)   (CLI)    (CLI)
@@ -128,16 +128,17 @@ Two flavors share the interface:
 
 - **API providers** (`gemini`, `openai`, `grok`, `perplexity`) — gated on
   `{PROVIDER}_API_KEY`, talk to vendor APIs over HTTPS, charge per call.
-- **CLI providers** (`codex`, `gemini-cli`) — gated on the binary being on
+- **CLI providers** (`codex`, `antigravity`) — gated on the binary being on
   `PATH`, use the user's existing CLI subscription auth, no per-call cost.
-  When both an API and CLI sibling exist (codex+openai, gemini-cli+gemini),
+  When both an API and CLI sibling exist (codex+openai, antigravity+gemini),
   the orchestrator prefers the CLI by default; explicit `--providers` wins
-  over the policy.
+  over the policy. If a CLI provider fails at query time, the council retries
+  through its API sibling (when that key is set) and marks the slot as a fallback.
 
 Environment-based configuration:
 - `{PROVIDER}_API_KEY` - Required authentication for API providers
 - `{PROVIDER}_MODEL` - Model override (also applies to CLI providers via
-  `CODEX_MODEL` / `GEMINI_CLI_MODEL`)
+  `CODEX_MODEL` / `ANTIGRAVITY_MODEL`)
 - `COUNCIL_MAX_TOKENS` - Response length limit (API providers only)
 - `COUNCIL_DEBUG` - Enable verbose logging
 
@@ -368,7 +369,7 @@ claude-council/
 │   │   ├── grok.sh              # API
 │   │   ├── perplexity.sh        # API
 │   │   ├── codex.sh             # CLI (subscription auth, shadows openai)
-│   │   └── gemini-cli.sh        # CLI (subscription auth, shadows gemini)
+│   │   └── antigravity.sh       # CLI (subscription auth, shadows gemini)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
@@ -401,7 +402,7 @@ claude-council/
 │   ├── agent-analysis.bats
 │   ├── cache.bats
 │   ├── check-status.bats
-│   ├── cli-providers.bats       # CLI providers (codex, gemini-cli)
+│   ├── cli-providers.bats       # CLI providers (codex, antigravity)
 │   ├── display.bats
 │   ├── fake-clis.bats
 │   ├── format-output.bats
@@ -430,7 +431,7 @@ claude-council/
 | `PERPLEXITY_API_KEY` | - | Perplexity API key |
 | `{PROVIDER}_MODEL` | varies | Model override (API providers) |
 | `CODEX_MODEL` | gpt-5.5 | Model passed to `codex exec -m` |
-| `GEMINI_CLI_MODEL` | gemini-3-flash-preview | Model passed to `gemini -m` |
+| `ANTIGRAVITY_MODEL` | Gemini 3.5 Flash (High) | Model passed to `agy --model` |
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
 | `COUNCIL_RETRY_DELAY` | 1 | Initial retry delay (s) |

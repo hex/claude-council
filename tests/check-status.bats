@@ -40,7 +40,7 @@ setup() {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    # gemini-cli (no auth probe) is the only available provider
+    # antigravity (no auth probe) is the only available provider
     [[ "$output" == *"1/6 providers available"* ]]
 }
 
@@ -58,5 +58,5 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"npm install -g @openai/codex"* ]]
-    [[ "$output" == *"npm install -g @google/gemini-cli"* ]]
+    [[ "$output" == *"install the Antigravity CLI (agy)"* ]]
 }

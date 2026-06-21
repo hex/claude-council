@@ -41,14 +41,14 @@ bats --verbose-run tests/cache.bats
 | File | Tests | Coverage |
 |------|-------|----------|
 | `cache.bats` | 17 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
-| `cli-providers.bats` | 21 tests | codex/gemini-cli discovery, CLI-prefers-API policy, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, gated E2E |
+| `cli-providers.bats` | 31 tests | codex/antigravity discovery, CLI-prefers-API policy, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, gated E2E |
 | `display.bats` | 26 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, waiting-line truncation + autowrap guard |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 19 tests | argument parsing, error cases, flags, local-council fallback hint |
-| `fake-clis.bats` | 11 tests | fixture self-checks, codex.sh/gemini-cli.sh against fake binaries |
+| `fake-clis.bats` | 11 tests | fixture self-checks, codex.sh/antigravity.sh against fake binaries |
 | `format-output.bats` | 9 tests | defensive parsing: empty/missing/non-string responses, raw preservation |
 | `prompts.bats` | 9 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh contract enforcement, schema sync |
@@ -59,7 +59,7 @@ bats --verbose-run tests/cache.bats
 
 ### Hermetic CLI Fixture
 
-`tests/fixtures/fake-clis.bash` installs real fake `codex`/`gemini`
+`tests/fixtures/fake-clis.bash` installs real fake `codex`/`agy`
 executables into a temp dir prepended to `PATH`, so provider scripts, async
 jobs, and the stop gate run end-to-end with no network or real CLIs:
 
@@ -196,26 +196,26 @@ echo '{"metadata":{"quiet_mode":true},"round1":{"gemini":{"status":"success","re
 
 ---
 
-### 2b. CLI Providers (codex / gemini-cli)
+### 2b. CLI Providers (codex / antigravity)
 
 **Test A**: CLI providers explicitly
 ```bash
-/claude-council:ask --providers=codex,gemini-cli "What is the most common cause of a SIGSEGV in C?"
+/claude-council:ask --providers=codex,antigravity "What is the most common cause of a SIGSEGV in C?"
 ```
 
 **Expected**:
-- [ ] Only queries Codex CLI and Gemini CLI (no API calls made)
-- [ ] Header banners show real model names (e.g. `gpt-5.5`, `gemini-3-flash-preview`)
-- [ ] Codex banner uses OpenAI's white square (🔳); Gemini-cli uses Gemini's blue square (🟦)
+- [ ] Only queries Codex CLI and Antigravity (no API calls made)
+- [ ] Header banners show real model names (e.g. `gpt-5.5`, `Gemini 3.5 Flash (High)`)
+- [ ] Codex banner uses OpenAI's white square (🔳); Antigravity uses Gemini's blue square (🟦)
 
 **Test B**: Default flow with CLI shadowing
 ```bash
-# With BOTH GEMINI_API_KEY/OPENAI_API_KEY set AND codex/gemini binaries installed:
+# With BOTH GEMINI_API_KEY/OPENAI_API_KEY set AND codex/agy binaries installed:
 /claude-council:ask "Should I use UUID or BIGINT for primary keys?"
 ```
 
 **Expected**:
-- [ ] Discovery finds 6 providers but only 4 are queried (codex, gemini-cli, grok, perplexity)
+- [ ] Discovery finds 6 providers but only 4 are queried (codex, antigravity, grok, perplexity)
 - [ ] No `openai` or `gemini` (API) entry in the output — they were shadowed
 - [ ] To force the API instead, use `--providers=openai,gemini` explicitly
 
