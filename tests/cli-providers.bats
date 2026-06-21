@@ -235,6 +235,56 @@ source_lib_and_call() {
 }
 
 # ============================================================================
+# CLI→API fallback — a failing CLI provider retries through its API sibling.
+# Hermetic: a temp PROVIDERS_DIR with a failing antigravity.sh and a stub
+# gemini.sh, driven through the real query-council.sh orchestration.
+# ============================================================================
+
+@test "query-council: antigravity failure falls back to the gemini API sibling" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-providers"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "Error from antigravity CLI: boom" >&2
+exit 1
+EOF
+    cat > "$fakedir/gemini.sh" <<'EOF'
+#!/bin/bash
+echo "FALLBACK-GEMINI-ANSWER"
+EOF
+    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+        bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    local slot
+    slot=$(echo "$output" | jq -c '.round1.antigravity')
+    [[ "$(echo "$slot" | jq -r '.status')" == "success" ]]
+    [[ "$(echo "$slot" | jq -r '.response')" == *"FALLBACK-GEMINI-ANSWER"* ]]
+    [[ "$(echo "$slot" | jq -r '.fallback')" == "gemini" ]]
+    [[ "$(echo "$slot" | jq -r '.model')" == "gemini-3.1-pro-preview" ]]
+}
+
+@test "query-council: antigravity failure with no gemini key stays an error" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-nokey"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "Error from antigravity CLI: boom" >&2
+exit 1
+EOF
+    chmod +x "$fakedir/antigravity.sh"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" bash "$SCRIPT" \
+        --no-cache --no-pane --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    local slot
+    slot=$(echo "$output" | jq -c '.round1.antigravity')
+    [[ "$(echo "$slot" | jq -r '.status')" == "error" ]]
+    [[ "$(echo "$slot" | jq -r '.error')" == *"boom"* ]]
+}
+
+# ============================================================================
 # query-council.sh integration
 # ============================================================================
 

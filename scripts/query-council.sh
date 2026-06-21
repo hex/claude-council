@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROVIDERS_DIR="${SCRIPT_DIR}/providers"
+PROVIDERS_DIR="${PROVIDERS_DIR:-${SCRIPT_DIR}/providers}"
 
 # Source libraries
 source "${SCRIPT_DIR}/lib/cache.sh"
@@ -329,6 +329,32 @@ query_provider() {
             cache_set "$key" "$provider" "$model" "$final_prompt" "$response"
         fi
     else
+        # CLI provider failed — fall back to its API sibling when one exists and
+        # its key is set. The slot keeps the CLI provider's identity but carries
+        # the API answer, the API model, and a `fallback` note.
+        local sibling sibling_script sibling_model fb_response
+        sibling=$(api_sibling "$provider")
+        if [[ -n "$sibling" ]] && api_key_present "$sibling"; then
+            sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
+            sibling_model=$(get_model "$sibling")
+            if [[ -x "$sibling_script" ]] && fb_response=$("$sibling_script" "$final_prompt" 2>&1); then
+                local elapsed=$(( $(now_ms) - start_ms ))
+                jq -n --arg r "$fb_response" --arg role "$role" \
+                    --arg fb "$sibling" --arg m "$sibling_model" \
+                    '{status: "success", response: $r, cached: false, model: $m, fallback: $fb, role: (if $role == "" then null else $role end)}' > "$output_file"
+                if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+                    pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed" "$sibling_model"
+                    pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$fb_response"
+                fi
+                if [[ "$USE_CACHE" == true ]]; then
+                    local key
+                    key=$(cache_key "$sibling" "$sibling_model" "$final_prompt")
+                    cache_set "$key" "$sibling" "$sibling_model" "$final_prompt" "$fb_response"
+                fi
+                return
+            fi
+        fi
+        # No fallback available, or it failed too: preserve the CLI error.
         jq -n --arg e "$response" --arg role "$role" \
             '{status: "error", error: $e, cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
         if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
