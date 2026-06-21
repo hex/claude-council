@@ -3,6 +3,7 @@
 # ABOUTME: Covers lib/providers.sh discovery + filter, plus query-council.sh wiring
 
 load test_helper
+bats_require_minimum_version 1.5.0
 
 SCRIPT="${SCRIPTS_DIR}/query-council.sh"
 PROVIDERS_LIB="${LIB_DIR}/providers.sh"
@@ -225,6 +226,12 @@ source_lib_and_call() {
     echo "$output" | jq empty
     [[ "$(echo "$output" | jq -r '.status')" == "error" ]]
     [[ "$(echo "$output" | jq -r '.model')" == "some-model" ]]
+}
+
+@test "coerce_result_json: a model already in the result is preserved, not overwritten" {
+    run source_lib_and_call $'coerce_result_json \'{"status":"success","response":"hi","model":"gemini-3.1-pro-preview"}\' some-default-model'
+    [ "$status" -eq 0 ]
+    [[ "$(echo "$output" | jq -r '.model')" == "gemini-3.1-pro-preview" ]]
 }
 
 # ============================================================================

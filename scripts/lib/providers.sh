@@ -135,7 +135,10 @@ coerce_result_json() {
         raw=$(jq -n --arg e "Provider returned invalid JSON: $(head -c 120 <<<"$raw")" \
             '{status: "error", error: $e, cached: false}')
     fi
-    jq --arg m "$model" '. + {model: $m}' <<<"$raw"
+    # {model:$m} + . lets a model already present in the result win; the
+    # default applies only when the provider didn't set one (fallback results
+    # carry the API sibling's model and must not be relabeled here).
+    jq --arg m "$model" '{model: $m} + .' <<<"$raw"
 }
 
 # Vendor color for a provider name. CLI variants share their vendor's color
