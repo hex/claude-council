@@ -170,6 +170,23 @@ source_lib_and_call() {
     assert_blank "$output"
 }
 
+@test "api_sibling is the exact inverse of shadow_origin (single source of truth)" {
+    # For every API provider shadow_origin maps to a CLI, api_sibling must map
+    # that CLI back to the same API provider. Locks the two against drift.
+    run bash -c "
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        source '${PROVIDERS_LIB}'
+        for api in openai gemini; do
+            cli=\$(shadow_origin \"\$api\")
+            back=\$(api_sibling \"\$cli\")
+            [[ \"\$back\" == \"\$api\" ]] || { echo \"MISMATCH \$api -> \$cli -> \$back\"; exit 1; }
+        done
+        echo OK
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "OK" ]]
+}
+
 @test "api_key_present: true when the env var is set" {
     run bash -c "
         export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
@@ -190,6 +207,19 @@ source_lib_and_call() {
     "
     [ "$status" -eq 0 ]
     [[ "$output" == "NO" ]]
+}
+
+@test "api_key_present: gates generically on <NAME>_API_KEY (openai)" {
+    # Uses the same convention as discover_providers' generic branch, so any
+    # API provider is covered without a per-provider case arm.
+    run bash -c "
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        source '${PROVIDERS_LIB}'
+        export OPENAI_API_KEY=x
+        api_key_present openai && echo YES
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "YES" ]]
 }
 
 # ============================================================================

@@ -39,40 +39,39 @@ discover_providers() {
     echo "${available[@]+"${available[@]}"}"
 }
 
-# Single source of truth for the API↔CLI shadowing pairs. Returns the name
-# of the CLI provider that shadows the given API provider (or empty if the
-# provider has no CLI sibling). Adding a new pair is a one-line change here
-# that automatically propagates to prefer_cli_over_api and to the human
-# display in query-council.sh's --list-available output.
+# Single source of truth for the API↔CLI shadowing pairs, as "api:cli" tokens.
+# Both shadow_origin and api_sibling derive from this list, so they cannot
+# drift: adding a pair is a one-line change here that propagates to
+# prefer_cli_over_api, the --list-available display, and the CLI→API fallback.
+SHADOW_PAIRS="openai:codex gemini:antigravity"
+
+# Returns the CLI provider that shadows the given API provider (empty if none).
 shadow_origin() {
-    case "$1" in
-        openai) echo "codex" ;;
-        gemini) echo "antigravity" ;;
-        *)      echo "" ;;
-    esac
+    local pair
+    for pair in $SHADOW_PAIRS; do
+        [[ "${pair%%:*}" == "$1" ]] && { echo "${pair#*:}"; return; }
+    done
+    echo ""
 }
 
 # Reverse of shadow_origin: the API provider a failed CLI provider falls back
-# to (or empty if none). Kept adjacent to shadow_origin as its paired inverse —
-# the two enumerate the same CLI↔API pairs and must stay in sync.
+# to (empty if none). Derived from the same SHADOW_PAIRS, so it cannot drift
+# from shadow_origin.
 api_sibling() {
-    case "$1" in
-        codex)       echo "openai" ;;
-        antigravity) echo "gemini" ;;
-        *)           echo "" ;;
-    esac
+    local pair
+    for pair in $SHADOW_PAIRS; do
+        [[ "${pair#*:}" == "$1" ]] && { echo "${pair%%:*}"; return; }
+    done
+    echo ""
 }
 
-# True (exit 0) if the API key env var for an API provider is set. Mirrors the
-# per-provider gating in discover_providers.
+# True (exit 0) if the API key env var for an API provider is set. Uses the
+# same <NAME>_API_KEY convention discover_providers gates on, so any API
+# provider is covered without a per-provider case arm.
 api_key_present() {
-    case "$1" in
-        gemini)     [[ -n "${GEMINI_API_KEY:-}" ]] ;;
-        openai)     [[ -n "${OPENAI_API_KEY:-}" ]] ;;
-        grok)       [[ -n "${GROK_API_KEY:-}" ]] ;;
-        perplexity) [[ -n "${PERPLEXITY_API_KEY:-}" ]] ;;
-        *)          return 1 ;;
-    esac
+    local var
+    var="$(echo "$1" | tr '[:lower:]' '[:upper:]')_API_KEY"
+    [[ -n "${!var:-}" ]]
 }
 
 # Apply the CLI-prefers-API policy to a list of provider names.
