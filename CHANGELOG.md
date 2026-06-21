@@ -4,6 +4,40 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.6.7
+
+Replaces the Gemini CLI provider with Google's Antigravity CLI and adds an
+automatic CLI→API fallback.
+
+### Added
+
+- **`antigravity` provider** — drives Google's Antigravity CLI (`agy`) in print
+  mode as the Gemini-vendor subscription-CLI provider, gated on the `agy` binary
+  being on `PATH`. Default model `Gemini 3.5 Flash (High)` (override via
+  `ANTIGRAVITY_MODEL`). A tool-suppression prompt guard keeps the agentic CLI
+  answering inline as plain text instead of writing report artifacts to disk.
+- **CLI→API fallback** — when a CLI provider fails at query time and its API
+  sibling's key is set, the council automatically retries through that sibling
+  (in both the initial and debate rounds), showing the answer in the same slot
+  with the API model's name and a "fell back to … API" note. The fallback is
+  skipped when the sibling is already a selected provider (so you never get the
+  same vendor's answer twice), reuses a cached sibling answer instead of
+  re-billing the API on a repeat, and also rescues a missing/non-executable
+  provider script.
+
+### Removed
+
+- **`gemini-cli` provider** — removed entirely (no compatibility alias);
+  `antigravity` supersedes it as the Gemini-vendor CLI.
+
+### Changed
+
+- `shadow_origin` and `api_sibling` now derive from a single `SHADOW_PAIRS`
+  source list so the API↔CLI pairing can't drift between them; `api_key_present`
+  gates generically on the `<NAME>_API_KEY` convention.
+- Docs (README, ARCHITECTURE, TESTING) updated for the new provider and the
+  fallback behavior.
+
 ## 2026.6.6
 
 Streaming-pane fix: the waiting-list spinner no longer waterfalls.
