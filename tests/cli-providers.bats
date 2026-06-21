@@ -337,6 +337,106 @@ EOF
     [[ "$(echo "$r2" | jq -r '.response')" == *"FALLBACK-GEMINI-ANSWER"* ]]
     [[ "$(echo "$r2" | jq -r '.fallback')" == "gemini" ]]
     [[ "$(echo "$r2" | jq -r '.model')" == "gemini-3.1-pro-preview" ]]
+    # Round-2 fallback slot carries the same shape as round 1 (role + cached),
+    # so the success shape can't silently drift between rounds.
+    [[ "$(echo "$r2" | jq -r '.cached')" == "false" ]]
+    [[ "$(echo "$r2" | jq -r 'has("role")')" == "true" ]]
+}
+
+@test "query-council: no fallback when the API sibling is also an explicit provider" {
+    # antigravity fails, but gemini is ALSO selected — it answers in its own
+    # slot, so the antigravity slot must NOT duplicate gemini's answer.
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-dup"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "Error from antigravity CLI: boom" >&2
+exit 1
+EOF
+    cat > "$fakedir/gemini.sh" <<'EOF'
+#!/bin/bash
+echo "GEMINI-SLOT-ANSWER"
+EOF
+    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+        bash "$SCRIPT" --no-cache --no-pane --providers=antigravity,gemini "ping"
+    [ "$status" -eq 0 ]
+    # antigravity slot stays an error (no shadow-duplicate of gemini)
+    [[ "$(echo "$output" | jq -r '.round1.antigravity.status')" == "error" ]]
+    [[ "$(echo "$output" | jq -r '.round1.antigravity.fallback // "none"')" == "none" ]]
+    # gemini answers in its own slot, exactly once
+    [[ "$(echo "$output" | jq -r '.round1.gemini.status')" == "success" ]]
+    [[ "$(echo "$output" | jq -r '.round1.gemini.response')" == *"GEMINI-SLOT-ANSWER"* ]]
+}
+
+@test "query-council: missing CLI provider script also falls back to the API sibling" {
+    # A provider with NO script on disk is as unusable as one that exits 1 —
+    # the fallback should rescue both identically.
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-missing"
+    mkdir -p "$fakedir"
+    # antigravity.sh deliberately absent; only the gemini sibling exists.
+    cat > "$fakedir/gemini.sh" <<'EOF'
+#!/bin/bash
+echo "FALLBACK-GEMINI-ANSWER"
+EOF
+    chmod +x "$fakedir/gemini.sh"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+        bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    [[ "$(echo "$output" | jq -r '.round1.antigravity.status')" == "success" ]]
+    [[ "$(echo "$output" | jq -r '.round1.antigravity.fallback')" == "gemini" ]]
+    [[ "$(echo "$output" | jq -r '.round1.antigravity.response')" == *"FALLBACK-GEMINI-ANSWER"* ]]
+}
+
+@test "query-council: fallback progress line reports the sibling model, not the CLI model" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-model"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "boom" >&2
+exit 1
+EOF
+    cat > "$fakedir/gemini.sh" <<'EOF'
+#!/bin/bash
+echo "answer"
+EOF
+    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+        bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    # The success status line on stderr must name the model that answered.
+    [[ "$stderr" == *"gemini-3.1-pro-preview"* ]]
+    [[ "$stderr" != *"Gemini 3.5 Flash (High)"* ]]
+}
+
+@test "query-council: a cached fallback is reused without re-invoking the sibling" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-cache"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "boom" >&2
+exit 1
+EOF
+    # gemini sibling records every invocation so we can count them.
+    cat > "$fakedir/gemini.sh" <<EOF
+#!/bin/bash
+echo "call" >> "${BATS_TEST_TMPDIR}/gemini-calls"
+echo "FALLBACK-GEMINI-ANSWER"
+EOF
+    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
+
+    # Two runs with the cache ENABLED (no --no-cache), same prompt.
+    for _ in 1 2; do
+        run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+            COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+            bash "$SCRIPT" --no-pane --providers=antigravity "cache me"
+        [ "$status" -eq 0 ]
+    done
+    # The sibling ran once; the second fallback reused the cached answer.
+    [ "$(wc -l < "${BATS_TEST_TMPDIR}/gemini-calls" | tr -d ' ')" -eq 1 ]
 }
 
 # ============================================================================
