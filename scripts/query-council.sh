@@ -272,7 +272,7 @@ trap "rm -rf $TEMP_DIR" EXIT
 # the original CLI error). Shared by round 1 (query_provider) and round 2.
 attempt_api_fallback() {
     local provider="$1" prompt="$2"
-    local sibling sibling_script sibling_model fb key cached p
+    local sibling sibling_script sibling_model key cached p
     sibling=$(api_sibling "$provider")
     [[ -n "$sibling" ]] && api_key_present "$sibling" || return 0
     # Don't shadow-fall-back to a provider the user already selected — it
@@ -284,21 +284,22 @@ attempt_api_fallback() {
     sibling_model=$(get_model "$sibling")
     # Reuse a cached sibling answer instead of re-hitting the paid API on a
     # repeat run; the sibling script bypasses query_provider's own cache check.
+    local resp
     if [[ "$USE_CACHE" == true ]]; then
         key=$(cache_key "$sibling" "$sibling_model" "$prompt")
         cached=$(cache_get "$key")
-        if [[ -n "$cached" ]]; then
-            jq -n --arg r "$cached" --arg m "$sibling_model" --arg s "$sibling" \
-                '{response: $r, model: $m, fallback: $s}'
+        [[ -n "$cached" ]] && resp="$cached"
+    fi
+    if [[ -z "${resp:-}" ]]; then
+        sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
+        if [[ -x "$sibling_script" ]] && resp=$("$sibling_script" "$prompt" 2>&1); then
+            [[ "$USE_CACHE" == true ]] && cache_set "$key" "$sibling" "$sibling_model" "$prompt" "$resp"
+        else
             return 0
         fi
     fi
-    sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
-    if [[ -x "$sibling_script" ]] && fb=$("$sibling_script" "$prompt" 2>&1); then
-        [[ "$USE_CACHE" == true ]] && cache_set "$key" "$sibling" "$sibling_model" "$prompt" "$fb"
-        jq -n --arg r "$fb" --arg m "$sibling_model" --arg s "$sibling" \
-            '{response: $r, model: $m, fallback: $s}'
-    fi
+    jq -n --arg r "$resp" --arg m "$sibling_model" --arg s "$sibling" \
+        '{response: $r, model: $m, fallback: $s}'
 }
 
 # Compose a success slot from an attempt_api_fallback object ({response, model,
@@ -312,21 +313,19 @@ fallback_slot_json() {
 # Handle a CLI provider that is unusable (missing script or runtime failure):
 # try the API-sibling fallback, writing its answer (with pane events) on success
 # or the given error otherwise. Shared by query_provider's missing-script and
-# runtime-failure paths. Args: provider final_prompt output_file role error_msg start_ms model
+# runtime-failure paths. Args: provider final_prompt output_file role error_msg start_ms
 finish_with_fallback_or_error() {
     local provider="$1" final_prompt="$2" output_file="$3" role="$4"
-    local error_msg="$5" start_ms="$6" model="$7"
+    local error_msg="$5" start_ms="$6"
     local fb_json
     fb_json=$(attempt_api_fallback "$provider" "$final_prompt")
     if [[ -n "$fb_json" ]]; then
-        local elapsed sibling_model fb_response
-        elapsed=$(( $(now_ms) - start_ms ))
-        sibling_model=$(jq -r '.model' <<<"$fb_json")
-        fb_response=$(jq -r '.response' <<<"$fb_json")
         fallback_slot_json "$fb_json" "$role" > "$output_file"
         if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
-            pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed" "$sibling_model"
-            pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$fb_response"
+            local elapsed
+            elapsed=$(( $(now_ms) - start_ms ))
+            pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed" "$(jq -r '.model' <<<"$fb_json")"
+            pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$(jq -r '.response' <<<"$fb_json")"
         fi
         return 0
     fi
@@ -335,7 +334,7 @@ finish_with_fallback_or_error() {
         '{status: "error", error: $e, cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
     if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
         pane_error_write "$COUNCIL_PANE_DIR" "$provider" "$error_msg"
-        pane_status_event "$COUNCIL_PANE_DIR" "$provider" error "" "$model"
+        pane_status_event "$COUNCIL_PANE_DIR" "$provider" error "" "$(get_model "$provider")"
     fi
 }
 
@@ -366,7 +365,7 @@ query_provider() {
         # A missing/non-executable script is as unusable as a runtime failure,
         # so it gets the same API-sibling fallback rather than a bare error.
         finish_with_fallback_or_error "$provider" "$final_prompt" "$output_file" \
-            "$role" "Script not found or not executable" "$start_ms" "$model"
+            "$role" "Script not found or not executable" "$start_ms"
         return
     fi
 
@@ -406,7 +405,7 @@ query_provider() {
         fi
     else
         finish_with_fallback_or_error "$provider" "$final_prompt" "$output_file" \
-            "$role" "$response" "$start_ms" "$model"
+            "$role" "$response" "$start_ms"
     fi
 }
 
@@ -515,8 +514,9 @@ for provider in "${PROVIDERS[@]}"; do
         RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --argjson r "$result" '.[$p] = $r')
 
         # Show the model that actually answered: on a fallback the slot carries
-        # the API sibling's model, not this provider's CLI default.
-        model=$(echo "$result" | jq -r --arg m "$model" '.model // $m')
+        # the API sibling's model, not this provider's CLI default. coerce_result_json
+        # guarantees .model is present.
+        model=$(echo "$result" | jq -r '.model')
 
         # Track errors and show status
         status=$(echo "$result" | jq -r '.status')

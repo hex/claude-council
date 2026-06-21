@@ -21,13 +21,10 @@ discover_providers() {
             antigravity)
                 command -v agy >/dev/null 2>&1 && is_available=true
                 ;;
-            gemini)     [[ -n "${GEMINI_API_KEY:-}" ]] && is_available=true ;;
-            openai)     [[ -n "${OPENAI_API_KEY:-}" ]] && is_available=true ;;
-            grok)       [[ -n "${GROK_API_KEY:-}" ]] && is_available=true ;;
             *)
-                local up_var
-                up_var=$(echo "$name" | tr '[:lower:]' '[:upper:]')_API_KEY
-                [[ -n "${!up_var:-}" ]] && is_available=true
+                # API providers gate on <NAME>_API_KEY — the same check
+                # api_key_present makes, so there's one definition of it.
+                api_key_present "$name" && is_available=true
                 ;;
         esac
 
