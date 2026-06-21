@@ -180,7 +180,7 @@ if [[ "$LIST_AVAILABLE" == true ]]; then
     if [[ ${#DISCOVERED[@]} -eq 0 ]]; then
         echo "No providers configured."
         echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)"
-        echo "  or install a CLI agent (codex, gemini)."
+        echo "  or install a CLI agent (codex, agy)."
         exit 0
     fi
     read -ra DEFAULT_SET <<< "$(prefer_cli_over_api "${DISCOVERED[@]+"${DISCOVERED[@]}"}")"
@@ -257,7 +257,7 @@ fi
 if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
     echo "Error: No providers configured." >&2
     echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)" >&2
-    echo "  or install a CLI agent (codex, gemini)." >&2
+    echo "  or install a CLI agent (codex, agy)." >&2
     echo "  Or run '/claude-council:ask --local' for a local Claude-only council (same-model, no API keys)." >&2
     exit 1
 fi
@@ -265,6 +265,23 @@ fi
 # Create temp directory for parallel results
 TEMP_DIR=$(mktemp -d)
 trap "rm -rf $TEMP_DIR" EXIT
+
+# On a CLI provider failure, attempt its API-sibling fallback. Echoes a JSON
+# object {response, model, fallback} when the sibling exists, its key is set,
+# and the sibling script succeeds; echoes nothing otherwise (caller then keeps
+# the original CLI error). Shared by round 1 (query_provider) and round 2.
+attempt_api_fallback() {
+    local provider="$1" prompt="$2"
+    local sibling sibling_script sibling_model fb
+    sibling=$(api_sibling "$provider")
+    [[ -n "$sibling" ]] && api_key_present "$sibling" || return 0
+    sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
+    sibling_model=$(get_model "$sibling")
+    if [[ -x "$sibling_script" ]] && fb=$("$sibling_script" "$prompt" 2>&1); then
+        jq -n --arg r "$fb" --arg m "$sibling_model" --arg s "$sibling" \
+            '{response: $r, model: $m, fallback: $s}'
+    fi
+}
 
 # Query provider and save result to temp file
 # Uses cache if available and USE_CACHE=true
@@ -329,30 +346,27 @@ query_provider() {
             cache_set "$key" "$provider" "$model" "$final_prompt" "$response"
         fi
     else
-        # CLI provider failed — fall back to its API sibling when one exists and
-        # its key is set. The slot keeps the CLI provider's identity but carries
-        # the API answer, the API model, and a `fallback` note.
-        local sibling sibling_script sibling_model fb_response
-        sibling=$(api_sibling "$provider")
-        if [[ -n "$sibling" ]] && api_key_present "$sibling"; then
-            sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
-            sibling_model=$(get_model "$sibling")
-            if [[ -x "$sibling_script" ]] && fb_response=$("$sibling_script" "$final_prompt" 2>&1); then
-                local elapsed=$(( $(now_ms) - start_ms ))
-                jq -n --arg r "$fb_response" --arg role "$role" \
-                    --arg fb "$sibling" --arg m "$sibling_model" \
-                    '{status: "success", response: $r, cached: false, model: $m, fallback: $fb, role: (if $role == "" then null else $role end)}' > "$output_file"
-                if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
-                    pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed" "$sibling_model"
-                    pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$fb_response"
-                fi
-                if [[ "$USE_CACHE" == true ]]; then
-                    local key
-                    key=$(cache_key "$sibling" "$sibling_model" "$final_prompt")
-                    cache_set "$key" "$sibling" "$sibling_model" "$final_prompt" "$fb_response"
-                fi
-                return
+        local fb_json
+        fb_json=$(attempt_api_fallback "$provider" "$final_prompt")
+        if [[ -n "$fb_json" ]]; then
+            local fb_response sibling sibling_model elapsed
+            fb_response=$(echo "$fb_json" | jq -r '.response')
+            sibling=$(echo "$fb_json" | jq -r '.fallback')
+            sibling_model=$(echo "$fb_json" | jq -r '.model')
+            elapsed=$(( $(now_ms) - start_ms ))
+            jq -n --arg r "$fb_response" --arg role "$role" \
+                --arg fb "$sibling" --arg m "$sibling_model" \
+                '{status: "success", response: $r, cached: false, model: $m, fallback: $fb, role: (if $role == "" then null else $role end)}' > "$output_file"
+            if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+                pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed" "$sibling_model"
+                pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$fb_response"
             fi
+            if [[ "$USE_CACHE" == true ]]; then
+                local key
+                key=$(cache_key "$sibling" "$sibling_model" "$final_prompt")
+                cache_set "$key" "$sibling" "$sibling_model" "$final_prompt" "$fb_response"
+            fi
+            return
         fi
         # No fallback available, or it failed too: preserve the CLI error.
         jq -n --arg e "$response" --arg role "$role" \
@@ -531,7 +545,13 @@ if [[ "$DEBATE_MODE" == true ]]; then
             elif response=$("$script" "$debate_prompt" 2>&1); then
                 jq -n --arg r "$response" '{status: "success", response: $r}' > "$output_file"
             else
-                jq -n --arg e "$response" '{status: "error", error: $e}' > "$output_file"
+                fb_json=$(attempt_api_fallback "$provider" "$debate_prompt")
+                if [[ -n "$fb_json" ]]; then
+                    jq -n --argjson f "$fb_json" \
+                        '{status: "success", response: $f.response, model: $f.model, fallback: $f.fallback}' > "$output_file"
+                else
+                    jq -n --arg e "$response" '{status: "error", error: $e}' > "$output_file"
+                fi
             fi
         ) &
         ROUND2_PIDS+=($!)

@@ -284,6 +284,31 @@ EOF
     [[ "$(echo "$slot" | jq -r '.error')" == *"boom"* ]]
 }
 
+@test "query-council: antigravity failure falls back to gemini in round 2 (debate)" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-r2"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "Error from antigravity CLI: boom" >&2
+exit 1
+EOF
+    cat > "$fakedir/gemini.sh" <<'EOF'
+#!/bin/bash
+echo "FALLBACK-GEMINI-ANSWER"
+EOF
+    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+        bash "$SCRIPT" --no-cache --no-pane --debate --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    local r2
+    r2=$(echo "$output" | jq -c '.round2.antigravity')
+    [[ "$(echo "$r2" | jq -r '.status')" == "success" ]]
+    [[ "$(echo "$r2" | jq -r '.response')" == *"FALLBACK-GEMINI-ANSWER"* ]]
+    [[ "$(echo "$r2" | jq -r '.fallback')" == "gemini" ]]
+    [[ "$(echo "$r2" | jq -r '.model')" == "gemini-3.1-pro-preview" ]]
+}
+
 # ============================================================================
 # query-council.sh integration
 # ============================================================================

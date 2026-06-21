@@ -85,3 +85,25 @@ envelope_with_entry() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"Invalid JSON"* ]]
 }
+
+@test "format-output: fallback note appears when fallback field is set" {
+    local json
+    json=$(jq -n '{
+        metadata: {quiet_mode: false, debate_mode: false},
+        round1: {antigravity: {status: "success", model: "gemini-3.1-pro-preview", response: "hi", fallback: "gemini"}}
+    }')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"fell back to gemini API"* ]]
+}
+
+@test "format-output: fallback note absent when fallback field is not set" {
+    local json
+    json=$(jq -n '{
+        metadata: {quiet_mode: false, debate_mode: false},
+        round1: {antigravity: {status: "success", model: "gemini-3.1-pro-preview", response: "hi"}}
+    }')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"fell back"* ]]
+}
