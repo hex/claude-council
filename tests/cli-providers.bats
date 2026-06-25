@@ -507,12 +507,14 @@ EOF
 }
 
 # ============================================================================
-# Real-CLI guard — runs whenever the real agy is present (not COUNCIL_E2E).
-# Verifies the flag ordering + tool-suppression guard against the actual CLI:
-# agy must answer inline (no artifact pointer) and accept our flags.
+# Real-CLI guard (gated — set COUNCIL_E2E=1 to run). Verifies the flag ordering
+# + tool-suppression guard against the actual CLI: agy must answer inline (no
+# artifact pointer) and accept our flags. Gated like the codex E2E above so the
+# default suite never depends on a live model's exact wording.
 # ============================================================================
 
-@test "antigravity.sh: real agy answers inline for a trivial prompt" {
+@test "antigravity.sh: real agy answers inline for a trivial prompt (E2E)" {
+    [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
     if ! command_exists agy; then skip "agy CLI not installed"; fi
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "Reply with exactly the word: OK"
     [ "$status" -eq 0 ]
