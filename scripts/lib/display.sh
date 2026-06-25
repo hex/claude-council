@@ -340,17 +340,18 @@ council_waiting_list() {
     # All internals are __-prefixed so the caller's chosen output-var name (and
     # any normal var) cannot collide with and shadow them.
     local __names=("$@") __n=$# __i __vis=0 __first=1 __acc="" __rgb __chunk __p __sep __reserve
-    local __f; __f=$(council_faint_sgr)                  # muted SGR for separators
+    local __mo __r0=$'\033[0m'                            # muted-open / reset sequences
+    __mo=$'\033['"$(council_faint_sgr)"m
     for (( __i = 0; __i < __n; __i++ )); do
         __p="${__names[$__i]}"
         __sep=0; (( __first == 0 )) && __sep=2          # width of ", "
         __reserve=0; (( __i < __n - 1 )) && __reserve=2 # leave room for ", …"
         if (( __vis + __sep + ${#__p} + __reserve > __budget )); then
-            if (( __first == 0 )); then __acc+=$'\033['"$__f"$'m, …\033[0m'; else __acc+=$'\033['"$__f"$'m…\033[0m'; fi
+            if (( __first == 0 )); then __acc+="${__mo}, …${__r0}"; else __acc+="${__mo}…${__r0}"; fi
             printf -v "$__out" '%s' "$__acc"
             return
         fi
-        if (( __first == 1 )); then __first=0; else __acc+=$'\033['"$__f"$'m, \033[0m'; fi
+        if (( __first == 1 )); then __first=0; else __acc+="${__mo}, ${__r0}"; fi
         provider_color_rgb __rgb "$__p"
         printf -v __chunk '\033[1;38;2;%sm%s\033[0m' "$__rgb" "$__p"
         __acc+="$__chunk"
