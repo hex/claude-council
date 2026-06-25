@@ -4,6 +4,29 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.6.8
+
+Makes the streaming pane's muted text readable on light/cream backgrounds.
+
+### Fixed
+
+- **Light-background pane contrast** — the pane's *muted* text (link URLs, table
+  grid lines, `---` rules, sub-headings, and the "waiting on" label) now adapts
+  to the terminal theme the way bold/italic emphasis already did. On light/cream
+  backgrounds these render as a readable dark gray instead of the faint
+  (`2`)/bright-black (`90`) codes that washed out; dark themes are unchanged.
+  Force with `COUNCIL_THEME=light`.
+
+### Changed
+
+- Docs (README, ARCHITECTURE, TESTING) updated to describe theme adaptation
+  covering muted text, not just emphasis.
+- Gated the real-`agy` CLI end-to-end test behind `COUNCIL_E2E=1` (matching the
+  codex E2E) so the default suite no longer makes a live model call or depends
+  on its exact wording.
+- Simplified the muted-SGR construction in the waiting-list renderer
+  (byte-identical output).
+
 ## 2026.6.7
 
 Replaces the Gemini CLI provider with Google's Antigravity CLI and adds an
