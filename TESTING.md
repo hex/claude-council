@@ -55,7 +55,7 @@ bats --verbose-run tests/cache.bats
 | `check-status.bats` | 6 tests | two-tier CLI availability, remediation strings |
 | `jobs.bats` | 12 tests | job store, --async lifecycle, --result/--jobs/--cancel |
 | `stop-gate.bats` | 8 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
-| `theme.bats` | 8 tests | terminal theme detection, theme-aware emphasis rendering |
+| `theme.bats` | 13 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
 
 ### Hermetic CLI Fixture
 
