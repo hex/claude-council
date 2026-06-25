@@ -158,6 +158,12 @@ my $em     = $theme eq 'dark' ? '3;97' : $theme eq 'light' ? '3;30' : '3';
 # Headings/table headers: bright cyan pops on dark but washes out on light,
 # where plain cyan holds contrast (also the safe pick when unknown)
 my $head   = $theme eq 'dark' ? '96' : '36';
+# Muted text: faint borders/thinking, gray link URLs/rules/table separators, and
+# dim H6 headings. ANSI 2 (faint) and 90 (bright-black) both wash out on a light
+# background, so light remaps both to a dark-gray 256-color (240) that holds
+# contrast; dark and unknown keep the raw codes (they read fine on a dark theme).
+my $faint = $theme eq 'light' ? '38;5;240' : '2';
+my $gray  = $theme eq 'light' ? '38;5;240' : '90';
 my $in_code = 0;
 my $in_think = 0;
 my @table_buf;
@@ -169,7 +175,7 @@ $cols = 80 if $cols !~ /^\d+$/ || $cols < 20;
 sub apply_inline {
     my $s = shift;
     $s =~ s/`([^`]+)`/\033[7;33m$1\033[0m/g;
-    $s =~ s/\[([^\]]+)\]\(([^)]+)\)/\033[4;36m$1\033[24m \033[90m($2)\033[0m/g;
+    $s =~ s/\[([^\]]+)\]\(([^)]+)\)/\033[4;36m$1\033[24m \033[${gray}m($2)\033[0m/g;
     $s =~ s/~~([^~]+)~~/\033[9m$1\033[29m/g;
     $s =~ s/\*\*([^*]+)\*\*/\033[${strong}m$1\033[0m/g;
     $s =~ s/(?<!\*)\*([^*]+)\*(?!\*)/\033[${em}m$1\033[0m/g;
@@ -192,9 +198,9 @@ sub flush_table {
         }
     }
     # Borderless table: only inner separators (no left/right/top/bottom borders).
-    my $sep_v = " \033[90m│\033[0m ";
-    my $hsep  = join("\033[90m─┼─\033[0m",
-                     map { "\033[90m" . ("─" x $_) . "\033[0m" } @widths) . "\n";
+    my $sep_v = " \033[${gray}m│\033[0m ";
+    my $hsep  = join("\033[${gray}m─┼─\033[0m",
+                     map { "\033[${gray}m" . ("─" x $_) . "\033[0m" } @widths) . "\n";
 
     for my $row_idx (0 .. $#table_buf) {
         my $cells = $table_buf[$row_idx];
@@ -218,12 +224,12 @@ while (my $line = <STDIN>) {
     if ($line =~ /^\s*<think>/) {
         flush_table();
         $in_think = 1;
-        print "\033[2;3m▸ thinking\033[0m\n";
+        print "\033[${faint};3m▸ thinking\033[0m\n";
         next;
     }
     if ($line =~ /^\s*<\/think>/) {
         $in_think = 0;
-        print "\033[2m└─\033[0m\n";
+        print "\033[${faint}m└─\033[0m\n";
         next;
     }
     if ($in_think) {
@@ -236,9 +242,9 @@ while (my $line = <STDIN>) {
             my $piece = substr($content, 0, $break);
             $content = substr($content, $break);
             $content =~ s/^\s+//;
-            print "\033[2m│\033[0m \033[2;3m$piece\033[0m\n";
+            print "\033[${faint}m│\033[0m \033[${faint};3m$piece\033[0m\n";
         }
-        print "\033[2m│\033[0m \033[2;3m$content\033[0m\n";
+        print "\033[${faint}m│\033[0m \033[${faint};3m$content\033[0m\n";
         next;
     }
 
@@ -272,7 +278,7 @@ while (my $line = <STDIN>) {
 
     # ----- Non-table line: apply inline subs first, then block subs -----
     $line = apply_inline($line);
-    $line =~ s/^###### (.*)$/\033[2;3m$1\033[0m/;
+    $line =~ s/^###### (.*)$/\033[${faint};3m$1\033[0m/;
     $line =~ s/^##### (.*)$/\033[1;3m$1\033[0m/;
     $line =~ s/^#### (.*)$/\033[1m$1\033[0m/;
     $line =~ s/^### (.*)$/\033[1;36m$1\033[0m/;
@@ -281,7 +287,7 @@ while (my $line = <STDIN>) {
     $line =~ s/^(\s*)(\d+)\. /$1\033[36m$2.\033[0m /;
     $line =~ s/^(\s*)[-*] /$1\033[36m•\033[0m /;
     $line =~ s/^> (.*)$/\033[35m▌\033[0m \033[3m$1\033[0m/;
-    $line =~ s/^---+$/\033[90m──────────────────────────────\033[0m/;
+    $line =~ s/^---+$/\033[${gray}m──────────────────────────────\033[0m/;
     print $line;
 }
 flush_table();
@@ -316,6 +322,14 @@ provider_color_rgb() {
     esac
 }
 
+# SGR parameter for muted/faint text (separators, the "waiting on" label).
+# ANSI 2 (faint) washes out on a light background, so light uses a dark-gray
+# 256-color that holds contrast; dark and unknown keep faint. Reads the theme
+# the watcher resolved into COUNCIL_THEME_RESOLVED.
+council_faint_sgr() {
+    [[ "${COUNCIL_THEME_RESOLVED:-}" == light ]] && echo '38;5;240' || echo '2'
+}
+
 # Build the colored "waiting on" provider list, fit to <budget> visible columns.
 # Names join with ", " in vendor color; a dim "…" stands in for the overflow so
 # the rendered line never needs more than <budget> columns. Provider names are
@@ -326,16 +340,17 @@ council_waiting_list() {
     # All internals are __-prefixed so the caller's chosen output-var name (and
     # any normal var) cannot collide with and shadow them.
     local __names=("$@") __n=$# __i __vis=0 __first=1 __acc="" __rgb __chunk __p __sep __reserve
+    local __f; __f=$(council_faint_sgr)                  # muted SGR for separators
     for (( __i = 0; __i < __n; __i++ )); do
         __p="${__names[$__i]}"
         __sep=0; (( __first == 0 )) && __sep=2          # width of ", "
         __reserve=0; (( __i < __n - 1 )) && __reserve=2 # leave room for ", …"
         if (( __vis + __sep + ${#__p} + __reserve > __budget )); then
-            if (( __first == 0 )); then __acc+=$'\033[2m, …\033[0m'; else __acc+=$'\033[2m…\033[0m'; fi
+            if (( __first == 0 )); then __acc+=$'\033['"$__f"$'m, …\033[0m'; else __acc+=$'\033['"$__f"$'m…\033[0m'; fi
             printf -v "$__out" '%s' "$__acc"
             return
         fi
-        if (( __first == 1 )); then __first=0; else __acc+=$'\033[2m, \033[0m'; fi
+        if (( __first == 1 )); then __first=0; else __acc+=$'\033['"$__f"$'m, \033[0m'; fi
         provider_color_rgb __rgb "$__p"
         printf -v __chunk '\033[1;38;2;%sm%s\033[0m' "$__rgb" "$__p"
         __acc+="$__chunk"
@@ -419,15 +434,16 @@ draw_loading() {
     local budget=$(( cols - 32 )); (( budget < 8 )) && budget=8
     local list; council_waiting_list list "$budget" "${pending[@]}"
 
-    local rgb_first
+    local rgb_first faint
     provider_color_rgb rgb_first "${pending[0]}"
+    faint=$(council_faint_sgr)   # "waiting on" label: dark gray on light, faint otherwise
     # Disable autowrap (DECAWM, \033[?7l) while drawing the line: a waiting list
     # wider than the pane must CLIP at the right margin, not wrap. \r\033[K only
     # reclaims the current physical row, so a wrapped line would leave a stale
     # row every frame (a waterfall of spinner lines). Re-enable (\033[?7h) after
     # so response text below still wraps for readability.
-    printf '\r\033[K\033[?7l   \033[1;38;2;%sm%s\033[0m   \033[2mcouncil is waiting on\033[0m   %s\033[?7h' \
-        "$rgb_first" "$frame" "$list"
+    printf '\r\033[K\033[?7l   \033[1;38;2;%sm%s\033[0m   \033[%smcouncil is waiting on\033[0m   %s\033[?7h' \
+        "$rgb_first" "$frame" "$faint" "$list"
 }
 
 clear_loading() {
