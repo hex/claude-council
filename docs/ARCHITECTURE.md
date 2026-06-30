@@ -400,6 +400,7 @@ claude-council/
 │   ├── fixtures/
 │   │   └── fake-clis.bash       # Fake codex/gemini binaries on PATH
 │   ├── agent-analysis.bats
+│   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
 │   ├── cache.bats
 │   ├── check-status.bats
 │   ├── cli-providers.bats       # CLI providers (codex, antigravity)

@@ -48,6 +48,7 @@ bats --verbose-run tests/cache.bats
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 19 tests | argument parsing, error cases, flags, local-council fallback hint |
+| `argmax.bats` | 3 tests | large response/prompt/debate-round-2 round-trip through final JSON (MSYS ARG_MAX marshalling guard) |
 | `fake-clis.bats` | 11 tests | fixture self-checks, codex.sh/antigravity.sh against fake binaries |
 | `format-output.bats` | 11 tests | defensive parsing: empty/missing/non-string responses, raw preservation, fallback-note rendering |
 | `prompts.bats` | 9 tests | template loading, {{VAR}} interpolation, role-injection rendering |
