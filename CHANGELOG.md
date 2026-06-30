@@ -4,6 +4,36 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.6.9
+
+Fixes a Windows/MSYS bug where large provider responses were silently dropped.
+
+### Fixed
+
+- **Windows/MSYS: provider responses silently dropped at `standard`/`detailed`
+  verbosity.** On MSYS, `ARG_MAX` is ~32 KB, but the council built its final
+  JSON by passing the combined provider responses to `jq` on the command line —
+  so once they exceeded ~32 KB, `jq` aborted with "Argument list too long" and
+  the script emitted nothing. All large data (responses, the metadata prompt,
+  the per-round accumulators) now reaches `jq` via stdin, which isn't bounded by
+  `ARG_MAX`. Linux/macOS were never affected (`ARG_MAX` ~2 MB). Thanks to
+  @GmailTedam (Dr Josh Tedam) for the report and original fix (#5).
+
+### Changed
+
+- Consolidated the jq marshalling onto one stdin-based path — a `merge_result`
+  helper for the result accumulators plus `jq -s`/`jq -Rs` for the metadata and
+  final build — replacing the temp files the initial fix used (byte-identical
+  output on every platform).
+- Added `tests/argmax.bats` (3 tests): large round-1 response, large prompt, and
+  large debate-round-2 response each round-trip through the final JSON intact.
+  Suite 253 → 256.
+
+### Docs
+
+- Listed the new `tests/argmax.bats` coverage in `TESTING.md` and
+  `docs/ARCHITECTURE.md`.
+
 ## 2026.6.8
 
 Makes the streaming pane's muted text readable on light/cream backgrounds.
