@@ -27,3 +27,8 @@ claude-council-workspace/
 *.swo
 *~
 autoresearch-results.tsv
+.cs/local/
+.cs/archives/
+.cs/.narrative-reminder-cooldown
+.claude/settings.local.json
+.obsidian/
