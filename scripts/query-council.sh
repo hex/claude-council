@@ -498,6 +498,16 @@ for pid in "${PIDS[@]}"; do
     wait "$pid" 2>/dev/null || true
 done
 
+# Fold one provider's coerced result into an accumulator object under its
+# provider key. Both blobs reach jq via STDIN, never argv: on MSYS/Windows
+# ARG_MAX is ~32KB and a large response passed on the command line overflows it
+# ("jq: Argument list too long"), silently dropping output. printf is a bash
+# builtin, so the pipe is not bounded by ARG_MAX.
+# Args: accumulator-json provider result-json   Stdout: merged accumulator
+merge_result() {
+    printf '%s\n%s' "$1" "$3" | jq -s --arg p "$2" '.[0] + {($p): .[1]}'
+}
+
 # Collect results
 RESULTS="{}"
 ERRORS=()
@@ -511,9 +521,7 @@ for provider in "${PROVIDERS[@]}"; do
         # coerce_result_json adds the model and guarantees valid JSON, so a
         # provider that wrote malformed output can't crash the whole run here.
         result=$(coerce_result_json "$(cat "$result_file")" "$model")
-        _accf=$(mktemp); printf '%s' "$result" > "$_accf"
-        RESULTS=$(printf '%s' "$RESULTS" | jq --arg p "$provider" --slurpfile r "$_accf" '.[$p] = $r[0]')
-        rm -f "$_accf"
+        RESULTS=$(merge_result "$RESULTS" "$provider" "$result")
 
         # Show the model that actually answered: on a fallback the slot carries
         # the API sibling's model, not this provider's CLI default. coerce_result_json
@@ -607,9 +615,7 @@ if [[ "$DEBATE_MODE" == true ]]; then
 
         if [[ -f "$result_file" ]]; then
             result=$(coerce_result_json "$(cat "$result_file")" "$model")
-            _accf=$(mktemp); printf '%s' "$result" > "$_accf"
-            ROUND2_RESULTS=$(printf '%s' "$ROUND2_RESULTS" | jq --arg p "$provider" --slurpfile r "$_accf" '.[$p] = $r[0]')
-            rm -f "$_accf"
+            ROUND2_RESULTS=$(merge_result "$ROUND2_RESULTS" "$provider" "$result")
 
             status=$(echo "$result" | jq -r '.status')
             if [[ "$status" == "error" ]]; then
@@ -632,9 +638,10 @@ if [[ -n "$ROLES" ]]; then
 else
     ROLES_JSON="null"
 fi
-_prompt_f=$(mktemp); printf '%s' "$PROMPT" > "$_prompt_f"   # prompt+auto-context can exceed argv limit
-METADATA=$(jq -n \
-    --rawfile prompt "$_prompt_f" \
+# The prompt (large with file context) reaches jq as a raw string via STDIN,
+# not argv: -Rs slurps it to a JSON string exactly as --rawfile would, with no
+# argv-bounded path. See merge_result for the ARG_MAX rationale.
+METADATA=$(printf '%s' "$PROMPT" | jq -Rs \
     --arg file_path "$FILE_PATH" \
     --argjson roles_used "$ROLES_JSON" \
     --argjson debate_mode "$DEBATE_MODE" \
@@ -643,7 +650,7 @@ METADATA=$(jq -n \
     --argjson auto_context "$AUTO_CONTEXT" \
     --arg timestamp "$TIMESTAMP" \
     '{
-        prompt: $prompt,
+        prompt: .,
         file_path: (if $file_path == "" then null else $file_path end),
         roles_used: $roles_used,
         debate_mode: $debate_mode,
@@ -652,32 +659,17 @@ METADATA=$(jq -n \
         auto_context: $auto_context,
         timestamp: $timestamp
     }')
-rm -f "$_prompt_f"
 
-# Output final JSON with metadata and results.
-# Pass large blobs (metadata + all provider responses) via TEMP FILES with
-# --slurpfile, NOT command-line --argjson: on MSYS/Windows ARG_MAX is small
-# (~32KB) and the combined responses overflow it, producing
-# "jq: Argument list too long" and silently dropping every response.
-_meta_f=$(mktemp); _r1_f=$(mktemp)
-printf '%s' "$METADATA" > "$_meta_f"
-printf '%s' "$RESULTS" > "$_r1_f"
+# Output final JSON. Feed the large blobs (metadata + every provider response)
+# to jq via STDIN, not argv — see merge_result for the ARG_MAX rationale. Each
+# blob is exactly one JSON value, so `jq -s` slurps them into an array to index.
 if [[ "$DEBATE_MODE" == true ]]; then
-    _r2_f=$(mktemp)
-    printf '%s' "$ROUND2_RESULTS" > "$_r2_f"
-    jq -n \
-        --slurpfile metadata "$_meta_f" \
-        --slurpfile round1 "$_r1_f" \
-        --slurpfile round2 "$_r2_f" \
-        '{metadata: $metadata[0], round1: $round1[0], round2: $round2[0]}'
-    rm -f "$_r2_f"
+    printf '%s\n%s\n%s' "$METADATA" "$RESULTS" "$ROUND2_RESULTS" |
+        jq -s '{metadata: .[0], round1: .[1], round2: .[2]}'
 else
-    jq -n \
-        --slurpfile metadata "$_meta_f" \
-        --slurpfile round1 "$_r1_f" \
-        '{metadata: $metadata[0], round1: $round1[0]}'
+    printf '%s\n%s' "$METADATA" "$RESULTS" |
+        jq -s '{metadata: .[0], round1: .[1]}'
 fi
-rm -f "$_meta_f" "$_r1_f"
 
 # Report errors to stderr
 if [[ ${#ERRORS[@]} -gt 0 ]]; then
