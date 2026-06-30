@@ -20,18 +20,20 @@ teardown() {
 # "Argument list too long" on Windows, silently dropping every response) can't
 # be reproduced where ARG_MAX is ~2MB, so these tests assert the durable
 # invariant instead: a large payload round-trips through the final JSON intact,
-# whatever transport jq is fed. Start/end markers catch truncation at either
-# edge; a length floor catches a dropped or empty body.
+# whatever transport jq is fed. The markers catch truncation at either edge; a
+# length floor catches a dropped or empty body.
 BIG_BYTES=60000
+MARK_START="BIGSTART_8f2a"
+MARK_END="BIGEND_3c7b"
 
-# Writes a fake provider that emits FAKE_START, BIG_BYTES of body, then FAKE_END.
-# The script is static (quoted heredoc) — markers arrive via the environment so
-# there is no shell-escaping hazard in the generated file.
+# Writes a fake provider that emits FAKE_START, FAKE_BYTES of body, then
+# FAKE_END. The script is static (quoted heredoc) — values arrive via the
+# environment so there is no shell-escaping hazard in the generated file.
 write_big_provider() {
     cat > "$1" <<'PROVIDER'
 #!/bin/bash
 printf '%s\n' "$FAKE_START"
-head -c "${FAKE_BYTES:-60000}" /dev/zero | tr '\0' 'x'
+head -c "$FAKE_BYTES" /dev/zero | tr '\0' 'x'
 printf '%s\n' "$FAKE_END"
 PROVIDER
     chmod +x "$1"
@@ -41,18 +43,17 @@ PROVIDER
     local fakedir="${BATS_TEST_TMPDIR}/argmax-r1"
     mkdir -p "$fakedir"
     write_big_provider "$fakedir/antigravity.sh"
-    local start="BIGSTART_8f2a" end="BIGEND_3c7b"
 
     run --separate-stderr env PROVIDERS_DIR="$fakedir" \
-        FAKE_START="$start" FAKE_END="$end" FAKE_BYTES="$BIG_BYTES" \
+        FAKE_START="$MARK_START" FAKE_END="$MARK_END" FAKE_BYTES="$BIG_BYTES" \
         bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
 
     [ "$status" -eq 0 ]
     echo "$output" | jq -e . >/dev/null   # whole output is valid JSON
     local resp
     resp=$(echo "$output" | jq -r '.round1.antigravity.response')
-    [[ "$resp" == "$start"* ]]            # front not truncated
-    [[ "$resp" == *"$end" ]]             # back not truncated
+    [[ "$resp" == "$MARK_START"* ]]       # front not truncated
+    [[ "$resp" == *"$MARK_END" ]]        # back not truncated
     [ "${#resp}" -ge "$BIG_BYTES" ]      # full body survived
 }
 
@@ -86,10 +87,9 @@ PROVIDER
     local fakedir="${BATS_TEST_TMPDIR}/argmax-debate"
     mkdir -p "$fakedir"
     write_big_provider "$fakedir/antigravity.sh"
-    local start="BIGSTART_8f2a" end="BIGEND_3c7b"
 
     run --separate-stderr env PROVIDERS_DIR="$fakedir" \
-        FAKE_START="$start" FAKE_END="$end" FAKE_BYTES="$BIG_BYTES" \
+        FAKE_START="$MARK_START" FAKE_END="$MARK_END" FAKE_BYTES="$BIG_BYTES" \
         bash "$SCRIPT" --no-cache --no-pane --debate --providers=antigravity "ping"
 
     [ "$status" -eq 0 ]
@@ -98,7 +98,7 @@ PROVIDER
     r1=$(echo "$output" | jq -r '.round1.antigravity.response')
     r2=$(echo "$output" | jq -r '.round2.antigravity.response')
     [ "${#r1}" -ge "$BIG_BYTES" ]
-    [[ "$r2" == "$start"* ]]
-    [[ "$r2" == *"$end" ]]
+    [[ "$r2" == "$MARK_START"* ]]
+    [[ "$r2" == *"$MARK_END" ]]
     [ "${#r2}" -ge "$BIG_BYTES" ]
 }
