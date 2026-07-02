@@ -141,12 +141,13 @@ council_detect_theme() {
     echo unknown
 }
 
-# Writes the per-response markdown renderer to the given path.
-# In-house perl-based renderer — fast, dependency-free, matches the
-# council's visual language (cyan headings, yellow code, etc).
+# Writes the perl markdown renderer to the given path — dependency-free,
+# matches the council's visual language (cyan headings, yellow code, etc).
+# Used when no Rich-capable Python exists, and as the Rich wrapper's
+# runtime fallback.
 # Emphasis adapts to COUNCIL_THEME_RESOLVED: bright white on dark themes,
 # black on light themes, attribute-only (inherits foreground) when unknown.
-display_write_renderer() {
+display_write_perl_renderer() {
     local path="$1"
     cat > "$path" <<'RENDEREOF'
 #!/usr/bin/env perl
@@ -293,6 +294,155 @@ while (my $line = <STDIN>) {
 flush_table();
 RENDEREOF
     chmod +x "$path"
+}
+
+# Prints a command line that runs Python with the Rich library importable,
+# preferring an interpreter that already has it over uv's on-demand resolve.
+# Paths are absolute because the pane that runs the result inherits the tmux
+# server's PATH, not this shell's. Returns 1 when neither route works.
+council_rich_python() {
+    local py uv
+    py=$(command -v python3 2>/dev/null) || py=""
+    if [[ -n "$py" ]] && "$py" -c 'import rich' 2>/dev/null; then
+        printf '%q' "$py"
+        return 0
+    fi
+    uv=$(command -v uv 2>/dev/null) || uv=""
+    if [[ -n "$uv" ]] && "$uv" run --quiet --with rich python3 -c 'import rich' 2>/dev/null; then
+        printf '%q %s' "$uv" 'run --quiet --with rich python3'
+        return 0
+    fi
+    return 1
+}
+
+# Writes the Rich markdown renderer: render.py (the renderer), a render.sh
+# wrapper that invokes it, and the perl renderer as the wrapper's runtime
+# fallback. Rich brings a real layout engine — word-wrapped prose, tables
+# fitted to the pane by wrapping inside cells, syntax-highlighted code —
+# styled to the council's visual language with the terminal's own palette.
+display_write_rich_renderer() {
+    local path="$1" py_cmd="$2"
+    local base="${path%.sh}"
+
+    display_write_perl_renderer "${base}_fallback.sh"
+
+    cat > "${base}.py" <<'PYEOF'
+# Council-tuned Rich markdown renderer for the streaming pane. Sparse
+# terminal-palette styling (no background fills, terminal's own colors),
+# left-aligned headings, OSC 8 hyperlinks, and the council's <think> block
+# treatment. Theme and width arrive via COUNCIL_THEME_RESOLVED and COLUMNS.
+import os
+import re
+import sys
+
+from rich.console import Console, Group
+from rich.markdown import Heading, Markdown
+from rich.padding import Padding
+from rich.text import Text
+from rich.theme import Theme
+
+theme = os.environ.get("COUNCIL_THEME_RESOLVED", "unknown")
+# ansi_* pygments themes color code with the terminal's 16-color palette and
+# no background fill, so highlighting inherits the user's terminal theme.
+code_theme = "ansi_light" if theme == "light" else "ansi_dark"
+
+# Council visual language (mirrors the perl renderer): cyan headings,
+# yellow inline code, cyan bullets, dim rules.
+council = Theme(
+    {
+        "markdown.h1": "bold reverse cyan",
+        "markdown.h2": "bold cyan",
+        "markdown.h3": "bold cyan",
+        "markdown.h4": "bold",
+        "markdown.h5": "bold italic",
+        "markdown.h6": "dim italic",
+        "markdown.code": "yellow",
+        "markdown.block_quote": "italic",
+        "markdown.item.bullet": "cyan",
+        "markdown.item.number": "cyan",
+        "markdown.hr": "dim",
+        "markdown.link": "underline cyan",
+        "markdown.link_url": "dim",
+        "markdown.table.header": "bold cyan",
+    }
+)
+
+
+class PlainHeading(Heading):
+    """Left-aligned headings, no panel box around h1."""
+
+    def __rich_console__(self, console, options):
+        text = self.text
+        text.justify = "left"
+        if self.tag == "h1":
+            text.pad(1)
+        yield text
+
+
+Markdown.elements["heading_open"] = PlainHeading
+
+source = sys.stdin.read()
+
+# Providers wrap reasoning in <think> blocks. Rich's Markdown treats them as
+# raw HTML and drops them, so split them out and style them here.
+parts = []
+pos = 0
+for m in re.finditer(r"<think>\n?(.*?)\n?</think>\n?", source, re.DOTALL):
+    if m.start() > pos:
+        parts.append(("md", source[pos : m.start()]))
+    parts.append(("think", m.group(1)))
+    pos = m.end()
+if pos < len(source):
+    parts.append(("md", source[pos:]))
+
+env_cols = os.environ.get("COLUMNS", "")
+width = int(env_cols) if env_cols.isdigit() else None
+console = Console(force_terminal=True, theme=council, width=width)
+renderables = []
+for kind, body in parts:
+    if kind == "think":
+        renderables.append(Text("▸ thinking", style="dim italic"))
+        renderables.append(Padding(Text(body.strip(), style="dim italic"), (0, 0, 1, 2)))
+    else:
+        renderables.append(Markdown(body, code_theme=code_theme, hyperlinks=True))
+console.print(Group(*renderables))
+PYEOF
+
+    # Runtime vars are escaped (\$); the python command, script, and fallback
+    # paths are baked in at write time.
+    cat > "$path" <<WRAPEOF
+#!/bin/bash
+# Captures the Rich render so a runtime failure (uv without its cache or
+# network, a Rich API break) falls back to the perl renderer — the pane never
+# goes blank. Width is read from the pane tty because a captured renderer
+# cannot detect it, and exported as COLUMNS for Rich.
+input=\$(cat)
+# 2> before < : redirections apply left to right, and a failed /dev/tty open
+# (headless run) must land in /dev/null, not leak to the pane.
+cols=\$(stty size 2>/dev/null </dev/tty | awk '{print \$2}')
+[[ "\$cols" =~ ^[0-9]+\$ ]] || cols=80
+if out=\$(printf '%s\n' "\$input" | COLUMNS="\$cols" $py_cmd "${base}.py" 2>/dev/null); then
+    printf '%s\n' "\$out"
+else
+    printf '%s\n' "\$input" | "${base}_fallback.sh"
+fi
+WRAPEOF
+    chmod +x "$path"
+}
+
+# Writes the pane's per-response markdown renderer to the given path,
+# preferring Rich when a Rich-capable Python exists, else the perl renderer.
+# COUNCIL_RENDERER=perl forces the perl path.
+display_write_renderer() {
+    local path="$1" py_cmd=""
+    if [[ "${COUNCIL_RENDERER:-auto}" != "perl" ]]; then
+        py_cmd=$(council_rich_python 2>/dev/null) || py_cmd=""
+    fi
+    if [[ -n "$py_cmd" ]]; then
+        display_write_rich_renderer "$path" "$py_cmd"
+    else
+        display_write_perl_renderer "$path"
+    fi
 }
 
 # Emits the `-e VAR=VAL` flags to forward into the streaming pane, one token

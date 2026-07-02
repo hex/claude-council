@@ -3,6 +3,7 @@
 # ABOUTME: Covers detection helpers, iTerm2 wrappers, and manifest file writes
 
 load test_helper
+bats_require_minimum_version 1.5.0
 
 LIB="${LIB_DIR}/display.sh"
 
@@ -220,8 +221,111 @@ teardown() {
     [[ "$output" == *"line3"* ]]
 }
 
-# ----- Markdown renderer detection -----
+# ----- Markdown renderer selection -----
 
+# Stub python3 whose probe (-c 'import rich') and render (script arg) exits
+# are controlled independently, so selection and runtime-fallback paths can
+# be tested without a real Rich install.
+make_python_stub() {
+    local dir="$1" probe_exit="$2" render_exit="$3"
+    cat > "$dir/python3" <<STUB
+#!/bin/bash
+case "\$1" in
+    -c) exit $probe_exit ;;
+    *)  exit $render_exit ;;
+esac
+STUB
+    chmod +x "$dir/python3"
+}
+
+SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **stdin**, not argv.'
+
+@test "renderer: council_rich_python echoes a python when one can import rich" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 0 0
+    PATH="$PANE_DIR:/usr/bin:/bin" run council_rich_python
+    [ "$status" -eq 0 ]
+    [ "$output" = "$PANE_DIR/python3" ]
+}
+
+@test "renderer: council_rich_python fails when no python can import rich" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 1 1
+    PATH="$PANE_DIR:/usr/bin:/bin" run council_rich_python
+    [ "$status" -ne 0 ]
+}
+
+@test "renderer: COUNCIL_RENDERER=perl forces the perl renderer" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 0 0
+    COUNCIL_RENDERER=perl PATH="$PANE_DIR:/usr/bin:/bin" \
+        display_write_renderer "$PANE_DIR/render.sh"
+    run head -1 "$PANE_DIR/render.sh"
+    [[ "$output" == *perl* ]]
+    [ ! -f "$PANE_DIR/render.py" ]
+}
+
+@test "renderer: falls back to perl when rich is unavailable" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 1 1
+    PATH="$PANE_DIR:/usr/bin:/bin" display_write_renderer "$PANE_DIR/render.sh"
+    run head -1 "$PANE_DIR/render.sh"
+    [[ "$output" == *perl* ]]
+    [ ! -f "$PANE_DIR/render.py" ]
+}
+
+@test "renderer: writes the Rich wrapper and render.py when rich is available" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 0 0
+    PATH="$PANE_DIR:/usr/bin:/bin" display_write_renderer "$PANE_DIR/render.sh"
+    [ -f "$PANE_DIR/render.py" ]
+    [ -x "$PANE_DIR/render_fallback.sh" ]
+    # The wrapper bakes the absolute python path: the pane's PATH is the tmux
+    # server's, not the shell's that ran the probe.
+    run grep -F "$PANE_DIR/python3" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "renderer: wrapper falls back to perl when the Rich render fails at runtime" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 0 1
+    PATH="$PANE_DIR:/usr/bin:/bin" display_write_renderer "$PANE_DIR/render.sh"
+    run --separate-stderr bash -c "printf '%s' \"\$1\" | \"\$2\"" _ "$SAMPLE_MD" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    # Stderr must be pristine — a headless run (no controlling tty) must not
+    # leak the wrapper's width-probe failure.
+    [ -z "$stderr" ]
+    # Perl fallback output: styled think block, no raw tags, ANSI present.
+    [[ "$output" == *"▸ thinking"* ]]
+    [[ "$output" != *"<think>"* ]]
+    [[ "$output" == *$'\033['* ]]
+}
+
+@test "renderer: Rich render styles think blocks and strips raw tags" {
+    source "$LIB"
+    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    display_write_renderer "$PANE_DIR/render.sh"
+    run --separate-stderr bash -c "printf '%s' \"\$1\" | \"\$2\"" _ "$SAMPLE_MD" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    [ -z "$stderr" ]
+    [[ "$output" == *"▸ thinking"* ]]
+    [[ "$output" != *"<think>"* ]]
+    [[ "$output" == *"Verdict"* ]]
+    [[ "$output" == *$'\033['* ]]
+}
+
+@test "renderer: Rich render honors COUNCIL_THEME_RESOLVED for code highlighting" {
+    source "$LIB"
+    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    display_write_renderer "$PANE_DIR/render.sh"
+    local code=$'```bash\nif true; then printf "%s" "$HOME"; fi\n```'
+    local dark light
+    dark=$(printf '%s' "$code" | COUNCIL_THEME_RESOLVED=dark "$PANE_DIR/render.sh")
+    light=$(printf '%s' "$code" | COUNCIL_THEME_RESOLVED=light "$PANE_DIR/render.sh")
+    [ -n "$dark" ]
+    [ -n "$light" ]
+    [ "$dark" != "$light" ]
+}
 
 # ----- Capability gating for pane open -----
 
