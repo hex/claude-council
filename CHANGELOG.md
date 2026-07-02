@@ -4,6 +4,35 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.7.1
+
+Rich markdown rendering in the streaming tmux pane, with the perl renderer as
+the zero-install fallback.
+
+### Added
+
+- **Rich markdown rendering in the streaming tmux pane.** When a Rich-capable
+  Python is available (`python3` with a modern `rich`, or `uv`, which fetches
+  it on demand), responses render through a council-tuned
+  [Rich](https://github.com/Textualize/rich) renderer: word-wrapped prose,
+  tables fitted to the pane width, syntax-highlighted code and reasoning
+  blocks styled with the terminal's own palette, and clickable OSC 8 links.
+  Without one, the built-in perl renderer runs unchanged — the plugin stays
+  zero-install. `COUNCIL_RENDERER=perl` forces the perl path.
+- Selection hardening: uv runs isolated from the cwd's Python project
+  (`--no-project`, `--offline` at render time), the pane-open probe is
+  bounded (`COUNCIL_RICH_PROBE_TIMEOUT`, default 10s), pre-13 Rich installs
+  are rejected by feature detection, and any runtime render failure falls
+  back to perl so the pane never goes blank.
+
+### Docs
+
+- Corrected stale `codex` / `gemini` CLI references to `agy` (Antigravity)
+  in README — the gemini CLI was replaced in v2026.6.7.
+- Documented renderer selection, `COUNCIL_RENDERER`, and
+  `COUNCIL_RICH_PROBE_TIMEOUT`; Requirements lists the optional Rich
+  dependency. Test suite 256 → 270.
+
 ## 2026.6.9
 
 Fixes a Windows/MSYS bug where large provider responses were silently dropped.
