@@ -3,6 +3,7 @@
 # ABOUTME: Covers detection helpers, iTerm2 wrappers, and manifest file writes
 
 load test_helper
+bats_require_minimum_version 1.5.0
 
 LIB="${LIB_DIR}/display.sh"
 
@@ -220,8 +221,213 @@ teardown() {
     [[ "$output" == *"line3"* ]]
 }
 
-# ----- Markdown renderer detection -----
+# ----- Markdown renderer selection -----
 
+# Stub python3 whose probe (-c payload) and render (script arg) exits are
+# controlled independently, so selection and runtime-fallback paths can be
+# tested without a real Rich install. Render prints a sentinel so tests can
+# assert the wrapper forwards the renderer's stdout (discarded on failure).
+make_python_stub() {
+    local dir="$1" probe_exit="$2" render_exit="$3"
+    cat > "$dir/python3" <<STUB
+#!/bin/bash
+case "\$1" in
+    -c) exit $probe_exit ;;
+    *)  printf 'STUB_RICH_OUTPUT\n'; exit $render_exit ;;
+esac
+STUB
+    chmod +x "$dir/python3"
+}
+
+# Stub uv: render invocations (last arg is a .py path) emit a sentinel; any
+# other invocation is a probe, which sleeps $2 seconds (default 0) then
+# succeeds — the delay exercises the probe timeout.
+make_uv_stub() {
+    local dir="$1" probe_delay="${2:-0}"
+    cat > "$dir/uv" <<STUB
+#!/bin/bash
+last=""
+for a in "\$@"; do last="\$a"; done
+case "\$last" in
+    *.py) printf 'STUB_UV_RICH_OUTPUT\n'; exit 0 ;;
+    *)    sleep $probe_delay; exit 0 ;;
+esac
+STUB
+    chmod +x "$dir/uv"
+}
+
+SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **stdin**, not argv.'
+
+@test "renderer: council_rich_python echoes a python when one can import rich" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 0 0
+    PATH="$PANE_DIR:/usr/bin:/bin" run council_rich_python
+    [ "$status" -eq 0 ]
+    [ "$output" = "$PANE_DIR/python3" ]
+}
+
+@test "renderer: council_rich_python fails when no python can import rich" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 1 1
+    PATH="$PANE_DIR:/usr/bin:/bin" run council_rich_python
+    [ "$status" -ne 0 ]
+}
+
+@test "renderer: COUNCIL_RENDERER=perl forces the perl renderer" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 0 0
+    COUNCIL_RENDERER=perl PATH="$PANE_DIR:/usr/bin:/bin" \
+        display_write_renderer "$PANE_DIR/render.sh"
+    run head -1 "$PANE_DIR/render.sh"
+    [[ "$output" == *perl* ]]
+    [ ! -f "$PANE_DIR/render.py" ]
+}
+
+@test "renderer: falls back to perl when rich is unavailable" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 1 1
+    PATH="$PANE_DIR:/usr/bin:/bin" display_write_renderer "$PANE_DIR/render.sh"
+    run head -1 "$PANE_DIR/render.sh"
+    [[ "$output" == *perl* ]]
+    [ ! -f "$PANE_DIR/render.py" ]
+}
+
+@test "renderer: writes the Rich wrapper and render.py when rich is available" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 0 0
+    PATH="$PANE_DIR:/usr/bin:/bin" display_write_renderer "$PANE_DIR/render.sh"
+    [ -f "$PANE_DIR/render.py" ]
+    [ -x "$PANE_DIR/render_fallback.sh" ]
+    # The wrapper bakes the absolute python path: the pane's PATH is the tmux
+    # server's, not the shell's that ran the probe.
+    run grep -F "$PANE_DIR/python3" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    # A zero-width tty (stty reports "0 0" when winsize was never set) must
+    # fall back to 80: COLUMNS=0 makes Rich emit nothing with exit 0.
+    run grep -F '^[1-9][0-9]*$' "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "renderer: wrapper forwards the Rich renderer's stdout" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 0 0
+    PATH="$PANE_DIR:/usr/bin:/bin" display_write_renderer "$PANE_DIR/render.sh"
+    run --separate-stderr bash -c "printf '%s' \"\$1\" | \"\$2\"" _ "$SAMPLE_MD" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    [ -z "$stderr" ]
+    [[ "$output" == *"STUB_RICH_OUTPUT"* ]]
+    # No perl fallback markers: the render succeeded, so its output must be
+    # forwarded verbatim, not re-rendered.
+    [[ "$output" != *"└─"* ]]
+}
+
+@test "renderer: selection routes through uv when python3 lacks rich" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 1 1
+    make_uv_stub "$PANE_DIR"
+    PATH="$PANE_DIR:/usr/bin:/bin" display_write_renderer "$PANE_DIR/render.sh"
+    [ -f "$PANE_DIR/render.py" ]
+    run grep -F "$PANE_DIR/uv" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    # --no-project: uv must not resolve (and sync!) whatever pyproject.toml
+    # the pane's cwd happens to contain.
+    run grep -F -- '--no-project' "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    # The baked multi-word uv command must survive word splitting end to end.
+    run --separate-stderr bash -c "printf '%s' \"\$1\" | \"\$2\"" _ "$SAMPLE_MD" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"STUB_UV_RICH_OUTPUT"* ]]
+}
+
+@test "renderer: uv probe times out instead of hanging pane open" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 1 1
+    make_uv_stub "$PANE_DIR" 3
+    COUNCIL_RICH_PROBE_TIMEOUT=1 PATH="$PANE_DIR:/usr/bin:/bin" run council_rich_python
+    [ "$status" -ne 0 ]
+}
+
+@test "renderer: wrapper falls back to perl when the Rich render fails at runtime" {
+    source "$LIB"
+    make_python_stub "$PANE_DIR" 0 1
+    PATH="$PANE_DIR:/usr/bin:/bin" display_write_renderer "$PANE_DIR/render.sh"
+    run --separate-stderr bash -c "printf '%s' \"\$1\" | \"\$2\"" _ "$SAMPLE_MD" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    # Stderr must be pristine — a headless run (no controlling tty) must not
+    # leak the wrapper's width-probe failure.
+    [ -z "$stderr" ]
+    # Perl fallback output: styled think block, no raw tags, ANSI present.
+    [[ "$output" == *"▸ thinking"* ]]
+    [[ "$output" != *"<think>"* ]]
+    [[ "$output" == *$'\033['* ]]
+}
+
+@test "renderer: Rich render styles think blocks and strips raw tags" {
+    source "$LIB"
+    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    display_write_renderer "$PANE_DIR/render.sh"
+    run --separate-stderr bash -c "printf '%s' \"\$1\" | \"\$2\"" _ "$SAMPLE_MD" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    [ -z "$stderr" ]
+    [[ "$output" == *"▸ thinking"* ]]
+    [[ "$output" != *"<think>"* ]]
+    [[ "$output" == *"Verdict"* ]]
+    [[ "$output" == *$'\033['* ]]
+    # Discriminate Rich from the silent perl fallback: perl always closes a
+    # think block with "└─"; Rich output never contains it. Without this the
+    # test passes even when render.py is dead and every render degrades.
+    [[ "$output" != *"└─"* ]]
+}
+
+@test "renderer: Rich render honors COUNCIL_THEME_RESOLVED for code highlighting" {
+    source "$LIB"
+    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    display_write_renderer "$PANE_DIR/render.sh"
+    local code=$'```bash\nif true; then printf "%s" "$HOME"; fi\n```'
+    local dark light
+    dark=$(printf '%s' "$code" | COUNCIL_THEME_RESOLVED=dark "$PANE_DIR/render.sh")
+    light=$(printf '%s' "$code" | COUNCIL_THEME_RESOLVED=light "$PANE_DIR/render.sh")
+    [ -n "$dark" ]
+    [ -n "$light" ]
+    # Pin the mapping's DIRECTION, not just difference (an inverted mapping
+    # also differs): ansi_dark uses bright SGRs (\033[9x), ansi_light none.
+    [[ "$dark" == *$'\033[9'* ]]
+    [[ "$light" != *$'\033[9'* ]]
+}
+
+@test "renderer: Rich render keeps content after an unclosed think tag" {
+    source "$LIB"
+    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    display_write_renderer "$PANE_DIR/render.sh"
+    # A response truncated mid-reasoning must not vanish: the tail renders as
+    # think content (perl parity), never silently dropped by Rich's HTML pass.
+    local truncated=$'before text\n\n<think>\nreasoning tail'
+    run bash -c "printf '%s' \"\$1\" | \"\$2\"" _ "$truncated" "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"before text"* ]]
+    [[ "$output" == *"reasoning tail"* ]]
+}
+
+@test "renderer: Rich render survives COLUMNS=0" {
+    source "$LIB"
+    local py_cmd
+    py_cmd=$(council_rich_python 2>/dev/null) || skip "no rich-capable python on this machine"
+    display_write_renderer "$PANE_DIR/render.sh"
+    run bash -c "printf '%s' '# Title' | COLUMNS=0 $py_cmd \"\$1\"" _ "$PANE_DIR/render.py"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Title"* ]]
+}
+
+@test "renderer: Rich render styles link anchors underline-cyan, not dim" {
+    source "$LIB"
+    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    display_write_renderer "$PANE_DIR/render.sh"
+    run bash -c "printf '%s' 'see [label](https://example.com) now' | \"\$1\"" _ "$PANE_DIR/render.sh"
+    [ "$status" -eq 0 ]
+    # 4;36 = underline cyan, the perl renderer's anchor style. With
+    # hyperlinks=True Rich styles the anchor text via markdown.link_url.
+    [[ "$output" == *$'\033[4;36m'* ]]
+}
 
 # ----- Capability gating for pane open -----
 

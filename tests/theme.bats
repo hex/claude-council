@@ -61,7 +61,10 @@ setup() {
 render_with_theme() {
     local theme="$1" markdown="$2"
     local renderer="${BATS_TEST_TMPDIR}/render.sh"
-    display_write_renderer "$renderer"
+    # These tests pin the perl renderer's theme-adaptive SGR codes; the Rich
+    # renderer handles theme via pygments code themes and is tested in
+    # display.bats.
+    COUNCIL_RENDERER=perl display_write_renderer "$renderer"
     printf '%s\n' "$markdown" | COUNCIL_THEME_RESOLVED="$theme" "$renderer"
 }
 

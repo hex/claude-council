@@ -532,13 +532,15 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 
 ### Display & Terminal Integration
 
-When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `cached`, `error` with timing) and renders each response as it lands using a built-in perl-based markdown renderer (cyan headings, yellow code, vendor-colored banners). Press **Esc** to close the pane.
+When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `cached`, `error` with timing) and renders each response as it lands. Rendering prefers [Rich](https://github.com/Textualize/rich) when a Rich-capable Python is available (`python3` with `rich` importable, or [`uv`](https://docs.astral.sh/uv/), which fetches it on demand): word-wrapped prose, tables fitted to the pane width, syntax-highlighted code, clickable links — styled with your terminal's own palette (cyan headings, yellow code, vendor-colored banners). Without one, a built-in dependency-free perl markdown renderer takes over with the same visual language, so nothing needs to be installed. Press **Esc** to close the pane.
 
 Colors adapt to your terminal theme: the pane detects the background
-(OSC 11 query, `COLORFGBG` fallback) and renders bold/italic emphasis bright on
-dark themes, dark on light themes, and attribute-only when undetectable. Muted
-text (link URLs, table grid lines, `---` rules, sub-headings, the "waiting on"
-label) follows suit — faint/bright-black on dark, a readable dark gray on light.
+(OSC 11 query, `COLORFGBG` fallback). The Rich renderer flips its
+code-highlighting theme to match; the perl renderer renders bold/italic
+emphasis bright on dark themes, dark on light themes, and attribute-only when
+undetectable, with muted text (link URLs, table grid lines, `---` rules,
+sub-headings, the "waiting on" label) following suit — faint/bright-black on
+dark, a readable dark gray on light.
 Force it with `COUNCIL_THEME=light` or `COUNCIL_THEME=dark`.
 
 When the outer terminal is iTerm2, council also drives:
@@ -549,6 +551,7 @@ When the outer terminal is iTerm2, council also drives:
 
 ```bash
 export COUNCIL_NO_PANE=1                # disable the streaming pane globally
+export COUNCIL_RENDERER=perl             # force the built-in perl renderer
 export COUNCIL_ATTENTION_THRESHOLD=5000  # only bounce dock if run > 5s
 ```
 
