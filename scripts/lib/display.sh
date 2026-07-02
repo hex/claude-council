@@ -453,7 +453,7 @@ PYEOF
 input=\$(cat)
 # 2> before < : redirections apply left to right, and a failed /dev/tty open
 # (headless run) must land in /dev/null, not leak to the pane.
-cols=\$(stty size 2>/dev/null </dev/tty | awk '{print \$2}')
+read -r _ cols < <(stty size 2>/dev/null </dev/tty) || true
 # Reject 0, not just non-numbers: stty reports "0 0" on a tty whose winsize
 # was never set, and COLUMNS=0 makes Rich emit nothing with exit 0.
 [[ "\$cols" =~ ^[1-9][0-9]*\$ ]] || cols=80

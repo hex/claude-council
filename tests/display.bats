@@ -7,6 +7,14 @@ bats_require_minimum_version 1.5.0
 
 LIB="${LIB_DIR}/display.sh"
 
+# Probe for a Rich-capable python ONCE per file: the real probe costs
+# 150-600ms and its result is invariant for the run. Empty → rich-gated
+# tests skip.
+setup_file() {
+    source "$LIB"
+    export COUNCIL_TEST_RICH_CMD="$(council_rich_python 2>/dev/null || true)"
+}
+
 setup() {
     mkdir -p "$TEST_TMP_DIR"
     unset TMUX TMUX_PANE LC_TERMINAL ITERM_SESSION_ID TERM_PROGRAM
@@ -364,7 +372,7 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
 
 @test "renderer: Rich render styles think blocks and strips raw tags" {
     source "$LIB"
-    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    [ -n "$COUNCIL_TEST_RICH_CMD" ] || skip "no rich-capable python on this machine"
     display_write_renderer "$PANE_DIR/render.sh"
     run --separate-stderr bash -c "printf '%s' \"\$1\" | \"\$2\"" _ "$SAMPLE_MD" "$PANE_DIR/render.sh"
     [ "$status" -eq 0 ]
@@ -381,7 +389,7 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
 
 @test "renderer: Rich render honors COUNCIL_THEME_RESOLVED for code highlighting" {
     source "$LIB"
-    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    [ -n "$COUNCIL_TEST_RICH_CMD" ] || skip "no rich-capable python on this machine"
     display_write_renderer "$PANE_DIR/render.sh"
     local code=$'```bash\nif true; then printf "%s" "$HOME"; fi\n```'
     local dark light
@@ -397,7 +405,7 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
 
 @test "renderer: Rich render keeps content after an unclosed think tag" {
     source "$LIB"
-    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    [ -n "$COUNCIL_TEST_RICH_CMD" ] || skip "no rich-capable python on this machine"
     display_write_renderer "$PANE_DIR/render.sh"
     # A response truncated mid-reasoning must not vanish: the tail renders as
     # think content (perl parity), never silently dropped by Rich's HTML pass.
@@ -410,8 +418,8 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
 
 @test "renderer: Rich render survives COLUMNS=0" {
     source "$LIB"
-    local py_cmd
-    py_cmd=$(council_rich_python 2>/dev/null) || skip "no rich-capable python on this machine"
+    local py_cmd="$COUNCIL_TEST_RICH_CMD"
+    [ -n "$py_cmd" ] || skip "no rich-capable python on this machine"
     display_write_renderer "$PANE_DIR/render.sh"
     run bash -c "printf '%s' '# Title' | COLUMNS=0 $py_cmd \"\$1\"" _ "$PANE_DIR/render.py"
     [ "$status" -eq 0 ]
@@ -420,7 +428,7 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
 
 @test "renderer: Rich render styles link anchors underline-cyan, not dim" {
     source "$LIB"
-    council_rich_python >/dev/null 2>&1 || skip "no rich-capable python on this machine"
+    [ -n "$COUNCIL_TEST_RICH_CMD" ] || skip "no rich-capable python on this machine"
     display_write_renderer "$PANE_DIR/render.sh"
     run bash -c "printf '%s' 'see [label](https://example.com) now' | \"\$1\"" _ "$PANE_DIR/render.sh"
     [ "$status" -eq 0 ]
