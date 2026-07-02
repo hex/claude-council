@@ -296,20 +296,33 @@ RENDEREOF
     chmod +x "$path"
 }
 
-# Prints a command line that runs Python with the Rich library importable,
-# preferring an interpreter that already has it over uv's on-demand resolve.
+# Prints a command line that runs Python with a Rich modern enough for the
+# council renderer, preferring an interpreter that already has it over uv's
+# on-demand resolve. The probe feature-detects Markdown.elements["heading_open"]
+# rather than importing rich: before Rich 13 that key does not exist, tables
+# render as collapsed inline text, and the heading override is dead — all with
+# exit 0, so an import-only probe would silently pick a mangling renderer.
 # Paths are absolute because the pane that runs the result inherits the tmux
-# server's PATH, not this shell's. Returns 1 when neither route works.
+# server's PATH, not this shell's.
+# The uv probe is bounded by a perl alarm (COUNCIL_RICH_PROBE_TIMEOUT, default
+# 10s): a cold cache on a dead network otherwise stalls pane opening ~45s
+# before any provider is queried. --no-project keeps uv from resolving — and
+# syncing .venv/uv.lock into — whatever pyproject.toml the cwd contains. The
+# baked render command adds --offline: a passing probe proves the cache can
+# satisfy rich, and rendering must never wait on the network.
+# Returns 1 when neither route works.
 council_rich_python() {
+    local probe='from rich.markdown import Markdown; Markdown.elements["heading_open"]'
     local py uv
     py=$(command -v python3 2>/dev/null) || py=""
-    if [[ -n "$py" ]] && "$py" -c 'import rich' 2>/dev/null; then
+    if [[ -n "$py" ]] && "$py" -c "$probe" 2>/dev/null; then
         printf '%q' "$py"
         return 0
     fi
     uv=$(command -v uv 2>/dev/null) || uv=""
-    if [[ -n "$uv" ]] && "$uv" run --quiet --with rich python3 -c 'import rich' 2>/dev/null; then
-        printf '%q %s' "$uv" 'run --quiet --with rich python3'
+    if [[ -n "$uv" ]] && perl -e 'alarm shift; exec @ARGV' "${COUNCIL_RICH_PROBE_TIMEOUT:-10}" \
+        "$uv" run --quiet --no-project --with rich python3 -c "$probe" 2>/dev/null; then
+        printf '%q %s' "$uv" 'run --quiet --no-project --offline --with rich python3'
         return 0
     fi
     return 1
@@ -362,7 +375,10 @@ council = Theme(
         "markdown.item.number": "cyan",
         "markdown.hr": "dim",
         "markdown.link": "underline cyan",
-        "markdown.link_url": "dim",
+        # With hyperlinks=True Rich styles the visible anchor text via
+        # link_url (the URL itself is never printed), so this key carries
+        # the perl renderer's underline-cyan anchor style.
+        "markdown.link_url": "underline cyan",
         "markdown.table.header": "bold cyan",
     }
 )
@@ -384,19 +400,37 @@ Markdown.elements["heading_open"] = PlainHeading
 source = sys.stdin.read()
 
 # Providers wrap reasoning in <think> blocks. Rich's Markdown treats them as
-# raw HTML and drops them, so split them out and style them here.
+# raw HTML and drops them, so split them out and style them here. Tags are
+# line-anchored (perl parity) so an inline mention in prose or a fence is not
+# ripped out of context; an unclosed tag (response truncated mid-reasoning)
+# keeps the tail visible as think content instead of Rich dropping it.
+THINK_PAIR = re.compile(r"(?ms)^[ \t]*<think>[ \t]*\n?(.*?)\n?^[ \t]*</think>[ \t]*\n?")
+THINK_OPEN = re.compile(r"(?m)^[ \t]*<think>[ \t]*\n?")
+
 parts = []
 pos = 0
-for m in re.finditer(r"<think>\n?(.*?)\n?</think>\n?", source, re.DOTALL):
+for m in THINK_PAIR.finditer(source):
     if m.start() > pos:
         parts.append(("md", source[pos : m.start()]))
     parts.append(("think", m.group(1)))
     pos = m.end()
-if pos < len(source):
-    parts.append(("md", source[pos:]))
+tail = source[pos:]
+open_m = THINK_OPEN.search(tail)
+if open_m:
+    if open_m.start():
+        parts.append(("md", tail[: open_m.start()]))
+    parts.append(("think", tail[open_m.end() :]))
+elif tail:
+    parts.append(("md", tail))
 
 env_cols = os.environ.get("COLUMNS", "")
-width = int(env_cols) if env_cols.isdigit() else None
+# Reject 0: width 0 renders zero bytes with exit 0. Scrub the variable too,
+# because Console reads COLUMNS from the environment on its own.
+if env_cols.isdigit() and int(env_cols) > 0:
+    width = int(env_cols)
+else:
+    os.environ.pop("COLUMNS", None)
+    width = None
 console = Console(force_terminal=True, theme=council, width=width)
 renderables = []
 for kind, body in parts:
@@ -420,7 +454,9 @@ input=\$(cat)
 # 2> before < : redirections apply left to right, and a failed /dev/tty open
 # (headless run) must land in /dev/null, not leak to the pane.
 cols=\$(stty size 2>/dev/null </dev/tty | awk '{print \$2}')
-[[ "\$cols" =~ ^[0-9]+\$ ]] || cols=80
+# Reject 0, not just non-numbers: stty reports "0 0" on a tty whose winsize
+# was never set, and COLUMNS=0 makes Rich emit nothing with exit 0.
+[[ "\$cols" =~ ^[1-9][0-9]*\$ ]] || cols=80
 if out=\$(printf '%s\n' "\$input" | COLUMNS="\$cols" $py_cmd "${base}.py" 2>/dev/null); then
     printf '%s\n' "\$out"
 else
