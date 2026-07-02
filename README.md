@@ -49,7 +49,7 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 ## Features
 
 - Query Gemini, OpenAI (GPT/Codex), Grok, and Perplexity simultaneously
-- Use the `codex` and `gemini` CLIs (subscription auth) when installed — preferred over their API siblings
+- Use the `codex` and `agy` (Antigravity) CLIs (subscription auth) when installed — preferred over their API siblings
 - Side-by-side comparison of responses with vendor-colored headers
 - Streaming tmux pane that renders responses as they land
 - Specialized roles, debate mode, and agent-enhanced deep analysis for high-stakes decisions
@@ -241,7 +241,7 @@ standard mode. Use it for high-stakes decisions, not quick questions.
 
 ### Local Council (--local)
 
-If you have no provider keys and no `codex` / `gemini` CLI installed, you can
+If you have no provider keys and no `codex` / `agy` CLI installed, you can
 still convene a council — locally, using Claude alone:
 
 ```bash
@@ -532,7 +532,7 @@ Timeouts fail fast (no retry) to prevent blocking on hung providers.
 
 ### Display & Terminal Integration
 
-When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `cached`, `error` with timing) and renders each response as it lands. Rendering prefers [Rich](https://github.com/Textualize/rich) when a Rich-capable Python is available (`python3` with `rich` importable, or [`uv`](https://docs.astral.sh/uv/), which fetches it on demand): word-wrapped prose, tables fitted to the pane width, syntax-highlighted code, clickable links — styled with your terminal's own palette (cyan headings, yellow code, vendor-colored banners). Without one, a built-in dependency-free perl markdown renderer takes over with the same visual language, so nothing needs to be installed. Press **Esc** to close the pane.
+When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `cached`, `error` with timing) and renders each response as it lands. Rendering prefers [Rich](https://github.com/Textualize/rich) when a Rich-capable Python is available (`python3` with a modern `rich` installed, or [`uv`](https://docs.astral.sh/uv/), which fetches it on demand): word-wrapped prose, tables fitted to the pane width, syntax-highlighted code, clickable links — styled with your terminal's own palette (cyan headings, yellow code, vendor-colored banners). Without one, a built-in dependency-free perl markdown renderer takes over with the same visual language, so nothing needs to be installed. Press **Esc** to close the pane.
 
 Colors adapt to your terminal theme: the pane detects the background
 (OSC 11 query, `COLORFGBG` fallback). The Rich renderer flips its
@@ -606,7 +606,8 @@ bash scripts/query-council.sh --list-default
 ## Requirements
 
 - `curl` and `jq` for API calls
-- Valid API keys for at least one provider, OR `codex` / `gemini` CLI installed
+- Valid API keys for at least one provider, OR `codex` / `agy` (Antigravity) CLI installed
+- Optional: a Rich-capable Python (`python3` with a modern `rich`, or `uv`) upgrades the tmux pane's markdown rendering; without it the built-in perl renderer is used
 
 ## Development
 
