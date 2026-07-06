@@ -4,6 +4,7 @@
 
 load test_helper
 load fixtures/fake-clis
+bats_require_minimum_version 1.5.0
 
 RUN_COUNCIL="${SCRIPTS_DIR}/run-council.sh"
 JOBS_LIB="${LIB_DIR}/jobs.sh"
@@ -171,4 +172,41 @@ wait_for_job() {
     [ "$status" -eq 0 ]
     [[ -f "$output" ]]
     grep -q "FAKE-CODEX-RESPONSE" "$output"
+}
+
+@test "run-council: sync failure surfaces the real error and leaves no partial file" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run --separate-stderr bash "$RUN_COUNCIL" --providers=codex --verbosity=bogus -- "test question"
+    [ "$status" -ne 0 ]
+    # the actual pre-flight error, not just format-output's "Invalid JSON input"
+    [[ "$stderr" == *"verbosity must be one of"* ]]
+    # no zero-byte transcript left behind
+    ! ls .claude/council-cache/*.md >/dev/null 2>&1
+}
+
+@test "run-council --async: a failing query marks the job failed, not completed" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local id
+    id=$(bash "$RUN_COUNCIL" --async --providers=codex --verbosity=bogus -- "test question" | head -1)
+    run wait_for_job "$id"
+    [ "$output" == "failed" ]
+    run bash "$RUN_COUNCIL" --result="$id"
+    [ "$status" -eq 1 ]
+}
+
+@test "run-council --result: a running job whose worker died is reaped to failed" {
+    source "$JOBS_LIB"
+    job_write zombie running
+    # a pid that is certainly dead (started, killed, reaped)
+    local dead
+    sleep 30 & dead=$!
+    kill "$dead" 2>/dev/null || true
+    wait "$dead" 2>/dev/null || true
+    job_set zombie pid "$dead"
+
+    run --separate-stderr bash "$RUN_COUNCIL" --result=zombie
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"no longer running"* ]]
+    run jq -r '.status' "${COUNCIL_JOBS_DIR}/zombie.json"
+    [ "$output" == "failed" ]
 }
