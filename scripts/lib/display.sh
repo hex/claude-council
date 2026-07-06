@@ -12,6 +12,22 @@ is_iterm2_outer() {
     [[ "${LC_TERMINAL:-}" == "iTerm2" || -n "${ITERM_SESSION_ID:-}" ]]
 }
 
+# True when a `tmux -V` output string denotes a version that understands
+# `split-window -l '<pct>%'` (length as a percentage), added in tmux 3.1.
+# Accepts forms like "tmux 3.1", "tmux 3.6a", "tmux next-3.4"; unparseable
+# input (empty, non-numeric) is treated as unsupported.
+tmux_version_supports_pane() {
+    local ver="$1"
+    ver=${ver#tmux }
+    ver=${ver#next-}
+    local major=${ver%%.*}
+    local minor=${ver#*.}
+    major=${major%%[!0-9]*}
+    minor=${minor%%[!0-9]*}
+    [[ -n "$major" && -n "$minor" ]] || return 1
+    (( 10#$major > 3 || (10#$major == 3 && 10#$minor >= 1) ))
+}
+
 should_open_pane() {
     is_tmux || return 1
     [[ "${COUNCIL_NO_PANE:-}" == "1" ]] && return 1
@@ -26,6 +42,12 @@ it2_set_tab_color() {
     it2setcolor tab "$1" 2>/dev/null || true
 }
 
+# Drops an iTerm2 mark (a cmd-up/down jump target). Inside tmux/screen the 1337
+# sequence must be wrapped in a passthrough (\033Ptmux;...\033\\), which tmux
+# forwards only when `allow-passthrough` is enabled — off by default in tmux 3.3+,
+# so marks silently no-op there unless the user opts in. The pane watcher emits
+# this same sequence inline (it runs as a separate process and cannot call this
+# helper), so keep the two in sync.
 it2_set_mark() {
     is_iterm2_outer || return 0
     if [[ "${TERM:-}" == screen* || "${TERM:-}" == tmux* ]]; then
@@ -74,7 +96,7 @@ pane_status_event() {
     local state="$3"
     local ms="${4:-}"
     local model="${5:-}"
-    [[ -d "$pane_dir" ]] || return 1
+    [[ -d "$pane_dir" ]] || return 0
     printf '%s\t%s\t%s\t%s\n' "$provider" "$state" "$ms" "$model" >> "$pane_dir/status"
 }
 
@@ -82,16 +104,20 @@ pane_response_write() {
     local pane_dir="$1"
     local provider="$2"
     local content="$3"
-    [[ -d "$pane_dir" ]] || return 1
+    [[ -d "$pane_dir" ]] || return 0
     mkdir -p "$pane_dir/responses"
-    printf '%s' "$content" > "$pane_dir/responses/${provider}.md"
+    # Write to a dot-prefixed temp then rename: the watcher globs responses/*.md,
+    # which never matches the .tmp, so it never renders a half-written file.
+    local tmp="$pane_dir/responses/.${provider}.md.tmp"
+    printf '%s' "$content" > "$tmp"
+    mv -f "$tmp" "$pane_dir/responses/${provider}.md"
 }
 
 pane_error_write() {
     local pane_dir="$1"
     local provider="$2"
     local message="$3"
-    [[ -d "$pane_dir" ]] || return 1
+    [[ -d "$pane_dir" ]] || return 0
     mkdir -p "$pane_dir/errors"
     printf '%s' "$message" > "$pane_dir/errors/${provider}.txt"
 }
@@ -778,6 +804,9 @@ WATCHEREOF
     if ! tmux split-window -h -l '40%' "${target_args[@]}" \
         "${pane_env[@]}" \
         "bash $safe_watcher $safe_dir $safe_lib" >/dev/null 2>&1; then
+        if ! tmux_version_supports_pane "$(tmux -V 2>/dev/null)"; then
+            printf 'council: streaming pane disabled (tmux >= 3.1 required); showing inline output\n' >&2
+        fi
         rm -rf "$watch_dir"
         return 1
     fi

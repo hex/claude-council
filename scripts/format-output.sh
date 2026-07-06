@@ -8,56 +8,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors (only if output is a terminal)
 if [[ -t 1 ]]; then
-    BLUE='\033[34m'
-    WHITE='\033[37m'
     RED='\033[31m'
-    GREEN='\033[32m'
-    CYAN='\033[36m'
-    YELLOW='\033[33m'
-    LIGHT_YELLOW='\033[93m'
-    LIGHT_PINK='\033[38;5;218m'
-    DIM='\033[2m'
     BOLD='\033[1m'
-    ITALIC='\033[3m'
     RESET='\033[0m'
 else
     # No colors when redirected to file
-    BLUE=''
-    WHITE=''
     RED=''
-    GREEN=''
-    CYAN=''
-    YELLOW=''
-    LIGHT_YELLOW=''
-    LIGHT_PINK=''
-    DIM=''
     BOLD=''
-    ITALIC=''
     RESET=''
 fi
-
-# Box drawing characters (Unicode)
-BOX_TL='╔'
-BOX_TR='╗'
-BOX_BL='╚'
-BOX_BR='╝'
-BOX_H='═'
-BOX_V='║'
-
-# Box width (80 chars total, 78 inner)
-BOX_WIDTH=80
-INNER_WIDTH=78
 
 # Provider styling
 # provider_color and provider_emoji are defined in lib/providers.sh
 source "${SCRIPT_DIR}/lib/providers.sh"
-
-# Draw horizontal line of box characters
-draw_hline() {
-    local char="$1"
-    local count="$2"
-    printf "%${count}s" | tr ' ' "$char"
-}
 
 # Draw header bar (markdown compatible)
 # Args: emoji provider_name model [role] [header_type] [fallback]
