@@ -7,6 +7,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/jobs.sh"
 
+# Resolve the jobs state dir once in this process so the command-substitution
+# subshells in job_file/job_log inherit the memoized value instead of re-forking
+# a hash on every call.
+jobs_state_dir >/dev/null
+
 MODE=sync
 JOB_ID=""
 PASS=()

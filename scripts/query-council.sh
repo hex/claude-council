@@ -478,6 +478,10 @@ council_probe_tty && COUNCIL_HAS_TTY=1
 council_signal_state yellow
 COUNCIL_START_MS=$(now_ms)
 
+# Reap expired cache entries once per run so the response cache does not grow
+# without bound (the prune-on-the-hot-path analog of jobs_prune in run_async).
+[[ "$USE_CACHE" == true ]] && cache_prune 2>/dev/null || true
+
 # Launch all queries in parallel
 FORMATTED_PROVIDERS=$(format_providers "${PROVIDERS[@]}")
 echo -e "🚀 Querying ${#PROVIDERS[@]} providers in parallel: ${FORMATTED_PROVIDERS}..." >&2
