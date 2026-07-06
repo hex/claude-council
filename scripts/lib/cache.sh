@@ -79,14 +79,21 @@ cache_set() {
     local timestamp
     timestamp=$(date +%s)
 
+    # Route prompt and response through --rawfile, not --arg: a large --file
+    # prompt or response passed on jq's command line would overflow ARG_MAX.
+    local ptmp rtmp
+    ptmp=$(mktemp); rtmp=$(mktemp)
+    printf '%s' "$prompt" > "$ptmp"
+    printf '%s' "$response" > "$rtmp"
     jq -n \
         --arg provider "$provider" \
         --arg model "$model" \
-        --arg prompt "$prompt" \
-        --arg response "$response" \
+        --rawfile prompt "$ptmp" \
+        --rawfile response "$rtmp" \
         --argjson timestamp "$timestamp" \
         '{provider: $provider, model: $model, prompt: $prompt, response: $response, timestamp: $timestamp}' \
         > "$cache_file"
+    rm -f "$ptmp" "$rtmp"
 }
 
 # Clear all cache entries

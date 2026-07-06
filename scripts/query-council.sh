@@ -277,6 +277,21 @@ TEMP_DIR=$(mktemp -d)
 # (Ctrl-C, SIGTERM, errexit) so it never spins "waiting on…" forever.
 trap 'rm -rf "$TEMP_DIR"; [[ -n "${COUNCIL_PANE_DIR:-}" ]] && display_pane_close "$COUNCIL_PANE_DIR" 2>/dev/null || true' EXIT
 
+# Invoke a provider script with the prompt delivered via a temp file
+# (--prompt-file), so a large --file prompt never rides the process argv where
+# Linux (MAX_ARG_STRLEN, 128KB) or MSYS (~32KB) would reject it as "argument
+# list too long". Providers still accept a literal prompt as $1 for direct use.
+# Merges stderr into stdout, matching the callers' original `2>&1` capture.
+run_provider_script() {
+    local script="$1" prompt="$2" pfile rc
+    pfile=$(mktemp "${TEMP_DIR}/prompt.XXXXXX")
+    printf '%s' "$prompt" > "$pfile"
+    "$script" --prompt-file "$pfile" 2>&1
+    rc=$?
+    rm -f "$pfile"
+    return $rc
+}
+
 # On a CLI provider failure, attempt its API-sibling fallback. Echoes a JSON
 # object {response, model, fallback} when the sibling exists, its key is set,
 # and the sibling script succeeds; echoes nothing otherwise (caller then keeps
@@ -303,7 +318,7 @@ attempt_api_fallback() {
     fi
     if [[ -z "${resp:-}" ]]; then
         sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
-        if [[ -x "$sibling_script" ]] && resp=$("$sibling_script" "$prompt" 2>&1); then
+        if [[ -x "$sibling_script" ]] && resp=$(run_provider_script "$sibling_script" "$prompt"); then
             [[ "$USE_CACHE" == true ]] && cache_set "$key" "$sibling" "$sibling_model" "$prompt" "$resp"
         else
             return 0
@@ -400,7 +415,7 @@ query_provider() {
     fi
 
     # Query provider with role-injected prompt
-    if response=$("$script" "$final_prompt" 2>&1); then
+    if response=$(run_provider_script "$script" "$final_prompt"); then
         local elapsed=$(( $(now_ms) - start_ms ))
         printf '%s' "$response" | jq -Rs --arg role "$role" \
             '{status: "success", response: ., cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
@@ -616,7 +631,7 @@ if [[ "$DEBATE_MODE" == true ]]; then
 
             if [[ ! -x "$script" ]]; then
                 echo '{"status": "error", "error": "Script not found"}' > "$output_file"
-            elif response=$("$script" "$debate_prompt" 2>&1); then
+            elif response=$(run_provider_script "$script" "$debate_prompt"); then
                 printf '%s' "$response" | jq -Rs '{status: "success", response: .}' > "$output_file"
             else
                 fb_json=$(attempt_api_fallback "$provider" "$debate_prompt")

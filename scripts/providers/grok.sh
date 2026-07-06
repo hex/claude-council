@@ -17,6 +17,11 @@ verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 DEBUG="${COUNCIL_DEBUG:-}"
 
 PROMPT="${1:-}"
+# A large prompt (e.g. a big --file) arrives via a temp file to stay off
+# the process argv, where the OS would reject it as "argument list too long".
+if [[ "$PROMPT" == "--prompt-file" ]]; then
+    PROMPT=$(cat "${2:?--prompt-file requires a path}")
+fi
 
 if [[ -z "$PROMPT" ]]; then
     echo "Error: No prompt provided" >&2

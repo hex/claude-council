@@ -83,6 +83,39 @@ PROVIDER
     [ "${#mprompt}" -ge "$BIG_BYTES" ]
 }
 
+@test "query-council: a large prompt reaches the provider intact via --prompt-file (ARG_MAX)" {
+    local fakedir="${BATS_TEST_TMPDIR}/argmax-recv"
+    mkdir -p "$fakedir"
+    # The provider echoes back proof of what it received, so we can assert the
+    # full prompt arrived (not truncated by an execve argv limit).
+    cat > "$fakedir/antigravity.sh" <<'PROVIDER'
+#!/bin/bash
+p="${1:-}"
+[[ "$p" == "--prompt-file" ]] && p=$(cat "$2")
+printf 'RECV_LEN=%s\n' "${#p}"
+[[ "$p" == RECVSTART* ]] && echo "HAS_START"
+[[ "$p" == *RECVEND ]] && echo "HAS_END"
+PROVIDER
+    chmod +x "$fakedir/antigravity.sh"
+
+    local body big_prompt
+    body=$(head -c "$BIG_BYTES" /dev/zero | tr '\0' 'Q')
+    big_prompt="RECVSTART ${body} RECVEND"
+
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" \
+        bash "$SCRIPT" --no-cache --no-pane --no-auto-context \
+        --providers=antigravity "$big_prompt"
+
+    [ "$status" -eq 0 ]
+    local resp
+    resp=$(echo "$output" | jq -r '.round1.antigravity.response')
+    [[ "$resp" == *"HAS_START"* ]]           # front reached the provider
+    [[ "$resp" == *"HAS_END"* ]]             # back reached the provider
+    local recv_len
+    recv_len=$(echo "$resp" | sed -n 's/RECV_LEN=//p')
+    [ "$recv_len" -ge "$BIG_BYTES" ]         # full prompt, not argv-truncated
+}
+
 @test "query-council: a large response round-trips intact in debate round 2 (ARG_MAX)" {
     local fakedir="${BATS_TEST_TMPDIR}/argmax-debate"
     mkdir -p "$fakedir"
