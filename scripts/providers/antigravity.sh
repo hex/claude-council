@@ -42,13 +42,24 @@ MODEL=$(get_model antigravity)
 # defense-in-depth alongside the guard.
 ARGS=(--sandbox --model "$MODEL" -p "$FULL_PROMPT")
 
+# Bound the CLI the way API providers are bounded by curl --max-time. GNU
+# `timeout` is absent on stock macOS, so use perl's alarm (perl is already a
+# renderer dependency); the pending alarm survives exec and kills the CLI after
+# COUNCIL_TIMEOUT seconds, surfacing as exit 142 (128 + SIGALRM).
+COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-300}"
+
 ERR_TMP=$(mktemp)
 trap 'rm -f "$ERR_TMP"' EXIT
 
-if RESPONSE=$(agy "${ARGS[@]}" 2>"$ERR_TMP"); then
+if RESPONSE=$(perl -e 'alarm shift; exec @ARGV' "$COUNCIL_TIMEOUT" agy "${ARGS[@]}" 2>"$ERR_TMP"); then
     echo "$RESPONSE"
 else
-    ERR_MSG=$(tr '\n' ' ' < "$ERR_TMP" | head -c 500)
-    echo "Error from antigravity CLI: ${ERR_MSG:-non-zero exit}" >&2
+    rc=$?
+    if [[ $rc -eq 142 ]]; then
+        echo "Error from antigravity CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
+    else
+        ERR_MSG=$(tr '\n' ' ' < "$ERR_TMP" | head -c 500)
+        echo "Error from antigravity CLI: ${ERR_MSG:-non-zero exit}" >&2
+    fi
     exit 1
 fi
