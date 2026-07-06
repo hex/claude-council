@@ -130,6 +130,23 @@ render_with_theme() {
     [[ "$output" != *"30m"* ]]
 }
 
+@test "renderer: scrubs raw control/escape bytes from untrusted model output" {
+    # A model answer could smuggle an OSC title-set (ESC ]0;...BEL) or a CSI
+    # clear (ESC [2J) into its text. The renderer must strip the raw control
+    # bytes before styling so they can't drive the terminal; the leftover
+    # printable characters are harmless.
+    local payload=$'before\033]0;pwned\a mid \033[2J after'
+    run render_with_theme dark "$payload"
+    [ "$status" -eq 0 ]
+    # Visible words survive the scrub.
+    [[ "$output" == *before* ]]
+    [[ "$output" == *after* ]]
+    # None of the injected raw sequences survive.
+    [[ "$output" != *$'\033]0;'* ]]   # OSC title-set intro gone
+    [[ "$output" != *$'\033[2J'* ]]   # CSI clear-screen gone
+    [[ "$output" != *$'\a'* ]]        # BEL gone
+}
+
 # ============================================================================
 # Theme-aware muted text (faint borders, gray URLs/rules, H6 headings)
 # ANSI 2 (faint) and 90 (bright-black) wash out on a light background, so

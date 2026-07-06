@@ -270,6 +270,11 @@ sub flush_table {
 }
 
 while (my $line = <STDIN>) {
+    # Strip raw control bytes from untrusted model output before any styling, so
+    # a smuggled escape (OSC title-set, CSI cursor/clear, etc.) can't drive the
+    # terminal. Keep tab (\x09) and newline (\x0a); the read delimits on \n.
+    $line =~ s/[\x00-\x08\x0b-\x1f\x7f]//g;
+
     # ----- Reasoning blocks -----
     if ($line =~ /^\s*<think>/) {
         flush_table();
@@ -754,6 +759,9 @@ while true; do
                 printf '\n\033[1;38;2;185;28;28m✗ %s error\033[0m\n' "$provider"
                 if [[ -f "$WATCH/errors/${provider}.txt" ]]; then
                     while IFS= read -r err_line; do
+                        # Scrub raw control bytes (keep tab) from the provider's
+                        # error text so it can't drive the terminal on display.
+                        err_line=$(printf '%s' "$err_line" | LC_ALL=C tr -d '\000-\010\013-\037\177')
                         printf '   \033[2;38;2;252;165;165m%s\033[0m\n' "$err_line"
                     done < "$WATCH/errors/${provider}.txt"
                 fi
