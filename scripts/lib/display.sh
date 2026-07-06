@@ -125,6 +125,22 @@ pane_error_write() {
 
 # ----- Pane lifecycle -----
 
+# Maps an OSC 11 background-color reply to "light" or "dark" by perceived
+# luminance (Rec. 601), or echoes nothing when the reply holds no parseable
+# rgb:R/G/B triplet. Pure (no tty) so every branch is unit-testable. Reads the
+# top two hex digits of each channel, so both 8-bit (rgb:RR/GG/BB) and 16-bit
+# (rgb:RRRR/GGGG/BBBB) replies work. Threshold: luminance > 127 is light.
+council_theme_from_osc_reply() {
+    local reply="$1"
+    if [[ "$reply" =~ rgb:([0-9a-fA-F]+)/([0-9a-fA-F]+)/([0-9a-fA-F]+) ]]; then
+        local r=$((16#${BASH_REMATCH[1]:0:2}))
+        local g=$((16#${BASH_REMATCH[2]:0:2}))
+        local b=$((16#${BASH_REMATCH[3]:0:2}))
+        local lum=$(( (r * 299 + g * 587 + b * 114) / 1000 ))
+        if (( lum > 127 )); then echo light; else echo dark; fi
+    fi
+}
+
 # Detect the terminal's background theme: "light", "dark", or "unknown".
 # Order: explicit COUNCIL_THEME, OSC 11 background-color query on the
 # controlling tty, COLORFGBG hint, else unknown. The OSC query outranks
@@ -137,15 +153,22 @@ council_detect_theme() {
     esac
 
     if [[ "${COUNCIL_NO_TTY_QUERY:-0}" != 1 && -r /dev/tty && -w /dev/tty ]]; then
-        local reply=""
         printf '\033]11;?\033\\' > /dev/tty 2>/dev/null || true
-        IFS= read -rs -t 0.2 -d $'\\' reply < /dev/tty 2>/dev/null || true
-        if [[ "$reply" =~ rgb:([0-9a-fA-F]+)/([0-9a-fA-F]+)/([0-9a-fA-F]+) ]]; then
-            local r=$((16#${BASH_REMATCH[1]:0:2}))
-            local g=$((16#${BASH_REMATCH[2]:0:2}))
-            local b=$((16#${BASH_REMATCH[3]:0:2}))
-            local lum=$(( (r * 299 + g * 587 + b * 114) / 1000 ))
-            if (( lum > 127 )); then echo light; else echo dark; fi
+        # Read the reply one byte at a time. bash 3.2 rejects a fractional
+        # read -t, and its -d captures only an ST (ESC \) terminator — so a
+        # BEL-terminated reply (which many terminals send) was never seen and
+        # detection silently no-oped. Break on either terminator; the 1s cap
+        # per byte keeps a non-answering terminal from hanging the pane.
+        local reply="" ch
+        while IFS= read -rs -t 1 -n 1 ch 2>/dev/null; do
+            [[ "$ch" == $'\a' ]] && break         # BEL terminator
+            reply+="$ch"
+            [[ "$reply" == *$'\033\\' ]] && break # ST terminator (ESC \)
+        done < /dev/tty
+        local theme
+        theme=$(council_theme_from_osc_reply "$reply")
+        if [[ -n "$theme" ]]; then
+            echo "$theme"
             return
         fi
     fi

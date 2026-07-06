@@ -54,6 +54,45 @@ setup() {
     [ "$output" == "unknown" ]
 }
 
+# ----- OSC 11 reply parsing (pure, no tty) -----
+# council_detect_theme's live query was dead on bash 3.2 (fractional read -t and
+# an ST-only delimiter). The parse/luminance logic now lives in a pure function
+# so every branch is testable without a terminal.
+
+@test "theme: osc reply — black background maps to dark" {
+    run council_theme_from_osc_reply 'rgb:0000/0000/0000'
+    [ "$output" = "dark" ]
+}
+
+@test "theme: osc reply — white background maps to light" {
+    run council_theme_from_osc_reply 'rgb:ffff/ffff/ffff'
+    [ "$output" = "light" ]
+}
+
+@test "theme: osc reply — luminance threshold sits at 127" {
+    # 0x80 = 128 on every channel -> lum 128 (> 127) -> light
+    run council_theme_from_osc_reply 'rgb:8080/8080/8080'
+    [ "$output" = "light" ]
+    # 0x7f = 127 -> lum 127 (not > 127) -> dark
+    run council_theme_from_osc_reply 'rgb:7f7f/7f7f/7f7f'
+    [ "$output" = "dark" ]
+}
+
+@test "theme: osc reply — handles 8-bit channels and a full OSC frame" {
+    run council_theme_from_osc_reply 'rgb:ff/ff/ff'
+    [ "$output" = "light" ]
+    # The tty returns the triplet wrapped in the OSC frame; parsing must find it.
+    run council_theme_from_osc_reply $'\033]11;rgb:1c1c/1c1c/1c1c\033\\'
+    [ "$output" = "dark" ]
+}
+
+@test "theme: osc reply — unparseable input yields empty (no assertion)" {
+    run council_theme_from_osc_reply 'garbage'
+    [ -z "$output" ]
+    run council_theme_from_osc_reply ''
+    [ -z "$output" ]
+}
+
 # ============================================================================
 # Theme-aware renderer
 # ============================================================================
