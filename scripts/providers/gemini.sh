@@ -61,11 +61,19 @@ PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "
     }
 }')
 
+# Keep the API key and request body off the process argv (ps-visible, and the
+# key would otherwise sit in the URL query string): the key travels via a
+# mode-600 curl config file (x-goog-api-key header) and the payload via a file.
+CURL_CFG=$(curl_secret_config "x-goog-api-key: ${API_KEY}")
+PAYLOAD_FILE=$(mktemp)
+trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE"' EXIT
+printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
+
 # Make API call
-RESPONSE=$(curl_with_retry -s -X POST \
-    "${ENDPOINT}?key=${API_KEY}" \
+RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
+    --config "$CURL_CFG" \
     -H "Content-Type: application/json" \
-    -d "$PAYLOAD")
+    --data-binary @"$PAYLOAD_FILE")
 
 # Extract text from response
 TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')

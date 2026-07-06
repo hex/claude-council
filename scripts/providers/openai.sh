@@ -7,6 +7,7 @@ set -euo pipefail
 # Source shared libraries
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
+source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
@@ -28,6 +29,13 @@ if [[ -z "$API_KEY" ]]; then
     exit 1
 fi
 
+# Keep the API key and request body off the process argv (ps-visible / OS
+# argument-size limits): the key travels via a mode-600 curl config file and
+# the payload via a temp file, populated per endpoint below.
+CURL_CFG=$(curl_secret_config "Authorization: Bearer ${API_KEY}")
+PAYLOAD_FILE=$(mktemp)
+trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE"' EXIT
+
 # Model selection (override via OPENAI_MODEL env var)
 MODEL="${OPENAI_MODEL:-gpt-5.5-pro}"
 
@@ -40,10 +48,9 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
     # Use v1/responses API
     ENDPOINT="https://api.openai.com/v1/responses"
 
-    # Reasoning models need higher token limits (reasoning + output combined)
-    # Use 8x the base limit, minimum 32768 (OpenAI recommends 25k+)
-    TOKENS=$(( BASE_TOKENS * 8 ))
-    [[ $TOKENS -lt 32768 ]] && TOKENS=32768
+    # Reasoning models need higher token limits (reasoning + output combined):
+    # bump to 8x base, minimum 32768. Same patterns that selected this endpoint.
+    bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'codex-*' '*-codex' 'o3-*' 'o4-*' 'gpt-5.[4-9]*'
 
     # Reasoning effort: low/medium/high (override via OPENAI_REASONING_EFFORT)
     EFFORT="${OPENAI_REASONING_EFFORT:-medium}"
@@ -66,10 +73,11 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
         echo "Reasoning effort: $EFFORT" >&2
     fi
 
+    printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
     RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
+        --config "$CURL_CFG" \
         -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${API_KEY}" \
-        -d "$PAYLOAD")
+        --data-binary @"$PAYLOAD_FILE")
 
     if [[ -n "$DEBUG" ]]; then
         echo "=== DEBUG: Response metadata ===" >&2
@@ -109,10 +117,11 @@ else
         max_completion_tokens: $tokens
     }')
 
+    printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
     RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
+        --config "$CURL_CFG" \
         -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${API_KEY}" \
-        -d "$PAYLOAD")
+        --data-binary @"$PAYLOAD_FILE")
 
     # Extract text from chat completions format
     TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')

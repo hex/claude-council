@@ -7,6 +7,19 @@ COUNCIL_MAX_RETRIES="${COUNCIL_MAX_RETRIES:-3}"
 COUNCIL_RETRY_DELAY="${COUNCIL_RETRY_DELAY:-1}"
 COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-300}"  # seconds per request (reasoning models need more time)
 
+# Write a curl --config file (mode 600) holding header lines, echo its path.
+# Keeps secrets (API keys) out of the process argv, where `ps` would show them.
+# Usage: cfg=$(curl_secret_config "Authorization: Bearer $KEY"); curl --config "$cfg" ...
+curl_secret_config() {
+    local f header
+    f=$(mktemp)
+    chmod 600 "$f"
+    for header in "$@"; do
+        printf 'header = "%s"\n' "$header" >> "$f"
+    done
+    printf '%s' "$f"
+}
+
 # HTTP status codes that should trigger a retry
 is_retryable_status() {
     local status="$1"
