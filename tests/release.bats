@@ -55,6 +55,33 @@ EOF
     [ -n "$(git -C "$repo" tag --list 'v*')" ]
 }
 
+@test "release: aborts when the test suite fails" {
+    local repo
+    repo=$(make_release_repo)
+    mkdir -p "$repo/tests"
+    printf '#!/bin/bash\necho boom\nexit 1\n' > "$repo/tests/run_tests.sh"
+    chmod +x "$repo/tests/run_tests.sh"
+
+    run env PATH="$repo/fakebin:$PATH" bash "$repo/scripts/release.sh"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"test suite failed"* ]]
+    # No bump commit — the release stopped at the gate
+    [[ "$(git -C "$repo" log --oneline | wc -l | tr -d ' ')" == "1" ]]
+}
+
+@test "release: a passing test suite gate lets the release proceed" {
+    local repo
+    repo=$(make_release_repo)
+    mkdir -p "$repo/tests"
+    printf '#!/bin/bash\nexit 0\n' > "$repo/tests/run_tests.sh"
+    chmod +x "$repo/tests/run_tests.sh"
+
+    run env PATH="$repo/fakebin:$PATH" bash "$repo/scripts/release.sh"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Running test suite before release"* ]]
+    [[ "$(git -C "$repo" log --oneline | wc -l | tr -d ' ')" == "2" ]]
+}
+
 @test "release: the bump commit carries only plugin.json" {
     local repo
     repo=$(make_release_repo)

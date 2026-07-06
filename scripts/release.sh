@@ -21,6 +21,16 @@ if ! git diff --cached --quiet; then
     exit 1
 fi
 
+# Never tag a release on a red suite. (Skipped only where the runner is absent,
+# e.g. a minimal checkout.)
+if [[ -f tests/run_tests.sh ]]; then
+    echo "Running test suite before release..."
+    if ! bash tests/run_tests.sh; then
+        echo "Error: test suite failed; aborting release." >&2
+        exit 1
+    fi
+fi
+
 # Read current version
 CURRENT_VERSION=$(jq -r '.version' "$PLUGIN_JSON")
 echo "Current version: $CURRENT_VERSION"
