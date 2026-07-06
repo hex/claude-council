@@ -4,6 +4,7 @@
 
 load test_helper
 load fixtures/fake-clis
+bats_require_minimum_version 1.5.0
 
 GATE="${SCRIPTS_DIR}/stop-review-gate.sh"
 
@@ -96,6 +97,31 @@ dirty_diff() {
     run bash "$GATE" <<< "$(stop_event)"
     [ "$status" -eq 0 ]
     [[ "$output" != *'"decision"'* ]]
+}
+
+@test "stop-gate: rejects an out-of-allowlist provider name without executing anything" {
+    # A provider like "../../evil" would otherwise build an arbitrary script path
+    jq -n '{enabled: true, provider: "../../evil", max_iterations: 1}' \
+        > "$REPO/.claude/council-stop-gate.json"
+    dirty_diff
+    export COUNCIL_FAKE_BEHAVIOR=block-verdict
+    run bash "$GATE" <<< "$(stop_event)"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *'"decision"'* ]]
+    [[ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]]
+}
+
+@test "stop-gate: a slow reviewer times out and fails open instead of hanging" {
+    enable_gate
+    dirty_diff
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_TIMEOUT=1
+    local start end
+    start=$SECONDS
+    run bash "$GATE" <<< "$(stop_event)"
+    end=$SECONDS
+    [ "$status" -eq 0 ]
+    [[ "$output" != *'"decision"'* ]]
+    [ $((end - start)) -lt 15 ]
 }
 
 @test "stop-gate: per-session iteration cap stops repeat blocks" {
