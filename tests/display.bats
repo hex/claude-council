@@ -122,17 +122,17 @@ teardown() {
 }
 
 @test "display: waiting line disables autowrap so a too-wide list clips, not wraps" {
-    # Regression guard for the spinner waterfall. The watcher's draw_loading is
-    # inside an un-sourceable heredoc, so this asserts the no-wrap guard is
-    # present in source: the waiting line must bracket its output with DECAWM-off
+    # Regression guard for the spinner waterfall. draw_loading only runs on a
+    # live pane tty, so this asserts the no-wrap guard is present in source:
+    # the waiting line must bracket its output with DECAWM-off
     # (\033[?7l) and DECAWM-on (\033[?7h). Without it, a list wider than the pane
     # wraps, and \r\033[K (which reclaims only the current row) leaves one stale
     # spinner line per frame. Verified behaviorally via tmux capture-pane.
     # Match the actual printf sequence, not the explanatory comment: the line
     # clears with \033[K then disables wrap, and re-enables right after the list.
-    run grep -F '\033[K\033[?7l' "$LIB"
+    run grep -F '\033[K\033[?7l' "${LIB_DIR}/pane-watcher.sh"
     [ "$status" -eq 0 ]
-    run grep -F '%s\033[?7h' "$LIB"
+    run grep -F '%s\033[?7h' "${LIB_DIR}/pane-watcher.sh"
     [ "$status" -eq 0 ]
 }
 
