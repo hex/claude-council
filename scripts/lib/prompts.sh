@@ -20,19 +20,27 @@ load_prompt_template() {
 # Usage: interpolate_template "$template" "KEY=value" "OTHER=value"
 # Values may contain any characters including newlines and equals signs.
 # Slots with no matching argument are removed.
+#
+# Single left-to-right pass over the ORIGINAL template: each {{KEY}} is replaced
+# by its value (or removed if unprovided), and the value is appended as-is —
+# never re-scanned. This preserves {{...}} sequences that appear inside a
+# substituted value (e.g. a git diff containing mustache/Jinja braces), which a
+# naive whole-string replace-then-strip would delete.
 interpolate_template() {
-    local out="$1"
+    local template="$1"
     shift
-    local kv key val
-    for kv in "$@"; do
-        key="${kv%%=*}"
-        val="${kv#*=}"
-        # Replacement is quoted so bash 5.2 patsub_replacement leaves & and \ literal
-        out=${out//"{{${key}}}"/"$val"}
+    local out="" rest="$template" whole name kv val
+    while [[ "$rest" =~ \{\{([A-Za-z0-9_]+)\}\} ]]; do
+        whole="${BASH_REMATCH[0]}"
+        name="${BASH_REMATCH[1]}"
+        out+="${rest%%"$whole"*}"   # literal text before this slot
+        val=""
+        for kv in "$@"; do
+            if [[ "${kv%%=*}" == "$name" ]]; then val="${kv#*=}"; break; fi
+        done
+        out+="$val"                 # provided value (or empty); not re-scanned
+        rest="${rest#*"$whole"}"
     done
-    # Unfilled slots collapse to empty
-    while [[ "$out" =~ \{\{[A-Za-z0-9_]+\}\} ]]; do
-        out=${out//"${BASH_REMATCH[0]}"/}
-    done
+    out+="$rest"
     printf '%s\n' "$out"
 }

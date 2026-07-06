@@ -4,6 +4,7 @@
 
 load test_helper
 load fixtures/fake-clis
+bats_require_minimum_version 1.5.0
 
 PROVIDERS_DIR_REAL="${SCRIPTS_DIR}/providers"
 PROVIDERS_LIB="${LIB_DIR}/providers.sh"

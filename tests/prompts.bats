@@ -56,6 +56,23 @@ setup() {
     [[ "$output" == "key=value" ]]
 }
 
+@test "interpolate_template: {{...}} inside a value is preserved, not stripped" {
+    # A diff containing mustache/Jinja braces must survive interpolation intact
+    local diff=$'+ render({{ user.name }})\n- render({{ old }})'
+    run interpolate_template "DIFF:\n{{DIFF}}" "DIFF=$diff"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"{{ user.name }}"* ]]
+    [[ "$output" == *"{{ old }}"* ]]
+}
+
+@test "interpolate_template: an unprovided slot is removed but same-named braces in a value stay" {
+    # {{Q}} is provided (its value contains {{X}}); {{X}} is NOT a provided slot
+    run interpolate_template "{{Q}} then {{X}}" "Q=ask {{X}} now"
+    [ "$status" -eq 0 ]
+    # the {{X}} from the value is preserved; the standalone {{X}} slot is removed
+    [[ "$output" == "ask {{X}} now then " ]]
+}
+
 @test "build_prompt_with_role: renders through the role-injection template" {
     source "${LIB_DIR}/roles.sh"
     local result
