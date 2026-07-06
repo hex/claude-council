@@ -147,6 +147,62 @@ render_with_theme() {
     [[ "$output" != *$'\a'* ]]        # BEL gone
 }
 
+# ----- Block-construct rendering (perl renderer, dark theme markers) -----
+# These pin the perl renderer's structural output: head=96, gray=90, strong=1;97
+# on dark. They complement the emphasis/muted tests above by covering tables,
+# code fences, headings, lists, and blockquotes.
+
+@test "renderer: table renders gray inner separators and a styled header row" {
+    run render_with_theme dark $'| Name | Role |\n| --- | --- |\n| gem | judge |'
+    [ "$status" -eq 0 ]
+    # Borderless table: gray │ separators between columns.
+    [[ "$output" == *$'\033[90m│\033[0m'* ]]
+    # Header cells: bold + head color (96 on dark). The --- separator row that
+    # marked them as a header is consumed, never printed.
+    [[ "$output" == *$'\033[1;96mName\033[0m'* ]]
+    [[ "$output" == *$'\033[1;96mRole\033[0m'* ]]
+    [[ "$output" == *"─┼─"* ]]        # header underline crossbars
+    # Data row present and NOT header-styled.
+    [[ "$output" == *"gem"* ]]
+    [[ "$output" == *"judge"* ]]
+}
+
+@test "renderer: fenced code block uses ┌/└ markers and copies content verbatim" {
+    run render_with_theme dark $'```bash\n# cfg line\n**not bold**\n```'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"┌─────"* ]]     # open marker
+    [[ "$output" == *"└─────"* ]]     # close marker
+    [[ "$output" == *"bash"* ]]       # language label
+    # Content inside a fence is never markdown-processed.
+    [[ "$output" == *'# cfg line'* ]]
+    [[ "$output" == *'**not bold**'* ]]
+    [[ "$output" != *$'\033[1;7;96m'* ]]  # '# cfg line' is not turned into an H1
+    [[ "$output" != *$'\033[1;97m'* ]]    # '**not bold**' is not turned into bold
+}
+
+@test "renderer: H1–H3 get distinct heading styles" {
+    run render_with_theme dark $'# Title One\n## Title Two\n### Title Three'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Title One"* ]]
+    [[ "$output" == *$'\033[1;7;96m'* ]]                   # H1: bold + inverse + head
+    [[ "$output" == *$'\033[1;96mTitle Two\033[0m'* ]]     # H2: bold + head
+    [[ "$output" == *$'\033[1;36mTitle Three\033[0m'* ]]   # H3: bold + fixed cyan
+}
+
+@test "renderer: bullet and numbered lists get cyan markers" {
+    run render_with_theme dark $'- first\n- second\n\n1. one\n2. two'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'\033[36m•\033[0m first'* ]]   # unordered → cyan bullet
+    [[ "$output" == *$'\033[36m1.\033[0m one'* ]]    # ordered → cyan number
+}
+
+@test "renderer: blockquote gets a magenta bar and italic body" {
+    run render_with_theme dark $'> quoted words'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'\033[35m▌\033[0m'* ]]           # magenta bar
+    [[ "$output" == *$'\033[3mquoted words\033[0m'* ]] # italic body
+}
+
 # ============================================================================
 # Theme-aware muted text (faint borders, gray URLs/rules, H6 headings)
 # ANSI 2 (faint) and 90 (bright-black) wash out on a light background, so
