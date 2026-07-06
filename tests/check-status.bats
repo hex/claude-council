@@ -60,3 +60,58 @@ setup() {
     [[ "$output" == *"npm install -g @openai/codex"* ]]
     [[ "$output" == *"install the Antigravity CLI (agy)"* ]]
 }
+
+# Shadow curl with a stub that echoes a scripted HTTP code, so check_provider's
+# result branches can be exercised offline with no real keys or network. Keys
+# are dummy values only to get past the no_key guard.
+shadow_curl() {
+    local dir="${BATS_TEST_TMPDIR}/fakecurl"
+    mkdir -p "$dir"
+    cat > "$dir/curl" <<'EOF'
+#!/bin/bash
+printf '%s' "${COUNCIL_FAKE_HTTP_CODE:-200}"
+EOF
+    chmod +x "$dir/curl"
+    export PATH="$dir:$PATH"
+    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k
+    export COUNCIL_FAKE_BEHAVIOR=valid
+}
+
+@test "check-status: HTTP 200 reports Connected and counts the provider available" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=200
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Connected"* ]]
+    # 4 API providers + codex + antigravity, all healthy
+    [[ "$output" == *"6/6 providers available"* ]]
+}
+
+@test "check-status: HTTP 401 reports auth failure with regenerate remediation" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=401
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Auth failed (HTTP 401)"* ]]
+    [[ "$output" == *"key rejected - regenerate it"* ]]
+    # Only the two CLI providers remain available
+    [[ "$output" == *"2/6 providers available"* ]]
+}
+
+@test "check-status: HTTP 500 reports a generic error with the code" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=500
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Error (HTTP 500)"* ]]
+    [[ "$output" == *"2/6 providers available"* ]]
+}
+
+@test "check-status: curl failure (000) reports a connection timeout" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=000
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Connection timeout"* ]]
+    [[ "$output" == *"2/6 providers available"* ]]
+}

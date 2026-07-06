@@ -57,12 +57,14 @@ check_provider() {
                 "https://api.x.ai/v1/models" 2>/dev/null || echo "000")
             ;;
         perplexity)
-            # Perplexity has no /models endpoint; use minimal chat request
+            # Perplexity has no /models endpoint, so auth can only be probed with
+            # a (billable) chat request. Cap it at max_tokens:1 to make the status
+            # check as close to free as the API allows.
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
                 -X POST \
                 -H "Authorization: Bearer ${api_key}" \
                 -H "Content-Type: application/json" \
-                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":16}' \
+                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":1}' \
                 "https://api.perplexity.ai/chat/completions" 2>/dev/null || echo "000")
             ;;
     esac
