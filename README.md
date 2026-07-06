@@ -70,12 +70,6 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 /plugin install claude-council
 ```
 
-### Direct from GitHub
-
-```bash
-/plugin install hex/claude-council
-```
-
 ### Manual (run from a local clone)
 
 For normal use, prefer the marketplace or GitHub install above — both persist
@@ -327,6 +321,8 @@ Cached responses show `cached` instead of `success` in the status output. Cache 
 - Using `--roles` creates separate cache entries (same prompt with different role = cache miss)
 - Debate mode round 2 rebuttals are not cached (they depend on round 1 content) — with one exception: if a CLI provider fails in round 2 and falls back to its API sibling, that fallback rebuttal is cached, keyed on the full debate prompt (which already includes the round 1 answers)
 
+Privacy: cache entries and the saved `council-*.md` transcripts store the **full prompt in cleartext** — including any files you pass with `--file` and the auto-included context. Council drops a `.gitignore` (`*`) into the cache dir so these never get committed, but the plaintext still lives on local disk under `COUNCIL_CACHE_DIR` until it ages out or you clear it.
+
 ### Export to File
 
 Save council responses as clean markdown files for documentation or sharing:
@@ -381,22 +377,6 @@ export GEMINI_API_KEY="your-key"
 export OPENAI_API_KEY="your-key"
 export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
 export PERPLEXITY_API_KEY="your-key"
-```
-
-Or create `.claude/claude-council.local.md` in your project:
-
-```yaml
----
-providers:
-  gemini:
-    api_key: "your-key"
-  openai:
-    api_key: "your-key"
-  grok:
-    api_key: "your-key"
-  perplexity:
-    api_key: "your-key"
----
 ```
 
 ### CLI Providers (subscription auth, no API key)

@@ -79,21 +79,6 @@ teardown() {
     [[ "$out" == *"033"* ]]
 }
 
-@test "display: it2_set_mark is silent no-op outside iTerm2" {
-    source "$LIB"
-    run it2_set_mark
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
-}
-
-@test "display: it2_set_mark emits SetMark sequence in iTerm2" {
-    source "$LIB"
-    export LC_TERMINAL="iTerm2"
-    local raw
-    raw=$(it2_set_mark)
-    [[ "$raw" == *"SetMark"* ]]
-}
-
 @test "display: it2_attention is silent no-op outside iTerm2" {
     source "$LIB"
     run it2_attention start

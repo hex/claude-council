@@ -53,21 +53,6 @@ it2_set_tab_color() {
     it2setcolor tab "$1" 2>/dev/null || true
 }
 
-# Drops an iTerm2 mark (a cmd-up/down jump target). Inside tmux/screen the 1337
-# sequence must be wrapped in a passthrough (\033Ptmux;...\033\\), which tmux
-# forwards only when `allow-passthrough` is enabled — off by default in tmux 3.3+,
-# so marks silently no-op there unless the user opts in. The pane watcher emits
-# this same sequence inline (it runs as a separate process and cannot call this
-# helper), so keep the two in sync.
-it2_set_mark() {
-    is_iterm2_outer || return 0
-    if [[ "${TERM:-}" == screen* || "${TERM:-}" == tmux* ]]; then
-        printf '\033Ptmux;\033\033]1337;SetMark\a\033\\'
-    else
-        printf '\033]1337;SetMark\a'
-    fi
-}
-
 it2_attention() {
     is_iterm2_outer || return 0
     command -v it2attention &>/dev/null || return 0

@@ -106,10 +106,11 @@ Options:
   - Detailed - thorough analysis with code examples and trade-offs
 ```
 
-The model names above are illustrative defaults. The authoritative model for each
-provider is `get_model()` in `scripts/lib/providers.sh` (overridable via the
-`*_MODEL` env vars), so prefer the live values from the `--list-default` output
-over these literals if they differ.
+The model names above are illustrative defaults, duplicated here by hand — treat
+them as potentially stale. The authoritative source for each provider's model is
+`get_model()` in `scripts/lib/providers.sh` (overridable per provider via the
+`*_MODEL` env vars). `--list-default` reports provider names only, not models, so
+it can't confirm these labels; when in doubt, read `get_model()`.
 
 When the providers list exceeds 4 options ("All" + N providers), AskUserQuestion's 4-option limit forces a different shape — collapse to "All / Fast subset / Custom" presets.
 

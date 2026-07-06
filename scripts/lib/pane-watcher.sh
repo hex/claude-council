@@ -167,6 +167,12 @@ while true; do
         clear_loading
         for f in "${new_responses[@]}"; do
             name=$(basename "$f" .md)
+            # Drop an iTerm2 mark (cmd-up/down jump target) above each response.
+            # Emitted unconditionally: iTerm2 detection is unreliable inside a
+            # tmux pane (ITERM_SESSION_ID/LC_TERMINAL aren't forwarded in), so
+            # gating on it would suppress marks that DO work in iTerm2+tmux. The
+            # DCS passthrough needs tmux `allow-passthrough on` to reach iTerm2;
+            # other terminals safely ignore the unknown OSC 1337.
             printf '\033Ptmux;\033\033]1337;SetMark\a\033\\'
             build_banner_line banner_line "$name"
             printf '\n\n%s\n\n' "$banner_line"

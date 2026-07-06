@@ -174,6 +174,17 @@ wait_for_job() {
     grep -q "FAKE-CODEX-RESPONSE" "$output"
 }
 
+@test "run-council: sync drops a self-ignoring .gitignore even under --no-cache" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    # --no-cache skips cache_set/ensure_cache_dir, so run_sync itself must drop
+    # the guard — otherwise the transcript (full prompt + any --file contents)
+    # lands in an untracked-but-unignored dir in the user's repo.
+    run bash "$RUN_COUNCIL" --no-cache --providers=codex -- "test question"
+    [ "$status" -eq 0 ]
+    [ -f .claude/council-cache/.gitignore ]
+    [ "$(cat .claude/council-cache/.gitignore)" = "*" ]
+}
+
 @test "run-council: sync failure surfaces the real error and leaves no partial file" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     run --separate-stderr bash "$RUN_COUNCIL" --providers=codex --verbosity=bogus -- "test question"

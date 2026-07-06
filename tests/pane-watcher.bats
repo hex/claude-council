@@ -40,6 +40,8 @@ run_watcher() {
     [[ "$output" == *"1.2s"* ]]
     # Response body rendered through render.sh.
     [[ "$output" == *"Hello"* ]]
+    # An iTerm2 mark (SetMark) is dropped above each response.
+    [[ "$output" == *"SetMark"* ]]
 }
 
 @test "watcher: prints an inline notice for a provider that errored without a response" {

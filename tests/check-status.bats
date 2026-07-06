@@ -115,3 +115,53 @@ EOF
     [[ "$output" == *"Connection timeout"* ]]
     [[ "$output" == *"2/6 providers available"* ]]
 }
+
+# ---- secret hygiene: /status probes must keep keys off the process argv ----
+
+# Recording curl: appends its argv (one arg per line) to CS_ARGV_FILE, copies any
+# --config file's contents to CS_CONFIG_FILE, then prints the scripted HTTP code.
+record_curl() {
+    local dir="${BATS_TEST_TMPDIR}/reccurl"
+    mkdir -p "$dir"
+    export CS_ARGV_FILE="${BATS_TEST_TMPDIR}/argv"
+    export CS_CONFIG_FILE="${BATS_TEST_TMPDIR}/cfg"
+    : > "$CS_ARGV_FILE"; : > "$CS_CONFIG_FILE"
+    cat > "$dir/curl" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$@" >> "$CS_ARGV_FILE"
+prev=""
+for a in "$@"; do
+    [[ "$prev" == "--config" && -f "$a" ]] && cat "$a" >> "$CS_CONFIG_FILE"
+    prev="$a"
+done
+printf '%s' "${COUNCIL_FAKE_HTTP_CODE:-200}"
+EOF
+    chmod +x "$dir/curl"
+    export PATH="$dir:$PATH"
+    export GEMINI_API_KEY=SEKRET_GEM OPENAI_API_KEY=SEKRET_OAI \
+           XAI_API_KEY=SEKRET_GROK PERPLEXITY_API_KEY=SEKRET_PPX
+    export COUNCIL_FAKE_BEHAVIOR=valid
+}
+
+@test "check-status: probe API keys never appear on the curl argv" {
+    record_curl
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    # Guard against a vacuous pass: curl must have actually run and recorded argv.
+    [ -s "$CS_ARGV_FILE" ]
+    # None of the four keys may reach the process table (ps-visible for the 10s probe).
+    ! grep -qF "SEKRET_GEM" "$CS_ARGV_FILE"
+    ! grep -qF "SEKRET_OAI" "$CS_ARGV_FILE"
+    ! grep -qF "SEKRET_GROK" "$CS_ARGV_FILE"
+    ! grep -qF "SEKRET_PPX" "$CS_ARGV_FILE"
+    # They must instead travel via the mode-600 --config file.
+    grep -qF "SEKRET_GEM" "$CS_CONFIG_FILE"
+    grep -qF "SEKRET_OAI" "$CS_CONFIG_FILE"
+}
+
+@test "check-status: now_ms scales the date fallback to milliseconds" {
+    # Durations render as "(Nms)"; without python3 the fallback must be
+    # date-seconds * 1000, never bare seconds (which would show ~1000x too small).
+    run grep -qE '\|\| *date \+%s *$' "$SCRIPT"
+    [ "$status" -ne 0 ]
+}

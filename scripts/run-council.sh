@@ -44,6 +44,10 @@ run_sync() {
     local outfile="${outdir}/${name}.md"
     local logfile="${outdir}/${name}.log"
     mkdir -p "$outdir"
+    # Self-ignoring cache dir: transcripts embed the full prompt (and any --file
+    # contents), so keep them out of git even on the --no-cache path, where
+    # cache.sh's ensure_cache_dir never runs.
+    [[ -f "${outdir}/.gitignore" ]] || printf '*\n' > "${outdir}/.gitignore"
     # Guarded by `if` so pipefail-driven failure is handled here rather than
     # tripping set -e before we can surface the cause.
     if bash "${SCRIPT_DIR}/query-council.sh" "${PASS[@]+"${PASS[@]}"}" 2>"$logfile" \
