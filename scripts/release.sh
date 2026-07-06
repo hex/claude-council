@@ -12,6 +12,15 @@ if [[ ! -f "$PLUGIN_JSON" ]]; then
     exit 1
 fi
 
+# Operate from the repo root, and refuse to run with a pre-staged index before
+# mutating anything: the version-bump commit below carries the whole index, so
+# any unrelated staged change would be swept into it.
+cd "${SCRIPT_DIR}/.."
+if ! git diff --cached --quiet; then
+    echo "Error: staged changes present. Commit or unstage them before releasing." >&2
+    exit 1
+fi
+
 # Read current version
 CURRENT_VERSION=$(jq -r '.version' "$PLUGIN_JSON")
 echo "Current version: $CURRENT_VERSION"
@@ -33,7 +42,6 @@ jq --arg v "$NEW_VERSION" '.version = $v' "$PLUGIN_JSON" > "${PLUGIN_JSON}.tmp"
 mv "${PLUGIN_JSON}.tmp" "$PLUGIN_JSON"
 
 # Commit and tag
-cd "${SCRIPT_DIR}/.."
 git add .claude-plugin/plugin.json
 git commit -m "Bump version to ${NEW_VERSION}"
 git tag "v${NEW_VERSION}"
