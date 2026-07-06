@@ -398,7 +398,7 @@ claude-council/
 │   ├── run_tests.sh             # Test runner
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── fixtures/
-│   │   └── fake-clis.bash       # Fake codex/gemini binaries on PATH
+│   │   └── fake-clis.bash       # Fake codex/agy binaries on PATH
 │   ├── agent-analysis.bats
 │   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
 │   ├── cache.bats

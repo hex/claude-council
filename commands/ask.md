@@ -83,6 +83,10 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default 2>&1 | head -
 **Combine providers + verbosity into a single AskUserQuestion call** (it supports multiple questions per call) so the user resolves both decisions in one screen instead of two:
 
 ```
+<!-- The model names below are the current defaults; the single source of truth
+     is get_model() in scripts/lib/providers.sh. When those defaults change,
+     update them here, in the SKILL.md provider tables, and in the README Model
+     Selection section together. -->
 Question 1: "Which AI providers should I consult?"
 Header: "Providers"
 multiSelect: true

@@ -325,7 +325,7 @@ export COUNCIL_CACHE_TTL=3600                      # Cache lifetime in seconds (
 Cached responses show `cached` instead of `success` in the status output. Cache is keyed by prompt + provider + model + role, so:
 - Changing models invalidates the cache
 - Using `--roles` creates separate cache entries (same prompt with different role = cache miss)
-- Debate mode round 2 rebuttals are never cached (they depend on round 1 content)
+- Debate mode round 2 rebuttals are not cached (they depend on round 1 content) — with one exception: if a CLI provider fails in round 2 and falls back to its API sibling, that fallback rebuttal is cached, keyed on the full debate prompt (which already includes the round 1 answers)
 
 ### Export to File
 
@@ -429,6 +429,12 @@ export COUNCIL_VERBOSITY=detailed  # thorough analysis with code + edge cases
 
 Or per-call: `--verbosity=brief|standard|detailed`. The slash command also asks via the provider-selection prompt.
 
+| Level | Typical output |
+|-------|----------------|
+| `brief` | 3-5 sentences max, bullets where possible, skips code blocks unless asked |
+| `standard` | Balanced — current default behavior, no directive prepended |
+| `detailed` | Thorough — includes code examples, edge cases, trade-offs, and rationale |
+
 ### Stop-Gate Review (opt-in, off by default)
 
 A Stop hook can ask one council provider to review your uncommitted `git diff`
@@ -446,11 +452,11 @@ continuation already triggered by a stop hook, caps blocks per session at
 `max_iterations`, and any reviewer failure allows the stop. Delete the file
 (or set `"enabled": false`) to turn it off.
 
-| Level | Typical output |
-|-------|----------------|
-| `brief` | 3-5 sentences max, bullets where possible, skips code blocks unless asked |
-| `standard` | Balanced — current default behavior, no directive prepended |
-| `detailed` | Thorough — includes code examples, edge cases, trade-offs, and rationale |
+Privacy: the review sends your full uncommitted `git diff` to the configured
+provider. With a CLI provider (`codex`, `agy`) it stays within that tool's own
+subscription auth; with an API provider (`gemini`, `openai`, `grok`,
+`perplexity`) the diff is transmitted to that third-party API. Keep the reviewer
+on a local CLI provider if your working tree may contain secrets.
 
 ## Reference
 
@@ -499,7 +505,7 @@ export OPENAI_REASONING_EFFORT="medium"  # default - balanced
 export OPENAI_REASONING_EFFORT="high"    # thorough reasoning, slower
 ```
 
-Grok accounts thinking tokens separately from `max_tokens`, which caps only the visible output — so its bump guards against long answers (not internal thinking) being cut off mid-response.
+Grok's token accounting depends on the model: `grok-build` counts thinking tokens separately, so `max_tokens` caps only its visible output; the other reasoning models (`grok-4*`, `*-reasoning`, `grok-3-mini-*`) share one budget between thinking and output. Either way, council bumps the cap for these models so a long answer isn't cut off mid-response.
 
 ### Perplexity Search Features
 
@@ -575,7 +581,8 @@ bash scripts/query-council.sh --providers=gemini,openai --roles=balanced -- "Rev
 # Pipe to formatter for terminal display
 bash scripts/query-council.sh --providers=gemini -- "Question" 2>/dev/null | bash scripts/format-output.sh
 
-# Check provider status
+# Check provider status (the Perplexity check makes one minimal billable request,
+# since Perplexity has no free /models endpoint to probe)
 bash scripts/check-status.sh
 
 # List configured providers (human-readable, with policy info)
@@ -646,7 +653,7 @@ bats tests/roles.bats
 ```
 
 CLI-provider paths are tested hermetically: `tests/fixtures/fake-clis.bash`
-installs fake `codex`/`gemini` executables onto `PATH` whose behavior is
+installs fake `codex`/`agy` executables onto `PATH` whose behavior is
 switched via `COUNCIL_FAKE_BEHAVIOR` and which record every invocation, so
 provider scripts, async jobs, and the stop gate run end-to-end with no
 network and no real CLIs.

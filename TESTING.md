@@ -100,8 +100,8 @@ Manual testing procedures for features that require API calls or Claude Code int
    export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
    ```
 
-   Alternatively, install `codex` and/or `gemini` CLIs — they're discovered
-   automatically via PATH and use your existing subscription auth.
+   Alternatively, install `codex` and/or `agy` (Antigravity) CLIs — they're
+   discovered automatically via PATH and use your existing subscription auth.
 
 2. **Plugin loaded** in Claude Code:
    ```bash
@@ -435,7 +435,7 @@ rm combined-test.md
 ### No API Keys and no CLI agents
 ```bash
 unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
-# Strip /opt/homebrew/bin and ~/.nvm from PATH so codex/gemini aren't discovered
+# Strip /opt/homebrew/bin and ~/.nvm from PATH so codex/agy aren't discovered
 bash scripts/query-council.sh "Test question" 2>&1
 ```
 **Expected**: `Error: No providers configured.` followed by a hint to set an
