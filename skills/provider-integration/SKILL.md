@@ -1,5 +1,5 @@
 ---
-name: integrating-providers
+name: provider-integration
 description: Adds new AI providers to claude-council, configures provider API settings, troubleshoots provider connections, and documents the provider script interface. Covers creating provider shell scripts, setting API keys, and validating connectivity. Triggers on "add provider", "new AI agent", "provider not working", "API configuration", or "extend council".
 ---
 

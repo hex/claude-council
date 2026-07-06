@@ -1,5 +1,5 @@
 ---
-name: querying-council-with-agents
+name: deep-execution
 description: Executes agent-enhanced council queries by spawning parallel Claude subagents that each query a provider, evaluate response quality, ask follow-up questions, and return structured insights with confidence ratings and blind spot analysis. Invoked when the --agents flag is used or when complex architectural decisions are detected.
 ---
 
@@ -22,9 +22,12 @@ Use `run_in_background: true` and `subagent_type: "general-purpose"` for each.
 **Agent prompt template**: See [agent-prompt-template.md](agent-prompt-template.md) for the full template.
 Read it and fill in `{PROVIDER}`, `{SCRIPT_PATH}`, and `{QUESTION}` for each agent.
 
-**CRITICAL**: If a role was assigned to a provider (via --roles), prepend the role context
-to the question before passing it to the agent. Use the same role injection format as
-the standard flow.
+**CRITICAL**: If a role was assigned to a provider (via --roles), build the
+role-injected question with the same helper the standard flow uses — source
+`scripts/lib/prompts.sh` and `scripts/lib/roles.sh`, then
+`build_prompt_with_role "<question>" "<role>"` — and pass its output as the
+agent's `{QUESTION}`. The role format itself is defined in
+`${CLAUDE_PLUGIN_ROOT}/prompts/role-injection.md`.
 
 **CRITICAL**: If file context was gathered (via --file or auto-context), include it in
 the question passed to each agent.
@@ -36,10 +39,15 @@ Wait for ALL agents to complete before proceeding to display.
 
 If an agent fails or times out, note the failure and continue with available results.
 
-Validate each agent's reply against the contract before using it:
+Validate each agent's reply against the contract before using it. Write the
+reply to a file first (its JSON may contain quotes, backticks, and `$()` that an
+inline `echo` would let the shell mangle or execute), then feed it on stdin:
 
 ```bash
-echo "$AGENT_REPLY_JSON" | bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-analysis.sh
+cat > /tmp/council-reply.json <<'COUNCIL_REPLY_EOF'
+<paste the agent's raw JSON reply here, verbatim, unescaped>
+COUNCIL_REPLY_EOF
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-analysis.sh < /tmp/council-reply.json
 ```
 
 - **Exit 0**: the reply is a valid analysis; use its fields in Steps 4-5.

@@ -12,9 +12,16 @@ Query the {PROVIDER} AI provider and deliver a structured analysis of its respon
 
 ### Round 1: Initial Query
 
-Run this command:
+Write the question to a file first, then query the provider reading from it. The
+quoted heredoc marker (`'COUNCIL_Q_EOF'`) means the shell does NOT interpret any
+quotes, backticks, or `$()` the question may contain — paste it verbatim, do not
+escape it:
+
 ```bash
-COUNCIL_TIMEOUT=500 bash {SCRIPT_PATH} "{QUESTION}"
+cat > /tmp/council-question.txt <<'COUNCIL_Q_EOF'
+{QUESTION}
+COUNCIL_Q_EOF
+COUNCIL_TIMEOUT=500 bash {SCRIPT_PATH} "$(cat /tmp/council-question.txt)"
 ```
 
 Read the response carefully.
@@ -38,7 +45,7 @@ matching {SCHEMA_PATH} (schemas/agent-analysis.schema.json):
 
 {
   "quality": "good | fair | poor",
-  "retried": true,
+  "retried": true | false,
   "confidence": "high | medium | low",
   "key_recommendations": ["3-5 actionable recommendations"],
   "unique_perspective": "What this provider brings that others might miss. 2-3 sentences.",
@@ -47,6 +54,7 @@ matching {SCHEMA_PATH} (schemas/agent-analysis.schema.json):
 }
 
 IMPORTANT:
+- retried is true only if you actually ran a follow-up query in Round 2; otherwise false
 - full_response must contain the complete, unedited provider response
 - Be honest in your quality assessment - "good" means genuinely useful, not just "it returned text"
 - For blind_spots, think about what a different expert perspective might critique
