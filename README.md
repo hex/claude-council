@@ -106,6 +106,9 @@ claude --plugin-dir /path/to/claude-council    # repo root; loaded for this sess
 # Include a specific file for review
 /claude-council:ask --file=src/auth.ts "What's wrong with this implementation?"
 
+# Attach a screenshot for visual critique
+/claude-council:ask --image=shot.png "Why does this dialog render off-center?"
+
 # Export response to markdown file
 /claude-council:ask --output=docs/auth-decision.md "How should we implement authentication?"
 
@@ -128,6 +131,7 @@ claude --plugin-dir /path/to/claude-council    # repo root; loaded for this sess
 | `--roles=list` | Assign roles (e.g., `security,performance` or preset like `balanced`) |
 | `--debate` | Enable two-round debate mode |
 | `--file=path` | Include specific file in context |
+| `--image=path` | Attach one image (e.g. a screenshot) for vision-capable providers |
 | `--output=path` | Export response to markdown file |
 | `--quiet` | Show only synthesis, hide individual responses |
 | `--agents` | Agent-enhanced analysis with subagents (slower, deeper) |
@@ -297,6 +301,21 @@ Auto-context limits:
 - Maximum 5 files included
 - Maximum ~10,000 tokens of context
 - Skipped if you provide `--file=` explicitly
+
+### Image Input
+
+Attach one image (e.g. a UI screenshot) so vision-capable providers can critique it:
+
+```bash
+/claude-council:ask --image=shot.png "Why does this dialog render off-center?"
+```
+
+- Single image per query, raw size up to 10 MB, extensions: png / jpg / jpeg / webp / gif.
+- `gemini` and `openai` receive the image alongside the prompt.
+- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini` (the slot is marked as a fallback). If the sibling is unusable (no API key) or already answering in its own slot, the CLI provider answers text-only instead.
+- `grok` and `perplexity` answer text-only; their responses are prefixed with `(answered without the image)`.
+
+Privacy: the image is sent to the providers that can see it, but its bytes are **not** written to cache entries or the saved `council-*.md` transcripts — only a hash of the image keys the cache.
 
 ### Response Caching
 
