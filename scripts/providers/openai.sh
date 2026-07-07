@@ -16,11 +16,23 @@ verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 DEBUG="${COUNCIL_DEBUG:-}"
 
 PROMPT="${1:-}"
-# A large prompt (e.g. a big --file) arrives via a temp file to stay off
-# the process argv, where the OS would reject it as "argument list too long".
+IMAGE_FILE=""
+IMAGE_MIME=""
+# A large prompt (e.g. a big --file) arrives via a temp file to stay off the
+# process argv, where the OS would reject it as "argument list too long".
 if [[ "$PROMPT" == "--prompt-file" ]]; then
     PROMPT=$(cat "${2:?--prompt-file requires a path}")
+    shift 2
+elif [[ $# -gt 0 ]]; then
+    shift
 fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --image-file) IMAGE_FILE="${2:?--image-file requires a path}"; shift 2 ;;
+        --image-mime) IMAGE_MIME="${2:?--image-mime requires a value}"; shift 2 ;;
+        *) shift ;;
+    esac
+done
 
 if [[ -z "$PROMPT" ]]; then
     echo "Error: No prompt provided" >&2
@@ -63,13 +75,27 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
     # System instruction
     SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
-    PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" '{
-        model: $model,
-        instructions: $system,
-        input: $prompt,
-        max_output_tokens: $tokens,
-        reasoning: { effort: $effort }
-    }')
+    if [[ -n "$IMAGE_FILE" ]]; then
+        PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" \
+            --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '{
+            model: $model,
+            instructions: $system,
+            input: [{ role: "user", content: [
+                { type: "input_text",  text: $prompt },
+                { type: "input_image", image_url: ("data:" + $mime + ";base64," + $b64) }
+            ]}],
+            max_output_tokens: $tokens,
+            reasoning: { effort: $effort }
+        }')
+    else
+        PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" '{
+            model: $model,
+            instructions: $system,
+            input: $prompt,
+            max_output_tokens: $tokens,
+            reasoning: { effort: $effort }
+        }')
+    fi
 
     if [[ -n "$DEBUG" ]]; then
         echo "=== DEBUG: OpenAI v1/responses ===" >&2
@@ -109,18 +135,34 @@ else
     # System instruction
     SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
-    PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
-        model: $model,
-        messages: [{
-            role: "system",
-            content: $system
-        }, {
-            role: "user",
-            content: $prompt
-        }],
-        temperature: 0.7,
-        max_completion_tokens: $tokens
-    }')
+    if [[ -n "$IMAGE_FILE" ]]; then
+        PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" \
+            --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '{
+            model: $model,
+            messages: [
+                { role: "system", content: $system },
+                { role: "user", content: [
+                    { type: "text",      text: $prompt },
+                    { type: "image_url", image_url: { url: ("data:" + $mime + ";base64," + $b64) } }
+                ]}
+            ],
+            temperature: 0.7,
+            max_completion_tokens: $tokens
+        }')
+    else
+        PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
+            model: $model,
+            messages: [{
+                role: "system",
+                content: $system
+            }, {
+                role: "user",
+                content: $prompt
+            }],
+            temperature: 0.7,
+            max_completion_tokens: $tokens
+        }')
+    fi
 
     printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
     RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
