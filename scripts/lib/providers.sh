@@ -114,6 +114,15 @@ get_model() {
     esac
 }
 
+# True (exit 0) if the provider's default model accepts image input. The MVP
+# vision set; everything else routes to a sibling or answers text-only.
+provider_vision_capable() {
+    case "$1" in
+        gemini|openai) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # Merge the model name into a provider's raw result, guaranteeing valid JSON.
 # Provider scripts can write arbitrary bytes to their result file; feeding
 # invalid JSON straight to the collection loop's accumulator merge aborts the

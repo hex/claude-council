@@ -153,3 +153,13 @@ run_provider() {
     ! grep -qF "UNIQUE_PROMPT_MARKER_42" "$ARGV_FILE"
     grep -qF "UNIQUE_PROMPT_MARKER_42" "$DATA_FILE"
 }
+
+@test "provider_vision_capable: true for gemini/openai, false for the rest" {
+    source "${LIB_DIR}/providers.sh"
+    provider_vision_capable gemini
+    provider_vision_capable openai
+    ! provider_vision_capable grok
+    ! provider_vision_capable perplexity
+    ! provider_vision_capable codex
+    ! provider_vision_capable antigravity
+}
