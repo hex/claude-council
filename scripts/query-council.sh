@@ -64,6 +64,7 @@ USE_CACHE=true
 ROLES=""
 DEBATE_MODE=false
 FILE_PATH=""
+IMAGE_PATH=""
 OUTPUT_PATH=""
 QUIET_MODE=false
 AUTO_CONTEXT=true
@@ -106,6 +107,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --file)
             FILE_PATH="$2"
+            shift 2
+            ;;
+        --image=*)
+            IMAGE_PATH="${1#*=}"
+            shift
+            ;;
+        --image)
+            IMAGE_PATH="$2"
             shift 2
             ;;
         --output=*)
@@ -276,6 +285,34 @@ TEMP_DIR=$(mktemp -d)
 # contains spaces and lets the trap close the streaming pane on ANY exit
 # (Ctrl-C, SIGTERM, errexit) so it never spins "waiting on…" forever.
 trap 'rm -rf "$TEMP_DIR"; [[ -n "${COUNCIL_PANE_DIR:-}" ]] && display_pane_close "$COUNCIL_PANE_DIR" 2>/dev/null || true' EXIT
+
+# Validate and prepare an --image, once, before any provider runs. The base64
+# rides its own temp file (never the prompt) and only its hash keys the cache.
+IMAGE_MIME=""
+IMAGE_B64_FILE=""
+if [[ -n "${IMAGE_PATH:-}" ]]; then
+    if [[ ! -f "$IMAGE_PATH" ]]; then
+        echo "Error: image not found: $IMAGE_PATH" >&2
+        exit 1
+    fi
+    ext=$(printf '%s' "${IMAGE_PATH##*.}" | tr '[:upper:]' '[:lower:]')
+    case "$ext" in
+        png)       IMAGE_MIME="image/png" ;;
+        jpg|jpeg)  IMAGE_MIME="image/jpeg" ;;
+        webp)      IMAGE_MIME="image/webp" ;;
+        gif)       IMAGE_MIME="image/gif" ;;
+        *) echo "Error: unsupported image type '.$ext' (use png/jpg/jpeg/webp/gif)" >&2; exit 1 ;;
+    esac
+    img_bytes=$(wc -c < "$IMAGE_PATH")
+    if [[ "$img_bytes" -gt 10485760 ]]; then
+        echo "Error: image too large (${img_bytes} bytes; cap is 10485760)" >&2
+        exit 1
+    fi
+    IMAGE_B64_FILE=$(mktemp "${TEMP_DIR}/image.XXXXXX")
+    base64 < "$IMAGE_PATH" | tr -d '\n' > "$IMAGE_B64_FILE"
+    COUNCIL_IMAGE_HASH=$(sha256_hex < "$IMAGE_PATH")
+    export COUNCIL_IMAGE_HASH
+fi
 
 # Invoke a provider script with the prompt delivered via a temp file
 # (--prompt-file), so a large --file prompt never rides the process argv where
