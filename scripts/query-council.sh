@@ -320,10 +320,14 @@ fi
 # list too long". Providers still accept a literal prompt as $1 for direct use.
 # Merges stderr into stdout, matching the callers' original `2>&1` capture.
 run_provider_script() {
-    local script="$1" prompt="$2" pfile rc
+    local script="$1" prompt="$2" image_file="${3:-}" image_mime="${4:-}" pfile rc
     pfile=$(mktemp "${TEMP_DIR}/prompt.XXXXXX")
     printf '%s' "$prompt" > "$pfile"
-    "$script" --prompt-file "$pfile" 2>&1
+    if [[ -n "$image_file" ]]; then
+        "$script" --prompt-file "$pfile" --image-file "$image_file" --image-mime "$image_mime" 2>&1
+    else
+        "$script" --prompt-file "$pfile" 2>&1
+    fi
     rc=$?
     rm -f "$pfile"
     return $rc
@@ -434,6 +438,17 @@ query_provider() {
 
     [[ -n "${COUNCIL_PANE_DIR:-}" ]] && pane_status_event "$COUNCIL_PANE_DIR" "$provider" querying "" "$model"
 
+    # Image disposition: vision providers get the image; others answer text-only
+    # with a tag. (CLI providers route to a sibling — Task 7 extends this block.)
+    local img_file="" img_mime="" image_note=""
+    if [[ -n "${IMAGE_B64_FILE:-}" ]]; then
+        if provider_vision_capable "$provider"; then
+            img_file="$IMAGE_B64_FILE"; img_mime="$IMAGE_MIME"
+        else
+            image_note="(answered without the image)"$'\n\n'
+        fi
+    fi
+
     # Check cache if enabled (cache key includes role)
     if [[ "$USE_CACHE" == true ]]; then
         local key
@@ -452,8 +467,9 @@ query_provider() {
     fi
 
     # Query provider with role-injected prompt
-    if response=$(run_provider_script "$script" "$final_prompt"); then
+    if response=$(run_provider_script "$script" "$final_prompt" "$img_file" "$img_mime"); then
         local elapsed=$(( $(now_ms) - start_ms ))
+        response="${image_note}${response}"
         printf '%s' "$response" | jq -Rs --arg role "$role" \
             '{status: "success", response: ., cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
         if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then

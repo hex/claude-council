@@ -38,3 +38,45 @@ teardown() { rm -rf "$TEST_CACHE_DIR"/*; }
     [ "$status" -ne 0 ]
     [[ "$stderr" == *"too large"* ]]
 }
+
+# A fake provider that proves whether it received an image and echoes the prompt.
+write_echo_provider() {
+    cat > "$1" <<'PROV'
+#!/bin/bash
+p="${1:-}"; img=""; mime=""
+[[ "$p" == "--prompt-file" ]] && { p=$(cat "$2"); shift 2; } || shift || true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --image-file) img=$(cat "$2"); shift 2 ;;
+        --image-mime) mime="$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+printf 'PROMPT=%s|IMG=%s|MIME=%s\n' "$p" "$img" "$mime"
+PROV
+    chmod +x "$1"
+}
+
+@test "image: a vision provider receives the base64 and mime" {
+    local fd="${BATS_TEST_TMPDIR}/fp"; mkdir -p "$fd"
+    write_echo_provider "$fd/gemini.sh"
+    run --separate-stderr env PROVIDERS_DIR="$fd" \
+        bash "$SCRIPT" --no-cache --no-pane --no-auto-context \
+        --image="$IMG" --providers=gemini "look"
+    [ "$status" -eq 0 ]
+    local resp; resp=$(echo "$output" | jq -r '.round1.gemini.response')
+    [[ "$resp" == *"IMG=$(base64 < "$IMG" | tr -d '\n')"* ]]
+    [[ "$resp" == *"MIME=image/png"* ]]
+}
+
+@test "image: a non-vision provider runs text-only and is tagged" {
+    local fd="${BATS_TEST_TMPDIR}/fp"; mkdir -p "$fd"
+    write_echo_provider "$fd/perplexity.sh"
+    run --separate-stderr env PROVIDERS_DIR="$fd" PERPLEXITY_API_KEY=k \
+        bash "$SCRIPT" --no-cache --no-pane --no-auto-context \
+        --image="$IMG" --providers=perplexity "look"
+    [ "$status" -eq 0 ]
+    local resp; resp=$(echo "$output" | jq -r '.round1.perplexity.response')
+    [[ "$resp" == *"(answered without the image)"* ]]
+    [[ "$resp" == *"IMG=|"* ]]   # empty image field: it never got the base64
+}
