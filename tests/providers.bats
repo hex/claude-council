@@ -154,6 +154,20 @@ run_provider() {
     grep -qF "UNIQUE_PROMPT_MARKER_42" "$DATA_FILE"
 }
 
+@test "gemini: injects inlineData when given an image" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}'
+    local bf="${BATS_TEST_TMPDIR}/b64"; printf 'QUJD' > "$bf"   # "ABC"
+    run --separate-stderr env PATH="${FAKE_DIR}:$PATH" \
+        FAKE_ARGV_FILE="$ARGV_FILE" FAKE_CONFIG_FILE="$CONFIG_FILE" \
+        FAKE_DATA_FILE="$DATA_FILE" FAKE_BODY="$FAKE_BODY" FAKE_HTTP=200 \
+        COUNCIL_RETRY_DELAY=0 GEMINI_API_KEY=k \
+        bash "$PROVIDERS/gemini.sh" "hi" --image-file "$bf" --image-mime image/png
+    [ "$status" -eq 0 ]
+    grep -qF 'inlineData' "$DATA_FILE"
+    grep -qF 'image/png' "$DATA_FILE"
+    grep -qF 'QUJD' "$DATA_FILE"
+}
+
 @test "provider_vision_capable: true for gemini/openai, false for the rest" {
     source "${LIB_DIR}/providers.sh"
     provider_vision_capable gemini
