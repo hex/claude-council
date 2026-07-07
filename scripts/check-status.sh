@@ -61,11 +61,22 @@ check_provider() {
             rm -f "$cfg"
             ;;
         grok)
+            # xAI returns 400 with {"code":"invalid-argument",...} for a bad
+            # key instead of the standard 401. Capture the body so we can
+            # reclassify that specific 400 as an auth failure (all other 400s
+            # still fall through to the generic error path).
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            local response
+            response=$(curl -s -w $'\n%{http_code}' --max-time 10 \
                 --config "$cfg" \
-                "https://api.x.ai/v1/models" 2>/dev/null || echo "000")
+                "https://api.x.ai/v1/models" 2>/dev/null || printf '\n000')
             rm -f "$cfg"
+            http_code=$(printf '%s' "$response" | tail -n1)
+            if [[ "$http_code" == "400" ]] \
+                && [[ "$(printf '%s' "$response" | sed '$d')" == *'"code":"invalid-argument"'* ]]; then
+                echo "auth_error:400"
+                return
+            fi
             ;;
         perplexity)
             # Perplexity has no /models endpoint, so auth can only be probed with
