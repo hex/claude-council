@@ -80,3 +80,18 @@ PROV
     [[ "$resp" == *"(answered without the image)"* ]]
     [[ "$resp" == *"IMG=|"* ]]   # empty image field: it never got the base64
 }
+
+@test "image: codex routes to openai (sibling) with the image" {
+    local fd="${BATS_TEST_TMPDIR}/fp"; mkdir -p "$fd"
+    write_echo_provider "$fd/codex.sh"     # must NOT be the one that answers
+    write_echo_provider "$fd/openai.sh"    # sibling that should get the image
+    run --separate-stderr env PROVIDERS_DIR="$fd" OPENAI_API_KEY=k \
+        bash "$SCRIPT" --no-cache --no-pane --no-auto-context \
+        --image="$IMG" --providers=codex "look"
+    [ "$status" -eq 0 ]
+    # The slot is filled by the sibling and carries the image.
+    local fb; fb=$(echo "$output" | jq -r '.round1.codex.fallback // empty')
+    [ "$fb" = "openai" ]
+    local resp; resp=$(echo "$output" | jq -r '.round1.codex.response')
+    [[ "$resp" == *"MIME=image/png"* ]]
+}

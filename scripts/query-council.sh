@@ -359,7 +359,11 @@ attempt_api_fallback() {
     fi
     if [[ -z "${resp:-}" ]]; then
         sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
-        if [[ -x "$sibling_script" ]] && resp=$(run_provider_script "$sibling_script" "$prompt"); then
+        local sib_img="" sib_mime=""
+        if [[ -n "${IMAGE_B64_FILE:-}" ]] && provider_vision_capable "$sibling"; then
+            sib_img="$IMAGE_B64_FILE"; sib_mime="$IMAGE_MIME"
+        fi
+        if [[ -x "$sibling_script" ]] && resp=$(run_provider_script "$sibling_script" "$prompt" "$sib_img" "$sib_mime"); then
             [[ "$USE_CACHE" == true ]] && cache_set "$key" "$sibling" "$sibling_model" "$prompt" "$resp"
         else
             return 0
@@ -438,13 +442,27 @@ query_provider() {
 
     [[ -n "${COUNCIL_PANE_DIR:-}" ]] && pane_status_event "$COUNCIL_PANE_DIR" "$provider" querying "" "$model"
 
-    # Image disposition: vision providers get the image; others answer text-only
-    # with a tag. (CLI providers route to a sibling — Task 7 extends this block.)
+    # Image disposition: vision providers get the image; a provider with a
+    # usable vision sibling answers through it; others answer text-only with a tag.
     local img_file="" img_mime="" image_note=""
     if [[ -n "${IMAGE_B64_FILE:-}" ]]; then
         if provider_vision_capable "$provider"; then
             img_file="$IMAGE_B64_FILE"; img_mime="$IMAGE_MIME"
         else
+            local sibling; sibling=$(api_sibling "$provider")
+            if [[ -n "$sibling" ]]; then
+                local fb_json
+                fb_json=$(attempt_api_fallback "$provider" "$final_prompt")
+                if [[ -n "$fb_json" ]]; then
+                    fallback_slot_json "$fb_json" "$role" > "$output_file"
+                    if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+                        local elapsed2=$(( $(now_ms) - start_ms ))
+                        pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed2" "$(jq -r '.model' <<<"$fb_json")"
+                        pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$(jq -r '.response' <<<"$fb_json")"
+                    fi
+                    return
+                fi
+            fi
             image_note="(answered without the image)"$'\n\n'
         fi
     fi
