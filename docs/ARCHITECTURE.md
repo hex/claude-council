@@ -119,7 +119,11 @@
 Each provider follows a consistent interface:
 
 ```
-INPUT:  $1 = prompt (with role prefix if assigned)
+INPUT:  --prompt-file <path>  the prompt; the orchestrator always uses this so a
+                              large prompt stays off the argv (see ARG_MAX below)
+        --image-file <path>   base64 image, passed only to vision-capable providers
+        --image-mime <type>   the image's MIME type (pairs with --image-file)
+        $1                    a literal prompt, for direct/manual invocation
 OUTPUT: stdout = AI response text
 EXIT:   0 = success, non-zero = failure (error to stderr)
 ```
@@ -142,10 +146,32 @@ Environment-based configuration:
 - `COUNCIL_MAX_TOKENS` - Response length limit (API providers only)
 - `COUNCIL_DEBUG` - Enable verbose logging
 
+### Vision / Image Input (`--image`)
+
+A single image can be attached with `--image=path` (png/jpg/jpeg/webp/gif,
+≤10 MB). `query-council.sh` validates it once at the edge, base64-encodes it to a
+temp file, and folds only its SHA-256 into the cache key (`COUNCIL_IMAGE_HASH`) —
+the bytes never enter the prompt string.
+
+Per-provider disposition when an image is attached:
+- **gemini, openai** (vision-capable) receive the image — gemini as an
+  `inlineData` part, openai as `input_image` (Responses API) or `image_url`
+  (Chat Completions).
+- **codex, antigravity** (CLI, cannot accept an image) route to their vision
+  API sibling — codex→openai, antigravity→gemini — with the image.
+- **grok, perplexity** (no vision model) answer text-only; their response is
+  prefixed `(answered without the image)`.
+
+Privacy invariant: only the image's SHA-256 keys the cache. The base64 lives
+solely in a temp file passed to providers; it is never written to cache entries
+or the saved `council-*.md` transcripts.
+
 ### Cache Layer (`scripts/lib/cache.sh`)
 
 ```
-Cache Key = SHA256("provider:model:prompt")
+Cache Key = SHA256("provider:model:verbosity:max_tokens:image_sha256:prompt")
+  (verbosity, token cap, and any attached-image hash all bust the cache, so a
+   --verbosity or --image change re-queries instead of reusing a stale answer)
 
 cache_get(key) -> response | empty
 cache_set(key, provider, model, prompt, response)
@@ -163,6 +189,11 @@ curl_with_retry():
   - Fails fast on: timeout, other 4xx (client error)
   - Backoff: exponential (1s, 2s, 4s...)
   - Max retries: $COUNCIL_MAX_RETRIES (default 3)
+
+curl_secret_config(header...):
+  - writes the auth header(s) to a mode-600 temp file and echoes its path
+  - callers pass it via `curl --config <file>` so API keys never ride the
+    process argv (ps-visible) or a URL query string
 ```
 
 ### Role System (`scripts/lib/roles.sh`)
@@ -374,11 +405,15 @@ claude-council/
 │       ├── cache.sh             # Caching utilities
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
+│       ├── hash.sh              # Portable SHA-256 helper (shasum / sha256sum)
 │       ├── jobs.sh              # Background job store
 │       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
+│       ├── pane-watcher.sh      # Runs in the tmux pane: streams status + rendered responses
 │       ├── prompts.sh           # Template loading + {{VAR}} interpolation
 │       ├── providers.sh         # Discovery + CLI-prefers-API policy + vendor display
-│       ├── retry.sh             # Retry with backoff
+│       ├── render.pl            # Dependency-free markdown renderer (perl fallback)
+│       ├── render.py            # Council-tuned Rich markdown renderer
+│       ├── retry.sh             # Retry with backoff + off-argv secret config
 │       ├── roles.sh             # Role management
 │       ├── tokens.sh            # Reasoning-model token-cap bumping
 │       └── verbosity.sh         # Response verbosity directives
@@ -405,11 +440,17 @@ claude-council/
 │   ├── check-status.bats
 │   ├── cli-providers.bats       # CLI providers (codex, antigravity)
 │   ├── display.bats
+│   ├── export.bats
 │   ├── fake-clis.bats
 │   ├── format-output.bats
+│   ├── image.bats               # Vision / --image routing + privacy guards
 │   ├── jobs.bats
 │   ├── keys.bats
+│   ├── pane-watcher.bats
 │   ├── prompts.bats
+│   ├── providers.bats           # API provider payloads + secret hygiene
+│   ├── release.bats
+│   ├── retry.bats
 │   ├── roles.bats
 │   ├── stop-gate.bats
 │   ├── theme.bats

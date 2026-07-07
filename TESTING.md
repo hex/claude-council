@@ -40,23 +40,31 @@ bats --verbose-run tests/cache.bats
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `cache.bats` | 17 tests | cache_key, cache_get/set, cache_valid, TTL, clear |
+| `cache.bats` | 26 tests | cache_key (incl. verbosity/token/image components), cache_get/set, cache_valid, TTL, clear, self-ignoring dir |
 | `cli-providers.bats` | 38 tests | codex/antigravity discovery, CLI-prefers-API policy, shadow_origin↔api_sibling single source, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, CLI→API fallback (dedup, cache reuse, missing-script, round 2), gated E2E |
-| `display.bats` | 40 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, waiting-line truncation + autowrap guard, renderer selection (Rich feature probe, uv route + timeout, perl fallback, COUNCIL_RENDERER=perl, runtime fallback + stdout forwarding, think-block styling incl. unclosed tags, code-theme direction, link style, COLUMNS=0) |
+| `display.bats` | 43 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, waiting-line truncation + autowrap guard, renderer selection (Rich feature probe, uv route + timeout, perl fallback, COUNCIL_RENDERER=perl, runtime fallback + stdout forwarding, think-block styling incl. unclosed tags, code-theme direction, link style, COLUMNS=0) |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 19 tests | argument parsing, error cases, flags, local-council fallback hint |
-| `argmax.bats` | 3 tests | large response/prompt/debate-round-2 round-trip through final JSON (MSYS ARG_MAX marshalling guard) |
-| `fake-clis.bats` | 11 tests | fixture self-checks, codex.sh/antigravity.sh against fake binaries |
+| `argmax.bats` | 4 tests | large response/prompt/debate-round-2 round-trip through final JSON (MSYS ARG_MAX marshalling guard) |
+| `fake-clis.bats` | 14 tests | fixture self-checks, codex.sh/antigravity.sh against fake binaries |
 | `format-output.bats` | 11 tests | defensive parsing: empty/missing/non-string responses, raw preservation, fallback-note rendering |
-| `prompts.bats` | 9 tests | template loading, {{VAR}} interpolation, role-injection rendering |
+| `prompts.bats` | 11 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh contract enforcement, schema sync |
-| `check-status.bats` | 6 tests | two-tier CLI availability, remediation strings |
-| `jobs.bats` | 12 tests | job store, --async lifecycle, --result/--jobs/--cancel |
-| `stop-gate.bats` | 8 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
-| `theme.bats` | 13 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
+| `check-status.bats` | 12 tests | two-tier CLI availability, remediation strings, HTTP probe branches, keys off the curl argv, ms clock |
+| `jobs.bats` | 16 tests | job store, --async lifecycle, --result/--jobs/--cancel, self-ignoring cache dir |
+| `stop-gate.bats` | 10 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
+| `theme.bats` | 24 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
+| `providers.bats` | 16 tests | API provider payloads, response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url) |
+| `image.bats` | 8 tests | --image validation (missing/bad-type/oversize), vision routing, CLI→sibling routing, non-vision text-only tag, base64 never in the cache |
+| `pane-watcher.bats` | 3 tests | standalone pane watcher: banner + response render, error notice, SetMark, watch-dir cleanup |
+| `export.bats` | 5 tests | markdown transcript export writing + formatting |
+| `release.bats` | 5 tests | release.sh version bump/commit/tag, staged-index guard, green-suite gate |
+| `retry.bats` | 6 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file |
+
+**Total: 354 tests** across 23 `.bats` files.
 
 ### Hermetic CLI Fixture
 
@@ -430,6 +438,28 @@ rm combined-test.md
 
 ---
 
+### 11. Vision / Image Input (--image)
+
+**Test A**: Attach an image to vision-capable providers
+```bash
+/claude-council:ask --image=screenshot.png --providers=gemini,openai "What does this screen show?"
+```
+
+**Expected**:
+- [ ] Gemini and OpenAI describe the actual image content (they received it)
+- [ ] No base64 appears in the terminal output or the saved `council-*.md` transcript
+
+**Test B**: Default set routes CLI providers to their vision siblings
+```bash
+/claude-council:ask --image=screenshot.png "Describe this"
+```
+
+**Expected**:
+- [ ] codex's slot is answered by openai and antigravity's by gemini (marked as a fallback), both seeing the image
+- [ ] grok / perplexity answer text-only, prefixed `(answered without the image)`
+
+---
+
 ## Edge Cases
 
 ### No API Keys and no CLI agents
@@ -452,6 +482,19 @@ bash scripts/query-council.sh --providers=invalid "Test" 2>&1
 bash scripts/query-council.sh --roles=hacker "Test" 2>&1
 ```
 **Expected**: `Error: Unknown role: hacker` with list of available roles
+
+### Invalid --image (rejected before any provider runs)
+```bash
+bash scripts/query-council.sh --image=/nope.png --providers=gemini "Test" 2>&1
+printf 'x' > /tmp/notes.txt
+bash scripts/query-council.sh --image=/tmp/notes.txt --providers=gemini "Test" 2>&1
+head -c 11000000 /dev/zero > /tmp/big.png
+bash scripts/query-council.sh --image=/tmp/big.png --providers=gemini "Test" 2>&1
+```
+**Expected**, respectively:
+- `Error: image not found: /nope.png`
+- `Error: unsupported image type '.txt' (use png/jpg/jpeg/webp/gif)`
+- `Error: image too large (... bytes; cap is 10485760)`
 
 ### Unknown Flag
 ```bash
@@ -520,3 +563,4 @@ export COUNCIL_DEBUG=1
 | Role preset | `--roles=balanced` | [ ] |
 | Debate | `--debate` | [ ] |
 | Combined flags | Multiple flags | [ ] |
+| Image input | `--image=shot.png` | [ ] |
