@@ -20,8 +20,12 @@ echo "fake claude $*"
 EOF
     chmod +x "$repo/fakebin/claude"
     git -C "$repo" init -q
-    git -C "$repo" -c user.email=t@t -c user.name=t add -A
-    git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m init
+    # Persist an identity in the repo config so release.sh's own commit works
+    # without an ambient git identity (CI runners have none).
+    git -C "$repo" config user.email t@t
+    git -C "$repo" config user.name t
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m init
     echo "$repo"
 }
 
