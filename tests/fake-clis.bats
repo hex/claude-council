@@ -4,6 +4,7 @@
 
 load test_helper
 load fixtures/fake-clis
+bats_require_minimum_version 1.5.0
 
 PROVIDERS_DIR_REAL="${SCRIPTS_DIR}/providers"
 PROVIDERS_LIB="${LIB_DIR}/providers.sh"
@@ -58,6 +59,26 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args[-1]')" == *"the user question"* ]]
 }
 
+@test "codex.sh: pins a read-only sandbox so a permissive user config can't grant write access" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/codex.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    [[ "$(echo "$call" | jq -r '.args | index("-s") as $i | .[$i+1]')" == "read-only" ]]
+}
+
+@test "codex.sh: a hung CLI is bounded by COUNCIL_TIMEOUT and reports a timeout" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_TIMEOUT=1
+    local start end
+    start=$SECONDS
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    end=$SECONDS
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"timed out"* ]]
+    [ $((end - start)) -lt 10 ]
+}
+
 @test "codex.sh: surfaces stderr and exits 1 on rate-limit behavior" {
     export COUNCIL_FAKE_BEHAVIOR=rate-limit
     run "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
@@ -97,6 +118,17 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args[-2]')" == "-p" ]]
     [[ "$(echo "$call" | jq -r '.args[-1]')" == *"another question"* ]]
     [[ "$(echo "$call" | jq -r '.args[-1]')" == *"Do NOT use any tools"* ]]
+}
+
+@test "antigravity.sh: a hung CLI is bounded by COUNCIL_TIMEOUT and reports a timeout" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_TIMEOUT=1
+    local start end
+    start=$SECONDS
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/antigravity.sh" "test prompt"
+    end=$SECONDS
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"timed out"* ]]
+    [ $((end - start)) -lt 10 ]
 }
 
 @test "antigravity.sh: surfaces stderr and exits 1 on auth-failure behavior" {

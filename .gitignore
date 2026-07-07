@@ -13,6 +13,12 @@
 # Session state (cs session manager)
 .cs/
 
+# Session state (oh-my-claude)
+.omc/
+
+# Internal design docs — plans/specs stay local, not shipped in the plugin
+docs/superpowers/
+
 # Web/page cache (claude-crawl)
 .claude-crawl/
 

@@ -3,6 +3,7 @@
 # ABOUTME: Validates argument parsing, error handling, and JSON output structure
 
 load test_helper
+bats_require_minimum_version 1.5.0
 
 SCRIPT="${SCRIPTS_DIR}/query-council.sh"
 
@@ -16,10 +17,37 @@ setup() {
     # calls during arg-parsing tests. The cli-providers.bats file does the
     # opposite — it keeps them on PATH on purpose.
     export PATH=$(path_without_clis)
+
+    # Hermetic provider dir: --providers=<name> runs these stubs with no network
+    # and no API key (query-council splits --providers straight into its list).
+    STUB_DIR="${BATS_TEST_TMPDIR}/providers"
+    CALLS_LOG="${BATS_TEST_TMPDIR}/calls.log"
+    mkdir -p "$STUB_DIR"
+    : > "$CALLS_LOG"
 }
 
-teardown() {
-    rm -rf "$TEST_CACHE_DIR"
+# Install a stub provider that echoes a canned answer and, as a side effect,
+# appends its name to CALLS_LOG (one line per invocation) and records the exact
+# prompt and verbosity it received. Lets tests assert real behavior offline.
+# Usage: write_stub <name> [answer]
+write_stub() {
+    local name="$1" answer="${2:-ANSWER-FROM-${1}}"
+    cat > "$STUB_DIR/${name}.sh" <<EOF
+#!/bin/bash
+prompt="\${1:-}"
+[[ "\$prompt" == "--prompt-file" ]] && prompt="\$(cat "\$2")"
+echo "${name}" >> "${CALLS_LOG}"
+printf '%s' "\$prompt" > "${STUB_DIR}/${name}.last_prompt"
+printf '%s' "\${COUNCIL_VERBOSITY:-}" > "${STUB_DIR}/${name}.verbosity"
+printf '%s\n' "${answer}"
+EOF
+    chmod +x "$STUB_DIR/${name}.sh"
+}
+
+# Run query-council hermetically: no pane, no auto-context, stub providers.
+run_council() {
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" \
+        bash "$SCRIPT" --no-pane --no-auto-context "$@"
 }
 
 # ============================================================================
@@ -44,20 +72,6 @@ teardown() {
     [[ "$output" == *"Unknown flag"* ]]
 }
 
-@test "query-council: accepts --prompt= flag" {
-    export GEMINI_API_KEY="test-key"
-    run bash "$SCRIPT" --prompt="test question" 2>&1
-    [[ "$output" != *"Unknown flag"* ]]
-    [[ "$output" != *"No prompt"* ]]
-}
-
-@test "query-council: accepts --prompt value flag" {
-    export GEMINI_API_KEY="test-key"
-    run bash "$SCRIPT" --prompt "test question" 2>&1
-    [[ "$output" != *"Unknown flag"* ]]
-    [[ "$output" != *"No prompt"* ]]
-}
-
 @test "query-council: errors on empty prompt" {
     run bash "$SCRIPT" ""
     [ "$status" -eq 1 ]
@@ -68,20 +82,17 @@ teardown() {
 # Provider discovery tests
 # ============================================================================
 
-@test "query-council: --list-available shows no providers when none configured" {
+@test "query-council: --list-available reports the exact no-providers message" {
     run bash "$SCRIPT" --list-available
-    [[ "$output" == *"No configured providers"* ]] || [ "$status" -eq 0 ]
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"No providers configured."* ]]
 }
 
-@test "query-council: errors when no providers available" {
+@test "query-council: querying with no providers exits nonzero with guidance" {
     run bash "$SCRIPT" "test prompt"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"No configured providers"* ]] || [[ "$output" == *"No providers"* ]]
-}
-
-@test "query-council: no-providers error points to local council fallback" {
-    run bash "$SCRIPT" "test prompt"
-    [ "$status" -ne 0 ]
+    [[ "$output" == *"No providers configured."* ]]
+    # Points at the local fallback so the user has a next step
     [[ "$output" == *"--local"* ]]
 }
 
@@ -89,10 +100,13 @@ teardown() {
 # Role validation tests
 # ============================================================================
 
-@test "query-council: errors on invalid role" {
-    export GEMINI_API_KEY="test-key"  # Need at least one provider
-    run bash "$SCRIPT" --roles=invalidrole "test prompt" 2>&1
-    [[ "$output" == *"Unknown role"* ]] || [[ "$output" == *"error"* ]] || [ "$status" -ne 0 ]
+@test "query-council: an invalid role exits nonzero and names the problem" {
+    write_stub gemini
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" \
+        bash "$SCRIPT" --no-pane --no-auto-context --providers=gemini \
+        --roles=invalidrole "test prompt"
+    [ "$status" -ne 0 ]
+    [[ "$stderr" == *"Unknown role"* ]]
 }
 
 # ============================================================================
@@ -100,77 +114,122 @@ teardown() {
 # ============================================================================
 
 @test "query-council: errors on missing file" {
-    export GEMINI_API_KEY="test-key"
-    run bash "$SCRIPT" --file=/nonexistent/path "test prompt"
+    write_stub gemini
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" \
+        bash "$SCRIPT" --no-pane --providers=gemini \
+        --file=/nonexistent/path "test prompt"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"not found"* ]] || [[ "$output" == *"No such file"* ]] || [[ "$output" == *"does not exist"* ]]
+    [[ "$stderr" == *"not found"* ]] || [[ "$stderr" == *"No such file"* ]]
 }
 
 # ============================================================================
-# Cache flag tests
+# Output structure and provider execution (hermetic, via stub providers)
 # ============================================================================
 
-@test "query-council: accepts --no-cache flag" {
-    export GEMINI_API_KEY="test-key"
-    # Should parse without error (may fail on actual query)
-    run bash "$SCRIPT" --no-cache "test" 2>&1
-    # Verify flag was accepted (error should be about something else, not flag)
-    [[ "$output" != *"Unknown flag: --no-cache"* ]]
+@test "query-council: a stub provider produces a success slot in round1" {
+    write_stub gemini "hello from the stub"
+    run_council --providers=gemini "test"
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.metadata' >/dev/null
+    echo "$output" | jq -e '.round1' >/dev/null
+    [[ "$(echo "$output" | jq -r '.round1.gemini.status')" == "success" ]]
+    [[ "$(echo "$output" | jq -r '.round1.gemini.response')" == "hello from the stub" ]]
 }
 
-@test "query-council: accepts --quiet flag" {
-    export GEMINI_API_KEY="test-key"
-    run bash "$SCRIPT" --quiet "test" 2>&1
-    [[ "$output" != *"Unknown flag: --quiet"* ]]
+@test "query-council: accepts the prompt via --prompt=" {
+    write_stub gemini
+    run_council --providers=gemini --prompt="from the prompt flag"
+    [ "$status" -eq 0 ]
+    [[ "$(echo "$output" | jq -r '.metadata.prompt')" == "from the prompt flag" ]]
 }
 
-@test "query-council: accepts -q short flag" {
-    export GEMINI_API_KEY="test-key"
-    run bash "$SCRIPT" -q "test" 2>&1
-    [[ "$output" != *"Unknown flag: -q"* ]]
+@test "query-council: --providers queries exactly the named providers" {
+    write_stub gemini
+    write_stub openai
+    run_council --providers=gemini,openai "test"
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.round1.gemini' >/dev/null
+    echo "$output" | jq -e '.round1.openai' >/dev/null
+    # Each named provider was invoked once
+    [ "$(grep -c . "$CALLS_LOG")" -eq 2 ]
 }
 
-@test "query-council: accepts --debate flag" {
-    export GEMINI_API_KEY="test-key"
-    run bash "$SCRIPT" --debate "test" 2>&1
-    [[ "$output" != *"Unknown flag: --debate"* ]]
+@test "query-council: --quiet sets quiet_mode in metadata" {
+    write_stub gemini
+    run_council --providers=gemini --quiet "test"
+    [ "$status" -eq 0 ]
+    [[ "$(echo "$output" | jq -r '.metadata.quiet_mode')" == "true" ]]
 }
 
-@test "query-council: accepts --no-auto-context flag" {
-    export GEMINI_API_KEY="test-key"
-    run bash "$SCRIPT" --no-auto-context "test" 2>&1
-    [[ "$output" != *"Unknown flag: --no-auto-context"* ]]
+@test "query-council: -q short flag also sets quiet_mode" {
+    write_stub gemini
+    run_council --providers=gemini -q "test"
+    [ "$status" -eq 0 ]
+    [[ "$(echo "$output" | jq -r '.metadata.quiet_mode')" == "true" ]]
+}
+
+@test "query-council: --verbosity is validated and exported to the provider" {
+    write_stub gemini
+    run_council --providers=gemini --verbosity=brief "test"
+    [ "$status" -eq 0 ]
+    [[ "$(cat "${STUB_DIR}/gemini.verbosity")" == "brief" ]]
+}
+
+@test "query-council: an unknown verbosity is rejected" {
+    write_stub gemini
+    run_council --providers=gemini --verbosity=louder "test"
+    [ "$status" -ne 0 ]
 }
 
 # ============================================================================
-# Provider filter tests
+# Cache behavior
 # ============================================================================
 
-@test "query-council: accepts --providers flag" {
-    export GEMINI_API_KEY="test-key"
-    run bash "$SCRIPT" --providers=gemini "test" 2>&1
-    [[ "$output" != *"Unknown flag"* ]]
+@test "query-council: a warm cache serves round1 without re-invoking the provider" {
+    write_stub gemini
+    run_council --providers=gemini "same question"
+    [ "$status" -eq 0 ]
+    run_council --providers=gemini "same question"
+    [ "$status" -eq 0 ]
+    # Second run was a cache hit
+    [[ "$(echo "$output" | jq -r '.round1.gemini.cached')" == "true" ]]
+    # Provider invoked exactly once across both runs
+    [ "$(grep -c . "$CALLS_LOG")" -eq 1 ]
 }
 
-@test "query-council: accepts multiple providers" {
-    export GEMINI_API_KEY="test-key"
-    export OPENAI_API_KEY="test-key"
-    run bash "$SCRIPT" --providers=gemini,openai "test" 2>&1
-    [[ "$output" != *"Unknown flag"* ]]
+@test "query-council: --no-cache forces a fresh provider invocation each run" {
+    write_stub gemini
+    run_council --providers=gemini --no-cache "same question"
+    [ "$status" -eq 0 ]
+    run_council --providers=gemini --no-cache "same question"
+    [ "$status" -eq 0 ]
+    # Provider invoked on both runs
+    [ "$(grep -c . "$CALLS_LOG")" -eq 2 ]
 }
 
 # ============================================================================
-# Output structure tests (when we have mock responses)
+# Debate mode (round 2)
 # ============================================================================
 
-@test "query-council: output is valid JSON structure" {
-    # Create a fixture that mocks the expected output
-    local expected_fields='["metadata", "round1"]'
+@test "query-council: --debate produces a round2 block" {
+    write_stub gemini
+    run_council --providers=gemini --debate "test"
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.round2' >/dev/null
+    [[ "$(echo "$output" | jq -r '.metadata.debate_mode')" == "true" ]]
+    [[ "$(echo "$output" | jq -r '.round2.gemini.status')" == "success" ]]
+}
 
-    # This test validates the expected output structure
-    # When real providers are mocked, uncomment:
-    # run bash "$SCRIPT" "test"
-    # echo "$output" | jq -e '.metadata' >/dev/null
-    # echo "$output" | jq -e '.round1' >/dev/null
-    skip "Requires provider mocking"
+@test "query-council: the round2 prompt carries the original question and a per-provider self-label" {
+    write_stub gemini
+    run_council --providers=gemini --debate "what is the original question here"
+    [ "$status" -eq 0 ]
+    # The stub's last_prompt is round 2's prompt (stateless calls have no round-1
+    # memory), so it must restate the question and tell gemini which answer is its own
+    local r2
+    r2=$(cat "${STUB_DIR}/gemini.last_prompt")
+    [[ "$r2" == *"The original question was:"* ]]
+    [[ "$r2" == *"what is the original question here"* ]]
+    [[ "$r2" == *"You are GEMINI."* ]]
+    [[ "$r2" == *"[GEMINI'S RESPONSE]"* ]]
 }

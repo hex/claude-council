@@ -7,6 +7,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROVIDERS_DIR="${PROVIDERS_DIR:-${SCRIPT_DIR}/providers}"
 
+# Preflight the one hard dependency used on every path: jq marshals every
+# request and response. Fail with a clear message instead of a cryptic cascade.
+# (curl is required only for API providers; CLI-only users never call it.)
+command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (macOS: brew install jq)." >&2; exit 1; }
+
 # Source libraries
 source "${SCRIPT_DIR}/lib/cache.sh"
 source "${SCRIPT_DIR}/lib/roles.sh"
@@ -15,9 +20,11 @@ source "${SCRIPT_DIR}/lib/display.sh"
 source "${SCRIPT_DIR}/lib/verbosity.sh"
 resolve_grok_key
 
-# Helper: current time in milliseconds (falls back to seconds if python3 missing)
+# Helper: current time in milliseconds. Falls back to whole-second precision
+# (still in milliseconds — *1000 — so elapsed-time math stays unit-correct) when
+# python3 is unavailable.
 now_ms() {
-    python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || date +%s
+    python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo $(( $(date +%s) * 1000 ))
 }
 
 source "${SCRIPT_DIR}/lib/providers.sh"
@@ -264,7 +271,26 @@ fi
 
 # Create temp directory for parallel results
 TEMP_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_DIR" EXIT
+# Single-quoted so $TEMP_DIR/$COUNCIL_PANE_DIR are expanded (and quoted) at trap
+# time, not trap-definition time: this both avoids word-splitting a TMPDIR that
+# contains spaces and lets the trap close the streaming pane on ANY exit
+# (Ctrl-C, SIGTERM, errexit) so it never spins "waiting on…" forever.
+trap 'rm -rf "$TEMP_DIR"; [[ -n "${COUNCIL_PANE_DIR:-}" ]] && display_pane_close "$COUNCIL_PANE_DIR" 2>/dev/null || true' EXIT
+
+# Invoke a provider script with the prompt delivered via a temp file
+# (--prompt-file), so a large --file prompt never rides the process argv where
+# Linux (MAX_ARG_STRLEN, 128KB) or MSYS (~32KB) would reject it as "argument
+# list too long". Providers still accept a literal prompt as $1 for direct use.
+# Merges stderr into stdout, matching the callers' original `2>&1` capture.
+run_provider_script() {
+    local script="$1" prompt="$2" pfile rc
+    pfile=$(mktemp "${TEMP_DIR}/prompt.XXXXXX")
+    printf '%s' "$prompt" > "$pfile"
+    "$script" --prompt-file "$pfile" 2>&1
+    rc=$?
+    rm -f "$pfile"
+    return $rc
+}
 
 # On a CLI provider failure, attempt its API-sibling fallback. Echoes a JSON
 # object {response, model, fallback} when the sibling exists, its key is set,
@@ -292,7 +318,7 @@ attempt_api_fallback() {
     fi
     if [[ -z "${resp:-}" ]]; then
         sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
-        if [[ -x "$sibling_script" ]] && resp=$("$sibling_script" "$prompt" 2>&1); then
+        if [[ -x "$sibling_script" ]] && resp=$(run_provider_script "$sibling_script" "$prompt"); then
             [[ "$USE_CACHE" == true ]] && cache_set "$key" "$sibling" "$sibling_model" "$prompt" "$resp"
         else
             return 0
@@ -389,7 +415,7 @@ query_provider() {
     fi
 
     # Query provider with role-injected prompt
-    if response=$("$script" "$final_prompt" 2>&1); then
+    if response=$(run_provider_script "$script" "$final_prompt"); then
         local elapsed=$(( $(now_ms) - start_ms ))
         printf '%s' "$response" | jq -Rs --arg role "$role" \
             '{status: "success", response: ., cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
@@ -478,6 +504,10 @@ council_probe_tty && COUNCIL_HAS_TTY=1
 council_signal_state yellow
 COUNCIL_START_MS=$(now_ms)
 
+# Reap expired cache entries once per run so the response cache does not grow
+# without bound (the prune-on-the-hot-path analog of jobs_prune in run_async).
+[[ "$USE_CACHE" == true ]] && cache_prune 2>/dev/null || true
+
 # Launch all queries in parallel
 FORMATTED_PROVIDERS=$(format_providers "${PROVIDERS[@]}")
 echo -e "🚀 Querying ${#PROVIDERS[@]} providers in parallel: ${FORMATTED_PROVIDERS}..." >&2
@@ -553,29 +583,35 @@ ROUND2_RESULTS="{}"
 if [[ "$DEBATE_MODE" == true ]]; then
     echo -e "\n🔄 Debate mode: Starting round 2 rebuttals..." >&2
 
-    # Build debate prompt with all round 1 responses
-    debate_prompt="Here are other perspectives on this question:"
-    debate_prompt+=$'\n\n'
+    # Build the shared part of the debate prompt: the ORIGINAL question (stateless
+    # provider calls have no memory of round 1) followed by every round-1 answer,
+    # each labeled by provider so a rebuttal can reference "its own" answer.
+    debate_common="The original question was:"
+    debate_common+=$'\n\n'
+    debate_common+="${PROMPT}"
+    debate_common+=$'\n\n'
+    debate_common+="Here are the round-1 answers to that question (yours is among them):"
+    debate_common+=$'\n\n'
     for provider in "${PROVIDERS[@]}"; do
         response=$(echo "$RESULTS" | jq -r --arg p "$provider" '.[$p].response // empty')
         if [[ -n "$response" ]]; then
             provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
-            debate_prompt+="[${provider_upper}'S RESPONSE]"
-            debate_prompt+=$'\n'
-            debate_prompt+="${response}"
-            debate_prompt+=$'\n\n'
+            debate_common+="[${provider_upper}'S RESPONSE]"
+            debate_common+=$'\n'
+            debate_common+="${response}"
+            debate_common+=$'\n\n'
         fi
     done
 
-    debate_prompt+="As a critical reviewer, analyze these responses:"
-    debate_prompt+=$'\n'
-    debate_prompt+="1. What are the strengths of each approach?"
-    debate_prompt+=$'\n'
-    debate_prompt+="2. What are the weaknesses or blind spots?"
-    debate_prompt+=$'\n'
-    debate_prompt+="3. What did the other responses miss?"
-    debate_prompt+=$'\n'
-    debate_prompt+="4. What would you change about your original recommendation after seeing these?"
+    debate_common+="As a critical reviewer, analyze these responses:"
+    debate_common+=$'\n'
+    debate_common+="1. What are the strengths of each approach?"
+    debate_common+=$'\n'
+    debate_common+="2. What are the weaknesses or blind spots?"
+    debate_common+=$'\n'
+    debate_common+="3. What did the other responses miss?"
+    debate_common+=$'\n'
+    debate_common+="4. What would you change about your original recommendation after seeing these?"
 
     # Query all providers for rebuttals (no roles, no cache)
     ROUND2_PIDS=()
@@ -586,9 +622,16 @@ if [[ "$DEBATE_MODE" == true ]]; then
             model=$(get_model "$provider")
             output_file="${TEMP_DIR}/${provider}_r2.json"
 
+            # Tell this provider which labeled answer is its own so it can
+            # actually revise "its" recommendation rather than a peer's.
+            provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+            debate_prompt="You are ${provider_upper}. Your own round-1 answer is the one labeled [${provider_upper}'S RESPONSE] below."
+            debate_prompt+=$'\n\n'
+            debate_prompt+="$debate_common"
+
             if [[ ! -x "$script" ]]; then
                 echo '{"status": "error", "error": "Script not found"}' > "$output_file"
-            elif response=$("$script" "$debate_prompt" 2>&1); then
+            elif response=$(run_provider_script "$script" "$debate_prompt"); then
                 printf '%s' "$response" | jq -Rs '{status: "success", response: .}' > "$output_file"
             else
                 fb_json=$(attempt_api_fallback "$provider" "$debate_prompt")

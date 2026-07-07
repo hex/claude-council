@@ -54,6 +54,45 @@ setup() {
     [ "$output" == "unknown" ]
 }
 
+# ----- OSC 11 reply parsing (pure, no tty) -----
+# council_detect_theme's live query was dead on bash 3.2 (fractional read -t and
+# an ST-only delimiter). The parse/luminance logic now lives in a pure function
+# so every branch is testable without a terminal.
+
+@test "theme: osc reply — black background maps to dark" {
+    run council_theme_from_osc_reply 'rgb:0000/0000/0000'
+    [ "$output" = "dark" ]
+}
+
+@test "theme: osc reply — white background maps to light" {
+    run council_theme_from_osc_reply 'rgb:ffff/ffff/ffff'
+    [ "$output" = "light" ]
+}
+
+@test "theme: osc reply — luminance threshold sits at 127" {
+    # 0x80 = 128 on every channel -> lum 128 (> 127) -> light
+    run council_theme_from_osc_reply 'rgb:8080/8080/8080'
+    [ "$output" = "light" ]
+    # 0x7f = 127 -> lum 127 (not > 127) -> dark
+    run council_theme_from_osc_reply 'rgb:7f7f/7f7f/7f7f'
+    [ "$output" = "dark" ]
+}
+
+@test "theme: osc reply — handles 8-bit channels and a full OSC frame" {
+    run council_theme_from_osc_reply 'rgb:ff/ff/ff'
+    [ "$output" = "light" ]
+    # The tty returns the triplet wrapped in the OSC frame; parsing must find it.
+    run council_theme_from_osc_reply $'\033]11;rgb:1c1c/1c1c/1c1c\033\\'
+    [ "$output" = "dark" ]
+}
+
+@test "theme: osc reply — unparseable input yields empty (no assertion)" {
+    run council_theme_from_osc_reply 'garbage'
+    [ -z "$output" ]
+    run council_theme_from_osc_reply ''
+    [ -z "$output" ]
+}
+
 # ============================================================================
 # Theme-aware renderer
 # ============================================================================
@@ -89,6 +128,79 @@ render_with_theme() {
     [[ "$output" == *$'\033[3m'subtle* ]]
     [[ "$output" != *"97m"* ]]
     [[ "$output" != *"30m"* ]]
+}
+
+@test "renderer: scrubs raw control/escape bytes from untrusted model output" {
+    # A model answer could smuggle an OSC title-set (ESC ]0;...BEL) or a CSI
+    # clear (ESC [2J) into its text. The renderer must strip the raw control
+    # bytes before styling so they can't drive the terminal; the leftover
+    # printable characters are harmless.
+    local payload=$'before\033]0;pwned\a mid \033[2J after'
+    run render_with_theme dark "$payload"
+    [ "$status" -eq 0 ]
+    # Visible words survive the scrub.
+    [[ "$output" == *before* ]]
+    [[ "$output" == *after* ]]
+    # None of the injected raw sequences survive.
+    [[ "$output" != *$'\033]0;'* ]]   # OSC title-set intro gone
+    [[ "$output" != *$'\033[2J'* ]]   # CSI clear-screen gone
+    [[ "$output" != *$'\a'* ]]        # BEL gone
+}
+
+# ----- Block-construct rendering (perl renderer, dark theme markers) -----
+# These pin the perl renderer's structural output: head=96, gray=90, strong=1;97
+# on dark. They complement the emphasis/muted tests above by covering tables,
+# code fences, headings, lists, and blockquotes.
+
+@test "renderer: table renders gray inner separators and a styled header row" {
+    run render_with_theme dark $'| Name | Role |\n| --- | --- |\n| gem | judge |'
+    [ "$status" -eq 0 ]
+    # Borderless table: gray │ separators between columns.
+    [[ "$output" == *$'\033[90m│\033[0m'* ]]
+    # Header cells: bold + head color (96 on dark). The --- separator row that
+    # marked them as a header is consumed, never printed.
+    [[ "$output" == *$'\033[1;96mName\033[0m'* ]]
+    [[ "$output" == *$'\033[1;96mRole\033[0m'* ]]
+    [[ "$output" == *"─┼─"* ]]        # header underline crossbars
+    # Data row present and NOT header-styled.
+    [[ "$output" == *"gem"* ]]
+    [[ "$output" == *"judge"* ]]
+}
+
+@test "renderer: fenced code block uses ┌/└ markers and copies content verbatim" {
+    run render_with_theme dark $'```bash\n# cfg line\n**not bold**\n```'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"┌─────"* ]]     # open marker
+    [[ "$output" == *"└─────"* ]]     # close marker
+    [[ "$output" == *"bash"* ]]       # language label
+    # Content inside a fence is never markdown-processed.
+    [[ "$output" == *'# cfg line'* ]]
+    [[ "$output" == *'**not bold**'* ]]
+    [[ "$output" != *$'\033[1;7;96m'* ]]  # '# cfg line' is not turned into an H1
+    [[ "$output" != *$'\033[1;97m'* ]]    # '**not bold**' is not turned into bold
+}
+
+@test "renderer: H1–H3 get distinct heading styles" {
+    run render_with_theme dark $'# Title One\n## Title Two\n### Title Three'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Title One"* ]]
+    [[ "$output" == *$'\033[1;7;96m'* ]]                   # H1: bold + inverse + head
+    [[ "$output" == *$'\033[1;96mTitle Two\033[0m'* ]]     # H2: bold + head
+    [[ "$output" == *$'\033[1;36mTitle Three\033[0m'* ]]   # H3: bold + fixed cyan
+}
+
+@test "renderer: bullet and numbered lists get cyan markers" {
+    run render_with_theme dark $'- first\n- second\n\n1. one\n2. two'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'\033[36m•\033[0m first'* ]]   # unordered → cyan bullet
+    [[ "$output" == *$'\033[36m1.\033[0m one'* ]]    # ordered → cyan number
+}
+
+@test "renderer: blockquote gets a magenta bar and italic body" {
+    run render_with_theme dark $'> quoted words'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'\033[35m▌\033[0m'* ]]           # magenta bar
+    [[ "$output" == *$'\033[3mquoted words\033[0m'* ]] # italic body
 }
 
 # ============================================================================

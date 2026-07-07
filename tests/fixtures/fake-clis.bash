@@ -9,6 +9,8 @@
 #   rate-limit     - 429 message on stderr, exit 1
 #   auth-failure   - login-required message on stderr, exit 1
 #   slow           - sleep COUNCIL_FAKE_SLEEP (default 5s) then respond
+#   hang           - exec sleep COUNCIL_FAKE_SLEEP (default 300s); replaces the
+#                    process so an inherited SIGALRM (timeout) kills it cleanly
 #   error          - generic failure on stderr, exit 1
 #
 # Every invocation appends {bin, args} to $COUNCIL_FAKE_STATE_DIR/calls.jsonl
@@ -52,6 +54,7 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     rate-limit)     echo "Error: 429 Too Many Requests" >&2; exit 1 ;;
     auth-failure)   echo "Error: not logged in" >&2; exit 1 ;;
     slow)           sleep "\${COUNCIL_FAKE_SLEEP:-5}"; echo "$marker: slow answer" ;;
+    hang)           exec sleep "\${COUNCIL_FAKE_SLEEP:-300}" ;;
     error)          echo "Error: fake provider failure" >&2; exit 1 ;;
     *)              echo "Unknown COUNCIL_FAKE_BEHAVIOR: \${COUNCIL_FAKE_BEHAVIOR}" >&2; exit 64 ;;
 esac

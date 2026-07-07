@@ -1,6 +1,6 @@
 ---
 description: Check connectivity and configuration status of all council providers
-allowed-tools: Bash(*)
+allowed-tools: Bash(bash */scripts/check-status.sh*), Bash(bash */scripts/run-council.sh *)
 ---
 
 Check the status of all configured AI providers.

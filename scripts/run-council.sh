@@ -7,6 +7,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/jobs.sh"
 
+# Resolve the jobs state dir once in this process so the command-substitution
+# subshells in job_file/job_log inherit the memoized value instead of re-forking
+# a hash on every call.
+jobs_state_dir >/dev/null
+
 MODE=sync
 JOB_ID=""
 PASS=()
@@ -28,15 +33,33 @@ for arg in "$@"; do
 done
 
 # Run query and format, saving to the named file under the cache dir.
-# Echoes the output file path for Claude to read.
+# On success echoes the output file path for Claude to read. On failure prints
+# query-council's real diagnostics (captured to a log, not discarded), removes
+# the empty transcript, and returns non-zero so callers — including the async
+# worker's `outfile=$(run_sync ...)` under set -e — don't mistake failure for a
+# completed run with an empty artifact.
 run_sync() {
     local name="${1:-council-$(date +%s)}"
     local outdir=".claude/council-cache"
     local outfile="${outdir}/${name}.md"
+    local logfile="${outdir}/${name}.log"
     mkdir -p "$outdir"
-    bash "${SCRIPT_DIR}/query-council.sh" "${PASS[@]+"${PASS[@]}"}" 2>/dev/null \
-        | bash "${SCRIPT_DIR}/format-output.sh" > "$outfile"
-    echo "$outfile"
+    # Self-ignoring cache dir: transcripts embed the full prompt (and any --file
+    # contents), so keep them out of git even on the --no-cache path, where
+    # cache.sh's ensure_cache_dir never runs.
+    [[ -f "${outdir}/.gitignore" ]] || printf '*\n' > "${outdir}/.gitignore"
+    # Guarded by `if` so pipefail-driven failure is handled here rather than
+    # tripping set -e before we can surface the cause.
+    if bash "${SCRIPT_DIR}/query-council.sh" "${PASS[@]+"${PASS[@]}"}" 2>"$logfile" \
+        | bash "${SCRIPT_DIR}/format-output.sh" > "$outfile"; then
+        rm -f "$logfile"
+        echo "$outfile"
+    else
+        echo "Council query failed:" >&2
+        tail -n 20 "$logfile" >&2 2>/dev/null || true
+        rm -f "$outfile" "$logfile"
+        return 1
+    fi
 }
 
 # Detach a worker for the same query and return immediately. Stdout is the
@@ -74,13 +97,26 @@ run_result() {
         echo "Error: unknown job: $JOB_ID" >&2
         exit 1
     fi
-    local status outfile
-    IFS=$'\t' read -r status outfile < <(jq -r '[.status, .outfile // ""] | @tsv' "$file")
+    # Read fields individually: an empty middle field (no outfile yet) would be
+    # swallowed by read's collapsing of consecutive tab (IFS-whitespace) delimiters.
+    local status outfile pid
+    status=$(jq -r '.status' "$file")
+    outfile=$(jq -r '.outfile // ""' "$file")
+    pid=$(jq -r '.pid // ""' "$file")
     case "$status" in
         completed)
             echo "$outfile"
             ;;
         queued|running)
+            # A worker killed by SIGKILL/reboot never ran its EXIT trap, so the
+            # record is stuck at running with a dead pid. Reap it to failed so
+            # /result doesn't poll a zombie forever and jobs_prune can reclaim it.
+            if [[ "$status" == running && -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+                job_write "$JOB_ID" failed
+                echo "Job $JOB_ID failed: worker (pid $pid) is no longer running." >&2
+                tail -5 "$(job_log "$JOB_ID")" >&2 2>/dev/null || true
+                exit 1
+            fi
             echo "Job $JOB_ID is still ${status}." >&2
             exit 2
             ;;

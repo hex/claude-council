@@ -17,6 +17,11 @@ verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 DEBUG="${COUNCIL_DEBUG:-}"
 
 PROMPT="${1:-}"
+# A large prompt (e.g. a big --file) arrives via a temp file to stay off
+# the process argv, where the OS would reject it as "argument list too long".
+if [[ "$PROMPT" == "--prompt-file" ]]; then
+    PROMPT=$(cat "${2:?--prompt-file requires a path}")
+fi
 
 if [[ -z "$PROMPT" ]]; then
     echo "Error: No prompt provided" >&2
@@ -58,11 +63,19 @@ PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$T
     max_tokens: $tokens
 }')
 
+# Keep the API key and request body off the process argv (ps-visible / OS
+# argument-size limits): the key travels via a mode-600 curl config file and
+# the payload via a temp file.
+CURL_CFG=$(curl_secret_config "Authorization: Bearer ${API_KEY}")
+PAYLOAD_FILE=$(mktemp)
+trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE"' EXIT
+printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
+
 # Make API call
 RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
+    --config "$CURL_CFG" \
     -H "Content-Type: application/json" \
-    -H "Authorization: Bearer ${API_KEY}" \
-    -d "$PAYLOAD")
+    --data-binary @"$PAYLOAD_FILE")
 
 # Extract text from response
 TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')

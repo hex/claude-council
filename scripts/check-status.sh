@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/keys.sh"
 source "$SCRIPT_DIR/lib/providers.sh"
+source "$SCRIPT_DIR/lib/retry.sh"
 resolve_grok_key
 
 # Colors
@@ -17,9 +18,10 @@ GREEN='\033[32m'
 DIM='\033[2m'
 RESET='\033[0m'
 
-# Millisecond timestamp; falls back to second resolution without python3
+# Millisecond timestamp. Without python3, scale whole seconds to ms so callers
+# that render "(${duration}ms)" don't show durations ~1000x too small.
 now_ms() {
-    python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || date +%s
+    python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || echo $(( $(date +%s) * 1000 ))
 }
 
 # Check a single provider
@@ -40,30 +42,43 @@ check_provider() {
     local start_time end_time duration
     start_time=$(now_ms)
 
-    local http_code
+    # Keys travel via a mode-600 curl --config file, never the argv (ps-visible)
+    # or the URL. Mirrors the provider scripts' curl_secret_config hardening.
+    local http_code cfg
     case "$name" in
         gemini)
+            cfg=$(curl_secret_config "x-goog-api-key: ${api_key}")
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-                "https://generativelanguage.googleapis.com/v1beta/models/${model}?key=${api_key}" 2>/dev/null || echo "000")
+                --config "$cfg" \
+                "https://generativelanguage.googleapis.com/v1beta/models/${model}" 2>/dev/null || echo "000")
+            rm -f "$cfg"
             ;;
         openai)
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-                -H "Authorization: Bearer ${api_key}" \
+                --config "$cfg" \
                 "https://api.openai.com/v1/models" 2>/dev/null || echo "000")
+            rm -f "$cfg"
             ;;
         grok)
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-                -H "Authorization: Bearer ${api_key}" \
+                --config "$cfg" \
                 "https://api.x.ai/v1/models" 2>/dev/null || echo "000")
+            rm -f "$cfg"
             ;;
         perplexity)
-            # Perplexity has no /models endpoint; use minimal chat request
+            # Perplexity has no /models endpoint, so auth can only be probed with
+            # a (billable) chat request. Cap it at max_tokens:1 to make the status
+            # check as close to free as the API allows.
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
                 -X POST \
-                -H "Authorization: Bearer ${api_key}" \
+                --config "$cfg" \
                 -H "Content-Type: application/json" \
-                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":16}' \
+                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":1}' \
                 "https://api.perplexity.ai/chat/completions" 2>/dev/null || echo "000")
+            rm -f "$cfg"
             ;;
     esac
 

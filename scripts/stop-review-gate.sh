@@ -6,6 +6,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# jq drives config and event parsing; without it the gate can't function, so
+# fail open (allow the stop) rather than trap the user at every turn end.
+command -v jq >/dev/null 2>&1 || exit 0
+
 EVENT=$(cat)
 
 # Off unless the project explicitly opts in. A malformed config reads as
@@ -17,6 +21,14 @@ IFS=$'\t' read -r ENABLED PROVIDER MAX_ITER < <(
     jq -r '[(.enabled // false), (.provider // "codex"), (.max_iterations // 1)] | @tsv' "$CONFIG" 2>/dev/null
 ) || true
 [[ "$ENABLED" == "true" ]] || exit 0
+
+# The provider name is interpolated into a script path and then executed, so
+# constrain it to the known set — a config value like "../../evil" must never
+# select an arbitrary script. Unknown provider -> fail open.
+case "$PROVIDER" in
+    gemini|openai|grok|perplexity|codex|antigravity) ;;
+    *) exit 0 ;;
+esac
 
 # Guard 1: never re-gate a continuation already triggered by a stop hook
 SESSION_ID=""
@@ -45,6 +57,13 @@ PROVIDER_SCRIPT="${SCRIPT_DIR}/providers/${PROVIDER}.sh"
 source "${SCRIPT_DIR}/lib/prompts.sh"
 TEMPLATE=$(load_prompt_template stop-review-gate)
 PROMPT=$(interpolate_template "$TEMPLATE" "DIFF=$DIFF")
+
+# Cap the reviewer under the 120s Stop-hook budget (hooks/hooks.json) so a slow
+# provider fails open — allowing the stop — instead of being killed mid-review
+# by the harness and stalling every turn end for the full budget.
+: "${COUNCIL_TIMEOUT:=300}"
+if (( COUNCIL_TIMEOUT > 90 )); then COUNCIL_TIMEOUT=90; fi
+export COUNCIL_TIMEOUT
 
 # A reviewer failure must never trap the user at the stop
 REVIEW=$(bash "$PROVIDER_SCRIPT" "$PROMPT" 2>/dev/null) || exit 0

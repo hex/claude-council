@@ -44,11 +44,19 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     if [[ "$1" == "--strip" ]]; then
         strip_ansi
     elif [[ "$1" == "--write" ]] && [[ -n "$2" ]]; then
-        write_export "$2" "${3:-}" "${4:-}"
+        # Optional 5th arg is a body file (the saved council transcript). When
+        # given, read the export body from it rather than stdin — the caller
+        # (ask.md Step 4) runs in a context with no stdin to pipe.
+        if [[ -n "${5:-}" ]]; then
+            [[ -f "$5" ]] || { echo "Error: body file not found: $5" >&2; exit 1; }
+            write_export "$2" "${3:-}" "${4:-}" < "$5"
+        else
+            write_export "$2" "${3:-}" "${4:-}"
+        fi
     else
         echo "Usage:"
-        echo "  $0 --strip              # Strip ANSI from stdin"
-        echo "  $0 --write <path> [prompt] [providers]  # Write with header"
+        echo "  $0 --strip                                       # Strip ANSI from stdin"
+        echo "  $0 --write <path> [prompt] [providers] [body-file]  # Write with header"
         exit 1
     fi
 fi

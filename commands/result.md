@@ -1,7 +1,7 @@
 ---
 description: Fetch, list, or cancel background council jobs started with --async
-argument-hint: [job-id] | list | cancel <job-id>
-allowed-tools: Bash(*), Read
+argument-hint: '[job-id] | list | cancel <job-id>'
+allowed-tools: Bash(bash */scripts/run-council.sh *), Read
 ---
 
 Manage background council jobs.

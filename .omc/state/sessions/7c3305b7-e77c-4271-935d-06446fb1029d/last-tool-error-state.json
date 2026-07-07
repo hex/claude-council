@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cat scripts/lib/cache.sh; echo ====; sed -n '1,80p' tests/cli-providers.bats\",\"description\":\"Read cache.sh and cli-providers.bats head\"}",
-  "error": "Exit code 1\n#!/bin/bash\n# ABOUTME: Response caching for council queries\n# ABOUTME: Stores responses by prompt+provider+model hash with TTL\n\n# Cache directory (relative to project root)\nCOUNCIL_CACHE_DIR=\"${COUNCIL_CACHE_DIR:-.claude/council-cache}\"\nCOUNCIL_CACHE_TTL=\"${COUNCIL_CACHE_TTL:-3600}\"  # Default 1 hour in seconds\n\n# Ensure cache directory exists\nensure_cache_dir() {\n    [[ -d \"$COUNCIL_CACHE_DIR\" ]] || mkdir -p \"$COUNCIL_CACHE_DIR\"\n}\n\n# Generate cache key from prompt + provider + model...",
-  "timestamp": "2026-06-12T14:16:35.037Z",
-  "retry_count": 1
-}

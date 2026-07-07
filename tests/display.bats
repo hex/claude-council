@@ -79,21 +79,6 @@ teardown() {
     [[ "$out" == *"033"* ]]
 }
 
-@test "display: it2_set_mark is silent no-op outside iTerm2" {
-    source "$LIB"
-    run it2_set_mark
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
-}
-
-@test "display: it2_set_mark emits SetMark sequence in iTerm2" {
-    source "$LIB"
-    export LC_TERMINAL="iTerm2"
-    local raw
-    raw=$(it2_set_mark)
-    [[ "$raw" == *"SetMark"* ]]
-}
-
 @test "display: it2_attention is silent no-op outside iTerm2" {
     source "$LIB"
     run it2_attention start
@@ -122,17 +107,17 @@ teardown() {
 }
 
 @test "display: waiting line disables autowrap so a too-wide list clips, not wraps" {
-    # Regression guard for the spinner waterfall. The watcher's draw_loading is
-    # inside an un-sourceable heredoc, so this asserts the no-wrap guard is
-    # present in source: the waiting line must bracket its output with DECAWM-off
+    # Regression guard for the spinner waterfall. draw_loading only runs on a
+    # live pane tty, so this asserts the no-wrap guard is present in source:
+    # the waiting line must bracket its output with DECAWM-off
     # (\033[?7l) and DECAWM-on (\033[?7h). Without it, a list wider than the pane
     # wraps, and \r\033[K (which reclaims only the current row) leaves one stale
     # spinner line per frame. Verified behaviorally via tmux capture-pane.
     # Match the actual printf sequence, not the explanatory comment: the line
     # clears with \033[K then disables wrap, and re-enables right after the list.
-    run grep -F '\033[K\033[?7l' "$LIB"
+    run grep -F '\033[K\033[?7l' "${LIB_DIR}/pane-watcher.sh"
     [ "$status" -eq 0 ]
-    run grep -F '%s\033[?7h' "$LIB"
+    run grep -F '%s\033[?7h' "${LIB_DIR}/pane-watcher.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -227,6 +212,40 @@ teardown() {
     [[ "$output" == *"line1"* ]]
     [[ "$output" == *"line2"* ]]
     [[ "$output" == *"line3"* ]]
+}
+
+@test "display: a removed pane dir does not abort the caller under set -e" {
+    source "$LIB"
+    # A provider runs its manifest writes inside a `set -e` subshell. If the user
+    # closes the streaming pane mid-run, the pane dir vanishes; a writer that
+    # returned 1 would abort the subshell here and the provider's answer + cache
+    # write would never happen. The writers must no-op successfully instead, so
+    # the work after them still runs. SENTINEL_REACHED is the "answer got saved".
+    local gone="$PANE_DIR/removed"
+    run bash -c '
+        set -e
+        source "$1"
+        pane_status_event "$2" gemini complete 120
+        pane_response_write "$2" gemini "answer"
+        pane_error_write "$2" gemini "err"
+        echo SENTINEL_REACHED
+    ' _ "$LIB" "$gone"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"SENTINEL_REACHED"* ]]
+}
+
+@test "display: pane_response_write is atomic — no temp file, complete content" {
+    source "$LIB"
+    mkdir -p "$PANE_DIR/responses"
+    pane_response_write "$PANE_DIR" gemini "$(printf 'a\nb\nc')"
+    [ -f "$PANE_DIR/responses/gemini.md" ]
+    # The dot-temp used for the atomic rename must not survive, and — critically —
+    # the watcher's responses/*.md glob must never match a half-written file.
+    run find "$PANE_DIR/responses" -name '.*.tmp'
+    [ -z "$output" ]
+    run cat "$PANE_DIR/responses/gemini.md"
+    [[ "$output" == *"a"* ]]
+    [[ "$output" == *"c"* ]]
 }
 
 # ----- Markdown renderer selection -----
@@ -461,4 +480,39 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
     export COUNCIL_NO_PANE=1
     run should_open_pane
     [ "$status" -eq 1 ]
+}
+
+# ----- tmux version gate -----
+# The streaming pane uses `split-window -l '<pct>%'` (length as a percentage),
+# which tmux only understands from 3.1 onward. tmux_version_supports_pane is the
+# pure parser behind the "pane disabled: tmux >= 3.1" fallback notice.
+
+@test "display: tmux_version_supports_pane accepts 3.1 and newer" {
+    source "$LIB"
+    run tmux_version_supports_pane "tmux 3.1"
+    [ "$status" -eq 0 ]
+    run tmux_version_supports_pane "tmux 3.6a"
+    [ "$status" -eq 0 ]
+    run tmux_version_supports_pane "tmux 4.0"
+    [ "$status" -eq 0 ]
+    run tmux_version_supports_pane "tmux next-3.4"
+    [ "$status" -eq 0 ]
+}
+
+@test "display: tmux_version_supports_pane rejects versions older than 3.1" {
+    source "$LIB"
+    run tmux_version_supports_pane "tmux 3.0"
+    [ "$status" -ne 0 ]
+    run tmux_version_supports_pane "tmux 2.9"
+    [ "$status" -ne 0 ]
+    run tmux_version_supports_pane "tmux 1.8"
+    [ "$status" -ne 0 ]
+}
+
+@test "display: tmux_version_supports_pane rejects unparseable version strings" {
+    source "$LIB"
+    run tmux_version_supports_pane "garbage"
+    [ "$status" -ne 0 ]
+    run tmux_version_supports_pane ""
+    [ "$status" -ne 0 ]
 }

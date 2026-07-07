@@ -1,7 +1,7 @@
 ---
 description: Query multiple AI agents (Gemini, OpenAI, Grok, Perplexity) for diverse perspectives on architecture decisions, technology choices, debugging dead-ends, and security tradeoffs. Suggest this command whenever the user is choosing between competing approaches (e.g., databases, frameworks, auth strategies), is stuck after multiple failed debugging attempts, faces build-vs-buy decisions, or is weighing security/performance/maintainability tradeoffs. Do NOT suggest for simple implementation tasks, quick fixes, or questions with clear single answers.
-argument-hint: [--file=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--local] [--async] [--output=path] [--quiet] [--no-cache] [--no-auto-context] "question"
-allowed-tools: Agent, Bash(*), Read, Glob, Grep, AskUserQuestion, TaskCreate, TaskUpdate
+argument-hint: '[--file=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--local] [--async] [--output=path] [--quiet] [--no-cache] [--no-auto-context] [--no-pane] "question"'
+allowed-tools: Agent, Bash(bash */scripts/query-council.sh *), Bash(bash */scripts/run-council.sh *), Bash(bash */scripts/lib/export.sh *), Bash(head:*), Bash(mkdir -p .claude/council-cache*), Read, Glob, Grep, Write, AskUserQuestion, TaskCreate, TaskUpdate
 ---
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -57,8 +57,8 @@ any provider questions:
      ```
      - "Run local council" → local mode (Step 2).
      - "How to add a provider" → show the setup hint (set an API key, or install
-       the `codex` / `gemini` CLI; `/claude-council:status` shows what's
-       available) and stop.
+       the `codex` / `agy` (Antigravity) CLI; `/claude-council:status` shows
+       what's available) and stop.
      - "Cancel" → stop.
 
 **Never pass `--local` to query-council.sh or run-council.sh** — it is a
@@ -83,6 +83,10 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default 2>&1 | head -
 **Combine providers + verbosity into a single AskUserQuestion call** (it supports multiple questions per call) so the user resolves both decisions in one screen instead of two:
 
 ```
+<!-- The model names below are the current defaults; the single source of truth
+     is get_model() in scripts/lib/providers.sh. When those defaults change,
+     update them here, in the SKILL.md provider tables, and in the README Model
+     Selection section together. -->
 Question 1: "Which AI providers should I consult?"
 Header: "Providers"
 multiSelect: true
@@ -101,6 +105,12 @@ Options:
   - Brief - 3-5 sentences, bullets only, no code unless asked
   - Detailed - thorough analysis with code examples and trade-offs
 ```
+
+The model names above are illustrative defaults, duplicated here by hand — treat
+them as potentially stale. The authoritative source for each provider's model is
+`get_model()` in `scripts/lib/providers.sh` (overridable per provider via the
+`*_MODEL` env vars). `--list-default` reports provider names only, not models, so
+it can't confirm these labels; when in doubt, read `get_model()`.
 
 When the providers list exceeds 4 options ("All" + N providers), AskUserQuestion's 4-option limit forces a different shape — collapse to "All / Fast subset / Custom" presets.
 
@@ -211,6 +221,20 @@ synthesis happens when the result is fetched.
 - WRONG: `--providers "gemini,openai"`
 - WRONG: `--providers gemini,openai`
 
+**Forward the user's flags.** Pass every flag present in `$ARGUMENTS` through to
+`run-council.sh` verbatim, before the `--` separator — including `--debate`,
+`--roles=…`, `--no-cache`, `--file=…`, `--quiet`, and `--no-pane`. The only
+command-layer flags to strip (never forward) are `--local`, `--agents`, and
+`--output` (handled in Steps 0, 1.5, and 4). For example, a `--debate --roles=…`
+query becomes:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --debate --roles=security,performance --providers=<list> -- "question"
+```
+
+`--debate` is what activates two-round debate mode; if the user passed it, it
+MUST reach the script, or Step 3's debate synthesis has nothing to summarize.
+
 **Invoke the `council-execution` skill** and follow its instructions to run the query pipeline and display output.
 
 ## Step 3: Generate Synthesis (standard mode only)
@@ -231,10 +255,13 @@ Additionally include:
 
 ## Step 4: Export (if --output specified)
 
-If `--output=<path>` was specified:
+If `--output=<path>` was specified, export the saved council transcript — the
+`.claude/council-cache/council-*.md` file the council-execution skill produced in
+Step 2 (its path was printed by `run-council.sh`). Pass that file as the body
+source (the command has no stdin to pipe):
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/lib/export.sh --write "<output_path>" "<prompt>" "<providers>"
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/lib/export.sh --write "<output_path>" "<prompt>" "<providers>" "<council_cache_file>"
 ```
 
 Confirm: `Exported to: <output_path>`
