@@ -64,6 +64,7 @@ USE_CACHE=true
 ROLES=""
 DEBATE_MODE=false
 FILE_PATH=""
+IMAGE_PATH=""
 OUTPUT_PATH=""
 QUIET_MODE=false
 AUTO_CONTEXT=true
@@ -106,6 +107,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --file)
             FILE_PATH="$2"
+            shift 2
+            ;;
+        --image=*)
+            IMAGE_PATH="${1#*=}"
+            shift
+            ;;
+        --image)
+            IMAGE_PATH="$2"
             shift 2
             ;;
         --output=*)
@@ -277,16 +286,48 @@ TEMP_DIR=$(mktemp -d)
 # (Ctrl-C, SIGTERM, errexit) so it never spins "waiting on…" forever.
 trap 'rm -rf "$TEMP_DIR"; [[ -n "${COUNCIL_PANE_DIR:-}" ]] && display_pane_close "$COUNCIL_PANE_DIR" 2>/dev/null || true' EXIT
 
+# Validate and prepare an --image, once, before any provider runs. The base64
+# rides its own temp file (never the prompt) and only its hash keys the cache.
+IMAGE_MIME=""
+IMAGE_B64_FILE=""
+if [[ -n "${IMAGE_PATH:-}" ]]; then
+    if [[ ! -f "$IMAGE_PATH" ]]; then
+        echo "Error: image not found: $IMAGE_PATH" >&2
+        exit 1
+    fi
+    ext=$(printf '%s' "${IMAGE_PATH##*.}" | tr '[:upper:]' '[:lower:]')
+    case "$ext" in
+        png)       IMAGE_MIME="image/png" ;;
+        jpg|jpeg)  IMAGE_MIME="image/jpeg" ;;
+        webp)      IMAGE_MIME="image/webp" ;;
+        gif)       IMAGE_MIME="image/gif" ;;
+        *) echo "Error: unsupported image type '.$ext' (use png/jpg/jpeg/webp/gif)" >&2; exit 1 ;;
+    esac
+    img_bytes=$(wc -c < "$IMAGE_PATH")
+    if [[ "$img_bytes" -gt 10485760 ]]; then
+        echo "Error: image too large (${img_bytes} bytes; cap is 10485760)" >&2
+        exit 1
+    fi
+    IMAGE_B64_FILE=$(mktemp "${TEMP_DIR}/image.XXXXXX")
+    base64 < "$IMAGE_PATH" | tr -d '\n' > "$IMAGE_B64_FILE"
+    COUNCIL_IMAGE_HASH=$(sha256_hex < "$IMAGE_PATH")
+    export COUNCIL_IMAGE_HASH
+fi
+
 # Invoke a provider script with the prompt delivered via a temp file
 # (--prompt-file), so a large --file prompt never rides the process argv where
 # Linux (MAX_ARG_STRLEN, 128KB) or MSYS (~32KB) would reject it as "argument
 # list too long". Providers still accept a literal prompt as $1 for direct use.
 # Merges stderr into stdout, matching the callers' original `2>&1` capture.
 run_provider_script() {
-    local script="$1" prompt="$2" pfile rc
+    local script="$1" prompt="$2" image_file="${3:-}" image_mime="${4:-}" pfile rc
     pfile=$(mktemp "${TEMP_DIR}/prompt.XXXXXX")
     printf '%s' "$prompt" > "$pfile"
-    "$script" --prompt-file "$pfile" 2>&1
+    if [[ -n "$image_file" ]]; then
+        "$script" --prompt-file "$pfile" --image-file "$image_file" --image-mime "$image_mime" 2>&1
+    else
+        "$script" --prompt-file "$pfile" 2>&1
+    fi
     rc=$?
     rm -f "$pfile"
     return $rc
@@ -318,7 +359,11 @@ attempt_api_fallback() {
     fi
     if [[ -z "${resp:-}" ]]; then
         sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
-        if [[ -x "$sibling_script" ]] && resp=$(run_provider_script "$sibling_script" "$prompt"); then
+        local sib_img="" sib_mime=""
+        if [[ -n "${IMAGE_B64_FILE:-}" ]] && provider_vision_capable "$sibling"; then
+            sib_img="$IMAGE_B64_FILE"; sib_mime="$IMAGE_MIME"
+        fi
+        if [[ -x "$sibling_script" ]] && resp=$(run_provider_script "$sibling_script" "$prompt" "$sib_img" "$sib_mime"); then
             [[ "$USE_CACHE" == true ]] && cache_set "$key" "$sibling" "$sibling_model" "$prompt" "$resp"
         else
             return 0
@@ -397,6 +442,31 @@ query_provider() {
 
     [[ -n "${COUNCIL_PANE_DIR:-}" ]] && pane_status_event "$COUNCIL_PANE_DIR" "$provider" querying "" "$model"
 
+    # Image disposition: vision providers get the image; a provider with a
+    # usable vision sibling answers through it; others answer text-only with a tag.
+    local img_file="" img_mime="" image_note=""
+    if [[ -n "${IMAGE_B64_FILE:-}" ]]; then
+        if provider_vision_capable "$provider"; then
+            img_file="$IMAGE_B64_FILE"; img_mime="$IMAGE_MIME"
+        else
+            local sibling; sibling=$(api_sibling "$provider")
+            if [[ -n "$sibling" ]]; then
+                local fb_json
+                fb_json=$(attempt_api_fallback "$provider" "$final_prompt")
+                if [[ -n "$fb_json" ]]; then
+                    fallback_slot_json "$fb_json" "$role" > "$output_file"
+                    if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+                        local elapsed2=$(( $(now_ms) - start_ms ))
+                        pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed2" "$(jq -r '.model' <<<"$fb_json")"
+                        pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$(jq -r '.response' <<<"$fb_json")"
+                    fi
+                    return
+                fi
+            fi
+            image_note="(answered without the image)"$'\n\n'
+        fi
+    fi
+
     # Check cache if enabled (cache key includes role)
     if [[ "$USE_CACHE" == true ]]; then
         local key
@@ -415,8 +485,9 @@ query_provider() {
     fi
 
     # Query provider with role-injected prompt
-    if response=$(run_provider_script "$script" "$final_prompt"); then
+    if response=$(run_provider_script "$script" "$final_prompt" "$img_file" "$img_mime"); then
         local elapsed=$(( $(now_ms) - start_ms ))
+        response="${image_note}${response}"
         printf '%s' "$response" | jq -Rs --arg role "$role" \
             '{status: "success", response: ., cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
         if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then

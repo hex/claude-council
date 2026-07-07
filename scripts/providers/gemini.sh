@@ -16,11 +16,23 @@ verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 DEBUG="${COUNCIL_DEBUG:-}"
 
 PROMPT="${1:-}"
-# A large prompt (e.g. a big --file) arrives via a temp file to stay off
-# the process argv, where the OS would reject it as "argument list too long".
+IMAGE_FILE=""
+IMAGE_MIME=""
+# A large prompt (e.g. a big --file) arrives via a temp file to stay off the
+# process argv, where the OS would reject it as "argument list too long".
 if [[ "$PROMPT" == "--prompt-file" ]]; then
     PROMPT=$(cat "${2:?--prompt-file requires a path}")
+    shift 2
+elif [[ $# -gt 0 ]]; then
+    shift
 fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --image-file) IMAGE_FILE="${2:?--image-file requires a path}"; shift 2 ;;
+        --image-mime) IMAGE_MIME="${2:?--image-mime requires a value}"; shift 2 ;;
+        *) shift ;;
+    esac
+done
 
 if [[ -z "$PROMPT" ]]; then
     echo "Error: No prompt provided" >&2
@@ -49,22 +61,23 @@ bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'gemini-3*' '*thinking*'
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
 # Build request payload
-PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
-    system_instruction: {
-        parts: [{
-            text: $system
-        }]
-    },
-    contents: [{
-        parts: [{
-            text: $prompt
-        }]
-    }],
-    generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: $tokens
-    }
-}')
+if [[ -n "$IMAGE_FILE" ]]; then
+    PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" \
+        --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '{
+        system_instruction: { parts: [{ text: $system }] },
+        contents: [{ parts: [
+            { text: $prompt },
+            { inlineData: { mimeType: $mime, data: $b64 } }
+        ]}],
+        generationConfig: { temperature: 0.7, maxOutputTokens: $tokens }
+    }')
+else
+    PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
+        system_instruction: { parts: [{ text: $system }] },
+        contents: [{ parts: [{ text: $prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: $tokens }
+    }')
+fi
 
 # Keep the API key and request body off the process argv (ps-visible, and the
 # key would otherwise sit in the URL query string): the key travels via a

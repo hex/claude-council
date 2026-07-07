@@ -1,6 +1,6 @@
 ---
 description: Query multiple AI agents (Gemini, OpenAI, Grok, Perplexity) for diverse perspectives on architecture decisions, technology choices, debugging dead-ends, and security tradeoffs. Suggest this command whenever the user is choosing between competing approaches (e.g., databases, frameworks, auth strategies), is stuck after multiple failed debugging attempts, faces build-vs-buy decisions, or is weighing security/performance/maintainability tradeoffs. Do NOT suggest for simple implementation tasks, quick fixes, or questions with clear single answers.
-argument-hint: '[--file=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--local] [--async] [--output=path] [--quiet] [--no-cache] [--no-auto-context] [--no-pane] "question"'
+argument-hint: '[--file=path] [--image=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--local] [--async] [--output=path] [--quiet] [--no-cache] [--no-auto-context] [--no-pane] "question"'
 allowed-tools: Agent, Bash(bash */scripts/query-council.sh *), Bash(bash */scripts/run-council.sh *), Bash(bash */scripts/lib/export.sh *), Bash(head:*), Bash(mkdir -p .claude/council-cache*), Read, Glob, Grep, Write, AskUserQuestion, TaskCreate, TaskUpdate
 ---
 
@@ -223,7 +223,7 @@ synthesis happens when the result is fetched.
 
 **Forward the user's flags.** Pass every flag present in `$ARGUMENTS` through to
 `run-council.sh` verbatim, before the `--` separator — including `--debate`,
-`--roles=…`, `--no-cache`, `--file=…`, `--quiet`, and `--no-pane`. The only
+`--roles=…`, `--no-cache`, `--file=…`, `--image=…`, `--quiet`, and `--no-pane`. The only
 command-layer flags to strip (never forward) are `--local`, `--agents`, and
 `--output` (handled in Steps 0, 1.5, and 4). For example, a `--debate --roles=…`
 query becomes:

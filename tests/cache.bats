@@ -67,6 +67,14 @@ teardown() {
     [ "$a" != "$b" ]
 }
 
+@test "cache_key: image hash changes the key" {
+    source "${LIB_DIR}/cache.sh"
+    local base withimg
+    base=$(cache_key gemini gemini-3.1-pro-preview "same prompt")
+    withimg=$(COUNCIL_IMAGE_HASH=abc123 cache_key gemini gemini-3.1-pro-preview "same prompt")
+    [ "$base" != "$withimg" ]
+}
+
 @test "sha256_hex: falls back to sha256sum when shasum is absent" {
     local fake="${BATS_TEST_TMPDIR}/hashbin" tools="${BATS_TEST_TMPDIR}/tools"
     mkdir -p "$fake" "$tools"
