@@ -4,6 +4,55 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.7.2
+
+Screenshot/image input for the council, plus a full security & correctness audit
+(67 findings) and continuous integration.
+
+### Added
+
+- **Screenshot / image input (`--image=path`).** Attach one image
+  (png/jpg/jpeg/webp/gif, ≤10 MB) to a council query. Gemini and OpenAI analyze
+  it natively; CLI providers route to their vision-capable API sibling
+  (codex→openai, antigravity→gemini); Grok and Perplexity answer text-only,
+  tagged `(answered without the image)`. The image bytes never touch cache
+  entries or saved `council-*.md` transcripts — only a hash keys the cache.
+- **Continuous integration.** GitHub Actions runs the bats suite on Ubuntu and
+  macOS; releases are gated on a green suite and refuse to run with a pre-staged
+  index.
+
+### Fixed
+
+Security and correctness hardening from a full audit (67 findings):
+
+- **Secrets off the process argv** — API keys reach `curl` via a mode-600
+  `--config` file, never the command line or a URL query string (Gemini uses the
+  `x-goog-api-key` header).
+- **Large prompts no longer fail** — provider prompts and payloads travel via
+  files rather than argv, fixing "argument list too long" on big `--file` inputs.
+- **Cache hardening** — portable SHA-256; keys that account for verbosity, token
+  cap, and any attached image; a self-ignoring cache dir; safe handling of empty
+  or corrupt entries.
+- **No silent failures** — `curl_with_retry` always returns a structured error
+  body; council failures surface, and zombie async jobs are reaped to `failed`.
+- **Display & terminal** — millisecond-correct timing, revived OSC-11 theme
+  detection on bash 3.2, control-byte scrubbing before render, hardened tmux pane
+  manifest writes.
+- **Provider robustness** — CLI providers bounded by `COUNCIL_TIMEOUT`, codex
+  pinned to a read-only sandbox, a near-free Perplexity status probe.
+
+### Docs
+
+- Corrected documentation drift (cache-key formula, file trees, model defaults),
+  documented the vision feature in the architecture and testing guides, added
+  privacy/cost notes, and removed a phantom config block and an unsupported
+  install command from the README.
+
+### Changed
+
+- Extracted the perl / Rich renderers and the pane watcher from inline heredocs
+  into standalone files; untracked session state; localized git attributes.
+
 ## 2026.7.1
 
 Rich markdown rendering in the streaming tmux pane, with the perl renderer as
