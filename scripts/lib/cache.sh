@@ -27,9 +27,10 @@ cache_key() {
     local prompt="$3"
     local verbosity="${COUNCIL_VERBOSITY:-standard}"
     local tokens="${COUNCIL_MAX_TOKENS:-}"
+    local image="${COUNCIL_IMAGE_HASH:-}"
 
     # Create deterministic hash from all inputs
-    printf '%s' "${provider}:${model}:${verbosity}:${tokens}:${prompt}" | sha256_hex
+    printf '%s' "${provider}:${model}:${verbosity}:${tokens}:${image}:${prompt}" | sha256_hex
 }
 
 # Check if cache entry exists and is valid
