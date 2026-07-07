@@ -95,3 +95,38 @@ PROV
     local resp; resp=$(echo "$output" | jq -r '.round1.codex.response')
     [[ "$resp" == *"MIME=image/png"* ]]
 }
+
+# A fixed-text provider for privacy assertions: it accepts the prompt and image
+# args but never repeats the bytes, so any base64 found in the cache can only
+# have come from the pipeline itself, not the provider's response.
+write_fixed_provider() {
+    cat > "$1" <<'PROV'
+#!/bin/bash
+printf 'critique text\n'
+PROV
+    chmod +x "$1"
+}
+
+@test "image: the base64 never appears in a cache entry" {
+    local fd="${BATS_TEST_TMPDIR}/fp"; mkdir -p "$fd"
+    write_fixed_provider "$fd/gemini.sh"
+    local b64; b64=$(base64 < "$IMG" | tr -d '\n')
+    run --separate-stderr env PROVIDERS_DIR="$fd" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --no-pane --no-auto-context \
+        --image="$IMG" --providers=gemini "look"
+    [ "$status" -eq 0 ]
+    # No cache file contains the base64 blob.
+    ! grep -rqF "$b64" "$TEST_CACHE_DIR"
+}
+
+@test "image: a no-image query is unaffected (regression)" {
+    local fd="${BATS_TEST_TMPDIR}/fp"; mkdir -p "$fd"
+    write_echo_provider "$fd/gemini.sh"
+    run --separate-stderr env PROVIDERS_DIR="$fd" \
+        bash "$SCRIPT" --no-cache --no-pane --no-auto-context \
+        --providers=gemini "look"
+    [ "$status" -eq 0 ]
+    local resp; resp=$(echo "$output" | jq -r '.round1.gemini.response')
+    [[ "$resp" == *"IMG=|"* ]]                       # no image sent
+    [[ "$resp" != *"(answered without the image)"* ]]  # no spurious tag
+}
