@@ -113,8 +113,23 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Auth failed (HTTP 401)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
+    # Every API provider must classify 401, not just whichever one happens to be
+    # first: a substring match alone cannot tell four rows from one.
+    [ "$(auth_failures "$output")" -eq 4 ]
     # Only the two CLI providers remain available
     [[ "$output" == *"2/6 providers available"* ]]
+}
+
+# Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
+# region block. Without the 403 arm these lose their remediation line entirely.
+@test "check-status: HTTP 403 reports auth failure with regenerate remediation" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=403
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Auth failed (HTTP 403)"* ]]
+    [[ "$output" == *"key rejected - regenerate it"* ]]
+    [ "$(auth_failures "$output")" -eq 4 ]
 }
 
 @test "check-status: HTTP 500 reports a generic error with the code" {
@@ -123,6 +138,8 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Error (HTTP 500)"* ]]
+    # A server-side fault is not a credentials problem
+    [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" == *"2/6 providers available"* ]]
 }
 
@@ -164,7 +181,8 @@ auth_failures() {
 @test "check-status: Gemini 400 with an INVALID_ARGUMENT body reports auth failure" {
     shadow_curl
     export COUNCIL_FAKE_HTTP_CODE=400
-    export COUNCIL_FAKE_HTTP_BODY='{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}'
+    # The details array carries API_KEY_INVALID, the only field that names the key
+    export COUNCIL_FAKE_HTTP_BODY='{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}}]}}'
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Auth failed (HTTP 400)"* ]]
@@ -174,6 +192,39 @@ auth_failures() {
     [[ "$output" == *"Error (HTTP 400)"* ]]
 }
 
+# Both vendors reuse their 400 marker for faults that have nothing to do with the
+# key, so these bodies are the ones that must NOT be read as a rejected key. A
+# user whose model name has a typo must not be told to regenerate a working key.
+
+@test "check-status: a Gemini 400 from a malformed model name is not a rejected key" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=400
+    # Gemini answers a name that fails its format check with the same
+    # INVALID_ARGUMENT status it uses for a bad key, and carries no details array
+    export COUNCIL_FAKE_HTTP_BODY='{"error":{"code":400,"message":"* GetModelRequest.name: unexpected model name format\n","status":"INVALID_ARGUMENT"}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    # All four API providers show the generic error: proves output was produced,
+    # so the auth-failure count below cannot pass on an empty run.
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(auth_failures "$output")" -eq 0 ]
+    [[ "$output" != *"key rejected"* ]]
+}
+
+@test "check-status: an xAI 400 from an unknown model is not a rejected key" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=400
+    # xAI files an unknown model under the same code it uses for a bad key
+    export COUNCIL_FAKE_HTTP_BODY='{"code":"invalid-argument","error":"Model not found: grok-does-not-exist"}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    # All four API providers show the generic error: proves output was produced,
+    # so the auth-failure count below cannot pass on an empty run.
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(auth_failures "$output")" -eq 0 ]
+    [[ "$output" != *"key rejected"* ]]
+}
+
 @test "check-status: a 400 that no vendor marks as a bad key stays a generic error" {
     shadow_curl
     export COUNCIL_FAKE_HTTP_CODE=400
@@ -181,7 +232,9 @@ auth_failures() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     # A malformed request is not a credentials problem; do not offer to regenerate
-    [[ "$output" == *"Error (HTTP 400)"* ]]
+    # All four API providers show the generic error: proves output was produced,
+    # so the auth-failure count below cannot pass on an empty run.
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -227,6 +280,80 @@ EOF
     [ -n "$payload" ]
     max_tokens=$(printf '%s' "$payload" | jq -r '.max_tokens')
     [ "$max_tokens" -ge 16 ]
+    # The request is billed, so the probe must sit at the floor, not merely above it
+    [ "$max_tokens" -le 32 ]
+    # A GET on /chat/completions answers 405, rendering a working key as broken
+    grep -qxF -- '-X' "$CS_ARGV_FILE"
+    grep -qxF -- 'POST' "$CS_ARGV_FILE"
+}
+
+# Without --max-time a black-holed endpoint hangs /status indefinitely.
+@test "check-status: every probe is bounded by a request timeout" {
+    record_curl
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ -s "$CS_ARGV_FILE" ]
+    [ "$(grep -cxF -- '--max-time' "$CS_ARGV_FILE" || true)" -eq 4 ]
+}
+
+# rejected_key reads the vendor's key marker with jq. Without a working jq that
+# marker is unreadable, and a rejected key looks exactly like an ordinary 400 —
+# a wrong answer, not a missing one, from the script whose job is diagnosis.
+@test "check-status: an unusable jq is reported rather than silently misdiagnosed" {
+    shadow_curl
+    printf '#!/bin/bash\nexit 127\n' > "${BATS_TEST_TMPDIR}/fakecurl/jq"
+    chmod +x "${BATS_TEST_TMPDIR}/fakecurl/jq"
+    export COUNCIL_FAKE_HTTP_CODE=400
+    export COUNCIL_FAKE_HTTP_BODY='{"code":"invalid-argument","error":"Incorrect API key provided."}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"jq not found"* ]]
+}
+
+# curl can exit having written nothing at all: the binary may be absent, or a
+# --config file unreadable, in which case -w never fires and the code is empty.
+@test "check-status: curl writing nothing is classified as a failed transfer" {
+    local dir="${BATS_TEST_TMPDIR}/silentcurl"
+    mkdir -p "$dir"
+    printf '#!/bin/bash\nexit 127\n' > "$dir/curl"
+    chmod +x "$dir/curl"
+    export PATH="$dir:$PATH"
+    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Connection timeout"* ]]
+    [[ "$output" != *"HTTP )"* ]]
+}
+
+@test "check-status: probes whose body is never read do not write one to disk" {
+    record_curl
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ -s "$CS_ARGV_FILE" ]
+    # OpenAI's error body echoes a redacted key and nothing reads it; Perplexity's
+    # is never read either. Only Gemini and xAI keep a body.
+    [ "$(grep -c '^/dev/null$' "$CS_ARGV_FILE" || true)" -eq 2 ]
+}
+
+# A probe body and the curl config that carries the key both live in TMPDIR for
+# the length of the request. Neither may outlive the run.
+@test "check-status: a completed probe leaves no temp file behind" {
+    export TMPDIR="${BATS_TEST_TMPDIR}/tmpdir"
+    mkdir -p "$TMPDIR"
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=200
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ -z "$(ls -A "$TMPDIR")" ]
+}
+
+@test "check-status: a keyless provider never creates a temp file at all" {
+    export TMPDIR="${BATS_TEST_TMPDIR}/tmpdir"
+    mkdir -p "$TMPDIR"
+    # setup() unsets every provider key, so each probe must return before mktemp
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ -z "$(ls -A "$TMPDIR")" ]
 }
 
 @test "check-status: probe API keys never appear on the curl argv" {
