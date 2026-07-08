@@ -208,10 +208,11 @@ wait_for_job() {
 @test "run-council --result: a running job whose worker died is reaped to failed" {
     source "$JOBS_LIB"
     job_write zombie running
-    # a pid that is certainly dead (started, killed, reaped)
+    # A pid that is certainly dead: fork a child that exits at once, then reap it.
+    # Backgrounding a long-lived sleep instead leaves a child holding this test's
+    # output stream for as long as it runs, whenever the reap does not land.
     local dead
-    sleep 30 & dead=$!
-    kill "$dead" 2>/dev/null || true
+    ( exit 0 ) & dead=$!
     wait "$dead" 2>/dev/null || true
     job_set zombie pid "$dead"
 
