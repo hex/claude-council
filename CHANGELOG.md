@@ -4,6 +4,51 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.7.3
+
+Three bugs made `/status` misreport provider health, including one that told users
+to revoke a working API key.
+
+### Fixed
+
+- **A typo'd model name no longer reads as a rejected API key.** Neither Gemini's
+  `INVALID_ARGUMENT` status nor xAI's `invalid-argument` code names the key: both
+  are the vendor's marker for their whole 400 class, an unusable model name
+  included. A capitalised `GEMINI_MODEL` reported `Auth failed (HTTP 400)` with
+  the remediation `key rejected - regenerate it`, so the user revoked a good key
+  and the symptom survived. Each check now reads the field that names the key,
+  Gemini's `details[].reason` and xAI's error text.
+- **A rejected key is reported even when the vendor answers 400.** Gemini and xAI
+  answer `400` rather than `401`, so half the providers rendered a bad key as a
+  generic error carrying no remediation.
+- **Perplexity is no longer reported as broken when it is fine.** The probe asked
+  for `max_tokens: 1`, under that API's floor of 16, so the API answered 400 to
+  our own request and every valid Perplexity key read as `Error (HTTP 400)`.
+- **Connection failures no longer render as `Error (HTTP 000000)`.** curl reports
+  a failed transfer as `000` and also exits non-zero; the guard that kept `set -e`
+  from aborting appended a second `000`. A body that stalled after a `200` header
+  produced `Error (HTTP 200000)`.
+- **A missing `jq` is reported rather than silently misdiagnosed.** Every `jq`
+  failure looked like "not a rejected key", so a genuinely rejected key reported
+  as an ordinary 400: a wrong answer rather than a missing one.
+
+### Security
+
+- **The OpenAI and Perplexity probes no longer write a response body to disk.**
+  Nothing reads it, and OpenAI's error body echoes a partially redacted copy of
+  the key.
+
+### Changed
+
+- Mutation testing drove these fixes: of ten defects injected into
+  `check-status.sh`, eight survived the suite. All ten now fail it. Coverage added
+  for 403, for 401 and 403 reaching every provider rather than one, for curl
+  writing nothing, for `-X POST` and `--max-time`, for temp-file cleanup, and a
+  cost bound on the billable Perplexity probe. 354 tests to 367.
+- The zombie-reaping test obtains a dead pid from a child that exits at once,
+  rather than backgrounding a 30-second sleep that could outlive the test and
+  hold its output stream, which intermittently failed the macOS runner.
+
 ## 2026.7.2
 
 Screenshot/image input for the council, plus a full security & correctness audit
