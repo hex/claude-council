@@ -4,6 +4,48 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.7.4
+
+No user-facing behavior changes. This release makes the shell linter tell the
+truth, then lets it block a merge.
+
+### Fixed
+
+- **`set -e` can see a failing command again in three places.** `local x=$(cmd)`
+  discards the command's exit status, because `local` is itself a command and its
+  success becomes the line's. A failing `dirname` when exporting, and a failing
+  `provider_color` or `provider_emoji` when formatting the provider list, passed
+  silently.
+
+### Other
+
+- **shellcheck reported 58 findings and was configured never to fail.**
+  `continue-on-error: true` kept the run green while the check stayed red, so
+  every commit on main carried a red mark, both releases included. It reports
+  none now, and a finding blocks a merge.
+- **Thirty-four of those came from one blind spot.** Every script reaches its
+  libraries through `source "$SCRIPT_DIR/lib/x.sh"`, a path shellcheck cannot
+  resolve, so it never opened the sourced files and called every shared
+  definition unused. A `.shellcheckrc` resolves them at the root.
+- **The lint target names every tracked script** rather than three globs, which
+  had silently skipped two files and would have skipped any script in a
+  directory added later.
+- **shellcheck is pinned by digest**, and its download retries into a file rather
+  than a pipe, since curl restarts a transfer from byte zero and cannot unwrite
+  what it already emitted. A linter ships new checks in every release, so an
+  unpinned one blocking a merge reddens main on a commit nobody touched.
+- **`available` named three different things**: an array of discovered providers,
+  a padded set string, and a provider counter. Each now names what it holds.
+- **A pane-watcher script global is gone.** The banner was built into a variable
+  through an out-param, then printed once and dropped. It prints directly now.
+
+### Docs
+
+- `TESTING.md` gains a lint section: how to run it, and when suppressing a
+  finding is legitimate.
+- `docs/ARCHITECTURE.md` lists `.shellcheckrc`, `.github/workflows/tests.yml`,
+  and `CHANGELOG.md` in the file tree.
+
 ## 2026.7.3
 
 Three bugs made `/status` misreport provider health, including one that told users
