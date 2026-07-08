@@ -184,23 +184,23 @@ assign_roles_to_providers() {
 
     IFS=',' read -ra roles <<< "$roles_str"
 
-    local pairs=()
+    local assignments=()
     for i in "${!providers[@]}"; do
         local provider="${providers[$i]}"
         local role="${roles[$i]:-}"  # Empty if no role for this provider
-        pairs+=("${provider}:${role}")
+        assignments+=("${provider}:${role}")
     done
 
-    echo "${pairs[*]}"
+    echo "${assignments[*]}"
 }
 
 # Get role for a specific provider from assignments string
 # Usage: get_provider_role "gemini" "gemini:security openai:performance"
 get_provider_role() {
     local provider="$1"
-    local assignments="$2"
+    local assignments_str="$2"
 
-    for assignment in $assignments; do
+    for assignment in $assignments_str; do
         local p="${assignment%%:*}"
         local r="${assignment#*:}"
         if [[ "$p" == "$provider" ]]; then

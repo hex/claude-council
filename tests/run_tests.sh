@@ -24,7 +24,9 @@ echo "Running tests..."
 echo "================"
 echo ""
 
-# Run bats with tap output for CI or pretty output for terminal
+# Run bats with tap output for CI or pretty output for terminal.
+# TEST_FILES holds an unexpanded glob, so it must split and expand into argv.
+# shellcheck disable=SC2086
 if [[ -t 1 ]]; then
     bats --pretty $TEST_FILES
 else

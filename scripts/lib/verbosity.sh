@@ -5,8 +5,8 @@
 # Base system prompt — used by every provider. Edit here to change the persona
 # globally. Perplexity appends an additional citation clause.
 #
-# Read by the provider scripts that source this file, which shellcheck cannot
-# see while linting this file on its own.
+# Linted on its own, this file shows no reader: the providers that source it are
+# out of view. A comment opening with the tool's name would parse as a directive.
 # shellcheck disable=SC2034
 BASE_SYSTEM_PROMPT="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
 

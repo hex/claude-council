@@ -104,8 +104,10 @@ finding is one you introduced.
 brew install shellcheck        # macOS
 sudo apt install shellcheck    # Ubuntu/Debian
 
-shellcheck scripts/*.sh scripts/lib/*.sh scripts/providers/*.sh
+git ls-files '*.sh' | xargs shellcheck
 ```
+
+CI lints every tracked `.sh`, so a script in a new directory cannot slip past it.
 
 `.shellcheckrc` in the repo root lets it follow `source "$SCRIPT_DIR/lib/*.sh"`.
 Without it, shellcheck never opens the sourced files and calls every shared

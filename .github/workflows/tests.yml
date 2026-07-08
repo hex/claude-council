@@ -37,16 +37,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pinned, because this job blocks a merge: an unpinned linter can redden
-      # main on a release nobody touched. Bump deliberately, with the tree clean.
+      # A linter ships new checks in every release, so an unpinned one reddens
+      # main on a commit nobody touched. This job blocks a merge, so it is pinned
+      # by digest: the tag names a release, only the hash names the bytes.
+      # Bump both deliberately, with the tree clean. bats needs no pin — a test
+      # runner does not invent assertions between releases.
       - name: Install shellcheck
         env:
           SHELLCHECK_VERSION: v0.11.0
+          SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
         run: |
-          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
-            | sudo tar -xJf - --strip-components=1 -C /usr/local/bin "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
+          # Retry into a file, never a pipe: curl restarts a transfer from byte
+          # zero but cannot unwrite what it already emitted, so a retried pipe
+          # hands tar a corrupted stream.
+          curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors -o shellcheck.tar.xz \
+            "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          echo "${SHELLCHECK_SHA256}  shellcheck.tar.xz" | sha256sum -c -
+          sudo tar -xJf shellcheck.tar.xz --strip-components=1 -C /usr/local/bin \
+            "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
+          rm -f shellcheck.tar.xz
           shellcheck --version
 
+      # Every tracked script, so a new directory cannot slip past a blocking gate.
       # Reads .shellcheckrc from the repo root, which lets it follow our sourced libs.
       - name: Lint shell scripts
-        run: shellcheck scripts/*.sh scripts/lib/*.sh scripts/providers/*.sh
+        run: git ls-files '*.sh' | xargs shellcheck

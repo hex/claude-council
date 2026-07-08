@@ -34,10 +34,6 @@ provider_index() {
     printf -v "$__out" '%d' "$i"
 }
 
-# build_banner_line writes here through printf -v, which creates the variable
-# rather than reading it, so nothing else declares it.
-banner_line=""
-
 status_lines_processed=0
 shown_responses=""
 spinner_frame=0
@@ -78,11 +74,14 @@ clear_loading() {
     printf '\r\033[K'
 }
 
-# Build a banner line into the variable named by $1.
+# Print the banner heading a provider's response, blank lines included.
 # Includes provider title, model name (if known), and status in italic parens.
 # Uses 24-bit RGB for theme-independent WCAG AA contrast.
-build_banner_line() {
-    local out_var="$1" name="$2"
+#
+# Prints rather than returning, because provider_index registers the provider it
+# looks up, and a command substitution would discard that in its subshell.
+print_banner() {
+    local name="$1"
     local idx
     provider_index idx "$name"
     local state="${provider_states[$idx]}"
@@ -123,7 +122,7 @@ build_banner_line() {
         error)    printf -v status_inline ' \033[22;3;31m(error)\033[23;1m' ;;
     esac
 
-    printf -v "$out_var" '\033[1;38;2;%s;48;2;%sm  %s%s%s  \033[K\033[0m' \
+    printf '\n\n\033[1;38;2;%s;48;2;%sm  %s%s%s  \033[K\033[0m\n\n' \
         "$fg" "$bg" "$upper" "$model_inline" "$status_inline"
 }
 
@@ -182,8 +181,7 @@ while true; do
             # the tmux DCS passthrough (ESC \), not a botched quote escape.
             # shellcheck disable=SC1003
             printf '\033Ptmux;\033\033]1337;SetMark\a\033\\'
-            build_banner_line banner_line "$name"
-            printf '\n\n%s\n\n' "$banner_line"
+            print_banner "$name"
             "$WATCH/render.sh" < "$f"
             # Extra blank lines so the loading line below has top margin.
             printf '\n\n'
