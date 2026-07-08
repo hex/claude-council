@@ -80,6 +80,9 @@ jobs_prune() {
     local max="${COUNCIL_MAX_JOBS:-20}"
     local dir f status
     dir=$(jobs_state_dir)
+    # Ordering by mtime is the point, and find offers no portable way to sort.
+    # The names are job ids this file generates, so they hold no whitespace.
+    # shellcheck disable=SC2012
     ls -t "$dir"/*.json 2>/dev/null | tail -n +$((max + 1)) | while read -r f; do
         status=$(jq -r '.status' "$f" 2>/dev/null || echo "")
         case "$status" in

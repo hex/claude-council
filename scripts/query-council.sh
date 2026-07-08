@@ -526,9 +526,10 @@ RESET='\033[0m'
 # Format provider list with colors and emojis
 format_providers() {
     local formatted=""
+    local color emoji
     for p in "$@"; do
-        local color=$(provider_color "$p")
-        local emoji=$(provider_emoji "$p")
+        color=$(provider_color "$p")
+        emoji=$(provider_emoji "$p")
         formatted+="${emoji} ${color}${p}${RESET} "
     done
     echo "$formatted"

@@ -80,11 +80,11 @@ api_key_present() {
 prefer_cli_over_api() {
     # Space-padded set string for bash 3.2 compat (no associative arrays).
     # Padding ensures word-boundary matches (e.g., "ai" won't match in "openai").
-    local available=" $* "
+    local requested=" $* "
     local p out=() shadow_cli
     for p in "$@"; do
         shadow_cli=$(shadow_origin "$p")
-        if [[ -n "$shadow_cli" && "$available" == *" $shadow_cli "* ]]; then
+        if [[ -n "$shadow_cli" && "$requested" == *" $shadow_cli "* ]]; then
             continue
         fi
         out+=("$p")

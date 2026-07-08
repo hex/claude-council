@@ -298,15 +298,15 @@ format_status "Antigravity" "antigravity" "$antigravity_status"
 
 echo ""
 
-# Summary. available=$((...)) rather than ((available++)): under set -e a
-# post-increment returning 0 would abort the script on the first hit.
-available=0
-[[ "$gemini_status" == ok:* ]] && available=$((available + 1))
-[[ "$openai_status" == ok:* ]] && available=$((available + 1))
-[[ "$grok_status" == ok:* ]] && available=$((available + 1))
-[[ "$perplexity_status" == ok:* ]] && available=$((available + 1))
-[[ "$codex_status" == ok:* ]] && available=$((available + 1))
-[[ "$antigravity_status" == ok:* ]] && available=$((available + 1))
+# Summary. available_count=$((...)) rather than ((available_count++)): under
+# set -e a post-increment returning 0 would abort the script on the first hit.
+available_count=0
+[[ "$gemini_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$openai_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$grok_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$perplexity_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))
 
-echo -e "${DIM}${available}/6 providers available${RESET}"
+echo -e "${DIM}${available_count}/6 providers available${RESET}"
 echo ""

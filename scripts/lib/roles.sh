@@ -184,14 +184,14 @@ assign_roles_to_providers() {
 
     IFS=',' read -ra roles <<< "$roles_str"
 
-    local assignments=()
+    local pairs=()
     for i in "${!providers[@]}"; do
         local provider="${providers[$i]}"
         local role="${roles[$i]:-}"  # Empty if no role for this provider
-        assignments+=("${provider}:${role}")
+        pairs+=("${provider}:${role}")
     done
 
-    echo "${assignments[*]}"
+    echo "${pairs[*]}"
 }
 
 # Get role for a specific provider from assignments string

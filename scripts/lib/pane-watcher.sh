@@ -8,6 +8,7 @@ trap 'rm -rf "$WATCH"' EXIT
 # render.sh picks emphasis colors by theme. Detection runs here because the
 # pane's own tty answers the OSC 11 background query; an explicit
 # COUNCIL_THEME (forwarded via tmux -e) wins inside council_detect_theme.
+# shellcheck source=display.sh
 source "$DISPLAY_LIB"
 COUNCIL_THEME_RESOLVED=$(council_detect_theme)
 export COUNCIL_THEME_RESOLVED
@@ -29,9 +30,13 @@ provider_index() {
         [[ "${provider_names[$i]}" == "$name" ]] && { printf -v "$__out" '%d' "$i"; return; }
         i=$((i + 1))
     done
-    provider_names[$i]="$name"
+    provider_names[i]="$name"
     printf -v "$__out" '%d' "$i"
 }
+
+# build_banner_line writes here through printf -v, which creates the variable
+# rather than reading it, so nothing else declares it.
+banner_line=""
 
 status_lines_processed=0
 shown_responses=""
@@ -133,9 +138,9 @@ while true; do
             line=$(sed -n "${status_lines_processed}p" "$WATCH/status")
             IFS=$'\t' read -r provider state ms model <<<"$line"
             provider_index idx "$provider"
-            provider_states[$idx]="$state"
-            [[ -n "$ms" ]] && provider_timings[$idx]="$ms"
-            [[ -n "$model" ]] && provider_models[$idx]="$model"
+            provider_states[idx]="$state"
+            [[ -n "$ms" ]] && provider_timings[idx]="$ms"
+            [[ -n "$model" ]] && provider_models[idx]="$model"
             if [[ "$state" == "error" ]]; then
                 clear_loading
                 printf '\n\033[1;38;2;185;28;28m✗ %s error\033[0m\n' "$provider"
@@ -173,6 +178,9 @@ while true; do
             # gating on it would suppress marks that DO work in iTerm2+tmux. The
             # DCS passthrough needs tmux `allow-passthrough on` to reach iTerm2;
             # other terminals safely ignore the unknown OSC 1337.
+            # The trailing \\ is printf's escape for the one backslash that ends
+            # the tmux DCS passthrough (ESC \), not a botched quote escape.
+            # shellcheck disable=SC1003
             printf '\033Ptmux;\033\033]1337;SetMark\a\033\\'
             build_banner_line banner_line "$name"
             printf '\n\n%s\n\n' "$banner_line"
