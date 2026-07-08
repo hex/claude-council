@@ -24,12 +24,18 @@ now_ms() {
     python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || echo $(( $(date +%s) * 1000 ))
 }
 
-# Check a single provider
-# Usage: check_provider <name> <api_key_var> <model_var> <default_model> <test_endpoint> <test_payload>
-# Vendors disagree on how a rejected key comes back. OpenAI and Perplexity send
-# 401, but Gemini sends 400 with status INVALID_ARGUMENT and xAI sends 400 with
-# code invalid-argument. For those two the response body, not the status alone,
-# separates a rejected key from a genuinely malformed request.
+# Does a 400 from this provider mean the key was rejected?
+# Usage: rejected_key <provider> <body_file>
+#
+# Vendors disagree on how a rejected key comes back. Most answer 401, which the
+# status code alone classifies. Gemini answers 400 with status INVALID_ARGUMENT
+# and xAI answers 400 with code invalid-argument; for those two the response
+# body, not the status alone, separates a rejected key from a malformed request.
+#
+# Each probe below is a request with no caller-supplied parameters beyond the
+# Gemini model in its path, and an unknown model answers 404, so on these
+# endpoints a 400 carrying the vendor's marker can only be the key. A probe that
+# grows query parameters would need a narrower test than the status alone.
 rejected_key() {
     local provider="$1" body_file="$2"
     case "$provider" in
@@ -39,6 +45,8 @@ rejected_key() {
     esac
 }
 
+# Check a single provider
+# Usage: check_provider <name> <api_key_var> <model_var> <default_model>
 check_provider() {
     local name="$1"
     local api_key="${!2:-}"
@@ -57,9 +65,10 @@ check_provider() {
 
     # Keys travel via a mode-600 curl --config file, never the argv (ps-visible)
     # or the URL. Mirrors the provider scripts' curl_secret_config hardening.
-    # The response body is kept because some vendors only reveal a rejected key
-    # there. It can carry a redacted copy of the key, so it stays in its
-    # mode-600 temp file: inspected, never printed, and removed straight after.
+    # The response body is captured because some vendors only reveal a rejected
+    # key there. It can carry a redacted copy of the key, so it lives in a temp
+    # file that mktemp creates mode-600: inspected via jq, never printed, and
+    # unlinked before this function returns.
     local http_code cfg body_file rejected
     body_file=$(mktemp)
     case "$name" in
@@ -99,9 +108,10 @@ check_provider() {
             ;;
     esac
 
-    # On a failed transfer curl writes 000 through -w and also exits non-zero.
-    # The `|| true` above absorbs that exit for set -e without appending a
-    # second 000 to the code. An empty code means curl wrote nothing at all.
+    # curl exits non-zero when a transfer fails, so the `|| true` above keeps
+    # set -e from aborting. When no response status was received it also reports
+    # the code as 000 through -w. An empty code means curl wrote nothing to
+    # stdout.
     http_code="${http_code:-000}"
 
     rejected=0
@@ -110,7 +120,7 @@ check_provider() {
     fi
     rm -f "$body_file"
     if (( rejected )); then
-        # Report the auth failure under the vendor's true code, not an invented 401
+        # This branch only runs on 400, so report it under the code the vendor sent
         echo "auth_error:400"
         return
     fi

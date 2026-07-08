@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# ABOUTME: Tests for check-status.sh two-tier availability and remediation output
+# ABOUTME: Tests check-status.sh provider probes, rejected-key classification, and remediation
 # ABOUTME: Hermetic via fake CLIs and a shadow curl; no real keys or network
 
 load test_helper
@@ -61,14 +61,16 @@ setup() {
     [[ "$output" == *"install the Antigravity CLI (agy)"* ]]
 }
 
-# Shadow curl with a stub that echoes a scripted HTTP code, so check_provider's
-# result branches can be exercised offline with no real keys or network. Keys
-# are dummy values only to get past the no_key guard.
+# Shadow curl with a stub that writes a scripted body to curl's -o target and
+# echoes a scripted HTTP code, so check_provider's result branches can be
+# exercised offline with no real keys or network. Keys are dummy values only to
+# get past the no_key guard.
 #
 # The stub exits non-zero on a failed transfer (code 000) because that is what
-# the real binary does: curl writes 000 through -w and *also* exits 7. A stub
-# that always succeeds cannot exercise the script's transfer-failure branch, so
-# it would certify that branch as working while it is broken.
+# the real binary does: curl writes 000 through -w and also exits non-zero (7 on
+# a refused connection, 28 on a timeout), and the stub picks one such code. A
+# stub that always exits 0 would let the script's transfer-failure branch pass
+# without ever running under a non-zero curl.
 shadow_curl() {
     local dir="${BATS_TEST_TMPDIR}/fakecurl"
     mkdir -p "$dir"
@@ -133,11 +135,12 @@ EOF
     [[ "$output" == *"2/6 providers available"* ]]
 }
 
-# Gemini and xAI answer a rejected key with 400 rather than the 401 OpenAI and
-# Perplexity send, so the status code alone cannot classify it and each vendor
-# marks it differently in the body. Both bodies below are verbatim responses
-# captured from the live APIs for a bad key. Each test also asserts that exactly
-# one provider is flagged, which proves one vendor's shape cannot match another's.
+# Gemini and xAI answer a rejected key with 400 rather than a 401, so the status
+# code alone cannot classify it and each vendor marks it differently in the body.
+# The first two bodies below are what Gemini and xAI return for a rejected key;
+# the third is a 400 that no vendor marks as a credentials problem. The two
+# vendor tests each assert that exactly one provider is flagged, so neither
+# vendor's body shape can satisfy the other's rule.
 
 # Count the providers reported as an auth failure (one row per provider).
 auth_failures() {
@@ -213,7 +216,7 @@ EOF
 # Perplexity is the one provider probed with a chat request, and it rejects any
 # request below 16 output tokens with HTTP 400 ("max_tokens must be at least
 # 16"). A probe cheaper than the floor is not a cheaper probe, it is a broken
-# one, and the stubbed curl above cannot notice: only the payload we send can.
+# one, and record_curl cannot notice: only the payload we send can.
 @test "check-status: the Perplexity probe requests at least the API's minimum max_tokens" {
     record_curl
     run bash "$SCRIPT"
