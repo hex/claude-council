@@ -366,6 +366,9 @@ usable on a Claude subscription alone.
 claude-council/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
+├── .github/
+│   └── workflows/
+│       └── tests.yml            # bats on ubuntu + macos; shellcheck blocks a merge
 ├── agents/
 │   └── council-advisor.md       # Proactive suggestions
 ├── commands/
@@ -457,6 +460,8 @@ claude-council/
 │   ├── tokens.bats
 │   ├── verbosity.bats
 │   └── query-council.bats
+├── .shellcheckrc               # Points shellcheck at the sourced libs
+├── CHANGELOG.md
 ├── LICENSE
 ├── README.md
 └── TESTING.md
