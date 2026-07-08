@@ -10,6 +10,13 @@ source "$SCRIPT_DIR/lib/providers.sh"
 source "$SCRIPT_DIR/lib/retry.sh"
 resolve_grok_key
 
+# Only rejected_key needs jq, and only to read a 400 body. Warn instead of
+# aborting, because every other probe result stands without it; staying silent
+# would report a rejected Gemini or xAI key as an ordinary HTTP 400.
+if ! jq --version >/dev/null 2>&1; then
+    echo "Warning: jq not found; a rejected Gemini or xAI key will report as a generic HTTP 400." >&2
+fi
+
 # Colors
 BLUE='\033[34m'
 WHITE='\033[37m'
@@ -24,21 +31,45 @@ now_ms() {
     python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || echo $(( $(date +%s) * 1000 ))
 }
 
-# Check a single provider
-# Usage: check_provider <name> <api_key_var> <model_var> <default_model> <test_endpoint> <test_payload>
-# Vendors disagree on how a rejected key comes back. OpenAI and Perplexity send
-# 401, but Gemini sends 400 with status INVALID_ARGUMENT and xAI sends 400 with
-# code invalid-argument. For those two the response body, not the status alone,
-# separates a rejected key from a genuinely malformed request.
+# Does a 400 from this provider mean the key was rejected?
+# Usage: rejected_key <provider> <body_file>
+#
+# Vendors disagree on how a rejected key comes back. Most answer 401, which the
+# status code alone classifies. Gemini and xAI answer 400, so for those two the
+# response body has to separate a rejected key from a malformed request.
+#
+# Both bury the key signal under a marker they also use for unrelated faults:
+# Gemini's INVALID_ARGUMENT is its status for the whole 400 class, including a
+# model name that fails its format check, and xAI files an unknown model under
+# the same invalid-argument code as a bad key. Matching on those alone tells a
+# user with a typo in their model to regenerate a working key, so each test reads
+# the field that names the key: Gemini's details[].reason, xAI's error text.
+#
+# jq errors (missing key, wrong type, unparseable body) mean the vendor's marker
+# is absent, which is not evidence of a rejected key, so they resolve to false.
 rejected_key() {
     local provider="$1" body_file="$2"
     case "$provider" in
-        gemini) jq -e '.error.status == "INVALID_ARGUMENT"' "$body_file" >/dev/null 2>&1 ;;
-        grok)   jq -e '.code == "invalid-argument"' "$body_file" >/dev/null 2>&1 ;;
-        *)      return 1 ;;
+        gemini)
+            jq -e 'try any(.error.details[]?; .reason == "API_KEY_INVALID") catch false' \
+                "$body_file" >/dev/null 2>&1
+            ;;
+        grok)
+            # xAI offers no structured reason, so the error text is the only
+            # discriminator. Should it ever be reworded past "api key", a rejected
+            # key degrades to a plain HTTP 400: the safe direction to fail, unlike
+            # matching the code alone, which would urge a good key be regenerated.
+            jq -e 'try ((.code == "invalid-argument")
+                        and ((.error | type) == "string")
+                        and (.error | ascii_downcase | contains("api key"))) catch false' \
+                "$body_file" >/dev/null 2>&1
+            ;;
+        *)  return 1 ;;
     esac
 }
 
+# Check a single provider
+# Usage: check_provider <name> <api_key_var> <model_var> <default_model>
 check_provider() {
     local name="$1"
     local api_key="${!2:-}"
@@ -57,11 +88,15 @@ check_provider() {
 
     # Keys travel via a mode-600 curl --config file, never the argv (ps-visible)
     # or the URL. Mirrors the provider scripts' curl_secret_config hardening.
-    # The response body is kept because some vendors only reveal a rejected key
-    # there. It can carry a redacted copy of the key, so it stays in its
-    # mode-600 temp file: inspected, never printed, and removed straight after.
+    # Gemini and xAI reveal a rejected key only in the response body, so theirs is
+    # kept in a temp file that mktemp creates mode-600: read by jq, never printed,
+    # and unlinked before this function returns. A signal that lands mid-probe
+    # leaves it, and the config file holding the key, behind; trapping the signal
+    # here would make Ctrl-C stop interrupting the probe.
     local http_code cfg body_file rejected
-    body_file=$(mktemp)
+    # An explicit template keeps the file in TMPDIR on every platform, since a
+    # bare mktemp ignores TMPDIR on BSD, and names it for anyone reading the dir.
+    body_file=$(mktemp "${TMPDIR:-/tmp}/council-probe.XXXXXX")
     case "$name" in
         gemini)
             cfg=$(curl_secret_config "x-goog-api-key: ${api_key}")
@@ -71,8 +106,10 @@ check_provider() {
             rm -f "$cfg"
             ;;
         openai)
+            # No body is kept: OpenAI marks a rejected key with 401, and its error
+            # body echoes a redacted copy of the key that nothing here reads.
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
-            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
                 --config "$cfg" \
                 "https://api.openai.com/v1/models" 2>/dev/null || true)
             rm -f "$cfg"
@@ -89,7 +126,7 @@ check_provider() {
             # a (billable) chat request. The API rejects anything under 16 output
             # tokens, so 16 is as close to free as the status check can get.
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
-            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
                 -X POST \
                 --config "$cfg" \
                 -H "Content-Type: application/json" \
@@ -99,9 +136,10 @@ check_provider() {
             ;;
     esac
 
-    # On a failed transfer curl writes 000 through -w and also exits non-zero.
-    # The `|| true` above absorbs that exit for set -e without appending a
-    # second 000 to the code. An empty code means curl wrote nothing at all.
+    # curl exits non-zero when a transfer fails, so the `|| true` above keeps
+    # set -e from aborting. When no response status was received it also reports
+    # the code as 000 through -w. An empty code means curl wrote nothing to
+    # stdout.
     http_code="${http_code:-000}"
 
     rejected=0
@@ -110,7 +148,7 @@ check_provider() {
     fi
     rm -f "$body_file"
     if (( rejected )); then
-        # Report the auth failure under the vendor's true code, not an invented 401
+        # This branch only runs on 400, so report it under the code the vendor sent
         echo "auth_error:400"
         return
     fi

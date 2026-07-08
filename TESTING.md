@@ -53,7 +53,7 @@ bats --verbose-run tests/cache.bats
 | `format-output.bats` | 11 tests | defensive parsing: empty/missing/non-string responses, raw preservation, fallback-note rendering |
 | `prompts.bats` | 11 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh contract enforcement, schema sync |
-| `check-status.bats` | 16 tests | two-tier CLI availability, remediation strings, HTTP probe branches, rejected-key classification (Gemini/xAI answer a bad key with 400, not 401), transfer-failure exit codes, Perplexity's minimum max_tokens, keys off the curl argv, ms clock |
+| `check-status.bats` | 25 tests | two-tier CLI availability, remediation strings, HTTP probe branches (401/403/500/000), rejected-key classification (Gemini/xAI answer a bad key with 400, not 401) and its false-positive guards (a typo'd model is not a bad key), transfer-failure exit codes, curl writing nothing, unusable jq, Perplexity's minimum max_tokens, `-X POST` and `--max-time` on every probe, temp-file cleanup, keys off the curl argv, ms clock |
 | `jobs.bats` | 16 tests | job store, --async lifecycle, --result/--jobs/--cancel, self-ignoring cache dir |
 | `stop-gate.bats` | 10 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
 | `theme.bats` | 24 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
@@ -64,7 +64,7 @@ bats --verbose-run tests/cache.bats
 | `release.bats` | 5 tests | release.sh version bump/commit/tag, staged-index guard, green-suite gate |
 | `retry.bats` | 6 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file |
 
-**Total: 358 tests** across 23 `.bats` files.
+**Total: 367 tests** across 23 `.bats` files.
 
 ### Hermetic CLI Fixture
 
