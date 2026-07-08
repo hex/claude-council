@@ -34,6 +34,8 @@ VIOLATIONS=$(echo "$INPUT" | jq -r '
 
 if [[ -n "$VIOLATIONS" ]]; then
     echo "invalid agent analysis:" >&2
+    # Bullets every line. ${var//search/replace} has no line anchor to match on.
+    # shellcheck disable=SC2001
     echo "$VIOLATIONS" | sed 's/^/  - /' >&2
     exit 1
 fi

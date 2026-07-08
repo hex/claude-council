@@ -32,12 +32,21 @@ jobs:
         run: bash tests/run_tests.sh
 
   shellcheck:
-    name: shellcheck (advisory)
+    name: shellcheck
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+
+      # Pinned, because this job blocks a merge: an unpinned linter can redden
+      # main on a release nobody touched. Bump deliberately, with the tree clean.
       - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+        env:
+          SHELLCHECK_VERSION: v0.11.0
+        run: |
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
+            | sudo tar -xJf - --strip-components=1 -C /usr/local/bin "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
+          shellcheck --version
+
+      # Reads .shellcheckrc from the repo root, which lets it follow our sourced libs.
       - name: Lint shell scripts
         run: shellcheck scripts/*.sh scripts/lib/*.sh scripts/providers/*.sh

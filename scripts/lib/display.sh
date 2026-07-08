@@ -149,6 +149,9 @@ council_detect_theme() {
     esac
 
     if [[ "${COUNCIL_NO_TTY_QUERY:-0}" != 1 && -r /dev/tty && -w /dev/tty ]]; then
+        # The trailing \\ is printf's escape for one backslash, terminating the
+        # OSC with ST (ESC \). shellcheck reads it as a botched quote escape.
+        # shellcheck disable=SC1003
         printf '\033]11;?\033\\' > /dev/tty 2>/dev/null || true
         # Read the reply one byte at a time. bash 3.2 rejects a fractional
         # read -t, and its -d captures only an ST (ESC \) terminator — so a

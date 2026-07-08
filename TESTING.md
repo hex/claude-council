@@ -95,6 +95,34 @@ setup() { install_fake_clis; }
 
 ---
 
+## Lint (shellcheck)
+
+CI blocks a merge on this, so run it before pushing. The tree is clean; any
+finding is one you introduced.
+
+```bash
+brew install shellcheck        # macOS
+sudo apt install shellcheck    # Ubuntu/Debian
+
+shellcheck scripts/*.sh scripts/lib/*.sh scripts/providers/*.sh
+```
+
+`.shellcheckrc` in the repo root lets it follow `source "$SCRIPT_DIR/lib/*.sh"`.
+Without it, shellcheck never opens the sourced files and calls every shared
+definition unused. CI pins the version, so a newer local shellcheck may report
+findings CI does not.
+
+Silence a finding only where the code is right and the tool is wrong, and say
+why on the line above:
+
+```bash
+# Ordering by mtime is the point, and find offers no portable way to sort.
+# shellcheck disable=SC2012
+ls -t "$dir"/*.json
+```
+
+---
+
 ## Manual Tests
 
 Manual testing procedures for features that require API calls or Claude Code integration.

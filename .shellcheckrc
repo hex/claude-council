@@ -1,0 +1,6 @@
+# Every script reaches its libraries through `source "$SCRIPT_DIR/lib/x.sh"`, a
+# path shellcheck cannot resolve on its own. Left unresolved it never opens the
+# sourced file, so it reports each source line as unfollowable and every shared
+# definition as unused: 34 of the 58 findings it once raised on this tree.
+external-sources=true
+source-path=SCRIPTDIR

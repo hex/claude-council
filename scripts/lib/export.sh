@@ -17,7 +17,8 @@ write_export() {
     local providers="$3"  # Space-separated list like "gemini openai"
 
     # Ensure directory exists
-    local dir=$(dirname "$output_path")
+    local dir
+    dir=$(dirname "$output_path")
     [[ -d "$dir" ]] || mkdir -p "$dir"
 
     # Generate metadata header
