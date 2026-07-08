@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # ABOUTME: Tests for check-status.sh two-tier availability and remediation output
-# ABOUTME: Hermetic via fake CLIs; API providers exercised only in keyless states
+# ABOUTME: Hermetic via fake CLIs and a shadow curl; no real keys or network
 
 load test_helper
 load fixtures/fake-clis
@@ -64,12 +64,29 @@ setup() {
 # Shadow curl with a stub that echoes a scripted HTTP code, so check_provider's
 # result branches can be exercised offline with no real keys or network. Keys
 # are dummy values only to get past the no_key guard.
+#
+# The stub exits non-zero on a failed transfer (code 000) because that is what
+# the real binary does: curl writes 000 through -w and *also* exits 7. A stub
+# that always succeeds cannot exercise the script's transfer-failure branch, so
+# it would certify that branch as working while it is broken.
 shadow_curl() {
     local dir="${BATS_TEST_TMPDIR}/fakecurl"
     mkdir -p "$dir"
     cat > "$dir/curl" <<'EOF'
 #!/bin/bash
-printf '%s' "${COUNCIL_FAKE_HTTP_CODE:-200}"
+code="${COUNCIL_FAKE_HTTP_CODE:-200}"
+# Mirror curl's -o: the body lands in the named file, never on stdout, so a
+# probe that inspects the body reads it exactly as it would from the real thing.
+out=""
+prev=""
+for arg in "$@"; do
+    if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    prev="$arg"
+done
+if [[ -n "$out" ]]; then printf '%s' "${COUNCIL_FAKE_HTTP_BODY:-}" > "$out"; fi
+printf '%s' "$code"
+if [[ "$code" == "000" ]]; then exit 7; fi
+exit 0
 EOF
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
@@ -116,6 +133,56 @@ EOF
     [[ "$output" == *"2/6 providers available"* ]]
 }
 
+# Gemini and xAI answer a rejected key with 400 rather than the 401 OpenAI and
+# Perplexity send, so the status code alone cannot classify it and each vendor
+# marks it differently in the body. Both bodies below are verbatim responses
+# captured from the live APIs for a bad key. Each test also asserts that exactly
+# one provider is flagged, which proves one vendor's shape cannot match another's.
+
+# Count the providers reported as an auth failure (one row per provider).
+auth_failures() {
+    printf '%s\n' "$1" | grep -c 'Auth failed' || true
+}
+
+@test "check-status: xAI 400 with an invalid-argument body reports auth failure" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=400
+    export COUNCIL_FAKE_HTTP_BODY='{"code":"invalid-argument","error":"Incorrect API key provided. You can obtain an API key from https://console.x.ai."}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    # Reported as an auth failure, but keeping the true code so debugging is honest
+    [[ "$output" == *"Auth failed (HTTP 400)"* ]]
+    [[ "$output" == *"key rejected - regenerate it"* ]]
+    # Only Grok matches this shape; the other three 400s stay generic errors
+    [ "$(auth_failures "$output")" -eq 1 ]
+    [[ "$output" == *"Error (HTTP 400)"* ]]
+}
+
+@test "check-status: Gemini 400 with an INVALID_ARGUMENT body reports auth failure" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=400
+    export COUNCIL_FAKE_HTTP_BODY='{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Auth failed (HTTP 400)"* ]]
+    [[ "$output" == *"key rejected - regenerate it"* ]]
+    # Only Gemini matches this shape; the other three 400s stay generic errors
+    [ "$(auth_failures "$output")" -eq 1 ]
+    [[ "$output" == *"Error (HTTP 400)"* ]]
+}
+
+@test "check-status: a 400 that no vendor marks as a bad key stays a generic error" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=400
+    export COUNCIL_FAKE_HTTP_BODY='{"code":"failed-precondition","error":"malformed request"}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    # A malformed request is not a credentials problem; do not offer to regenerate
+    [[ "$output" == *"Error (HTTP 400)"* ]]
+    [ "$(auth_failures "$output")" -eq 0 ]
+    [[ "$output" != *"key rejected"* ]]
+}
+
 # ---- secret hygiene: /status probes must keep keys off the process argv ----
 
 # Recording curl: appends its argv (one arg per line) to CS_ARGV_FILE, copies any
@@ -141,6 +208,22 @@ EOF
     export GEMINI_API_KEY=SEKRET_GEM OPENAI_API_KEY=SEKRET_OAI \
            XAI_API_KEY=SEKRET_GROK PERPLEXITY_API_KEY=SEKRET_PPX
     export COUNCIL_FAKE_BEHAVIOR=valid
+}
+
+# Perplexity is the one provider probed with a chat request, and it rejects any
+# request below 16 output tokens with HTTP 400 ("max_tokens must be at least
+# 16"). A probe cheaper than the floor is not a cheaper probe, it is a broken
+# one, and the stubbed curl above cannot notice: only the payload we send can.
+@test "check-status: the Perplexity probe requests at least the API's minimum max_tokens" {
+    record_curl
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ -s "$CS_ARGV_FILE" ]
+    local payload max_tokens
+    payload=$(grep -o '{"model":"sonar".*}' "$CS_ARGV_FILE" | head -1)
+    [ -n "$payload" ]
+    max_tokens=$(printf '%s' "$payload" | jq -r '.max_tokens')
+    [ "$max_tokens" -ge 16 ]
 }
 
 @test "check-status: probe API keys never appear on the curl argv" {
