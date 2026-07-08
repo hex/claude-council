@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # ABOUTME: Tests for check-status.sh two-tier availability and remediation output
-# ABOUTME: Hermetic via fake CLIs; API providers exercised only in keyless states
+# ABOUTME: Hermetic via fake CLIs and a shadow curl; no real keys or network
 
 load test_helper
 load fixtures/fake-clis
@@ -64,12 +64,20 @@ setup() {
 # Shadow curl with a stub that echoes a scripted HTTP code, so check_provider's
 # result branches can be exercised offline with no real keys or network. Keys
 # are dummy values only to get past the no_key guard.
+#
+# The stub exits non-zero on a failed transfer (code 000) because that is what
+# the real binary does: curl writes 000 through -w and *also* exits 7. A stub
+# that always succeeds cannot exercise the script's transfer-failure branch, so
+# it would certify that branch as working while it is broken.
 shadow_curl() {
     local dir="${BATS_TEST_TMPDIR}/fakecurl"
     mkdir -p "$dir"
     cat > "$dir/curl" <<'EOF'
 #!/bin/bash
-printf '%s' "${COUNCIL_FAKE_HTTP_CODE:-200}"
+code="${COUNCIL_FAKE_HTTP_CODE:-200}"
+printf '%s' "$code"
+if [[ "$code" == "000" ]]; then exit 7; fi
+exit 0
 EOF
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"

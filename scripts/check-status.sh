@@ -50,21 +50,21 @@ check_provider() {
             cfg=$(curl_secret_config "x-goog-api-key: ${api_key}")
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
                 --config "$cfg" \
-                "https://generativelanguage.googleapis.com/v1beta/models/${model}" 2>/dev/null || echo "000")
+                "https://generativelanguage.googleapis.com/v1beta/models/${model}" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
         openai)
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
                 --config "$cfg" \
-                "https://api.openai.com/v1/models" 2>/dev/null || echo "000")
+                "https://api.openai.com/v1/models" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
         grok)
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
             http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
                 --config "$cfg" \
-                "https://api.x.ai/v1/models" 2>/dev/null || echo "000")
+                "https://api.x.ai/v1/models" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
         perplexity)
@@ -77,10 +77,15 @@ check_provider() {
                 --config "$cfg" \
                 -H "Content-Type: application/json" \
                 -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":1}' \
-                "https://api.perplexity.ai/chat/completions" 2>/dev/null || echo "000")
+                "https://api.perplexity.ai/chat/completions" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
     esac
+
+    # On a failed transfer curl writes 000 through -w and also exits non-zero.
+    # The `|| true` above absorbs that exit for set -e without appending a
+    # second 000 to the code. An empty code means curl wrote nothing at all.
+    http_code="${http_code:-000}"
 
     end_time=$(now_ms)
 
