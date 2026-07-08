@@ -26,6 +26,19 @@ now_ms() {
 
 # Check a single provider
 # Usage: check_provider <name> <api_key_var> <model_var> <default_model> <test_endpoint> <test_payload>
+# Vendors disagree on how a rejected key comes back. OpenAI and Perplexity send
+# 401, but Gemini sends 400 with status INVALID_ARGUMENT and xAI sends 400 with
+# code invalid-argument. For those two the response body, not the status alone,
+# separates a rejected key from a genuinely malformed request.
+rejected_key() {
+    local provider="$1" body_file="$2"
+    case "$provider" in
+        gemini) jq -e '.error.status == "INVALID_ARGUMENT"' "$body_file" >/dev/null 2>&1 ;;
+        grok)   jq -e '.code == "invalid-argument"' "$body_file" >/dev/null 2>&1 ;;
+        *)      return 1 ;;
+    esac
+}
+
 check_provider() {
     local name="$1"
     local api_key="${!2:-}"
@@ -44,39 +57,43 @@ check_provider() {
 
     # Keys travel via a mode-600 curl --config file, never the argv (ps-visible)
     # or the URL. Mirrors the provider scripts' curl_secret_config hardening.
-    local http_code cfg
+    # The response body is kept because some vendors only reveal a rejected key
+    # there. It can carry a redacted copy of the key, so it stays in its
+    # mode-600 temp file: inspected, never printed, and removed straight after.
+    local http_code cfg body_file rejected
+    body_file=$(mktemp)
     case "$name" in
         gemini)
             cfg=$(curl_secret_config "x-goog-api-key: ${api_key}")
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
                 --config "$cfg" \
                 "https://generativelanguage.googleapis.com/v1beta/models/${model}" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
         openai)
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
                 --config "$cfg" \
                 "https://api.openai.com/v1/models" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
         grok)
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
                 --config "$cfg" \
                 "https://api.x.ai/v1/models" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
         perplexity)
             # Perplexity has no /models endpoint, so auth can only be probed with
-            # a (billable) chat request. Cap it at max_tokens:1 to make the status
-            # check as close to free as the API allows.
+            # a (billable) chat request. The API rejects anything under 16 output
+            # tokens, so 16 is as close to free as the status check can get.
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
                 -X POST \
                 --config "$cfg" \
                 -H "Content-Type: application/json" \
-                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":1}' \
+                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":16}' \
                 "https://api.perplexity.ai/chat/completions" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
@@ -86,6 +103,17 @@ check_provider() {
     # The `|| true` above absorbs that exit for set -e without appending a
     # second 000 to the code. An empty code means curl wrote nothing at all.
     http_code="${http_code:-000}"
+
+    rejected=0
+    if [[ "$http_code" == "400" ]] && rejected_key "$name" "$body_file"; then
+        rejected=1
+    fi
+    rm -f "$body_file"
+    if (( rejected )); then
+        # Report the auth failure under the vendor's true code, not an invented 401
+        echo "auth_error:400"
+        return
+    fi
 
     end_time=$(now_ms)
 
