@@ -332,9 +332,9 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [ -s "$CS_ARGV_FILE" ]
-    # OpenAI's error body echoes a redacted key and nothing reads it; Perplexity's
-    # is never read either. Only Gemini and xAI keep a body.
-    [ "$(grep -c '^/dev/null$' "$CS_ARGV_FILE" || true)" -eq 2 ]
+    # OpenAI's error body echoes a redacted key and nothing reads it; Perplexity
+    # and Anthropic never read theirs either. Only Gemini and xAI keep a body.
+    [ "$(grep -c '^/dev/null$' "$CS_ARGV_FILE" || true)" -eq 3 ]
 }
 
 # A probe body and the curl config that carries the key both live in TMPDIR for
