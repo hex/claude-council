@@ -41,7 +41,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     # antigravity (no auth probe) is the only available provider
-    [[ "$output" == *"1/6 providers available"* ]]
+    [[ "$output" == *"1/7 providers available"* ]]
 }
 
 @test "check-status: missing API key shows exact export remediation" {
@@ -50,6 +50,7 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"export OPENAI_API_KEY="* ]]
     [[ "$output" == *"export PERPLEXITY_API_KEY="* ]]
+    [[ "$output" == *"export ANTHROPIC_API_KEY="* ]]
 }
 
 @test "check-status: missing CLI binary shows install remediation" {
@@ -92,7 +93,7 @@ exit 0
 EOF
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
-    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k
+    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k ANTHROPIC_API_KEY=k
     export COUNCIL_FAKE_BEHAVIOR=valid
 }
 
@@ -103,7 +104,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connected"* ]]
     # 4 API providers + codex + antigravity, all healthy
-    [[ "$output" == *"6/6 providers available"* ]]
+    [[ "$output" == *"7/7 providers available"* ]]
 }
 
 @test "check-status: HTTP 401 reports auth failure with regenerate remediation" {
@@ -117,7 +118,7 @@ EOF
     # first: a substring match alone cannot tell four rows from one.
     [ "$(auth_failures "$output")" -eq 4 ]
     # Only the two CLI providers remain available
-    [[ "$output" == *"2/6 providers available"* ]]
+    [[ "$output" == *"2/7 providers available"* ]]
 }
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
@@ -140,7 +141,7 @@ EOF
     [[ "$output" == *"Error (HTTP 500)"* ]]
     # A server-side fault is not a credentials problem
     [ "$(auth_failures "$output")" -eq 0 ]
-    [[ "$output" == *"2/6 providers available"* ]]
+    [[ "$output" == *"2/7 providers available"* ]]
 }
 
 @test "check-status: curl failure (000) reports a connection timeout" {
@@ -149,7 +150,7 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]
-    [[ "$output" == *"2/6 providers available"* ]]
+    [[ "$output" == *"2/7 providers available"* ]]
 }
 
 # Gemini and xAI answer a rejected key with 400 rather than a 401, so the status
@@ -262,7 +263,8 @@ EOF
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
     export GEMINI_API_KEY=SEKRET_GEM OPENAI_API_KEY=SEKRET_OAI \
-           XAI_API_KEY=SEKRET_GROK PERPLEXITY_API_KEY=SEKRET_PPX
+           XAI_API_KEY=SEKRET_GROK PERPLEXITY_API_KEY=SEKRET_PPX \
+           ANTHROPIC_API_KEY=SEKRET_ANT
     export COUNCIL_FAKE_BEHAVIOR=valid
 }
 
@@ -318,7 +320,7 @@ EOF
     printf '#!/bin/bash\nexit 127\n' > "$dir/curl"
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
-    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k
+    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k ANTHROPIC_API_KEY=k
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]

@@ -22,6 +22,7 @@ BLUE='\033[34m'
 WHITE='\033[37m'
 RED='\033[31m'
 GREEN='\033[32m'
+YELLOW='\033[33m'
 DIM='\033[2m'
 RESET='\033[0m'
 
@@ -134,6 +135,18 @@ check_provider() {
                 "https://api.perplexity.ai/chat/completions" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
+        anthropic)
+            # Anthropic returns 401 for a rejected key (standard shape, no
+            # body inspection needed - unlike gemini/grok). Two required
+            # headers travel through curl_secret_config together.
+            cfg=$(curl_secret_config \
+                "x-api-key: ${api_key}" \
+                "anthropic-version: 2023-06-01")
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+                --config "$cfg" \
+                "https://api.anthropic.com/v1/models" 2>/dev/null || true)
+            rm -f "$cfg"
+            ;;
     esac
 
     # curl exits non-zero when a transfer fails, so the `|| true` above keeps
@@ -209,6 +222,7 @@ remediation_for() {
         openai:no_key)        echo "export OPENAI_API_KEY=<key>" ;;
         grok:no_key)          echo "export XAI_API_KEY=<key>" ;;
         perplexity:no_key)    echo "export PERPLEXITY_API_KEY=<key>" ;;
+        anthropic:no_key)     echo "export ANTHROPIC_API_KEY=<key>" ;;
         codex:no_binary)      echo "npm install -g @openai/codex" ;;
         codex:unauthed)       echo "codex login" ;;
         antigravity:no_binary) echo "install the Antigravity CLI (agy)" ;;
@@ -227,6 +241,7 @@ gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "GEMINI_MODEL" "gemini-
 openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "gpt-5.5-pro")
 grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "grok-4.20-reasoning")
 perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "sonar-reasoning-pro")
+anthropic_status=$(check_provider "anthropic" "ANTHROPIC_API_KEY" "ANTHROPIC_MODEL" "claude-opus-4-7")
 # codex login status exits non-zero when logged out; agy has no
 # equivalent offline auth probe, so it stays a single-tier check
 codex_status=$(check_cli_provider "codex" "codex" login status)
@@ -293,6 +308,7 @@ format_status "Gemini"     "gemini"     "$gemini_status"
 format_status "OpenAI"     "openai"     "$openai_status"
 format_status "Grok"       "grok"       "$grok_status"
 format_status "Perplexity" "perplexity" "$perplexity_status"
+format_status "Anthropic"  "anthropic"  "$anthropic_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
 format_status "Antigravity" "antigravity" "$antigravity_status"
 
@@ -305,8 +321,9 @@ available_count=0
 [[ "$openai_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$grok_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$perplexity_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$anthropic_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))
 
-echo -e "${DIM}${available_count}/6 providers available${RESET}"
+echo -e "${DIM}${available_count}/7 providers available${RESET}"
 echo ""
