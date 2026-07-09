@@ -116,7 +116,7 @@ EOF
     [[ "$output" == *"key rejected - regenerate it"* ]]
     # Every API provider must classify 401, not just whichever one happens to be
     # first: a substring match alone cannot tell four rows from one.
-    [ "$(auth_failures "$output")" -eq 4 ]
+    [ "$(auth_failures "$output")" -eq 5 ]
     # Only the two CLI providers remain available
     [[ "$output" == *"2/7 providers available"* ]]
 }
@@ -130,7 +130,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Auth failed (HTTP 403)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
-    [ "$(auth_failures "$output")" -eq 4 ]
+    [ "$(auth_failures "$output")" -eq 5 ]
 }
 
 @test "check-status: HTTP 500 reports a generic error with the code" {
@@ -207,7 +207,7 @@ auth_failures() {
     [ "$status" -eq 0 ]
     # All four API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -221,7 +221,7 @@ auth_failures() {
     [ "$status" -eq 0 ]
     # All four API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -235,7 +235,7 @@ auth_failures() {
     # A malformed request is not a credentials problem; do not offer to regenerate
     # All four API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -295,7 +295,7 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [ -s "$CS_ARGV_FILE" ]
-    [ "$(grep -cxF -- '--max-time' "$CS_ARGV_FILE" || true)" -eq 4 ]
+    [ "$(grep -cxF -- '--max-time' "$CS_ARGV_FILE" || true)" -eq 5 ]
 }
 
 # rejected_key reads the vendor's key marker with jq. Without a working jq that
