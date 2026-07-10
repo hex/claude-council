@@ -311,9 +311,8 @@ Attach one image (e.g. a UI screenshot) so vision-capable providers can critique
 ```
 
 - Single image per query, raw size up to 10 MB, extensions: png / jpg / jpeg / webp / gif.
-- `gemini` and `openai` receive the image alongside the prompt.
+- `gemini`, `openai`, `grok`, and `perplexity` receive the image alongside the prompt.
 - CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini` (the slot is marked as a fallback). If the sibling is unusable (no API key) or already answering in its own slot, the CLI provider answers text-only instead.
-- `grok` and `perplexity` answer text-only; their responses are prefixed with `(answered without the image)`.
 
 Privacy: the image is sent to the providers that can see it, but its bytes are **not** written to cache entries or the saved `council-*.md` transcripts — only a hash of the image keys the cache.
 

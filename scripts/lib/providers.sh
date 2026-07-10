@@ -118,7 +118,7 @@ get_model() {
 # vision set; everything else routes to a sibling or answers text-only.
 provider_vision_capable() {
     case "$1" in
-        gemini|openai) return 0 ;;
+        gemini|openai|grok|perplexity) return 0 ;;
         *) return 1 ;;
     esac
 }

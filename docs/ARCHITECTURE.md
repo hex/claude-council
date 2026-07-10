@@ -154,13 +154,12 @@ temp file, and folds only its SHA-256 into the cache key (`COUNCIL_IMAGE_HASH`) 
 the bytes never enter the prompt string.
 
 Per-provider disposition when an image is attached:
-- **gemini, openai** (vision-capable) receive the image — gemini as an
-  `inlineData` part, openai as `input_image` (Responses API) or `image_url`
-  (Chat Completions).
+- **gemini, openai, grok, perplexity** (vision-capable) receive the image —
+  gemini as an `inlineData` part, openai as `input_image` (Responses API) or
+  `image_url` (Chat Completions), grok and perplexity as an OpenAI-compatible
+  `image_url` data-URI on their `/chat/completions` endpoint.
 - **codex, antigravity** (CLI, cannot accept an image) route to their vision
   API sibling — codex→openai, antigravity→gemini — with the image.
-- **grok, perplexity** (no vision model) answer text-only; their response is
-  prefixed `(answered without the image)`.
 
 Privacy invariant: only the image's SHA-256 keys the cache. The base64 lives
 solely in a temp file passed to providers; it is never written to cache entries

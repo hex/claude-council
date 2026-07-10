@@ -57,7 +57,7 @@ bats --verbose-run tests/cache.bats
 | `jobs.bats` | 16 tests | job store, --async lifecycle, --result/--jobs/--cancel, self-ignoring cache dir |
 | `stop-gate.bats` | 10 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
 | `theme.bats` | 24 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
-| `providers.bats` | 16 tests | API provider payloads, response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url) |
+| `providers.bats` | 19 tests | API provider payloads, response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url, grok/perplexity image_url) |
 | `image.bats` | 8 tests | --image validation (missing/bad-type/oversize), vision routing, CLI→sibling routing, non-vision text-only tag, base64 never in the cache |
 | `pane-watcher.bats` | 3 tests | standalone pane watcher: banner + response render, error notice, SetMark, watch-dir cleanup |
 | `export.bats` | 5 tests | markdown transcript export writing + formatting |
@@ -472,11 +472,11 @@ rm combined-test.md
 
 **Test A**: Attach an image to vision-capable providers
 ```bash
-/claude-council:ask --image=screenshot.png --providers=gemini,openai "What does this screen show?"
+/claude-council:ask --image=screenshot.png --providers=gemini,openai,grok,perplexity "What does this screen show?"
 ```
 
 **Expected**:
-- [ ] Gemini and OpenAI describe the actual image content (they received it)
+- [ ] Gemini, OpenAI, Grok, and Perplexity describe the actual image content (they received it)
 - [ ] No base64 appears in the terminal output or the saved `council-*.md` transcript
 
 **Test B**: Default set routes CLI providers to their vision siblings
@@ -486,7 +486,6 @@ rm combined-test.md
 
 **Expected**:
 - [ ] codex's slot is answered by openai and antigravity's by gemini (marked as a fallback), both seeing the image
-- [ ] grok / perplexity answer text-only, prefixed `(answered without the image)`
 
 ---
 

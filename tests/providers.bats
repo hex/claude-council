@@ -194,12 +194,52 @@ run_provider() {
     grep -qF 'data:image/png;base64,QUJD' "$DATA_FILE"
 }
 
-@test "provider_vision_capable: true for gemini/openai, false for the rest" {
+@test "grok: injects image_url object when given an image" {
+    FAKE_BODY='{"choices":[{"message":{"content":"ok"}}]}'
+    local bf="${BATS_TEST_TMPDIR}/b64"; printf 'QUJD' > "$bf"
+    run --separate-stderr env PATH="${FAKE_DIR}:$PATH" \
+        FAKE_ARGV_FILE="$ARGV_FILE" FAKE_CONFIG_FILE="$CONFIG_FILE" \
+        FAKE_DATA_FILE="$DATA_FILE" FAKE_BODY="$FAKE_BODY" FAKE_HTTP=200 \
+        COUNCIL_RETRY_DELAY=0 XAI_API_KEY=k \
+        bash "$PROVIDERS/grok.sh" "hi" --image-file "$bf" --image-mime image/png
+    [ "$status" -eq 0 ]
+    grep -qF 'image_url' "$DATA_FILE"
+    grep -qF 'data:image/png;base64,QUJD' "$DATA_FILE"
+}
+
+@test "perplexity: injects image_url object when given an image" {
+    FAKE_BODY='{"choices":[{"message":{"content":"ok"}}]}'
+    local bf="${BATS_TEST_TMPDIR}/b64"; printf 'QUJD' > "$bf"
+    run --separate-stderr env PATH="${FAKE_DIR}:$PATH" \
+        FAKE_ARGV_FILE="$ARGV_FILE" FAKE_CONFIG_FILE="$CONFIG_FILE" \
+        FAKE_DATA_FILE="$DATA_FILE" FAKE_BODY="$FAKE_BODY" FAKE_HTTP=200 \
+        COUNCIL_RETRY_DELAY=0 PERPLEXITY_API_KEY=k \
+        bash "$PROVIDERS/perplexity.sh" "hi" --image-file "$bf" --image-mime image/png
+    [ "$status" -eq 0 ]
+    grep -qF 'image_url' "$DATA_FILE"
+    grep -qF 'data:image/png;base64,QUJD' "$DATA_FILE"
+}
+
+@test "perplexity: injects image_url object with a recency filter set" {
+    FAKE_BODY='{"choices":[{"message":{"content":"ok"}}]}'
+    local bf="${BATS_TEST_TMPDIR}/b64"; printf 'QUJD' > "$bf"
+    run --separate-stderr env PATH="${FAKE_DIR}:$PATH" \
+        FAKE_ARGV_FILE="$ARGV_FILE" FAKE_CONFIG_FILE="$CONFIG_FILE" \
+        FAKE_DATA_FILE="$DATA_FILE" FAKE_BODY="$FAKE_BODY" FAKE_HTTP=200 \
+        COUNCIL_RETRY_DELAY=0 PERPLEXITY_API_KEY=k PERPLEXITY_RECENCY=week \
+        bash "$PROVIDERS/perplexity.sh" "hi" --image-file "$bf" --image-mime image/png
+    [ "$status" -eq 0 ]
+    grep -qF 'image_url' "$DATA_FILE"
+    grep -qF 'data:image/png;base64,QUJD' "$DATA_FILE"
+    grep -qF 'search_recency_filter' "$DATA_FILE"
+}
+
+@test "provider_vision_capable: true for gemini/openai/grok/perplexity, false for the rest" {
     source "${LIB_DIR}/providers.sh"
     provider_vision_capable gemini
     provider_vision_capable openai
-    ! provider_vision_capable grok
-    ! provider_vision_capable perplexity
+    provider_vision_capable grok
+    provider_vision_capable perplexity
     ! provider_vision_capable codex
     ! provider_vision_capable antigravity
 }
