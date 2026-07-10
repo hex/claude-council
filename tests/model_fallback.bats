@@ -135,3 +135,50 @@ mf() {
     mf 'model_fallback_for nosuchprovider'
     [ -z "$output" ]
 }
+
+# ============================================================================
+# Verdict cache — remember "unavailable" for a provider+model+key, with a TTL
+# ============================================================================
+
+@test "verdict cache: an unremembered verdict is not cached" {
+    mf 'model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -ne 0 ]
+}
+
+@test "verdict cache: a remembered verdict reads back fresh" {
+    mf 'model_unavailable_remember grok grok-4.5 abc123; model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -eq 0 ]
+}
+
+@test "verdict cache: the verdict is scoped to the model" {
+    mf 'model_unavailable_remember grok grok-4.5 abc123; model_unavailable_cached grok grok-4.3 abc123'
+    [ "$status" -ne 0 ]
+}
+
+@test "verdict cache: the verdict is scoped to the key" {
+    # A different-region key must not inherit the prior key's verdict.
+    mf 'model_unavailable_remember grok grok-4.5 abc123; model_unavailable_cached grok grok-4.5 def456'
+    [ "$status" -ne 0 ]
+}
+
+@test "verdict cache: a verdict older than the TTL is stale" {
+    mf 'model_unavailable_remember grok grok-4.5 abc123
+        COUNCIL_AVAILABILITY_TTL=0 model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -ne 0 ]
+}
+
+@test "verdict cache: a truncated entry is treated as stale, not fatal" {
+    # An unparseable timestamp must not abort the run under set -e.
+    mf 'model_unavailable_remember grok grok-4.5 abc123
+        f=$(model_verdict_file grok grok-4.5 abc123)
+        printf "garbage" > "$f"
+        model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -ne 0 ]
+}
+
+@test "model_fallback_key_hash: scopes to the provider's key, not its name" {
+    mf 'GROK_API_KEY=one; a=$(model_fallback_key_hash grok)
+        GROK_API_KEY=two; b=$(model_fallback_key_hash grok)
+        [[ "$a" != "$b" ]]'
+    [ "$status" -eq 0 ]
+}
