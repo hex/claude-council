@@ -161,6 +161,13 @@ is_model_unavailable_error() {
          elif (.error | type) == "string" then .error
          else "" end) | ascii_downcase' <<<"$body" 2>/dev/null) || return 1
 
+    # A model-unavailable 400 always names the model; a bad-parameter or
+    # missing-resource 400 does not.
+    case "$msg" in
+        *model*) ;;
+        *) return 1 ;;
+    esac
+
     # Deliberately not matching "not supported": OpenAI's 400 for an unsupported
     # reasoning effort reads "'low' is not supported with the 'gpt-5.5-pro' model".
     case "$msg" in

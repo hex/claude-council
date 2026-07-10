@@ -81,3 +81,23 @@ classify() {
     classify 200 '{"choices":[{"message":{"content":"hi"}}]}'
     [ "$status" -ne 0 ]
 }
+
+@test "classifier: a 400 thread-not-found message is not model-unavailable" {
+    classify 400 '{"error":{"message":"Thread thread_abc123 does not exist."}}'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a 400 file-not-found message is not model-unavailable" {
+    classify 400 '{"error":{"message":"The requested file file-xyz does not exist or you do not have access to it."}}'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a bare JSON array body is not model-unavailable" {
+    classify 400 '[1,2,3]'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a 400 bare-string error not naming a model is not model-unavailable" {
+    classify 400 '{"error":"Invalid request: temperature must be between 0 and 2"}'
+    [ "$status" -ne 0 ]
+}
