@@ -4,7 +4,7 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.7.5
 
 ### Added
 
@@ -19,6 +19,11 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   retried on every call, and the council returns to the default automatically
   once it becomes available. An explicit `<PROVIDER>_MODEL` opts a provider
   out of the fallback.
+- **Image input for Grok and Perplexity.** grok-4.x and Perplexity sonar
+  models now receive images over their OpenAI-compatible `/chat/completions`
+  endpoints, alongside the existing Gemini and OpenAI vision routing. The
+  text-only path is unchanged, and Perplexity's `search_recency_filter` /
+  `return_citations` are preserved on the image path.
 
 ### Fixed
 
@@ -34,6 +39,17 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   `.output` key. jq exits 5, and under `set -euo pipefail` the command
   substitution aborted the script before its error-handling block ever ran.
   Users saw a raw jq diagnostic and exit 5 instead of a reported error.
+- **The Stop hook wedged the session when the plugin path contained a space.**
+  An unquoted `${CLAUDE_PLUGIN_ROOT}` word-split (common on Windows,
+  `C:\Users\First Last\...`), so bash ran the split-off prefix as a script —
+  exit 127, or a syntax error and exit 2 that Claude Code reads as "block the
+  stop", a loop that survived disabling the plugin. Quoting the expansion
+  passes the path as a single argument. (Fixes #11.)
+
+### Changed
+
+- **Default models bumped to current flagships:** OpenAI `gpt-5.6-sol`,
+  Grok `grok-4.5`.
 
 ## 2026.7.4
 
