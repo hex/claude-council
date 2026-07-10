@@ -107,3 +107,25 @@ envelope_with_entry() {
     [ "$status" -eq 0 ]
     [[ "$output" != *"fell back"* ]]
 }
+
+@test "format-output: model_fallback note names the unavailable preferred model" {
+    local json
+    json=$(jq -n '{
+        metadata: {quiet_mode: false, debate_mode: false},
+        round1: {grok: {status: "success", model: "grok-4.20-reasoning", response: "hi", model_fallback: "grok-4.5"}}
+    }')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"grok-4.20-reasoning (grok-4.5 unavailable)"* ]]
+}
+
+@test "format-output: model_fallback note absent when field is not set" {
+    local json
+    json=$(jq -n '{
+        metadata: {quiet_mode: false, debate_mode: false},
+        round1: {grok: {status: "success", model: "grok-4.5", response: "hi"}}
+    }')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"unavailable"* ]]
+}

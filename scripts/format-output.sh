@@ -23,8 +23,10 @@ fi
 source "${SCRIPT_DIR}/lib/providers.sh"
 
 # Draw header bar (markdown compatible)
-# Args: emoji provider_name model [role] [header_type] [fallback]
+# Args: emoji provider_name model [role] [header_type] [fallback] [model_fallback]
 # header_type: normal, rebuttal
+# fallback: a sibling PROVIDER answered instead (CLI→API swap)
+# model_fallback: the preferred MODEL was unavailable and a fallback model answered
 draw_header() {
     local emoji="$1"
     local provider="$2"
@@ -32,6 +34,7 @@ draw_header() {
     local role="${4:-}"
     local header_type="${5:-normal}"
     local fallback="${6:-}"
+    local model_fallback="${7:-}"
 
     # Capitalize provider name
     local provider_cap
@@ -50,6 +53,9 @@ draw_header() {
     fi
     if [[ -n "$fallback" ]] && [[ "$fallback" != "null" ]]; then
         header_text="${header_text} (fell back to ${fallback} API)"
+    fi
+    if [[ -n "$model_fallback" ]] && [[ "$model_fallback" != "null" ]]; then
+        header_text="${header_text} (${model_fallback} unavailable)"
     fi
 
     # Draw markdown header
@@ -139,10 +145,12 @@ format_output() {
             role=$(echo "$json" | jq -r ".round1[\"${provider}\"].role // empty")
             local fallback
             fallback=$(echo "$json" | jq -r ".round1[\"${provider}\"].fallback // empty")
+            local model_fallback
+            model_fallback=$(echo "$json" | jq -r ".round1[\"${provider}\"].model_fallback // empty")
             local entry
             entry=$(echo "$json" | jq -c ".round1[\"${provider}\"]")
 
-            draw_header "$emoji" "$provider" "$model" "$role" "normal" "$fallback"
+            draw_header "$emoji" "$provider" "$model" "$role" "normal" "$fallback" "$model_fallback"
             render_response "$entry"
             echo ""
         done
@@ -165,11 +173,13 @@ format_output() {
                     model=$(echo "$json" | jq -r ".round2[\"${provider}\"].model // \"unknown\"")
                     local fallback
                     fallback=$(echo "$json" | jq -r ".round2[\"${provider}\"].fallback // empty")
+                    local model_fallback
+                    model_fallback=$(echo "$json" | jq -r ".round2[\"${provider}\"].model_fallback // empty")
                     local entry
                     # A provider absent from round2 renders as an error entry
                     entry=$(echo "$json" | jq -c ".round2[\"${provider}\"] // {\"status\": \"error\"}")
 
-                    draw_header "$emoji" "$provider" "$model" "" "rebuttal" "$fallback"
+                    draw_header "$emoji" "$provider" "$model" "" "rebuttal" "$fallback" "$model_fallback"
                     render_response "$entry"
                     echo ""
                 done
