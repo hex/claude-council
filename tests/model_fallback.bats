@@ -198,7 +198,10 @@ mf() {
         printf "{\"checked_at\":1.5}" > "$f"
         model_unavailable_cached grok grok-4.5 abc123'
     [ "$status" -eq 1 ]
-    [[ "$output" != *"arithmetic"* ]]
+    # Assert the absence of any diagnostic rather than its wording: bash routes
+    # arithmetic errors through gettext, so matching the English text would stop
+    # detecting an unguarded leak under a translated locale.
+    [ -z "$output" ]
 }
 
 @test "model_fallback_key_hash: scopes to the provider's key, not its name" {
