@@ -47,24 +47,25 @@ bats --verbose-run tests/cache.bats
 | `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
-| `query-council.bats` | 19 tests | argument parsing, error cases, flags, local-council fallback hint |
+| `query-council.bats` | 26 tests | argument parsing, error cases, flags, local-council fallback hint, model-fallback wrapper (preferred-then-fallback retry, cached-verdict skip, explicit `<PROVIDER>_MODEL` opt-out, no verdict remembered when the fallback also fails), round 2 and CLI-sibling fallback carrying `model_fallback` |
 | `argmax.bats` | 4 tests | large response/prompt/debate-round-2 round-trip through final JSON (MSYS ARG_MAX marshalling guard) |
 | `fake-clis.bats` | 14 tests | fixture self-checks, codex.sh/antigravity.sh against fake binaries |
-| `format-output.bats` | 11 tests | defensive parsing: empty/missing/non-string responses, raw preservation, fallback-note rendering |
+| `format-output.bats` | 13 tests | defensive parsing: empty/missing/non-string responses, raw preservation, CLI→API fallback-note rendering, model-fallback note (preferred model named, absent when unset) |
 | `prompts.bats` | 11 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh contract enforcement, schema sync |
 | `check-status.bats` | 25 tests | two-tier CLI availability, remediation strings, HTTP probe branches (401/403/500/000), rejected-key classification (Gemini/xAI answer a bad key with 400, not 401) and its false-positive guards (a typo'd model is not a bad key), transfer-failure exit codes, curl writing nothing, unusable jq, Perplexity's minimum max_tokens, `-X POST` and `--max-time` on every probe, temp-file cleanup, keys off the curl argv, ms clock |
 | `jobs.bats` | 16 tests | job store, --async lifecycle, --result/--jobs/--cancel, self-ignoring cache dir |
 | `stop-gate.bats` | 10 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
 | `theme.bats` | 24 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
-| `providers.bats` | 19 tests | API provider payloads, response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url, grok/perplexity image_url) |
+| `providers.bats` | 25 tests | API provider payloads, response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url, grok/perplexity image_url), model-unavailable exit-3 classification per provider (grok 403 region block, openai/gemini/perplexity 404/400) vs. ordinary errors (401/500) still exiting 1 |
 | `image.bats` | 8 tests | --image validation (missing/bad-type/oversize), vision routing, CLI→sibling routing, non-vision text-only tag, base64 never in the cache |
 | `pane-watcher.bats` | 3 tests | standalone pane watcher: banner + response render, error notice, SetMark, watch-dir cleanup |
 | `export.bats` | 5 tests | markdown transcript export writing + formatting |
 | `release.bats` | 5 tests | release.sh version bump/commit/tag, staged-index guard, green-suite gate |
-| `retry.bats` | 6 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file |
+| `retry.bats` | 11 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file, ensure_error_body http_status stamping (object and string `.error`, Gemini's string `.error.status` left alone, synthesised message, 200 passthrough) |
+| `model_fallback.bats` | 28 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (grok-4.5's EU region block, end to end) |
 
-**Total: 367 tests** across 23 `.bats` files.
+**Total: 418 tests** across 24 `.bats` files.
 
 ### Hermetic CLI Fixture
 

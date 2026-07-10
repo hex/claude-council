@@ -478,6 +478,36 @@ export COUNCIL_MAX_TOKENS=4096  # longer responses
 export COUNCIL_MAX_TOKENS=1024  # shorter, faster responses
 ```
 
+### Model fallback
+
+If a provider's default model is unavailable for your API key or region, the
+council answers with a verified fallback model instead of failing, and says so
+in the response header:
+
+```
+## 🟥 Grok - grok-4.20-reasoning (grok-4.5 unavailable)
+```
+
+| Provider | Default | Fallback |
+|---|---|---|
+| openai | `gpt-5.6-sol` | `gpt-5.5-pro` |
+| grok | `grok-4.5` | `grok-4.20-reasoning` |
+| gemini | `gemini-3.1-pro-preview` | `gemini-pro-latest` |
+| perplexity | `sonar-reasoning-pro` | `sonar-pro` |
+
+The same substitution is also noted on stderr and folded into the synthesis,
+so it's visible even in quiet mode or a headless run. Setting `<PROVIDER>_MODEL`
+explicitly disables the fallback for that provider — an explicit choice is
+respected verbatim.
+
+The verdict — "this model is unavailable for this key" — is cached for a day
+so it isn't retried on every query, and the council returns to the default
+automatically once it becomes available. This is a separate cache from the
+response cache above (`COUNCIL_CACHE_DIR` / `COUNCIL_CACHE_TTL`): it tracks
+per-model availability, not full answers. Tune it with `COUNCIL_AVAILABILITY_TTL`
+(seconds, default `86400`); set it to `0` to re-check on every query. It is
+independent of `--no-cache`, which only forces fresh *answers*.
+
 ### Reasoning Models
 
 For reasoning models from any provider, the token limit is automatically increased to 8x the base value (minimum 32768). This is because reasoning models combine internal thinking tokens and visible output tokens into a single `max_output_tokens` limit — without the bump, the model can run out mid-response.

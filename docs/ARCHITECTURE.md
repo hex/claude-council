@@ -126,6 +126,9 @@ INPUT:  --prompt-file <path>  the prompt; the orchestrator always uses this so a
         $1                    a literal prompt, for direct/manual invocation
 OUTPUT: stdout = AI response text
 EXIT:   0 = success, non-zero = failure (error to stderr)
+        3 = the requested model is unavailable for this key/region — the
+            orchestrator's model-fallback wrapper retries with a fallback
+            model instead of surfacing the error (see Model Fallback below)
 ```
 
 Two flavors share the interface:
@@ -194,6 +197,30 @@ curl_secret_config(header...):
   - callers pass it via `curl --config <file>` so API keys never ride the
     process argv (ps-visible) or a URL query string
 ```
+
+### Model Fallback (`scripts/lib/retry.sh`, `scripts/lib/model_fallback.sh`)
+
+```
+is_model_unavailable_error(body):        # retry.sh
+  - true only for a 403/404, or a 400 whose message names the model
+  - excludes 401/429/5xx: no other model fixes those
+  - reads .http_status, stamped onto every >=400 body by ensure_error_body
+    (handles xAI's bare-string .error as well as the usual .error.message)
+
+model_fallback_for(provider) -> model    # model_fallback.sh
+  - one verified fallback per API provider (openai, grok, gemini, perplexity)
+  - empty for CLI providers, which degrade to their API sibling instead
+
+model_unavailable_cached/remember(provider, model, key_hash):
+  - TTL-cached "unavailable" verdict, scoped to provider + preferred model + key
+  - written only once the fallback model has actually answered
+  - independent of the response cache; tunable via COUNCIL_AVAILABILITY_TTL
+```
+
+`query-council.sh`'s `run_provider_with_model_fallback` wraps a provider
+script: a preferred-model exit 3 (see Provider Scripts below), or a cached
+verdict, retries once with the fallback. The substitution is reported on the
+response header, on stderr, and folded into the synthesis prompt.
 
 ### Role System (`scripts/lib/roles.sh`)
 
@@ -410,6 +437,7 @@ claude-council/
 │       ├── hash.sh              # Portable SHA-256 helper (shasum / sha256sum)
 │       ├── jobs.sh              # Background job store
 │       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
+│       ├── model_fallback.sh    # Fallback model per provider + TTL-cached unavailable verdicts
 │       ├── pane-watcher.sh      # Runs in the tmux pane: streams status + rendered responses
 │       ├── prompts.sh           # Template loading + {{VAR}} interpolation
 │       ├── providers.sh         # Discovery + CLI-prefers-API policy + vendor display
@@ -448,6 +476,7 @@ claude-council/
 │   ├── image.bats               # Vision / --image routing + privacy guards
 │   ├── jobs.bats
 │   ├── keys.bats
+│   ├── model_fallback.bats      # Classifier, fallback pairs, verdict cache, gated real-API test
 │   ├── pane-watcher.bats
 │   ├── prompts.bats
 │   ├── providers.bats           # API provider payloads + secret hygiene
@@ -484,6 +513,7 @@ claude-council/
 | `COUNCIL_TIMEOUT` | 300 | Request timeout (s) |
 | `COUNCIL_CACHE_DIR` | .claude/council-cache | Cache location |
 | `COUNCIL_CACHE_TTL` | 3600 | Cache lifetime (s) |
+| `COUNCIL_AVAILABILITY_TTL` | 86400 | Model-unavailable verdict cache lifetime (s); `0` re-checks every query |
 | `COUNCIL_JOBS_DIR` | per-workspace under `$CLAUDE_PLUGIN_DATA` | Background job state location |
 | `COUNCIL_MAX_JOBS` | 20 | Terminal-status jobs kept before pruning |
 | `COUNCIL_PROMPTS_DIR` | prompts/ | Prompt template location |
