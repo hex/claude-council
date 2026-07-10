@@ -39,7 +39,7 @@ fi
 ENDPOINT="https://api.x.ai/v1/chat/completions"
 
 # Model selection (override via GROK_MODEL env var)
-MODEL="${GROK_MODEL:-grok-4.20-reasoning}"
+MODEL="${GROK_MODEL:-grok-4.5}"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models
 # (*-reasoning, grok-4*, grok-3-mini-*, grok-build-*) need a higher cap; for
