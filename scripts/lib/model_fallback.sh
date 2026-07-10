@@ -8,7 +8,9 @@ source "${LIB_MODEL_FALLBACK_DIR}/cache.sh"
 # One source of truth for the fallback map, as "provider:fallback" tokens; the
 # preferred model is whatever get_model returns, so it is not repeated here.
 # Mirrors the SHADOW_PAIRS idiom in providers.sh. Adding a provider is one token.
-# Every id below was confirmed with a real completion on 2026-07-10.
+# Each id is verified against the live API before it lands here: a model can be
+# listed by a provider's models endpoint and still fail a completion (gemini-2.5-pro
+# is listed by Google's, and 404s on generateContent).
 MODEL_FALLBACKS="openai:gpt-5.5-pro grok:grok-4.20-reasoning perplexity:sonar-pro gemini:gemini-pro-latest"
 
 # The model a provider degrades to when its preferred model is unavailable.

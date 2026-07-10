@@ -142,7 +142,7 @@ mf() {
 
 @test "verdict cache: an unremembered verdict is not cached" {
     mf 'model_unavailable_cached grok grok-4.5 abc123'
-    [ "$status" -ne 0 ]
+    [ "$status" -eq 1 ]
 }
 
 @test "verdict cache: a remembered verdict reads back fresh" {
@@ -152,19 +152,19 @@ mf() {
 
 @test "verdict cache: the verdict is scoped to the model" {
     mf 'model_unavailable_remember grok grok-4.5 abc123; model_unavailable_cached grok grok-4.3 abc123'
-    [ "$status" -ne 0 ]
+    [ "$status" -eq 1 ]
 }
 
 @test "verdict cache: the verdict is scoped to the key" {
     # A different-region key must not inherit the prior key's verdict.
     mf 'model_unavailable_remember grok grok-4.5 abc123; model_unavailable_cached grok grok-4.5 def456'
-    [ "$status" -ne 0 ]
+    [ "$status" -eq 1 ]
 }
 
 @test "verdict cache: a verdict older than the TTL is stale" {
     mf 'model_unavailable_remember grok grok-4.5 abc123
         COUNCIL_AVAILABILITY_TTL=0 model_unavailable_cached grok grok-4.5 abc123'
-    [ "$status" -ne 0 ]
+    [ "$status" -eq 1 ]
 }
 
 @test "verdict cache: a truncated entry is treated as stale, not fatal" {
@@ -173,7 +173,32 @@ mf() {
         f=$(model_verdict_file grok grok-4.5 abc123)
         printf "garbage" > "$f"
         model_unavailable_cached grok grok-4.5 abc123'
-    [ "$status" -ne 0 ]
+    [ "$status" -eq 1 ]
+}
+
+@test "verdict cache: a non-numeric timestamp is stale, and does not abort the run" {
+    mf 'model_unavailable_remember grok grok-4.5 abc123
+        f=$(model_verdict_file grok grok-4.5 abc123)
+        printf "{\"checked_at\":\"notanumber\"}" > "$f"
+        model_unavailable_cached grok grok-4.5 abc123 || true
+        echo SURVIVED'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *SURVIVED* ]]
+}
+
+@test "verdict cache: a fractional timestamp is stale, without leaking a shell arithmetic error" {
+    # Unlike a bare word (which bash treats as an unset variable and, under
+    # nounset, aborts the whole run), a fractional literal fails bash's
+    # arithmetic parser instead: "invalid arithmetic operator". That parse
+    # error does not abort the run, but without the guard it still aborts the
+    # function before the TTL check runs, and prints the parser's diagnostic.
+    # Guarded, the verdict is still correctly stale (status 1) but silently so.
+    mf 'model_unavailable_remember grok grok-4.5 abc123
+        f=$(model_verdict_file grok grok-4.5 abc123)
+        printf "{\"checked_at\":1.5}" > "$f"
+        model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -eq 1 ]
+    [[ "$output" != *"arithmetic"* ]]
 }
 
 @test "model_fallback_key_hash: scopes to the provider's key, not its name" {
