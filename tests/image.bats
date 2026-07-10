@@ -69,14 +69,16 @@ PROV
     [[ "$resp" == *"MIME=image/png"* ]]
 }
 
-@test "image: a non-vision provider runs text-only and is tagged" {
+@test "image: a non-vision provider with no vision sibling runs text-only and is tagged" {
     local fd="${BATS_TEST_TMPDIR}/fp"; mkdir -p "$fd"
-    write_echo_provider "$fd/perplexity.sh"
-    run --separate-stderr env PROVIDERS_DIR="$fd" PERPLEXITY_API_KEY=k \
+    write_echo_provider "$fd/codex.sh"
+    # No OPENAI_API_KEY: codex's vision sibling (openai) is unusable, so codex
+    # cannot route the image and answers text-only with the tag instead.
+    run --separate-stderr env PROVIDERS_DIR="$fd" \
         bash "$SCRIPT" --no-cache --no-pane --no-auto-context \
-        --image="$IMG" --providers=perplexity "look"
+        --image="$IMG" --providers=codex "look"
     [ "$status" -eq 0 ]
-    local resp; resp=$(echo "$output" | jq -r '.round1.perplexity.response')
+    local resp; resp=$(echo "$output" | jq -r '.round1.codex.response')
     [[ "$resp" == *"(answered without the image)"* ]]
     [[ "$resp" == *"IMG=|"* ]]   # empty image field: it never got the base64
 }

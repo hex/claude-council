@@ -16,11 +16,23 @@ verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 DEBUG="${COUNCIL_DEBUG:-}"
 
 PROMPT="${1:-}"
+IMAGE_FILE=""
+IMAGE_MIME=""
 # A large prompt (e.g. a big --file) arrives via a temp file to stay off
 # the process argv, where the OS would reject it as "argument list too long".
 if [[ "$PROMPT" == "--prompt-file" ]]; then
     PROMPT=$(cat "${2:?--prompt-file requires a path}")
+    shift 2
+elif [[ $# -gt 0 ]]; then
+    shift
 fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --image-file) IMAGE_FILE="${2:?--image-file requires a path}"; shift 2 ;;
+        --image-mime) IMAGE_MIME="${2:?--image-mime requires a value}"; shift 2 ;;
+        *) shift ;;
+    esac
+done
 
 if [[ -z "$PROMPT" ]]; then
     echo "Error: No prompt provided" >&2
@@ -55,13 +67,25 @@ RECENCY="${PERPLEXITY_RECENCY:-}"
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT When citing sources, include them inline."
 
 # Build request payload
-# Perplexity extends OpenAI format with search-specific parameters
+# Perplexity extends OpenAI format with search-specific parameters.
+# The user message content is either a bare prompt string or, when an image is
+# supplied, an OpenAI-shaped [text, image_url] array. Building it once here keeps
+# the image variant orthogonal to the recency branch below (no 2x2 duplication).
+if [[ -n "$IMAGE_FILE" ]]; then
+    USER_CONTENT=$(jq -n --arg prompt "$PROMPT" --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '[
+        { type: "text",      text: $prompt },
+        { type: "image_url", image_url: { url: ("data:" + $mime + ";base64," + $b64) } }
+    ]')
+else
+    USER_CONTENT=$(jq -n --arg prompt "$PROMPT" '$prompt')
+fi
+
 if [[ -n "$RECENCY" ]]; then
     PAYLOAD=$(jq -n \
-        --arg prompt "$PROMPT" \
         --arg model "$MODEL" \
         --argjson tokens "$TOKENS" \
         --arg system "$SYSTEM" \
+        --argjson content "$USER_CONTENT" \
         --arg recency "$RECENCY" \
         '{
             model: $model,
@@ -70,7 +94,7 @@ if [[ -n "$RECENCY" ]]; then
                 content: $system
             }, {
                 role: "user",
-                content: $prompt
+                content: $content
             }],
             temperature: 0.7,
             max_tokens: $tokens,
@@ -79,10 +103,10 @@ if [[ -n "$RECENCY" ]]; then
         }')
 else
     PAYLOAD=$(jq -n \
-        --arg prompt "$PROMPT" \
         --arg model "$MODEL" \
         --argjson tokens "$TOKENS" \
         --arg system "$SYSTEM" \
+        --argjson content "$USER_CONTENT" \
         '{
             model: $model,
             messages: [{
@@ -90,7 +114,7 @@ else
                 content: $system
             }, {
                 role: "user",
-                content: $prompt
+                content: $content
             }],
             temperature: 0.7,
             max_tokens: $tokens,
