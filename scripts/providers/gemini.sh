@@ -99,6 +99,7 @@ TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 if [[ -z "$TEXT" ]]; then
     ERROR=$(echo "$RESPONSE" | jq -r '.error.message // "Unknown error"')
     echo "Error from Gemini: $ERROR" >&2
+    is_model_unavailable_error "$RESPONSE" && exit 3
     exit 1
 fi
 

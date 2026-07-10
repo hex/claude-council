@@ -4,6 +4,37 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+
+- **Model fallback for API providers.** When a provider's default model is
+  unavailable for your key or region — the API answers 403/404, or a 400
+  naming the model — the council retries with a verified fallback model
+  instead of failing, and reports the substitution on three surfaces: the
+  rendered header (`grok-4.20-reasoning (grok-4.5 unavailable)`), a stderr
+  note, and the synthesis. `grok-4.5`, for example, is not currently served in
+  the EU. The verdict is cached for a day (`COUNCIL_AVAILABILITY_TTL`,
+  seconds, `0` to re-check every query) so the unavailable model isn't
+  retried on every call, and the council returns to the default automatically
+  once it becomes available. An explicit `<PROVIDER>_MODEL` opts a provider
+  out of the fallback.
+
+### Fixed
+
+- **xAI errors reported their HTTP code instead of their reason.** xAI returns
+  `.error` as a bare string rather than an object. `.error.message` on a string
+  raises a jq error rather than yielding null, and `//` does not catch a raise —
+  so the existing check read every xAI failure as "no usable message" and
+  replaced the body, printing `Error from Grok: HTTP 403` instead of *"The
+  model grok-4.5 is not available in your region."*
+- **Any OpenAI API error crashed the provider script instead of reporting it.**
+  On the `/v1/responses` path — which the default model `gpt-5.6-sol` uses —
+  the text extraction iterated `.output[]` over an error body that has no
+  `.output` key. jq exits 5, and under `set -euo pipefail` the command
+  substitution aborted the script before its error-handling block ever ran.
+  Users saw a raw jq diagnostic and exit 5 instead of a reported error.
+
 ## 2026.7.4
 
 No user-facing behavior changes. This release makes the shell linter tell the

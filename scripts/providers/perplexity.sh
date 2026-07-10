@@ -156,8 +156,9 @@ fi
 TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
 
 if [[ -z "$TEXT" ]]; then
-    ERROR=$(echo "$RESPONSE" | jq -r '.error.message // .error // "Unknown error"')
+    ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // "") elif (.error | type) == "string" then .error else "" end) | select(. != "") // "Unknown error"')
     echo "Error from Perplexity: $ERROR" >&2
+    is_model_unavailable_error "$RESPONSE" && exit 3
     exit 1
 fi
 

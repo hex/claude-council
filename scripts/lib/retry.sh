@@ -42,16 +42,27 @@ retry_error_body() {
 }
 
 # Given the final HTTP code and response body (on stdin), pass the body through
-# unless it is a >=400 status with no usable .error.message — in which case
-# synthesise one carrying the HTTP code, keeping the raw body for detail.
+# unless it is a >=400 status with no usable message — in which case synthesise
+# one carrying the HTTP code, keeping the raw body for detail. Every >=400 body
+# gains a top-level .http_status so callers can classify the failure.
 ensure_error_body() {
     local code="$1" body
     body=$(cat)
     if [[ "$code" =~ ^[0-9]+$ ]] && (( code >= 400 )); then
-        if ! printf '%s' "$body" | jq -e '(.error.message // .error) | select(. != null and . != "")' >/dev/null 2>&1; then
-            jq -n --arg m "HTTP $code" --arg raw "$body" '{error: {message: $m, raw: $raw}}'
-            return
+        # `.error.message` on a string `.error` (xAI) raises a jq error rather
+        # than yielding null, and `//` does not catch an error — so branch on
+        # the type before indexing.
+        if ! printf '%s' "$body" | jq -e '
+            type == "object" and
+            ((if (.error | type) == "object" then .error.message
+              elif (.error | type) == "string" then .error
+              else null end) | . != null and . != "")' >/dev/null 2>&1; then
+            body=$(jq -n --arg m "HTTP $code" --arg raw "$body" '{error: {message: $m, raw: $raw}}')
         fi
+        # Stamped at the top level, never under .error: .error is a bare string
+        # for xAI, and Gemini's own .error.status is a string like "NOT_FOUND".
+        printf '%s' "$body" | jq --argjson c "$code" '. + {http_status: $c}'
+        return
     fi
     printf '%s' "$body"
 }
@@ -120,4 +131,48 @@ curl_with_retry() {
     rm -f "$temp_file"
     printf '%s' "$response" | ensure_error_body "$http_code"
     return 0
+}
+
+# True (exit 0) if a provider error body says the requested model is unavailable
+# for this key or region — the one failure a different model can fix. Auth (401),
+# rate limits (429) and 5xx are excluded: retrying them on another model wastes a
+# call and hides the real problem.
+#
+# Reads the top-level .http_status stamped by ensure_error_body. Bodies
+# synthesised by retry_error_body (timeout, network) carry no status, so a
+# transient failure never downgrades a model.
+is_model_unavailable_error() {
+    local body="$1" code msg
+    code=$(jq -r 'if type == "object" then (.http_status // empty) else empty end' <<<"$body" 2>/dev/null) || return 1
+    [[ -n "$code" ]] || return 1
+
+    case "$code" in
+        # The model is absent, or this key cannot reach it.
+        403|404) return 0 ;;
+        # A 400 is ambiguous — it covers both "no such model" and ordinary bad
+        # parameters — so only a message naming the model qualifies.
+        400) ;;
+        *) return 1 ;;
+    esac
+
+    # .error is an object for OpenAI/Gemini/Perplexity and a bare string for xAI.
+    msg=$(jq -r '
+        (if (.error | type) == "object" then (.error.message // "")
+         elif (.error | type) == "string" then .error
+         else "" end) | ascii_downcase' <<<"$body" 2>/dev/null) || return 1
+
+    # A model-unavailable 400 always names the model; a bad-parameter or
+    # missing-resource 400 does not.
+    case "$msg" in
+        *model*) ;;
+        *) return 1 ;;
+    esac
+
+    # Deliberately not matching "not supported": OpenAI's 400 for an unsupported
+    # reasoning effort reads "'low' is not supported with the 'gpt-5.5-pro' model".
+    case "$msg" in
+        *"model not found"*|*"model_not_found"*|*"invalid model"*|\
+        *"does not exist"*|*"no access to model"*) return 0 ;;
+        *) return 1 ;;
+    esac
 }

@@ -1,0 +1,240 @@
+#!/usr/bin/env bats
+# ABOUTME: Classifier + fallback-pair + verdict-cache tests for reactive model fallback
+# ABOUTME: Bodies are real vendor responses captured live; verdicts come from vendor semantics
+
+load test_helper
+bats_require_minimum_version 1.5.0
+
+RETRY_LIB="${LIB_DIR}/retry.sh"
+
+# Classify a body through a stamped ensure_error_body, exactly as curl_with_retry does.
+classify() {
+    run env bash -c "
+        set -euo pipefail
+        source '${RETRY_LIB}'
+        body=\$(printf '%s' '$2' | ensure_error_body '$1')
+        is_model_unavailable_error \"\$body\"
+    "
+}
+
+# --- positives: a different model would help -------------------------------
+
+@test "classifier: xAI 403 region block is model-unavailable" {
+    classify 403 '{"code":"permission-denied","error":"The model grok-4.5 is not available in your region."}'
+    [ "$status" -eq 0 ]
+}
+
+@test "classifier: xAI 400 model-not-found is model-unavailable" {
+    classify 400 '{"code":"invalid-argument","error":"Model not found: grok-does-not-exist-9"}'
+    [ "$status" -eq 0 ]
+}
+
+@test "classifier: OpenAI 404 model_not_found is model-unavailable" {
+    classify 404 '{"error":{"message":"The model gpt-does-not-exist-9 does not exist or you do not have access to it.","code":"model_not_found"}}'
+    [ "$status" -eq 0 ]
+}
+
+@test "classifier: Perplexity 400 invalid model is model-unavailable" {
+    classify 400 '{"error":{"message":"Invalid model \"sonar-does-not-exist-9\". Permitted models can be found in the documentation.","type":"invalid_model","code":400}}'
+    [ "$status" -eq 0 ]
+}
+
+@test "classifier: Gemini 404 NOT_FOUND is model-unavailable" {
+    classify 404 '{"error":{"code":404,"message":"models/gemini-does-not-exist-9 is not found for API version v1beta.","status":"NOT_FOUND"}}'
+    [ "$status" -eq 0 ]
+}
+
+# --- negatives: a different model would NOT help ---------------------------
+
+@test "classifier: OpenAI 401 bad key is not model-unavailable" {
+    classify 401 '{"error":{"message":"Incorrect API key provided.","code":"invalid_api_key"}}'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a 400 unsupported reasoning effort is not model-unavailable" {
+    # The message names the model and says "is not supported" — it must not match.
+    classify 400 '{"error":{"message":"Unsupported value: \"low\" is not supported with the \"gpt-5.5-pro\" model.","param":"reasoning.effort","code":"unsupported_value"}}'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: 429 rate limit is not model-unavailable" {
+    classify 429 '{"error":{"message":"Rate limit reached."}}'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: 500 server error is not model-unavailable" {
+    classify 500 '{"error":{"message":"Internal server error."}}'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a synthesised network/timeout body has no status and is not model-unavailable" {
+    run env bash -c "
+        set -euo pipefail
+        source '${RETRY_LIB}'
+        body=\$(retry_error_body 'Request timed out after 300 seconds')
+        is_model_unavailable_error \"\$body\"
+    "
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a 200 success body is not model-unavailable" {
+    classify 200 '{"choices":[{"message":{"content":"hi"}}]}'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a 400 thread-not-found message is not model-unavailable" {
+    classify 400 '{"error":{"message":"Thread thread_abc123 does not exist."}}'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a 400 file-not-found message is not model-unavailable" {
+    classify 400 '{"error":{"message":"The requested file file-xyz does not exist or you do not have access to it."}}'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a bare JSON array body is not model-unavailable" {
+    classify 400 '[1,2,3]'
+    [ "$status" -ne 0 ]
+}
+
+@test "classifier: a 400 bare-string error not naming a model is not model-unavailable" {
+    classify 400 '{"error":"Invalid request: temperature must be between 0 and 2"}'
+    [ "$status" -ne 0 ]
+}
+
+# ============================================================================
+# model_fallback_for — the preferred→fallback map
+# ============================================================================
+
+MF_LIB="${LIB_DIR}/model_fallback.sh"
+
+mf() {
+    run env bash -c "set -euo pipefail; source '${MF_LIB}'; $*"
+}
+
+@test "model_fallback_for: each API provider has its verified fallback" {
+    mf 'model_fallback_for openai'
+    [ "$output" = "gpt-5.5-pro" ]
+    mf 'model_fallback_for grok'
+    [ "$output" = "grok-4.20-reasoning" ]
+    mf 'model_fallback_for perplexity'
+    [ "$output" = "sonar-pro" ]
+    mf 'model_fallback_for gemini'
+    [ "$output" = "gemini-pro-latest" ]
+}
+
+@test "model_fallback_for: a CLI provider has no fallback of its own" {
+    # codex/antigravity degrade to their API sibling, which then gets model fallback.
+    mf 'model_fallback_for codex'
+    [ -z "$output" ]
+    mf 'model_fallback_for antigravity'
+    [ -z "$output" ]
+}
+
+@test "model_fallback_for: an unknown provider has no fallback" {
+    mf 'model_fallback_for nosuchprovider'
+    [ -z "$output" ]
+}
+
+# ============================================================================
+# Verdict cache — remember "unavailable" for a provider+model+key, with a TTL
+# ============================================================================
+
+@test "verdict cache: an unremembered verdict is not cached" {
+    mf 'model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -eq 1 ]
+}
+
+@test "verdict cache: a remembered verdict reads back fresh" {
+    mf 'model_unavailable_remember grok grok-4.5 abc123; model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -eq 0 ]
+}
+
+@test "verdict cache: the verdict is scoped to the model" {
+    mf 'model_unavailable_remember grok grok-4.5 abc123; model_unavailable_cached grok grok-4.3 abc123'
+    [ "$status" -eq 1 ]
+}
+
+@test "verdict cache: the verdict is scoped to the key" {
+    # A different-region key must not inherit the prior key's verdict.
+    mf 'model_unavailable_remember grok grok-4.5 abc123; model_unavailable_cached grok grok-4.5 def456'
+    [ "$status" -eq 1 ]
+}
+
+@test "verdict cache: a verdict older than the TTL is stale" {
+    mf 'model_unavailable_remember grok grok-4.5 abc123
+        COUNCIL_AVAILABILITY_TTL=0 model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -eq 1 ]
+}
+
+@test "verdict cache: a truncated entry is treated as stale, not fatal" {
+    # An unparseable timestamp must not abort the run under set -e.
+    mf 'model_unavailable_remember grok grok-4.5 abc123
+        f=$(model_verdict_file grok grok-4.5 abc123)
+        printf "garbage" > "$f"
+        model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -eq 1 ]
+}
+
+@test "verdict cache: a non-numeric timestamp is stale, and does not abort the run" {
+    mf 'model_unavailable_remember grok grok-4.5 abc123
+        f=$(model_verdict_file grok grok-4.5 abc123)
+        printf "{\"checked_at\":\"notanumber\"}" > "$f"
+        model_unavailable_cached grok grok-4.5 abc123 || true
+        echo SURVIVED'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *SURVIVED* ]]
+}
+
+@test "verdict cache: a fractional timestamp is stale, without leaking a shell arithmetic error" {
+    # Unlike a bare word (which bash treats as an unset variable and, under
+    # nounset, aborts the whole run), a fractional literal fails bash's
+    # arithmetic parser instead: "invalid arithmetic operator". That parse
+    # error does not abort the run, but without the guard it still aborts the
+    # function before the TTL check runs, and prints the parser's diagnostic.
+    # Guarded, the verdict is still correctly stale (status 1) but silently so.
+    mf 'model_unavailable_remember grok grok-4.5 abc123
+        f=$(model_verdict_file grok grok-4.5 abc123)
+        printf "{\"checked_at\":1.5}" > "$f"
+        model_unavailable_cached grok grok-4.5 abc123'
+    [ "$status" -eq 1 ]
+    # Assert the absence of any diagnostic rather than its wording: bash routes
+    # arithmetic errors through gettext, so matching the English text would stop
+    # detecting an unguarded leak under a translated locale.
+    [ -z "$output" ]
+}
+
+@test "model_fallback_key_hash: scopes to the provider's key, not its name" {
+    mf 'GROK_API_KEY=one; a=$(model_fallback_key_hash grok)
+        GROK_API_KEY=two; b=$(model_fallback_key_hash grok)
+        [[ "$a" != "$b" ]]'
+    [ "$status" -eq 0 ]
+}
+
+# ============================================================================
+# Real API — skipped unless a key is present
+# ============================================================================
+
+# grok-4.5 is genuinely HTTP 403 in the EU today, so this is the one test in
+# the suite that exercises the whole path with no mocks: real 403 from xAI,
+# real classification, real fallback retry, real answer. It earns its keep by
+# catching a regression the classifier fixtures cannot — e.g. xAI changing its
+# error shape in a way that still satisfies the captured-body tests above but
+# breaks against the live API.
+@test "real xAI: grok-4.5 is classified and answered by the fallback model" {
+    [[ -n "${XAI_API_KEY:-}${GROK_API_KEY:-}" ]] || skip "no xAI key present"
+    run --separate-stderr env COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" COUNCIL_MAX_TOKENS=256 \
+        bash "${SCRIPTS_DIR}/query-council.sh" \
+        --providers=grok --no-pane --no-auto-context --no-cache "Reply with exactly the word: OK"
+    [ "$status" -eq 0 ]
+    # Either grok-4.5 rolled out here (then no fallback), or it did not and the
+    # fallback answered. Both are correct; a hard error is not. The assertion
+    # must not fail merely because grok-4.5 started working after the EU rollout.
+    local model
+    model=$(jq -r '.round1.grok.model' <<<"$output")
+    [[ "$model" == "grok-4.5" || "$model" == "grok-4.20-reasoning" ]]
+    [ "$(jq -r '.round1.grok.status' <<<"$output")" = "success" ]
+    if [[ "$model" == "grok-4.20-reasoning" ]]; then
+        [ "$(jq -r '.round1.grok.model_fallback' <<<"$output")" = "grok-4.5" ]
+    fi
+}

@@ -233,3 +233,117 @@ run_council() {
     [[ "$r2" == *"You are GEMINI."* ]]
     [[ "$r2" == *"[GEMINI'S RESPONSE]"* ]]
 }
+
+# ============================================================================
+# run_provider_with_model_fallback
+# ============================================================================
+
+# A fake provider that exits 3 for the preferred model and 0 for the fallback,
+# reading the model from the same env var the real scripts read.
+write_model_aware_stub() {
+    local name="$1" preferred="$2"
+    cat > "$STUB_DIR/${name}.sh" <<EOF
+#!/bin/bash
+model="\${$(echo "$name" | tr '[:lower:]' '[:upper:]')_MODEL:-${preferred}}"
+echo "\$model" >> "${CALLS_LOG}"
+if [[ "\$model" == "${preferred}" ]]; then
+    echo "Error from ${name}: model unavailable" >&2
+    exit 3
+fi
+printf 'ANSWER-FROM-%s\n' "\$model"
+EOF
+    chmod +x "$STUB_DIR/${name}.sh"
+}
+
+# The wrapper is exercised through the real query-council.sh rather than sourced
+# in isolation: it depends on TEMP_DIR, PROVIDERS_DIR and the pane globals that
+# the script sets up, and driving the script proves the whole path.
+
+@test "wrapper: exit 3 on the preferred model retries with the fallback" {
+    export GROK_API_KEY=k
+    write_model_aware_stub grok grok-4.5
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.model' 'grok-4.20-reasoning'
+    assert_json_eq "$output" '.round1.grok.model_fallback' 'grok-4.5'
+    [[ "$stderr" == *"grok-4.5 unavailable"* ]]
+}
+
+@test "wrapper: the preferred model is tried first, then the fallback" {
+    export GROK_API_KEY=k
+    write_model_aware_stub grok grok-4.5
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
+    [ "$status" -eq 0 ]
+    [ "$(sed -n 1p "$CALLS_LOG")" = "grok-4.5" ]
+    [ "$(sed -n 2p "$CALLS_LOG")" = "grok-4.20-reasoning" ]
+}
+
+@test "wrapper: a cached verdict skips the known-bad preferred model" {
+    export GROK_API_KEY=k
+    write_model_aware_stub grok grok-4.5
+    # First run discovers and remembers the verdict.
+    env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1
+    : > "$CALLS_LOG"
+    # Second run must go straight to the fallback: exactly one invocation.
+    env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1
+    [ "$(grep -c . "$CALLS_LOG")" -eq 1 ]
+    [ "$(sed -n 1p "$CALLS_LOG")" = "grok-4.20-reasoning" ]
+}
+
+@test "wrapper: an explicit GROK_MODEL override never falls back" {
+    export GROK_API_KEY=k GROK_MODEL=grok-4.5
+    write_model_aware_stub grok grok-4.5
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
+    # The stub exits 3; with an override there is no fallback, so it is an error.
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ "$(grep -c . "$CALLS_LOG")" -eq 1 ]
+}
+
+@test "wrapper: when the fallback also fails, no verdict is remembered" {
+    export GROK_API_KEY=k
+    # Both models fail: an account-level block, not a model-level one.
+    cat > "$STUB_DIR/grok.sh" <<'EOF'
+#!/bin/bash
+echo "Error from grok: model unavailable" >&2
+exit 3
+EOF
+    chmod +x "$STUB_DIR/grok.sh"
+    env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1 || true
+    # A poisoned verdict would silently downgrade grok for a day.
+    [ ! -d "${TEST_CACHE_DIR}/model-verdicts" ] || [ -z "$(ls -A "${TEST_CACHE_DIR}/model-verdicts")" ]
+}
+
+@test "round2: the rebuttal slot carries the fallback model and the displaced one" {
+    export GROK_API_KEY=k
+    write_model_aware_stub grok grok-4.5
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=grok --debate --no-pane --no-auto-context --no-cache "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round2.grok.model' 'grok-4.20-reasoning'
+    assert_json_eq "$output" '.round2.grok.model_fallback' 'grok-4.5'
+}
+
+@test "sibling: a CLI provider's API sibling reports its own model fallback" {
+    # codex is unusable; its sibling openai answers, and openai's preferred model
+    # is itself unavailable, so the slot must name both fallbacks.
+    export OPENAI_API_KEY=k
+    write_model_aware_stub openai gpt-5.6-sol
+    cat > "$STUB_DIR/codex.sh" <<'EOF'
+#!/bin/bash
+echo "codex is broken" >&2
+exit 1
+EOF
+    chmod +x "$STUB_DIR/codex.sh"
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=codex --no-pane --no-auto-context --no-cache "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.codex.fallback' 'openai'
+    assert_json_eq "$output" '.round1.codex.model' 'gpt-5.5-pro'
+    assert_json_eq "$output" '.round1.codex.model_fallback' 'gpt-5.6-sol'
+}

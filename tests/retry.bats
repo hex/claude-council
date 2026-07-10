@@ -136,3 +136,51 @@ run_retry() {
     [ "$body" = "hello world" ]
     [ "$(cat "$COUNT_FILE")" -eq 1 ]
 }
+
+# ============================================================================
+# ensure_error_body — status stamping and vendor body shapes
+# ============================================================================
+
+ensure_body() {
+    run env bash -c "
+        set -euo pipefail
+        source '${RETRY_LIB}'
+        printf '%s' '$2' | ensure_error_body '$1'
+    "
+}
+
+@test "ensure_error_body: stamps http_status on an object-.error body" {
+    ensure_body 404 '{"error":{"message":"nope","code":"model_not_found"}}'
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.http_status' <<<"$output")" = "404" ]
+    [ "$(jq -r '.error.message' <<<"$output")" = "nope" ]
+}
+
+@test "ensure_error_body: a string .error survives as the message" {
+    ensure_body 403 '{"code":"permission-denied","error":"The model grok-4.5 is not available in your region."}'
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.http_status' <<<"$output")" = "403" ]
+    [ "$(jq -r '.error' <<<"$output")" = "The model grok-4.5 is not available in your region." ]
+}
+
+@test "ensure_error_body: does not clobber Gemini's string .error.status" {
+    ensure_body 404 '{"error":{"code":404,"message":"not found","status":"NOT_FOUND"}}'
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.error.status' <<<"$output")" = "NOT_FOUND" ]
+    [ "$(jq -r '.http_status' <<<"$output")" = "404" ]
+}
+
+@test "ensure_error_body: a body with no usable message is synthesised and stamped" {
+    ensure_body 500 'not json at all'
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.error.message' <<<"$output")" = "HTTP 500" ]
+    [ "$(jq -r '.error.raw' <<<"$output")" = "not json at all" ]
+    [ "$(jq -r '.http_status' <<<"$output")" = "500" ]
+}
+
+@test "ensure_error_body: a 200 body is passed through untouched" {
+    ensure_body 200 '{"choices":[{"message":{"content":"hi"}}]}'
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.http_status // "absent"' <<<"$output")" = "absent" ]
+    [ "$(jq -r '.choices[0].message.content' <<<"$output")" = "hi" ]
+}
