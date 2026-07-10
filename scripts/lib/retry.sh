@@ -42,16 +42,27 @@ retry_error_body() {
 }
 
 # Given the final HTTP code and response body (on stdin), pass the body through
-# unless it is a >=400 status with no usable .error.message — in which case
-# synthesise one carrying the HTTP code, keeping the raw body for detail.
+# unless it is a >=400 status with no usable message — in which case synthesise
+# one carrying the HTTP code, keeping the raw body for detail. Every >=400 body
+# gains a top-level .http_status so callers can classify the failure.
 ensure_error_body() {
     local code="$1" body
     body=$(cat)
     if [[ "$code" =~ ^[0-9]+$ ]] && (( code >= 400 )); then
-        if ! printf '%s' "$body" | jq -e '(.error.message // .error) | select(. != null and . != "")' >/dev/null 2>&1; then
-            jq -n --arg m "HTTP $code" --arg raw "$body" '{error: {message: $m, raw: $raw}}'
-            return
+        # `.error.message` on a string `.error` (xAI) raises a jq error rather
+        # than yielding null, and `//` does not catch an error — so branch on
+        # the type before indexing.
+        if ! printf '%s' "$body" | jq -e '
+            type == "object" and
+            ((if (.error | type) == "object" then .error.message
+              elif (.error | type) == "string" then .error
+              else null end) | . != null and . != "")' >/dev/null 2>&1; then
+            body=$(jq -n --arg m "HTTP $code" --arg raw "$body" '{error: {message: $m, raw: $raw}}')
         fi
+        # Stamped at the top level, never under .error: .error is a bare string
+        # for xAI, and Gemini's own .error.status is a string like "NOT_FOUND".
+        printf '%s' "$body" | jq --argjson c "$code" '. + {http_status: $c}'
+        return
     fi
     printf '%s' "$body"
 }
