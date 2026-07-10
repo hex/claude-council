@@ -132,3 +132,40 @@ curl_with_retry() {
     printf '%s' "$response" | ensure_error_body "$http_code"
     return 0
 }
+
+# True (exit 0) if a provider error body says the requested model is unavailable
+# for this key or region — the one failure a different model can fix. Auth (401),
+# rate limits (429) and 5xx are excluded: retrying them on another model wastes a
+# call and hides the real problem.
+#
+# Reads the top-level .http_status stamped by ensure_error_body. Bodies
+# synthesised by retry_error_body (timeout, network) carry no status, so a
+# transient failure never downgrades a model.
+is_model_unavailable_error() {
+    local body="$1" code msg
+    code=$(jq -r 'if type == "object" then (.http_status // empty) else empty end' <<<"$body" 2>/dev/null) || return 1
+    [[ -n "$code" ]] || return 1
+
+    case "$code" in
+        # The model is absent, or this key cannot reach it.
+        403|404) return 0 ;;
+        # A 400 is ambiguous — it covers both "no such model" and ordinary bad
+        # parameters — so only a message naming the model qualifies.
+        400) ;;
+        *) return 1 ;;
+    esac
+
+    # .error is an object for OpenAI/Gemini/Perplexity and a bare string for xAI.
+    msg=$(jq -r '
+        (if (.error | type) == "object" then (.error.message // "")
+         elif (.error | type) == "string" then .error
+         else "" end) | ascii_downcase' <<<"$body" 2>/dev/null) || return 1
+
+    # Deliberately not matching "not supported": OpenAI's 400 for an unsupported
+    # reasoning effort reads "'low' is not supported with the 'gpt-5.5-pro' model".
+    case "$msg" in
+        *"model not found"*|*"model_not_found"*|*"invalid model"*|\
+        *"does not exist"*|*"no access to model"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
