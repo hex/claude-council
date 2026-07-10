@@ -413,7 +413,7 @@ run_provider_with_model_fallback() {
 # the original CLI error). Shared by round 1 (query_provider) and round 2.
 attempt_api_fallback() {
     local provider="$1" prompt="$2"
-    local sibling sibling_script sibling_model key cached p
+    local sibling sibling_script key cached p
     sibling=$(api_sibling "$provider")
     [[ -n "$sibling" ]] && api_key_present "$sibling" || return 0
     # Don't shadow-fall-back to a provider the user already selected — it
@@ -422,7 +422,23 @@ attempt_api_fallback() {
     for p in ${PROVIDERS[@]+"${PROVIDERS[@]}"}; do
         [[ "$p" == "$sibling" ]] && return 0
     done
-    sibling_model=$(get_model "$sibling")
+    # Resolve the sibling's effective model before its answer cache is read:
+    # this cache is separate from query_provider's, and keying it by the
+    # preferred model would mislabel a cached repeat and drop its notification.
+    local sibling_preferred sibling_fallback sibling_model sibling_mf="" sib_override
+    sibling_preferred=$(get_model "$sibling")
+    sibling_model="$sibling_preferred"
+    sibling_fallback=$(model_fallback_for "$sibling")
+    sib_override="$(echo "$sibling" | tr '[:lower:]' '[:upper:]')_MODEL"
+    if [[ -z "${!sib_override:-}" && -n "$sibling_fallback" ]]; then
+        local sib_keyhash
+        sib_keyhash=$(model_fallback_key_hash "$sibling")
+        if model_unavailable_cached "$sibling" "$sibling_preferred" "$sib_keyhash"; then
+            sibling_model="$sibling_fallback"
+            sibling_mf="$sibling_preferred"
+        fi
+    fi
+
     # Reuse a cached sibling answer instead of re-hitting the paid API on a
     # repeat run; the sibling script bypasses query_provider's own cache check.
     local resp
@@ -437,14 +453,19 @@ attempt_api_fallback() {
         if [[ -n "${IMAGE_B64_FILE:-}" ]] && provider_vision_capable "$sibling"; then
             sib_img="$IMAGE_B64_FILE"; sib_mime="$IMAGE_MIME"
         fi
-        if [[ -x "$sibling_script" ]] && resp=$(run_provider_script "$sibling_script" "$prompt" "$sib_img" "$sib_mime"); then
-            [[ "$USE_CACHE" == true ]] && cache_set "$key" "$sibling" "$sibling_model" "$prompt" "$resp"
-        else
-            return 0
-        fi
+        [[ -x "$sibling_script" ]] || return 0
+        local sib_envelope sib_rc=0
+        sib_envelope=$(run_provider_with_model_fallback "$sibling" "$sibling_script" "$prompt" "$sib_img" "$sib_mime") || sib_rc=$?
+        [[ $sib_rc -eq 0 ]] || return 0
+        resp=$(jq -r '.response' <<<"$sib_envelope")
+        sibling_model=$(jq -r '.model' <<<"$sib_envelope")
+        sibling_mf=$(jq -r '.model_fallback // empty' <<<"$sib_envelope")
+        [[ "$USE_CACHE" == true ]] && cache_set "$(cache_key "$sibling" "$sibling_model" "$prompt")" \
+            "$sibling" "$sibling_model" "$prompt" "$resp"
     fi
-    printf '%s' "$resp" | jq -Rs --arg m "$sibling_model" --arg s "$sibling" \
-        '{response: ., model: $m, fallback: $s}'
+    printf '%s' "$resp" | jq -Rs --arg m "$sibling_model" --arg s "$sibling" --arg mf "$sibling_mf" \
+        '{response: ., model: $m, fallback: $s,
+          model_fallback: (if $mf == "" then null else $mf end)}'
 }
 
 # Compose a success slot from an attempt_api_fallback object ({response, model,
@@ -808,14 +829,18 @@ if [[ "$DEBATE_MODE" == true ]]; then
 
             if [[ ! -x "$script" ]]; then
                 echo '{"status": "error", "error": "Script not found"}' > "$output_file"
-            elif response=$(run_provider_script "$script" "$debate_prompt"); then
-                printf '%s' "$response" | jq -Rs '{status: "success", response: .}' > "$output_file"
             else
-                fb_json=$(attempt_api_fallback "$provider" "$debate_prompt")
-                if [[ -n "$fb_json" ]]; then
-                    fallback_slot_json "$fb_json" "" > "$output_file"
+                envelope=$(run_provider_with_model_fallback "$provider" "$script" "$debate_prompt") && r2_rc=0 || r2_rc=$?
+                if [[ ${r2_rc:-0} -eq 0 ]]; then
+                    jq -n --argjson e "$envelope" \
+                        '{status: "success", response: $e.response, model: $e.model, model_fallback: $e.model_fallback}' > "$output_file"
                 else
-                    printf '%s' "$response" | jq -Rs '{status: "error", error: .}' > "$output_file"
+                    fb_json=$(attempt_api_fallback "$provider" "$debate_prompt")
+                    if [[ -n "$fb_json" ]]; then
+                        fallback_slot_json "$fb_json" "" > "$output_file"
+                    else
+                        printf '%s' "$envelope" | jq -Rs '{status: "error", error: .}' > "$output_file"
+                    fi
                 fi
             fi
         ) &

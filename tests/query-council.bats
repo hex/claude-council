@@ -318,3 +318,32 @@ EOF
     # A poisoned verdict would silently downgrade grok for a day.
     [ ! -d "${TEST_CACHE_DIR}/model-verdicts" ] || [ -z "$(ls -A "${TEST_CACHE_DIR}/model-verdicts")" ]
 }
+
+@test "round2: the rebuttal slot carries the fallback model and the displaced one" {
+    export GROK_API_KEY=k
+    write_model_aware_stub grok grok-4.5
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=grok --debate --no-pane --no-auto-context --no-cache "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round2.grok.model' 'grok-4.20-reasoning'
+    assert_json_eq "$output" '.round2.grok.model_fallback' 'grok-4.5'
+}
+
+@test "sibling: a CLI provider's API sibling reports its own model fallback" {
+    # codex is unusable; its sibling openai answers, and openai's preferred model
+    # is itself unavailable, so the slot must name both fallbacks.
+    export OPENAI_API_KEY=k
+    write_model_aware_stub openai gpt-5.6-sol
+    cat > "$STUB_DIR/codex.sh" <<'EOF'
+#!/bin/bash
+echo "codex is broken" >&2
+exit 1
+EOF
+    chmod +x "$STUB_DIR/codex.sh"
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
+        bash "$SCRIPT" --providers=codex --no-pane --no-auto-context --no-cache "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.codex.fallback' 'openai'
+    assert_json_eq "$output" '.round1.codex.model' 'gpt-5.5-pro'
+    assert_json_eq "$output" '.round1.codex.model_fallback' 'gpt-5.6-sol'
+}
