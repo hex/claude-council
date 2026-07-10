@@ -101,3 +101,37 @@ classify() {
     classify 400 '{"error":"Invalid request: temperature must be between 0 and 2"}'
     [ "$status" -ne 0 ]
 }
+
+# ============================================================================
+# model_fallback_for — the preferred→fallback map
+# ============================================================================
+
+MF_LIB="${LIB_DIR}/model_fallback.sh"
+
+mf() {
+    run env bash -c "set -euo pipefail; source '${MF_LIB}'; $*"
+}
+
+@test "model_fallback_for: each API provider has its verified fallback" {
+    mf 'model_fallback_for openai'
+    [ "$output" = "gpt-5.5-pro" ]
+    mf 'model_fallback_for grok'
+    [ "$output" = "grok-4.20-reasoning" ]
+    mf 'model_fallback_for perplexity'
+    [ "$output" = "sonar-pro" ]
+    mf 'model_fallback_for gemini'
+    [ "$output" = "gemini-pro-latest" ]
+}
+
+@test "model_fallback_for: a CLI provider has no fallback of its own" {
+    # codex/antigravity degrade to their API sibling, which then gets model fallback.
+    mf 'model_fallback_for codex'
+    [ -z "$output" ]
+    mf 'model_fallback_for antigravity'
+    [ -z "$output" ]
+}
+
+@test "model_fallback_for: an unknown provider has no fallback" {
+    mf 'model_fallback_for nosuchprovider'
+    [ -z "$output" ]
+}
