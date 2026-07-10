@@ -121,9 +121,12 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
     fi
 
     # Extract text from v1/responses format
-    # Find the message output (skip reasoning outputs) and get the text
+    # Find the message output (skip reasoning outputs) and get the text.
+    # .output[]? tolerates an error body, which carries no .output field —
+    # without it jq raises on null and the script would exit 5, not the
+    # error handling below.
     TEXT=$(echo "$RESPONSE" | jq -r '
-        [.output[] | select(.type == "message") | .content[0].text] | first // empty
+        [.output[]? | select(.type == "message") | .content[0].text] | first // empty
     ')
 else
     # Use v1/chat/completions API
@@ -184,6 +187,7 @@ if [[ -z "$TEXT" ]]; then
     else
         echo "Error from OpenAI: $ERROR" >&2
     fi
+    is_model_unavailable_error "$RESPONSE" && exit 3
     exit 1
 fi
 

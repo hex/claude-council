@@ -109,8 +109,11 @@ RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
 TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
 
 if [[ -z "$TEXT" ]]; then
-    ERROR=$(echo "$RESPONSE" | jq -r '.error.message // "Unknown error"')
+    ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // "") elif (.error | type) == "string" then .error else "" end) | select(. != "") // "Unknown error"')
     echo "Error from Grok: $ERROR" >&2
+    # Exit 3 tells query-council.sh this model is unavailable for this key or
+    # region, and that the fallback model is worth trying.
+    is_model_unavailable_error "$RESPONSE" && exit 3
     exit 1
 fi
 

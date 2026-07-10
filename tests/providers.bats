@@ -243,3 +243,43 @@ run_provider() {
     ! provider_vision_capable codex
     ! provider_vision_capable antigravity
 }
+
+# ---- model-unavailable signalling: exit 3, not exit 1 ----
+
+@test "grok: a 403 region block exits 3" {
+    # Real xAI shape: .error is a bare string, .code sits at the top level.
+    FAKE_BODY='{"code":"permission-denied","error":"The model grok-4.5 is not available in your region."}' FAKE_HTTP=403
+    run_provider grok.sh "hi" XAI_API_KEY=k
+    [ "$status" -eq 3 ]
+    [[ "$stderr" == *"not available in your region"* ]]
+}
+
+@test "grok: a 401 bad key still exits 1" {
+    FAKE_BODY='{"code":"unauthenticated","error":"Incorrect API key provided."}' FAKE_HTTP=401
+    run_provider grok.sh "hi" XAI_API_KEY=k
+    [ "$status" -eq 1 ]
+}
+
+@test "openai: a 404 model_not_found exits 3" {
+    FAKE_BODY='{"error":{"message":"The model does not exist or you do not have access to it.","code":"model_not_found"}}' FAKE_HTTP=404
+    run_provider openai.sh "hi" OPENAI_API_KEY=k
+    [ "$status" -eq 3 ]
+}
+
+@test "gemini: a 404 NOT_FOUND exits 3" {
+    FAKE_BODY='{"error":{"code":404,"message":"models/x is not found for API version v1beta.","status":"NOT_FOUND"}}' FAKE_HTTP=404
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k
+    [ "$status" -eq 3 ]
+}
+
+@test "perplexity: a 400 invalid model exits 3" {
+    FAKE_BODY='{"error":{"message":"Invalid model '\''x'\''.","type":"invalid_model","code":400}}' FAKE_HTTP=400
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k
+    [ "$status" -eq 3 ]
+}
+
+@test "perplexity: a 500 server error still exits 1" {
+    FAKE_BODY='{"error":{"message":"Internal server error."}}' FAKE_HTTP=500
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k COUNCIL_MAX_RETRIES=0
+    [ "$status" -eq 1 ]
+}
