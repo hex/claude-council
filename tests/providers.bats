@@ -283,3 +283,20 @@ run_provider() {
     run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k COUNCIL_MAX_RETRIES=0
     [ "$status" -eq 1 ]
 }
+
+@test "openai: a bare-string .error on a 502 does not crash the extractor" {
+    # A gateway/proxy body can carry .error as a bare string rather than an
+    # object; .error.message on a string raises a jq error that // cannot
+    # catch, and that would abort the script before is_model_unavailable_error runs.
+    FAKE_BODY='{"error":"upstream gateway error"}' FAKE_HTTP=502
+    run_provider openai.sh "hi" OPENAI_API_KEY=k COUNCIL_MAX_RETRIES=0
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"upstream gateway error"* ]]
+}
+
+@test "perplexity: a bare-string .error on a 502 does not crash the extractor" {
+    FAKE_BODY='{"error":"upstream gateway error"}' FAKE_HTTP=502
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k COUNCIL_MAX_RETRIES=0
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"upstream gateway error"* ]]
+}

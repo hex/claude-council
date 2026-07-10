@@ -179,7 +179,7 @@ fi
 
 if [[ -z "$TEXT" ]]; then
     # Try multiple error paths
-    ERROR=$(echo "$RESPONSE" | jq -r '.error.message // .error // empty')
+    ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // .error.code // "") elif (.error | type) == "string" then .error else "" end) | select(. != "")')
     if [[ -z "$ERROR" ]]; then
         # Show raw response for debugging
         echo "Error from OpenAI: Unable to parse response" >&2
