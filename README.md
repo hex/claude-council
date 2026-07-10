@@ -31,7 +31,7 @@ You get side-by-side responses from each configured provider:
    UUIDv7 specifically: security of non-guessable IDs plus the index
    locality of time-ordered sequences.
 
-🟥 Grok - grok-4.20-reasoning
+🟥 Grok - grok-4.5
    BIGINT autoincrement — smaller index, faster joins. Handle public-
    exposure concerns with a separate UUID slug column.
 
@@ -467,8 +467,8 @@ Override default models via environment variables:
 
 ```bash
 export GEMINI_MODEL="gemini-3.1-pro-preview"       # default
-export OPENAI_MODEL="gpt-5.5-pro"                   # default
-export GROK_MODEL="grok-4.20-reasoning"             # default
+export OPENAI_MODEL="gpt-5.6-sol"                   # default
+export GROK_MODEL="grok-4.5"                        # default
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
 ```
 
@@ -493,8 +493,8 @@ The bump applies to:
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
 | Standard (gpt-5.1) | 2048 (default) | 2048 |
-| Reasoning (gpt-5.5-pro) | 2048 (default) | 32768 |
-| Reasoning (gpt-5.5-pro) | 4096 | 32768 |
+| Reasoning (gpt-5.6-sol) | 2048 (default) | 32768 |
+| Reasoning (gpt-5.6-sol) | 4096 | 32768 |
 
 Control reasoning effort to balance speed vs thoroughness:
 

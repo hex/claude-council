@@ -53,8 +53,8 @@ MD
 for p in gemini openai grok perplexity; do
     case "$p" in
         gemini)     m="gemini-3.1-pro-preview" ;;
-        openai)     m="gpt-5.5-pro" ;;
-        grok)       m="grok-4.20-reasoning" ;;
+        openai)     m="gpt-5.6-sol" ;;
+        grok)       m="grok-4.5" ;;
         perplexity) m="sonar-reasoning-pro" ;;
     esac
     pane_status_event "$PANE" "$p" querying "" "$m"
@@ -64,8 +64,8 @@ done
 model_for() {
     case "$1" in
         gemini)     echo "gemini-3.1-pro-preview" ;;
-        openai)     echo "gpt-5.5-pro" ;;
-        grok)       echo "grok-4.20-reasoning" ;;
+        openai)     echo "gpt-5.6-sol" ;;
+        grok)       echo "grok-4.5" ;;
         perplexity) echo "sonar-reasoning-pro" ;;
     esac
 }
