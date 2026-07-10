@@ -28,6 +28,7 @@ now_ms() {
 }
 
 source "${SCRIPT_DIR}/lib/providers.sh"
+source "${SCRIPT_DIR}/lib/model_fallback.sh"
 
 usage() {
     cat >&2 << 'EOF'
@@ -333,6 +334,79 @@ run_provider_script() {
     return $rc
 }
 
+# One-line stderr notice, so a headless run — no pane, no rendered header —
+# still says why a different model answered.
+model_fallback_notice() {
+    echo "note: $2 unavailable for $1 (key/region) — answered with $3" >&2
+}
+
+# Run a provider, degrading to its fallback model when the preferred model is
+# unavailable for this key or region.
+#
+# Stdout on success (exit 0): {response, model, model_fallback}
+#   model          — the model that actually answered
+#   model_fallback — the displaced preferred model, or null
+# On failure: the provider's error text on stdout and a non-zero exit, matching
+# run_provider_script's contract, so the caller's existing error / CLI→API path
+# is unchanged.
+# Args: provider script prompt [image_file] [image_mime]
+run_provider_with_model_fallback() {
+    local provider="$1" script="$2" prompt="$3" img="${4:-}" mime="${5:-}"
+    local upper override_var preferred fallback keyhash resp rc=0
+
+    upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+    override_var="${upper}_MODEL"
+    preferred=$(get_model "$provider")
+    fallback=$(model_fallback_for "$provider")
+
+    # An explicit override is respected verbatim, and a provider with no
+    # configured fallback has nothing to degrade to: one plain attempt.
+    if [[ -n "${!override_var:-}" || -z "$fallback" ]]; then
+        resp=$(run_provider_script "$script" "$prompt" "$img" "$mime") || rc=$?
+        [[ $rc -eq 0 ]] || { printf '%s' "$resp"; return "$rc"; }
+        printf '%s' "$resp" | jq -Rs --arg m "$preferred" '{response: ., model: $m, model_fallback: null}'
+        return 0
+    fi
+
+    keyhash=$(model_fallback_key_hash "$provider")
+
+    # A fresh verdict means the preferred model is known-bad for this key: go
+    # straight to the fallback rather than spend a call that would fail again.
+    if model_unavailable_cached "$provider" "$preferred" "$keyhash"; then
+        model_fallback_notice "$provider" "$preferred" "$fallback"
+        resp=$(export "${override_var}=${fallback}"; run_provider_script "$script" "$prompt" "$img" "$mime") || rc=$?
+        [[ $rc -eq 0 ]] || { printf '%s' "$resp"; return "$rc"; }
+        printf '%s' "$resp" | jq -Rs --arg m "$fallback" --arg p "$preferred" \
+            '{response: ., model: $m, model_fallback: $p}'
+        return 0
+    fi
+
+    resp=$(run_provider_script "$script" "$prompt" "$img" "$mime") || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        printf '%s' "$resp" | jq -Rs --arg m "$preferred" '{response: ., model: $m, model_fallback: null}'
+        return 0
+    fi
+    # Exit 3 is the providers' "this model is unavailable" signal. Any other
+    # failure — bad key, rate limit, 5xx — is not one a different model fixes.
+    if [[ $rc -ne 3 ]]; then
+        printf '%s' "$resp"
+        return "$rc"
+    fi
+
+    model_fallback_notice "$provider" "$preferred" "$fallback"
+    local fb_resp fb_rc=0
+    fb_resp=$(export "${override_var}=${fallback}"; run_provider_script "$script" "$prompt" "$img" "$mime") || fb_rc=$?
+    if [[ $fb_rc -ne 0 ]]; then
+        # The fallback failed too, so this is account-level, not model-level.
+        # Remembering it would downgrade this provider for a whole TTL.
+        printf '%s' "$fb_resp"
+        return "$fb_rc"
+    fi
+    model_unavailable_remember "$provider" "$preferred" "$keyhash"
+    printf '%s' "$fb_resp" | jq -Rs --arg m "$fallback" --arg p "$preferred" \
+        '{response: ., model: $m, model_fallback: $p}'
+}
+
 # On a CLI provider failure, attempt its API-sibling fallback. Echoes a JSON
 # object {response, model, fallback} when the sibling exists, its key is set,
 # and the sibling script succeeds; echoes nothing otherwise (caller then keeps
@@ -418,8 +492,22 @@ query_provider() {
     local output_file="$3"
     local role="${4:-}"
     local script="${PROVIDERS_DIR}/${provider}.sh"
-    local model
-    model=$(get_model "$provider")
+    local preferred fallback keyhash override_var
+    local model model_fallback=""
+    preferred=$(get_model "$provider")
+    model="$preferred"
+    fallback=$(model_fallback_for "$provider")
+    override_var="$(echo "$provider" | tr '[:lower:]' '[:upper:]')_MODEL"
+    # A known-bad preferred model must be resolved BEFORE the answer cache is
+    # read: the cache is keyed by model, and a cached fallback answer lives under
+    # the fallback's key. Resolving late would miss it and re-call the API.
+    if [[ -z "${!override_var:-}" && -n "$fallback" ]]; then
+        keyhash=$(model_fallback_key_hash "$provider")
+        if model_unavailable_cached "$provider" "$preferred" "$keyhash"; then
+            model="$fallback"
+            model_fallback="$preferred"
+        fi
+    fi
 
     # Build the final prompt (with role injection if specified)
     local final_prompt
@@ -474,8 +562,14 @@ query_provider() {
         local cached_response
         cached_response=$(cache_get "$key")
         if [[ -n "$cached_response" ]]; then
+            # A cached repeat must render exactly like the fresh answer did, or
+            # the fallback notification silently disappears on the second run.
             printf '%s' "$cached_response" | jq -Rs --arg role "$role" \
-                '{status: "success", response: ., cached: true, role: (if $role == "" then null else $role end)}' > "$output_file"
+                --arg m "$model" --arg mf "$model_fallback" \
+                '{status: "success", response: ., cached: true,
+                  role: (if $role == "" then null else $role end),
+                  model: $m,
+                  model_fallback: (if $mf == "" then null else $mf end)}' > "$output_file"
             if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
                 pane_status_event "$COUNCIL_PANE_DIR" "$provider" cached "" "$model"
                 pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$cached_response"
@@ -485,16 +579,27 @@ query_provider() {
     fi
 
     # Query provider with role-injected prompt
-    if response=$(run_provider_script "$script" "$final_prompt" "$img_file" "$img_mime"); then
+    local envelope rc=0
+    envelope=$(run_provider_with_model_fallback "$provider" "$script" "$final_prompt" "$img_file" "$img_mime") || rc=$?
+    if [[ $rc -eq 0 ]]; then
         local elapsed=$(( $(now_ms) - start_ms ))
+        # The envelope is authoritative: on a fresh discovery the wrapper fell
+        # back at query time, and only it knows which model actually answered.
+        response=$(jq -r '.response' <<<"$envelope")
+        model=$(jq -r '.model' <<<"$envelope")
+        model_fallback=$(jq -r '.model_fallback // empty' <<<"$envelope")
         response="${image_note}${response}"
         printf '%s' "$response" | jq -Rs --arg role "$role" \
-            '{status: "success", response: ., cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
+            --arg m "$model" --arg mf "$model_fallback" \
+            '{status: "success", response: ., cached: false,
+              role: (if $role == "" then null else $role end),
+              model: $m,
+              model_fallback: (if $mf == "" then null else $mf end)}' > "$output_file"
         if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
             pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed" "$model"
             pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$response"
         fi
-        # Store in cache on success
+        # Cache under the model that answered, so the repeat run reads its own key.
         if [[ "$USE_CACHE" == true ]]; then
             local key
             key=$(cache_key "$provider" "$model" "$final_prompt")
@@ -502,7 +607,7 @@ query_provider() {
         fi
     else
         finish_with_fallback_or_error "$provider" "$final_prompt" "$output_file" \
-            "$role" "$response" "$start_ms"
+            "$role" "$envelope" "$start_ms"
     fi
 }
 
