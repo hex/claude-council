@@ -27,6 +27,7 @@ Each provider is a shell script in `scripts/providers/` that:
 | OpenAI | `OPENAI_API_KEY` | gpt-5.5-pro |
 | Grok | `XAI_API_KEY` (or `GROK_API_KEY`) | grok-4.20-reasoning |
 | Perplexity | `PERPLEXITY_API_KEY` | sonar-reasoning-pro |
+| Anthropic | `ANTHROPIC_API_KEY` | claude-opus-4-7 |
 
 ## Troubleshooting
 

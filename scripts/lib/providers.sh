@@ -108,6 +108,10 @@ get_model() {
         openai)     echo "${OPENAI_MODEL:-gpt-5.6-sol}" ;;
         grok)       echo "${GROK_MODEL:-grok-4.5}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
+        # Model default sourced from Anthropic's public model list on 2026-07-08.
+        # Re-check against `claude --list-models` or Anthropic release notes on
+        # significant new-model launches before merging.
+        anthropic)  echo "${ANTHROPIC_MODEL:-claude-opus-4-7}" ;;
         codex)      echo "${CODEX_MODEL:-gpt-5.5}" ;;
         antigravity) echo "${ANTIGRAVITY_MODEL:-Gemini 3.5 Flash (High)}" ;;
         *)          echo "unknown" ;;
@@ -156,6 +160,7 @@ provider_color() {
         openai|codex)      echo -e "${WHITE}" ;;
         grok)              echo -e "${RED}" ;;
         perplexity)        echo -e "${GREEN}" ;;
+        anthropic)         echo -e "${YELLOW}" ;;
         *)                 echo -e "${CYAN}" ;;
     esac
 }
@@ -167,6 +172,7 @@ provider_emoji() {
         openai|codex)      echo "🔳" ;;
         grok)              echo "🟥" ;;
         perplexity)        echo "🟩" ;;
+        anthropic)         echo "🟨" ;;
         *)                 echo "⬛" ;;
     esac
 }

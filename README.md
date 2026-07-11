@@ -48,7 +48,7 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 
 ## Features
 
-- Query Gemini, OpenAI (GPT/Codex), Grok, and Perplexity simultaneously
+- Query Anthropic, Gemini, OpenAI (GPT/Codex), Grok, and Perplexity simultaneously
 - Use the `codex` and `agy` (Antigravity) CLIs (subscription auth) when installed — preferred over their API siblings
 - Side-by-side comparison of responses with vendor-colored headers
 - Streaming tmux pane that renders responses as they land

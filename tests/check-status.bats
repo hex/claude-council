@@ -41,7 +41,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     # antigravity (no auth probe) is the only available provider
-    [[ "$output" == *"1/6 providers available"* ]]
+    [[ "$output" == *"1/7 providers available"* ]]
 }
 
 @test "check-status: missing API key shows exact export remediation" {
@@ -50,6 +50,7 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"export OPENAI_API_KEY="* ]]
     [[ "$output" == *"export PERPLEXITY_API_KEY="* ]]
+    [[ "$output" == *"export ANTHROPIC_API_KEY="* ]]
 }
 
 @test "check-status: missing CLI binary shows install remediation" {
@@ -92,7 +93,7 @@ exit 0
 EOF
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
-    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k
+    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k ANTHROPIC_API_KEY=k
     export COUNCIL_FAKE_BEHAVIOR=valid
 }
 
@@ -103,7 +104,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connected"* ]]
     # 4 API providers + codex + antigravity, all healthy
-    [[ "$output" == *"6/6 providers available"* ]]
+    [[ "$output" == *"7/7 providers available"* ]]
 }
 
 @test "check-status: HTTP 401 reports auth failure with regenerate remediation" {
@@ -115,9 +116,9 @@ EOF
     [[ "$output" == *"key rejected - regenerate it"* ]]
     # Every API provider must classify 401, not just whichever one happens to be
     # first: a substring match alone cannot tell four rows from one.
-    [ "$(auth_failures "$output")" -eq 4 ]
+    [ "$(auth_failures "$output")" -eq 5 ]
     # Only the two CLI providers remain available
-    [[ "$output" == *"2/6 providers available"* ]]
+    [[ "$output" == *"2/7 providers available"* ]]
 }
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
@@ -129,7 +130,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Auth failed (HTTP 403)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
-    [ "$(auth_failures "$output")" -eq 4 ]
+    [ "$(auth_failures "$output")" -eq 5 ]
 }
 
 @test "check-status: HTTP 500 reports a generic error with the code" {
@@ -140,7 +141,7 @@ EOF
     [[ "$output" == *"Error (HTTP 500)"* ]]
     # A server-side fault is not a credentials problem
     [ "$(auth_failures "$output")" -eq 0 ]
-    [[ "$output" == *"2/6 providers available"* ]]
+    [[ "$output" == *"2/7 providers available"* ]]
 }
 
 @test "check-status: curl failure (000) reports a connection timeout" {
@@ -149,7 +150,7 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]
-    [[ "$output" == *"2/6 providers available"* ]]
+    [[ "$output" == *"2/7 providers available"* ]]
 }
 
 # Gemini and xAI answer a rejected key with 400 rather than a 401, so the status
@@ -206,7 +207,7 @@ auth_failures() {
     [ "$status" -eq 0 ]
     # All four API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -220,7 +221,7 @@ auth_failures() {
     [ "$status" -eq 0 ]
     # All four API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -234,7 +235,7 @@ auth_failures() {
     # A malformed request is not a credentials problem; do not offer to regenerate
     # All four API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -262,7 +263,8 @@ EOF
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
     export GEMINI_API_KEY=SEKRET_GEM OPENAI_API_KEY=SEKRET_OAI \
-           XAI_API_KEY=SEKRET_GROK PERPLEXITY_API_KEY=SEKRET_PPX
+           XAI_API_KEY=SEKRET_GROK PERPLEXITY_API_KEY=SEKRET_PPX \
+           ANTHROPIC_API_KEY=SEKRET_ANT
     export COUNCIL_FAKE_BEHAVIOR=valid
 }
 
@@ -293,7 +295,7 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [ -s "$CS_ARGV_FILE" ]
-    [ "$(grep -cxF -- '--max-time' "$CS_ARGV_FILE" || true)" -eq 4 ]
+    [ "$(grep -cxF -- '--max-time' "$CS_ARGV_FILE" || true)" -eq 5 ]
 }
 
 # rejected_key reads the vendor's key marker with jq. Without a working jq that
@@ -318,7 +320,7 @@ EOF
     printf '#!/bin/bash\nexit 127\n' > "$dir/curl"
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
-    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k
+    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k ANTHROPIC_API_KEY=k
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]
@@ -330,9 +332,9 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [ -s "$CS_ARGV_FILE" ]
-    # OpenAI's error body echoes a redacted key and nothing reads it; Perplexity's
-    # is never read either. Only Gemini and xAI keep a body.
-    [ "$(grep -c '^/dev/null$' "$CS_ARGV_FILE" || true)" -eq 2 ]
+    # OpenAI's error body echoes a redacted key and nothing reads it; Perplexity
+    # and Anthropic never read theirs either. Only Gemini and xAI keep a body.
+    [ "$(grep -c '^/dev/null$' "$CS_ARGV_FILE" || true)" -eq 3 ]
 }
 
 # A probe body and the curl config that carries the key both live in TMPDIR for

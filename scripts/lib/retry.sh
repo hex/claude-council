@@ -24,7 +24,7 @@ curl_secret_config() {
 is_retryable_status() {
     local status="$1"
     case "$status" in
-        429|500|502|503|504) return 0 ;;  # Retryable
+        429|500|502|503|504|529) return 0 ;;  # Retryable (529 = Anthropic overloaded)
         *) return 1 ;;  # Not retryable
     esac
 }

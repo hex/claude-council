@@ -9,11 +9,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Colors (only if output is a terminal)
 if [[ -t 1 ]]; then
     RED='\033[31m'
+    YELLOW='\033[33m'
     BOLD='\033[1m'
     RESET='\033[0m'
 else
     # No colors when redirected to file
     RED=''
+    YELLOW=''
     BOLD=''
     RESET=''
 fi
