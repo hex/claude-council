@@ -4,7 +4,7 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.7.6
 
 ### Added
 
@@ -18,6 +18,13 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   CLI's own default model unless `GROK_CLI_MODEL` is set. Because it is a
   CLI, an image query routes to its `grok` API sibling when a key is present,
   and answers text-only otherwise.
+
+### Docs
+
+- Added grok-cli to provider enumerations, the configuration reference, and
+  manual test scenarios across README, ARCHITECTURE, and TESTING.
+
+## 2026.7.5
 
 ### Added
 
