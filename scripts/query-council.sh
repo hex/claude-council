@@ -197,7 +197,7 @@ if [[ "$LIST_AVAILABLE" == true ]]; then
     if [[ ${#DISCOVERED[@]} -eq 0 ]]; then
         echo "No providers configured."
         echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)"
-        echo "  or install a CLI agent (codex, agy)."
+        echo "  or install a CLI agent (codex, agy, grok)."
         exit 0
     fi
     read -ra DEFAULT_SET <<< "$(prefer_cli_over_api "${DISCOVERED[@]+"${DISCOVERED[@]}"}")"
@@ -274,7 +274,7 @@ fi
 if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
     echo "Error: No providers configured." >&2
     echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)" >&2
-    echo "  or install a CLI agent (codex, agy)." >&2
+    echo "  or install a CLI agent (codex, agy, grok)." >&2
     echo "  Or run '/claude-council:ask --local' for a local Claude-only council (same-model, no API keys)." >&2
     exit 1
 fi

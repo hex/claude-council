@@ -47,6 +47,13 @@ source_lib_and_call() {
     [[ "$output" == *"antigravity"* ]]
 }
 
+@test "discover_providers: includes grok-cli when grok binary is on PATH" {
+    if ! command_exists grok; then skip "grok CLI not installed"; fi
+    run source_lib_and_call 'discover_providers'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"grok-cli"* ]]
+}
+
 @test "discover_providers: excludes codex when binary is missing" {
     # Strip codex from PATH by running with a minimal PATH
     run bash -c "
@@ -59,6 +66,7 @@ source_lib_and_call() {
     [ "$status" -eq 0 ]
     [[ "$output" != *"codex"* ]]
     [[ "$output" != *"antigravity"* ]]
+    [[ "$output" != *"grok-cli"* ]]
 }
 
 @test "discover_providers: excludes API providers when keys unset" {
@@ -119,6 +127,15 @@ source_lib_and_call() {
     [[ ! "$output" =~ (^|[[:space:]])gemini([[:space:]]|$) ]]
 }
 
+@test "prefer_cli_over_api: drops grok when grok-cli is present" {
+    run source_lib_and_call 'prefer_cli_over_api grok-cli grok perplexity'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"grok-cli"* ]]
+    [[ "$output" == *"perplexity"* ]]
+    # bare grok must be gone, but grok-cli (which contains "grok") must remain
+    [[ ! "$output" =~ (^|[[:space:]])grok([[:space:]]|$) ]]
+}
+
 @test "prefer_cli_over_api: drops both API siblings when both CLIs present" {
     run source_lib_and_call 'prefer_cli_over_api codex antigravity openai gemini grok'
     [ "$status" -eq 0 ]
@@ -140,6 +157,12 @@ source_lib_and_call() {
     run source_lib_and_call 'shadow_origin gemini'
     [ "$status" -eq 0 ]
     [[ "$output" == "antigravity" ]]
+}
+
+@test "shadow_origin: grok is shadowed by grok-cli" {
+    run source_lib_and_call 'shadow_origin grok'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "grok-cli" ]]
 }
 
 @test "get_model: antigravity default is a Gemini Flash model" {
@@ -164,6 +187,12 @@ source_lib_and_call() {
     [[ "$output" == "gemini" ]]
 }
 
+@test "api_sibling: grok-cli falls back to grok" {
+    run source_lib_and_call 'api_sibling grok-cli'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "grok" ]]
+}
+
 @test "api_sibling: provider with no sibling yields empty" {
     run source_lib_and_call 'api_sibling grok'
     [ "$status" -eq 0 ]
@@ -176,7 +205,7 @@ source_lib_and_call() {
     run bash -c "
         export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
         source '${PROVIDERS_LIB}'
-        for api in openai gemini; do
+        for api in openai gemini grok; do
             cli=\$(shadow_origin \"\$api\")
             back=\$(api_sibling \"\$cli\")
             [[ \"\$back\" == \"\$api\" ]] || { echo \"MISMATCH \$api -> \$cli -> \$back\"; exit 1; }
@@ -494,6 +523,11 @@ EOF
     [[ "$output" != *"Unknown flag"* ]]
 }
 
+@test "query-council: --providers grok-cli flag is accepted" {
+    run bash "$SCRIPT" --providers=grok-cli "test prompt" 2>&1
+    [[ "$output" != *"Unknown flag"* ]]
+}
+
 # ============================================================================
 # End-to-end CLI provider invocation (gated — set COUNCIL_E2E=1 to run)
 # ============================================================================
@@ -521,4 +555,12 @@ EOF
     [[ "$output" == *"OK"* ]]
     # Inline answer, not an artifact pointer
     [[ "$output" != *"file:///"* ]]
+}
+
+@test "grok-cli.sh: real grok answers inline for a trivial prompt (E2E)" {
+    [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
+    if ! command_exists grok; then skip "grok CLI not installed"; fi
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "Reply with exactly the word: OK"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OK"* ]]
 }

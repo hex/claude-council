@@ -13,7 +13,7 @@ A Claude Code plugin that consults multiple AI coding agents in parallel and sho
 
 # 2. Configure at least one provider — any of these works:
 export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY
-                                    # OR install the codex / antigravity (agy) CLIs (uses your existing
+                                    # OR install the codex / antigravity (agy) / grok CLIs (uses your existing
                                     # subscription — no API key needed)
 
 # 3. Ask anything
@@ -312,7 +312,7 @@ Attach one image (e.g. a UI screenshot) so vision-capable providers can critique
 
 - Single image per query, raw size up to 10 MB, extensions: png / jpg / jpeg / webp / gif.
 - `gemini`, `openai`, `grok`, and `perplexity` receive the image alongside the prompt.
-- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini` (the slot is marked as a fallback). If the sibling is unusable (no API key) or already answering in its own slot, the CLI provider answers text-only instead.
+- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok` (the slot is marked as a fallback). If the sibling is unusable (no API key) or already answering in its own slot, the CLI provider answers text-only instead.
 
 Privacy: the image is sent to the providers that can see it, but its bytes are **not** written to cache entries or the saved `council-*.md` transcripts — only a hash of the image keys the cache.
 
@@ -399,12 +399,13 @@ export PERPLEXITY_API_KEY="your-key"
 
 ### CLI Providers (subscription auth, no API key)
 
-If `codex` or `agy` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
+If the `codex`, `agy`, or `grok` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
 
 - `codex` (OpenAI Codex CLI) shadows the `openai` API provider
 - `antigravity` (Antigravity CLI, `agy`) shadows the `gemini` API provider
+- `grok-cli` (xAI Grok CLI, `grok`) shadows the `grok` API provider — defaults to `grok-composer-2.5-fast`, override with `GROK_CLI_MODEL`
 
-CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai` or `--providers=gemini`. Listing both API and CLI together (e.g., `--providers=gemini,antigravity`) runs them side-by-side for comparison.
+CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai`, `--providers=gemini`, or `--providers=grok`. Listing both API and CLI together (e.g., `--providers=grok,grok-cli`) runs them side-by-side for comparison.
 
 If a CLI provider fails at query time and its API sibling's key is set, the council automatically retries through that API sibling and marks the slot as a fallback (the answer is shown under the CLI slot with the API model's name and a "fell back to … API" note). The fallback is skipped when the sibling is already in your selected providers, so you never get the same vendor's answer twice.
 

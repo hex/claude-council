@@ -34,6 +34,12 @@ teardown() {
     [[ "$output" == "$FAKE_BIN_DIR/agy" ]]
 }
 
+@test "fixture: fake grok shadows any real grok on PATH" {
+    run command -v grok
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$FAKE_BIN_DIR/grok" ]]
+}
+
 # ============================================================================
 # codex.sh against the fake binary
 # ============================================================================
@@ -139,6 +145,59 @@ teardown() {
 }
 
 # ============================================================================
+# grok-cli.sh against the fake binary
+# ============================================================================
+
+@test "grok-cli.sh: returns fake response on valid behavior" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"FAKE-GROK-RESPONSE"* ]]
+}
+
+@test "grok-cli.sh: sends -p prompt, plain output, model flag, and read-only sandbox" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    export GROK_CLI_MODEL="test-model-g"
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    assert_json_eq "$call" '.bin' "grok"
+    # -p carries the user question as its value
+    [[ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"the user question"* ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--output-format") as $i | .[$i+1]')" == "plain" ]]
+    [[ "$(echo "$call" | jq -r '.args | index("-m") as $i | .[$i+1]')" == "test-model-g" ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--sandbox") as $i | .[$i+1]')" == "read-only" ]]
+}
+
+@test "grok-cli.sh: pins a read-only sandbox so a permissive user config can't grant write access" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    [[ "$(echo "$call" | jq -r '.args | index("--sandbox") as $i | .[$i+1]')" == "read-only" ]]
+}
+
+@test "grok-cli.sh: a hung CLI is bounded by COUNCIL_TIMEOUT and reports a timeout" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_TIMEOUT=1
+    local start end
+    start=$SECONDS
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    end=$SECONDS
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"timed out"* ]]
+    [ $((end - start)) -lt 10 ]
+}
+
+@test "grok-cli.sh: surfaces stderr and exits 1 on error behavior" {
+    export COUNCIL_FAKE_BEHAVIOR=error
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"fake provider failure"* ]]
+}
+
+# ============================================================================
 # Discovery with fakes — replaces skip-gated coverage
 # ============================================================================
 
@@ -152,6 +211,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"codex"* ]]
     [[ "$output" == *"antigravity"* ]]
+    [[ "$output" == *"grok-cli"* ]]
 }
 
 @test "fixture: slow behavior delays the response" {

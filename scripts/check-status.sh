@@ -212,6 +212,8 @@ remediation_for() {
         codex:no_binary)      echo "npm install -g @openai/codex" ;;
         codex:unauthed)       echo "codex login" ;;
         antigravity:no_binary) echo "install the Antigravity CLI (agy)" ;;
+        grok-cli:no_binary)   echo "install the Grok CLI (grok)" ;;
+        grok-cli:unauthed)    echo "grok login" ;;
         *:auth_error)         echo "key rejected - regenerate it" ;;
         *)                    echo "" ;;
     esac
@@ -228,9 +230,11 @@ openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "gpt-5.6
 grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "grok-4.5")
 perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "sonar-reasoning-pro")
 # codex login status exits non-zero when logged out; agy has no
-# equivalent offline auth probe, so it stays a single-tier check
+# equivalent offline auth probe, so it stays a single-tier check. `grok models`
+# exits non-zero when logged out, giving grok-cli the same two-tier probe as codex.
 codex_status=$(check_cli_provider "codex" "codex" login status)
 antigravity_status=$(check_cli_provider "antigravity" "agy")
+grokcli_status=$(check_cli_provider "grok-cli" "grok" models)
 
 # Format output
 # Usage: format_status <display_name> <provider_id> <status>
@@ -295,6 +299,7 @@ format_status "Grok"       "grok"       "$grok_status"
 format_status "Perplexity" "perplexity" "$perplexity_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
 format_status "Antigravity" "antigravity" "$antigravity_status"
+format_status "Grok CLI"   "grok-cli"   "$grokcli_status"
 
 echo ""
 
@@ -307,6 +312,7 @@ available_count=0
 [[ "$perplexity_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$grokcli_status" == ok:* ]] && available_count=$((available_count + 1))
 
-echo -e "${DIM}${available_count}/6 providers available${RESET}"
+echo -e "${DIM}${available_count}/7 providers available${RESET}"
 echo ""

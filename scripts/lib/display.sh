@@ -306,7 +306,7 @@ provider_color_rgb() {
     case "$2" in
         gemini|antigravity) printf -v "$__out" '59;130;246'   ;;  # blue-500
         openai|codex)      printf -v "$__out" '100;116;139'  ;;  # slate-500
-        grok)              printf -v "$__out" '239;68;68'    ;;  # red-500
+        grok|grok-cli)     printf -v "$__out" '239;68;68'    ;;  # red-500
         perplexity)        printf -v "$__out" '22;163;74'    ;;  # green-600
         *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
     esac

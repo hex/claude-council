@@ -4,7 +4,7 @@
 
 # Discover which provider scripts are available to query.
 # API providers are gated on their <NAME>_API_KEY env var; subscription-auth
-# CLI providers (codex, antigravity) are gated on their binary being on PATH.
+# CLI providers (codex, antigravity, grok-cli) are gated on their binary being on PATH.
 discover_providers() {
     local available=()
 
@@ -20,6 +20,9 @@ discover_providers() {
                 ;;
             antigravity)
                 command -v agy >/dev/null 2>&1 && is_available=true
+                ;;
+            grok-cli)
+                command -v grok >/dev/null 2>&1 && is_available=true
                 ;;
             *)
                 # API providers gate on <NAME>_API_KEY — the same check
@@ -40,7 +43,7 @@ discover_providers() {
 # Both shadow_origin and api_sibling derive from this list, so they cannot
 # drift: adding a pair is a one-line change here that propagates to
 # prefer_cli_over_api, the --list-available display, and the CLI→API fallback.
-SHADOW_PAIRS="openai:codex gemini:antigravity"
+SHADOW_PAIRS="openai:codex gemini:antigravity grok:grok-cli"
 
 # Returns the CLI provider that shadows the given API provider (empty if none).
 shadow_origin() {
@@ -107,6 +110,7 @@ get_model() {
         gemini)     echo "${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
         openai)     echo "${OPENAI_MODEL:-gpt-5.6-sol}" ;;
         grok)       echo "${GROK_MODEL:-grok-4.5}" ;;
+        grok-cli)   echo "${GROK_CLI_MODEL:-grok-composer-2.5-fast}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
         codex)      echo "${CODEX_MODEL:-gpt-5.5}" ;;
         antigravity) echo "${ANTIGRAVITY_MODEL:-Gemini 3.5 Flash (High)}" ;;
@@ -148,13 +152,14 @@ coerce_result_json() {
 }
 
 # Vendor color for a provider name. CLI variants share their vendor's color
-# (codex with openai, antigravity with gemini) since they speak for the same vendor.
+# (codex with openai, antigravity with gemini, grok-cli with grok) since they
+# speak for the same vendor.
 # Caller is responsible for defining BLUE/WHITE/RED/GREEN/CYAN globals.
 provider_color() {
     case "$1" in
         gemini|antigravity) echo -e "${BLUE}" ;;
         openai|codex)      echo -e "${WHITE}" ;;
-        grok)              echo -e "${RED}" ;;
+        grok|grok-cli)     echo -e "${RED}" ;;
         perplexity)        echo -e "${GREEN}" ;;
         *)                 echo -e "${CYAN}" ;;
     esac
@@ -165,7 +170,7 @@ provider_emoji() {
     case "$1" in
         gemini|antigravity) echo "🟦" ;;
         openai|codex)      echo "🔳" ;;
-        grok)              echo "🟥" ;;
+        grok|grok-cli)     echo "🟥" ;;
         perplexity)        echo "🟩" ;;
         *)                 echo "⬛" ;;
     esac

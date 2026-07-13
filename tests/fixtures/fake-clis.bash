@@ -1,4 +1,4 @@
-# ABOUTME: Installs fake codex/agy CLI executables onto PATH for hermetic tests
+# ABOUTME: Installs fake codex/agy/grok CLI executables onto PATH for hermetic tests
 # ABOUTME: Behavior switches via COUNCIL_FAKE_BEHAVIOR; calls recorded as JSONL in COUNCIL_FAKE_STATE_DIR
 
 # Behaviors (COUNCIL_FAKE_BEHAVIOR):
@@ -23,7 +23,7 @@ install_fake_clis() {
     export FAKE_BIN_DIR COUNCIL_FAKE_STATE_DIR
 
     local bin
-    for bin in codex agy; do
+    for bin in codex agy grok; do
         write_fake_cli "$bin"
     done
     PATH="$FAKE_BIN_DIR:$PATH"
