@@ -171,6 +171,15 @@ source_lib_and_call() {
     [[ "$output" == "Gemini 3.5 Flash (High)" ]]
 }
 
+@test "get_model: grok-cli without an override labels the CLI's own default, not a pinned id" {
+    # grok-cli.sh passes no -m when GROK_CLI_MODEL is unset (the CLI's default
+    # differs by auth mode), so the display/cache label must say so rather than
+    # name a model that was never requested.
+    run source_lib_and_call 'unset GROK_CLI_MODEL; get_model grok-cli'
+    [ "$status" -eq 0 ]
+    [[ "$output" == "default" ]]
+}
+
 # ============================================================================
 # api_sibling — reverse of shadow_origin (CLI → API fallback target)
 # ============================================================================

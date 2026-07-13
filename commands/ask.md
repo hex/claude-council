@@ -57,8 +57,8 @@ any provider questions:
      ```
      - "Run local council" → local mode (Step 2).
      - "How to add a provider" → show the setup hint (set an API key, or install
-       the `codex` / `agy` (Antigravity) CLI; `/claude-council:status` shows
-       what's available) and stop.
+       the `codex` / `agy` (Antigravity) / `grok` CLI; `/claude-council:status`
+       shows what's available) and stop.
      - "Cancel" → stop.
 
 **Never pass `--local` to query-council.sh or run-council.sh** — it is a

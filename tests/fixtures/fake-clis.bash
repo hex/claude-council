@@ -46,6 +46,18 @@ if [[ "\${1:-}" == "--version" ]]; then
     echo "fake-$bin 0.0.1"
     exit 0
 fi
+EOF
+    if [[ "$bin" == "grok" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<EOF
+# The real grok CLI answers a logged-out "grok models" with "You are not
+# authenticated." on stdout and exit 0, never a non-zero exit
+if [[ "\${1:-}" == "models" && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then
+    echo "You are not authenticated."
+    exit 0
+fi
+EOF
+    fi
+    cat >> "$FAKE_BIN_DIR/$bin" <<EOF
 case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     valid)          echo "$marker: deterministic answer" ;;
     empty)          ;;

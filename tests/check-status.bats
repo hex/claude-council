@@ -36,6 +36,15 @@ setup() {
     [[ "$output" == *"codex login"* ]]
 }
 
+@test "check-status: grok logged out (stdout message, exit 0) is not authenticated" {
+    # The real grok CLI prints "You are not authenticated." and exits 0, so the
+    # probe must classify the unauth state from stdout, not the exit code.
+    export COUNCIL_FAKE_BEHAVIOR=auth-failure
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"grok login"* ]]
+}
+
 @test "check-status: unauthenticated codex is not counted available" {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"

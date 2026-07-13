@@ -170,6 +170,18 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args | index("--sandbox") as $i | .[$i+1]')" == "read-only" ]]
 }
 
+@test "grok-cli.sh: passes no -m when GROK_CLI_MODEL is unset, deferring to the CLI's own default" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset GROK_CLI_MODEL
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    assert_json_eq "$call" '.bin' "grok"
+    # A pinned id is rejected under XAI_API_KEY env auth, so no -m may appear
+    [[ "$(echo "$call" | jq -r '.args | index("-m")')" == "null" ]]
+}
+
 @test "grok-cli.sh: pins a read-only sandbox so a permissive user config can't grant write access" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"

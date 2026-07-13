@@ -14,8 +14,8 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   council with no `XAI_API_KEY` and no per-call cost, the same way `codex` and
   `antigravity` already do. It shadows the `grok` API provider (listing both,
   e.g. `--providers=grok,grok-cli`, runs them side by side), pins grok's
-  built-in `read-only` sandbox as defense-in-depth, and defaults to
-  `grok-composer-2.5-fast` (override with `GROK_CLI_MODEL`). Because it is a
+  built-in `read-only` sandbox as defense-in-depth, and defaults to the grok
+  CLI's own default model unless `GROK_CLI_MODEL` is set. Because it is a
   CLI, an image query routes to its `grok` API sibling when a key is present,
   and answers text-only otherwise.
 

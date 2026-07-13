@@ -41,7 +41,7 @@ bats --verbose-run tests/cache.bats
 | File | Tests | Coverage |
 |------|-------|----------|
 | `cache.bats` | 26 tests | cache_key (incl. verbosity/token/image components), cache_get/set, cache_valid, TTL, clear, self-ignoring dir |
-| `cli-providers.bats` | 44 tests | codex/antigravity/grok-cli discovery, CLI-prefers-API policy, shadow_origin↔api_sibling single source, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, CLI→API fallback (dedup, cache reuse, missing-script, round 2), gated E2E |
+| `cli-providers.bats` | 45 tests | codex/antigravity/grok-cli discovery, CLI-prefers-API policy, shadow_origin↔api_sibling single source, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, CLI→API fallback (dedup, cache reuse, missing-script, round 2), gated E2E |
 | `display.bats` | 43 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, waiting-line truncation + autowrap guard, renderer selection (Rich feature probe, uv route + timeout, perl fallback, COUNCIL_RENDERER=perl, runtime fallback + stdout forwarding, think-block styling incl. unclosed tags, code-theme direction, link style, COLUMNS=0) |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
@@ -49,11 +49,11 @@ bats --verbose-run tests/cache.bats
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 26 tests | argument parsing, error cases, flags, local-council fallback hint, model-fallback wrapper (preferred-then-fallback retry, cached-verdict skip, explicit `<PROVIDER>_MODEL` opt-out, no verdict remembered when the fallback also fails), round 2 and CLI-sibling fallback carrying `model_fallback` |
 | `argmax.bats` | 4 tests | large response/prompt/debate-round-2 round-trip through final JSON (MSYS ARG_MAX marshalling guard) |
-| `fake-clis.bats` | 20 tests | fixture self-checks, codex.sh/antigravity.sh/grok-cli.sh against fake binaries |
+| `fake-clis.bats` | 21 tests | fixture self-checks, codex.sh/antigravity.sh/grok-cli.sh against fake binaries |
 | `format-output.bats` | 13 tests | defensive parsing: empty/missing/non-string responses, raw preservation, CLI→API fallback-note rendering, model-fallback note (preferred model named, absent when unset) |
 | `prompts.bats` | 11 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh contract enforcement, schema sync |
-| `check-status.bats` | 25 tests | two-tier CLI availability, remediation strings, HTTP probe branches (401/403/500/000), rejected-key classification (Gemini/xAI answer a bad key with 400, not 401) and its false-positive guards (a typo'd model is not a bad key), transfer-failure exit codes, curl writing nothing, unusable jq, Perplexity's minimum max_tokens, `-X POST` and `--max-time` on every probe, temp-file cleanup, keys off the curl argv, ms clock |
+| `check-status.bats` | 26 tests | two-tier CLI availability, remediation strings, HTTP probe branches (401/403/500/000), rejected-key classification (Gemini/xAI answer a bad key with 400, not 401) and its false-positive guards (a typo'd model is not a bad key), transfer-failure exit codes, curl writing nothing, unusable jq, Perplexity's minimum max_tokens, `-X POST` and `--max-time` on every probe, temp-file cleanup, keys off the curl argv, ms clock |
 | `jobs.bats` | 16 tests | job store, --async lifecycle, --result/--jobs/--cancel, self-ignoring cache dir |
 | `stop-gate.bats` | 10 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
 | `theme.bats` | 24 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
@@ -65,7 +65,7 @@ bats --verbose-run tests/cache.bats
 | `retry.bats` | 11 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file, ensure_error_body http_status stamping (object and string `.error`, Gemini's string `.error.status` left alone, synthesised message, 200 passthrough) |
 | `model_fallback.bats` | 28 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (grok-4.5's EU region block, end to end) |
 
-**Total: 432 tests** across 24 `.bats` files.
+**Total: 435 tests** across 24 `.bats` files.
 
 ### Hermetic CLI Fixture
 

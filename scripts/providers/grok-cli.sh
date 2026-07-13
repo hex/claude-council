@@ -6,7 +6,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
-source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -32,14 +31,17 @@ FULL_PROMPT="${SYSTEM}
 
 ${PROMPT}"
 
-MODEL=$(get_model grok-cli)
 # -p: single-turn prompt — grok prints the answer to stdout and exits, no TUI.
 # --output-format plain: bare text, so the response needs no JSON unwrapping.
 # --sandbox read-only: the council only reads stdout, so pin grok's built-in
 # read-only profile rather than inherit a permissive user config — a defense
 # against model-generated file writes or shell from an adversarial prompt
 # (mirrors codex's -s read-only and agy's --sandbox guard).
-ARGS=(-p "$FULL_PROMPT" --output-format plain -m "$MODEL" --sandbox read-only)
+ARGS=(-p "$FULL_PROMPT" --output-format plain --sandbox read-only)
+# -m only on an explicit override: the CLI's default model differs by auth
+# mode, and a pinned id is rejected ("unknown model id") under XAI_API_KEY
+# env auth, so an unset GROK_CLI_MODEL defers to the CLI's own default.
+[[ -n "${GROK_CLI_MODEL:-}" ]] && ARGS+=(-m "$GROK_CLI_MODEL")
 
 # Bound the CLI the way API providers are bounded by curl --max-time. GNU
 # `timeout` is absent on stock macOS, so use perl's alarm (perl is already a
