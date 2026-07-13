@@ -30,11 +30,11 @@
         +-------+-------+-------+-------+-------+-------+
         |       |       |       |       |       |       |
         v       v       v       v       v       v       v
-   +--------+ +-----+ +------+ +-----+ +------+ +-----------+
-   | gemini | |open | | grok | |perp | |codex | |antigravity|
-   |  .sh   | | .sh | |  .sh | |.sh  | |  .sh | |    .sh    |
-   +--------+ +-----+ +------+ +-----+ +------+ +-----------+
-   (API)      (API)   (API)    (API)   (CLI)    (CLI)
+   +--------+ +-----+ +------+ +-----+ +------+ +-----------+ +---------+
+   | gemini | |open | | grok | |perp | |codex | |antigravity| | grok-   |
+   |  .sh   | | .sh | |  .sh | |.sh  | |  .sh | |    .sh    | | cli.sh  |
+   +--------+ +-----+ +------+ +-----+ +------+ +-----------+ +---------+
+   (API)      (API)   (API)    (API)   (CLI)    (CLI)         (CLI)
         |               |               |               |
         |    +----------+----------+----------+        |
         +--->|      lib/cache.sh   |<---------+--------+
@@ -135,17 +135,18 @@ Two flavors share the interface:
 
 - **API providers** (`gemini`, `openai`, `grok`, `perplexity`) — gated on
   `{PROVIDER}_API_KEY`, talk to vendor APIs over HTTPS, charge per call.
-- **CLI providers** (`codex`, `antigravity`) — gated on the binary being on
-  `PATH`, use the user's existing CLI subscription auth, no per-call cost.
-  When both an API and CLI sibling exist (codex+openai, antigravity+gemini),
-  the orchestrator prefers the CLI by default; explicit `--providers` wins
-  over the policy. If a CLI provider fails at query time, the council retries
-  through its API sibling (when that key is set) and marks the slot as a fallback.
+- **CLI providers** (`codex`, `antigravity`, `grok-cli`) — gated on the binary
+  being on `PATH`, use the user's existing CLI subscription auth, no per-call cost.
+  When both an API and CLI sibling exist (codex+openai, antigravity+gemini,
+  grok-cli+grok), the orchestrator prefers the CLI by default; explicit
+  `--providers` wins over the policy. If a CLI provider fails at query time, the
+  council retries through its API sibling (when that key is set) and marks the
+  slot as a fallback.
 
 Environment-based configuration:
 - `{PROVIDER}_API_KEY` - Required authentication for API providers
 - `{PROVIDER}_MODEL` - Model override (also applies to CLI providers via
-  `CODEX_MODEL` / `ANTIGRAVITY_MODEL`)
+  `CODEX_MODEL` / `ANTIGRAVITY_MODEL` / `GROK_CLI_MODEL`)
 - `COUNCIL_MAX_TOKENS` - Response length limit (API providers only)
 - `COUNCIL_DEBUG` - Enable verbose logging
 
@@ -161,8 +162,9 @@ Per-provider disposition when an image is attached:
   gemini as an `inlineData` part, openai as `input_image` (Responses API) or
   `image_url` (Chat Completions), grok and perplexity as an OpenAI-compatible
   `image_url` data-URI on their `/chat/completions` endpoint.
-- **codex, antigravity** (CLI, cannot accept an image) route to their vision
-  API sibling — codex→openai, antigravity→gemini — with the image.
+- **codex, antigravity, grok-cli** (CLI, cannot accept an image) route to their
+  vision API sibling — codex→openai, antigravity→gemini, grok-cli→grok — with
+  the image.
 
 Privacy invariant: only the image's SHA-256 keys the cache. The base64 lives
 solely in a temp file passed to providers; it is never written to cache entries
@@ -429,7 +431,8 @@ claude-council/
 │   │   ├── grok.sh              # API
 │   │   ├── perplexity.sh        # API
 │   │   ├── codex.sh             # CLI (subscription auth, shadows openai)
-│   │   └── antigravity.sh       # CLI (subscription auth, shadows gemini)
+│   │   ├── antigravity.sh       # CLI (subscription auth, shadows gemini)
+│   │   └── grok-cli.sh          # CLI (subscription auth, shadows grok)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
@@ -468,7 +471,7 @@ claude-council/
 │   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
 │   ├── cache.bats
 │   ├── check-status.bats
-│   ├── cli-providers.bats       # CLI providers (codex, antigravity)
+│   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli)
 │   ├── display.bats
 │   ├── export.bats
 │   ├── fake-clis.bats

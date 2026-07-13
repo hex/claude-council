@@ -1,4 +1,4 @@
-# ABOUTME: Installs fake codex/agy CLI executables onto PATH for hermetic tests
+# ABOUTME: Installs fake codex/agy/grok CLI executables onto PATH for hermetic tests
 # ABOUTME: Behavior switches via COUNCIL_FAKE_BEHAVIOR; calls recorded as JSONL in COUNCIL_FAKE_STATE_DIR
 
 # Behaviors (COUNCIL_FAKE_BEHAVIOR):
@@ -23,7 +23,7 @@ install_fake_clis() {
     export FAKE_BIN_DIR COUNCIL_FAKE_STATE_DIR
 
     local bin
-    for bin in codex agy; do
+    for bin in codex agy grok; do
         write_fake_cli "$bin"
     done
     PATH="$FAKE_BIN_DIR:$PATH"
@@ -46,6 +46,18 @@ if [[ "\${1:-}" == "--version" ]]; then
     echo "fake-$bin 0.0.1"
     exit 0
 fi
+EOF
+    if [[ "$bin" == "grok" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<EOF
+# The real grok CLI answers a logged-out "grok models" with "You are not
+# authenticated." on stdout and exit 0, never a non-zero exit
+if [[ "\${1:-}" == "models" && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then
+    echo "You are not authenticated."
+    exit 0
+fi
+EOF
+    fi
+    cat >> "$FAKE_BIN_DIR/$bin" <<EOF
 case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     valid)          echo "$marker: deterministic answer" ;;
     empty)          ;;

@@ -36,12 +36,22 @@ setup() {
     [[ "$output" == *"codex login"* ]]
 }
 
+@test "check-status: grok logged out (stdout message, exit 0) is not authenticated" {
+    # The real grok CLI prints "You are not authenticated." and exits 0, so the
+    # probe must classify the unauth state from stdout, not the exit code.
+    export COUNCIL_FAKE_BEHAVIOR=auth-failure
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"grok login"* ]]
+}
+
 @test "check-status: unauthenticated codex is not counted available" {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    # antigravity (no auth probe) is the only available provider
-    [[ "$output" == *"1/6 providers available"* ]]
+    # antigravity (no auth probe) is the only available provider; codex and
+    # grok-cli both probe auth and report unauthed under auth-failure
+    [[ "$output" == *"1/7 providers available"* ]]
 }
 
 @test "check-status: missing API key shows exact export remediation" {
@@ -59,6 +69,7 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"npm install -g @openai/codex"* ]]
     [[ "$output" == *"install the Antigravity CLI (agy)"* ]]
+    [[ "$output" == *"install the Grok CLI (grok)"* ]]
 }
 
 # Shadow curl with a stub that writes a scripted body to curl's -o target and
@@ -102,8 +113,8 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connected"* ]]
-    # 4 API providers + codex + antigravity, all healthy
-    [[ "$output" == *"6/6 providers available"* ]]
+    # 4 API providers + codex + antigravity + grok-cli, all healthy
+    [[ "$output" == *"7/7 providers available"* ]]
 }
 
 @test "check-status: HTTP 401 reports auth failure with regenerate remediation" {
@@ -116,8 +127,8 @@ EOF
     # Every API provider must classify 401, not just whichever one happens to be
     # first: a substring match alone cannot tell four rows from one.
     [ "$(auth_failures "$output")" -eq 4 ]
-    # Only the two CLI providers remain available
-    [[ "$output" == *"2/6 providers available"* ]]
+    # Only the three CLI providers remain available (codex, antigravity, grok-cli)
+    [[ "$output" == *"3/7 providers available"* ]]
 }
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
@@ -140,7 +151,7 @@ EOF
     [[ "$output" == *"Error (HTTP 500)"* ]]
     # A server-side fault is not a credentials problem
     [ "$(auth_failures "$output")" -eq 0 ]
-    [[ "$output" == *"2/6 providers available"* ]]
+    [[ "$output" == *"3/7 providers available"* ]]
 }
 
 @test "check-status: curl failure (000) reports a connection timeout" {
@@ -149,7 +160,7 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]
-    [[ "$output" == *"2/6 providers available"* ]]
+    [[ "$output" == *"3/7 providers available"* ]]
 }
 
 # Gemini and xAI answer a rejected key with 400 rather than a 401, so the status

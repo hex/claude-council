@@ -26,7 +26,7 @@ IFS=$'\t' read -r ENABLED PROVIDER MAX_ITER < <(
 # constrain it to the known set — a config value like "../../evil" must never
 # select an arbitrary script. Unknown provider -> fail open.
 case "$PROVIDER" in
-    gemini|openai|grok|perplexity|codex|antigravity) ;;
+    gemini|openai|grok|grok-cli|perplexity|codex|antigravity) ;;
     *) exit 0 ;;
 esac
 
