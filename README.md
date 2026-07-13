@@ -49,7 +49,7 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 ## Features
 
 - Query Gemini, OpenAI (GPT/Codex), Grok, and Perplexity simultaneously
-- Use the `codex` and `agy` (Antigravity) CLIs (subscription auth) when installed — preferred over their API siblings
+- Use the `codex`, `agy` (Antigravity), and `grok` CLIs (subscription auth) when installed — preferred over their API siblings
 - Side-by-side comparison of responses with vendor-colored headers
 - Streaming tmux pane that renders responses as they land
 - Specialized roles, debate mode, and agent-enhanced deep analysis for high-stakes decisions
@@ -239,7 +239,7 @@ standard mode. Use it for high-stakes decisions, not quick questions.
 
 ### Local Council (--local)
 
-If you have no provider keys and no `codex` / `agy` CLI installed, you can
+If you have no provider keys and no `codex` / `agy` / `grok` CLI installed, you can
 still convene a council — locally, using Claude alone:
 
 ```bash
@@ -453,7 +453,7 @@ continuation already triggered by a stop hook, caps blocks per session at
 (or set `"enabled": false`) to turn it off.
 
 Privacy: the review sends your full uncommitted `git diff` to the configured
-provider. With a CLI provider (`codex`, `agy`) it stays within that tool's own
+provider. With a CLI provider (`codex`, `agy`, `grok`) it stays within that tool's own
 subscription auth; with an API provider (`gemini`, `openai`, `grok`,
 `perplexity`) the diff is transmitted to that third-party API. Keep the reviewer
 on a local CLI provider if your working tree may contain secrets.
@@ -643,7 +643,7 @@ bash scripts/query-council.sh --list-default
 ## Requirements
 
 - `curl` and `jq` for API calls
-- Valid API keys for at least one provider, OR `codex` / `agy` (Antigravity) CLI installed
+- Valid API keys for at least one provider, OR `codex` / `agy` (Antigravity) / `grok` CLI installed
 - Optional: a Rich-capable Python (`python3` with a modern `rich`, or `uv`) upgrades the tmux pane's markdown rendering; without it the built-in perl renderer is used
 
 ## Development
@@ -683,7 +683,7 @@ bats tests/roles.bats
 ```
 
 CLI-provider paths are tested hermetically: `tests/fixtures/fake-clis.bash`
-installs fake `codex`/`agy` executables onto `PATH` whose behavior is
+installs fake `codex`/`agy`/`grok` executables onto `PATH` whose behavior is
 switched via `COUNCIL_FAKE_BEHAVIOR` and which record every invocation, so
 provider scripts, async jobs, and the stop gate run end-to-end with no
 network and no real CLIs.

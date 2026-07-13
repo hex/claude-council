@@ -139,7 +139,7 @@ Manual testing procedures for features that require API calls or Claude Code int
    export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
    ```
 
-   Alternatively, install `codex` and/or `agy` (Antigravity) CLIs — they're
+   Alternatively, install `codex`, `agy` (Antigravity), and/or `grok` CLIs — they're
    discovered automatically via PATH and use your existing subscription auth.
 
 2. **Plugin loaded** in Claude Code:
@@ -236,7 +236,7 @@ echo '{"metadata":{"quiet_mode":true},"round1":{"gemini":{"status":"success","re
 
 ---
 
-### 2b. CLI Providers (codex / antigravity)
+### 2b. CLI Providers (codex / antigravity / grok-cli)
 
 **Test A**: CLI providers explicitly
 ```bash
@@ -256,8 +256,19 @@ echo '{"metadata":{"quiet_mode":true},"round1":{"gemini":{"status":"success","re
 
 **Expected**:
 - [ ] Discovery finds 6 providers but only 4 are queried (codex, antigravity, grok, perplexity)
+- [ ] With the `grok` CLI also installed, discovery finds 7 and shadows 3 API siblings (`openai`, `gemini`, `grok`) — still only 4 queried (codex, antigravity, grok-cli, perplexity)
 - [ ] No `openai` or `gemini` (API) entry in the output — they were shadowed
 - [ ] To force the API instead, use `--providers=openai,gemini` explicitly
+
+**Test C**: Grok CLI explicitly
+```bash
+/claude-council:ask --providers=grok-cli "What is the most common cause of a SIGSEGV in C?"
+```
+
+**Expected**:
+- [ ] Only queries the Grok CLI (no API call made)
+- [ ] Header banner shows the real model name (the grok CLI's own default, or `GROK_CLI_MODEL` if set)
+- [ ] Grok CLI banner uses Grok's red square (🟥)
 
 ---
 
@@ -486,7 +497,7 @@ rm combined-test.md
 ```
 
 **Expected**:
-- [ ] codex's slot is answered by openai and antigravity's by gemini (marked as a fallback), both seeing the image
+- [ ] codex's slot is answered by openai, antigravity's by gemini, and grok-cli's by grok (marked as a fallback), all seeing the image
 
 ---
 
@@ -495,7 +506,7 @@ rm combined-test.md
 ### No API Keys and no CLI agents
 ```bash
 unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
-# Strip /opt/homebrew/bin and ~/.nvm from PATH so codex/agy aren't discovered
+# Strip /opt/homebrew/bin and ~/.nvm from PATH so codex/agy/grok aren't discovered (grok also installs there via homebrew/npm)
 bash scripts/query-council.sh "Test question" 2>&1
 ```
 **Expected**: `Error: No providers configured.` followed by a hint to set an

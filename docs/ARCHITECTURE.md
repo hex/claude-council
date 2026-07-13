@@ -466,7 +466,7 @@ claude-council/
 │   ├── run_tests.sh             # Test runner
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── fixtures/
-│   │   └── fake-clis.bash       # Fake codex/agy binaries on PATH
+│   │   └── fake-clis.bash       # Fake codex/agy/grok binaries on PATH
 │   ├── agent-analysis.bats
 │   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
 │   ├── cache.bats
@@ -510,6 +510,7 @@ claude-council/
 | `{PROVIDER}_MODEL` | varies | Model override (API providers) |
 | `CODEX_MODEL` | gpt-5.5 | Model passed to `codex exec -m` |
 | `ANTIGRAVITY_MODEL` | Gemini 3.5 Flash (High) | Model passed to `agy --model` |
+| `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
 | `COUNCIL_RETRY_DELAY` | 1 | Initial retry delay (s) |
