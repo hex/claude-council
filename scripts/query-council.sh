@@ -352,10 +352,9 @@ model_fallback_notice() {
 # Args: provider script prompt [image_file] [image_mime]
 run_provider_with_model_fallback() {
     local provider="$1" script="$2" prompt="$3" img="${4:-}" mime="${5:-}"
-    local upper override_var preferred fallback keyhash resp rc=0
+    local override_var preferred fallback keyhash resp rc=0
 
-    upper=$(provider_env_prefix "$provider")
-    override_var="${upper}_MODEL"
+    override_var="$(provider_env_prefix "$provider")_MODEL"
     preferred=$(get_model "$provider")
     fallback=$(model_fallback_for "$provider")
 

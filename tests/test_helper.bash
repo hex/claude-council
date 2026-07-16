@@ -7,6 +7,12 @@ export SCRIPTS_DIR="${PROJECT_ROOT}/scripts"
 export LIB_DIR="${SCRIPTS_DIR}/lib"
 export CONFIG_DIR="${PROJECT_ROOT}/config"
 
+# Resolve bash before any setup() strips CLI directories from PATH: those dirs
+# can also hold the bash users actually run (e.g. Homebrew's 5.x), and falling
+# back to /bin/bash 3.2 masks expansion errors that are fatal on modern bash.
+# Scripts under test should be invoked as: "$HOST_BASH" "$SCRIPT" ...
+export HOST_BASH="$(command -v bash)"
+
 # Test-specific directories
 export TEST_TMP_DIR="${BATS_TEST_TMPDIR:-/tmp/council-tests}"
 export TEST_CACHE_DIR="${TEST_TMP_DIR}/cache"

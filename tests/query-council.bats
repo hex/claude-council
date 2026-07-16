@@ -6,6 +6,8 @@ load test_helper
 bats_require_minimum_version 1.5.0
 
 SCRIPT="${SCRIPTS_DIR}/query-council.sh"
+# provider_env_prefix, used when generating model-aware stubs.
+source "${LIB_DIR}/providers.sh"
 
 setup() {
     mkdir -p "$TEST_CACHE_DIR"
@@ -15,11 +17,9 @@ setup() {
     unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
     # Hide codex/gemini binaries so binary-gated discovery doesn't make real CLI
     # calls during arg-parsing tests. The cli-providers.bats file does the
-    # opposite — it keeps them on PATH on purpose.
-    # Resolve bash before the strip: removing a CLI's directory can also remove
-    # the bash users actually run (e.g. Homebrew's 5.x), and falling back to
-    # /bin/bash 3.2 masks expansion errors that are fatal on modern bash.
-    HOST_BASH="$(command -v bash)"
+    # opposite — it keeps them on PATH on purpose. The stripped PATH can demote
+    # bare `bash` to /bin/bash 3.2, so the SUT always runs via "$HOST_BASH"
+    # (resolved in test_helper.bash before the strip).
     export PATH=$(path_without_clis)
 
     # Hermetic provider dir: --providers=<name> runs these stubs with no network
@@ -59,25 +59,25 @@ run_council() {
 # ============================================================================
 
 @test "query-council: shows usage with --help" {
-    run bash "$SCRIPT" --help
+    run "$HOST_BASH" "$SCRIPT" --help
     [ "$status" -eq 1 ]
     [[ "$output" == *"Usage:"* ]]
 }
 
 @test "query-council: shows usage with -h" {
-    run bash "$SCRIPT" -h
+    run "$HOST_BASH" "$SCRIPT" -h
     [ "$status" -eq 1 ]
     [[ "$output" == *"Usage:"* ]]
 }
 
 @test "query-council: errors on unknown flag" {
-    run bash "$SCRIPT" --unknown-flag "test"
+    run "$HOST_BASH" "$SCRIPT" --unknown-flag "test"
     [ "$status" -eq 1 ]
     [[ "$output" == *"Unknown flag"* ]]
 }
 
 @test "query-council: errors on empty prompt" {
-    run bash "$SCRIPT" ""
+    run "$HOST_BASH" "$SCRIPT" ""
     [ "$status" -eq 1 ]
     [[ "$output" == *"No prompt"* ]] || [[ "$output" == *"Usage"* ]]
 }
@@ -87,13 +87,13 @@ run_council() {
 # ============================================================================
 
 @test "query-council: --list-available reports the exact no-providers message" {
-    run bash "$SCRIPT" --list-available
+    run "$HOST_BASH" "$SCRIPT" --list-available
     [ "$status" -eq 0 ]
     [[ "$output" == *"No providers configured."* ]]
 }
 
 @test "query-council: querying with no providers exits nonzero with guidance" {
-    run bash "$SCRIPT" "test prompt"
+    run "$HOST_BASH" "$SCRIPT" "test prompt"
     [ "$status" -ne 0 ]
     [[ "$output" == *"No providers configured."* ]]
     # Points at the local fallback so the user has a next step
@@ -107,7 +107,7 @@ run_council() {
 @test "query-council: an invalid role exits nonzero and names the problem" {
     write_stub gemini
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" \
-        bash "$SCRIPT" --no-pane --no-auto-context --providers=gemini \
+        "$HOST_BASH" "$SCRIPT" --no-pane --no-auto-context --providers=gemini \
         --roles=invalidrole "test prompt"
     [ "$status" -ne 0 ]
     [[ "$stderr" == *"Unknown role"* ]]
@@ -120,7 +120,7 @@ run_council() {
 @test "query-council: errors on missing file" {
     write_stub gemini
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" \
-        bash "$SCRIPT" --no-pane --providers=gemini \
+        "$HOST_BASH" "$SCRIPT" --no-pane --providers=gemini \
         --file=/nonexistent/path "test prompt"
     [ "$status" -ne 0 ]
     [[ "$stderr" == *"not found"* ]] || [[ "$stderr" == *"No such file"* ]]
@@ -254,12 +254,13 @@ run_council() {
 # ============================================================================
 
 # A fake provider that exits 3 for the preferred model and 0 for the fallback,
-# reading the model from the same env var the real scripts read.
+# reading the model from the same env var the real scripts read — derived with
+# the same provider_env_prefix the real scripts use, so hyphenated names work.
 write_model_aware_stub() {
     local name="$1" preferred="$2"
     cat > "$STUB_DIR/${name}.sh" <<EOF
 #!/bin/bash
-model="\${$(echo "$name" | tr '[:lower:]' '[:upper:]')_MODEL:-${preferred}}"
+model="\${$(provider_env_prefix "$name")_MODEL:-${preferred}}"
 echo "\$model" >> "${CALLS_LOG}"
 if [[ "\$model" == "${preferred}" ]]; then
     echo "Error from ${name}: model unavailable" >&2
@@ -278,7 +279,7 @@ EOF
     export GROK_API_KEY=k
     write_model_aware_stub grok grok-4.5
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
-        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
+        "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
     assert_json_eq "$output" '.round1.grok.model' 'grok-4.20-reasoning'
     assert_json_eq "$output" '.round1.grok.model_fallback' 'grok-4.5'
@@ -289,7 +290,7 @@ EOF
     export GROK_API_KEY=k
     write_model_aware_stub grok grok-4.5
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
-        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
+        "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
     [ "$(sed -n 1p "$CALLS_LOG")" = "grok-4.5" ]
     [ "$(sed -n 2p "$CALLS_LOG")" = "grok-4.20-reasoning" ]
@@ -300,11 +301,11 @@ EOF
     write_model_aware_stub grok grok-4.5
     # First run discovers and remembers the verdict.
     env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
-        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1
+        "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1
     : > "$CALLS_LOG"
     # Second run must go straight to the fallback: exactly one invocation.
     env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
-        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1
+        "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1
     [ "$(grep -c . "$CALLS_LOG")" -eq 1 ]
     [ "$(sed -n 1p "$CALLS_LOG")" = "grok-4.20-reasoning" ]
 }
@@ -313,7 +314,7 @@ EOF
     export GROK_API_KEY=k GROK_MODEL=grok-4.5
     write_model_aware_stub grok grok-4.5
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
-        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
+        "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
     # The stub exits 3; with an override there is no fallback, so it is an error.
     assert_json_eq "$output" '.round1.grok.status' 'error'
     [ "$(grep -c . "$CALLS_LOG")" -eq 1 ]
@@ -329,7 +330,7 @@ exit 3
 EOF
     chmod +x "$STUB_DIR/grok.sh"
     env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
-        bash "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1 || true
+        "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1 || true
     # A poisoned verdict would silently downgrade grok for a day.
     [ ! -d "${TEST_CACHE_DIR}/model-verdicts" ] || [ -z "$(ls -A "${TEST_CACHE_DIR}/model-verdicts")" ]
 }
@@ -338,7 +339,7 @@ EOF
     export GROK_API_KEY=k
     write_model_aware_stub grok grok-4.5
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
-        bash "$SCRIPT" --providers=grok --debate --no-pane --no-auto-context --no-cache "q"
+        "$HOST_BASH" "$SCRIPT" --providers=grok --debate --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
     assert_json_eq "$output" '.round2.grok.model' 'grok-4.20-reasoning'
     assert_json_eq "$output" '.round2.grok.model_fallback' 'grok-4.5'
@@ -356,7 +357,7 @@ exit 1
 EOF
     chmod +x "$STUB_DIR/codex.sh"
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
-        bash "$SCRIPT" --providers=codex --no-pane --no-auto-context --no-cache "q"
+        "$HOST_BASH" "$SCRIPT" --providers=codex --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
     assert_json_eq "$output" '.round1.codex.fallback' 'openai'
     assert_json_eq "$output" '.round1.codex.model' 'gpt-5.5-pro'
