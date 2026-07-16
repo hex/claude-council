@@ -32,7 +32,6 @@ FULL_PROMPT="${SYSTEM}
 
 ${PROMPT}"
 
-MODEL=$(get_model codex)
 # --skip-git-repo-check: codex refuses to run from non-trusted dirs as a
 # safety guard for interactive sessions; for headless `exec` we only read
 # stdout, so the check is pure friction.
@@ -40,7 +39,12 @@ MODEL=$(get_model codex)
 # rather than inherit a permissive ~/.codex/config.toml default — a defense
 # against model-generated shell from an adversarial prompt (mirrors agy's
 # --sandbox guard).
-ARGS=(exec --skip-git-repo-check -s read-only -m "$MODEL" "$FULL_PROMPT")
+ARGS=(exec --skip-git-repo-check -s read-only)
+# -m only on an explicit override: a pinned id would override the model the
+# user configured in ~/.codex/config.toml, so an unset CODEX_MODEL defers to
+# the CLI's own resolution (mirrors grok-cli.sh).
+[[ -n "${CODEX_MODEL:-}" ]] && ARGS+=(-m "$CODEX_MODEL")
+ARGS+=("$FULL_PROMPT")
 
 # Bound the CLI the way API providers are bounded by curl --max-time. GNU
 # `timeout` is absent on stock macOS, so use perl's alarm (perl is already a

@@ -113,8 +113,9 @@ default_provider_set() {
 # Default model per provider. CLI defaults mirror what the CLI itself picks
 # when invoked without -m, so the cache key and pane header match what's
 # actually run. Bump when the CLI ships a new default we want to track.
-# grok-cli's default differs by auth mode, so grok-cli.sh passes no -m unless
-# GROK_CLI_MODEL is set and the unset case reads as the label "default" here.
+# grok-cli's default differs by auth mode and codex's by ~/.codex/config.toml,
+# so their scripts pass no -m unless the *_MODEL override is set and the unset
+# case reads as the label "default" here.
 get_model() {
     case "$1" in
         gemini)     echo "${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
@@ -122,7 +123,7 @@ get_model() {
         grok)       echo "${GROK_MODEL:-grok-4.5}" ;;
         grok-cli)   echo "${GROK_CLI_MODEL:-default}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
-        codex)      echo "${CODEX_MODEL:-gpt-5.5}" ;;
+        codex)      echo "${CODEX_MODEL:-default}" ;;
         antigravity) echo "${ANTIGRAVITY_MODEL:-Gemini 3.5 Flash (High)}" ;;
         *)          echo "unknown" ;;
     esac

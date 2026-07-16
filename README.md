@@ -23,7 +23,7 @@ export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY
 You get side-by-side responses from each configured provider:
 
 ```
-🔳 Codex - gpt-5.5
+🔳 Codex - default
    Use UUID primary keys — they avoid enumeration, work across distributed
    services, and survive imports/exports cleanly.
 
@@ -401,7 +401,7 @@ export PERPLEXITY_API_KEY="your-key"
 
 If the `codex`, `agy`, or `grok` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
 
-- `codex` (OpenAI Codex CLI) shadows the `openai` API provider
+- `codex` (OpenAI Codex CLI) shadows the `openai` API provider — uses your `~/.codex/config.toml` model unless `CODEX_MODEL` is set
 - `antigravity` (Antigravity CLI, `agy`) shadows the `gemini` API provider
 - `grok-cli` (xAI Grok CLI, `grok`) shadows the `grok` API provider — uses the grok CLI's own default model unless `GROK_CLI_MODEL` is set
 
@@ -412,7 +412,7 @@ If a CLI provider fails at query time and its API sibling's key is set, the coun
 Override CLI model selection (defaults mirror what each CLI picks itself):
 
 ```bash
-export CODEX_MODEL="gpt-5-codex"                # default: gpt-5.5
+export CODEX_MODEL="gpt-5-codex"                # default: the codex CLI's own configured model
 export ANTIGRAVITY_MODEL="Gemini 3.1 Pro (High)"  # default: Gemini 3.5 Flash (High)
 export GROK_CLI_MODEL="grok-4.3"                # default: the grok CLI's own default model
 ```

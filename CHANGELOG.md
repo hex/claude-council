@@ -4,6 +4,17 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Changed
+
+- **codex defers to the user's own model configuration.** codex.sh no longer
+  pins `-m gpt-5.5`: an unset `CODEX_MODEL` now passes no `-m` at all, so the
+  model configured in `~/.codex/config.toml` (or the CLI's own default)
+  decides — the same deference grok-cli.sh already practices. The pinned id
+  was silently overriding user config with an older model. Set `CODEX_MODEL`
+  to force a specific model; the header label reads `default` when unset.
+
 ## 2026.7.7
 
 ### Fixed

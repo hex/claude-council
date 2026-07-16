@@ -65,6 +65,19 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args[-1]')" == *"the user question"* ]]
 }
 
+@test "codex.sh: passes no -m when CODEX_MODEL is unset, deferring to the user's codex config" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset CODEX_MODEL
+    run "${PROVIDERS_DIR_REAL}/codex.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    assert_json_eq "$call" '.bin' "codex"
+    # A pinned -m overrides ~/.codex/config.toml's model; omit it so the
+    # user's own configuration decides.
+    [[ "$(echo "$call" | jq -r '.args | index("-m")')" == "null" ]]
+}
+
 @test "codex.sh: pins a read-only sandbox so a permissive user config can't grant write access" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     run "${PROVIDERS_DIR_REAL}/codex.sh" "the user question"

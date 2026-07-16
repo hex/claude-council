@@ -508,7 +508,7 @@ claude-council/
 | `GROK_API_KEY` | - | xAI API key (legacy alias; `XAI_API_KEY` wins if both set) |
 | `PERPLEXITY_API_KEY` | - | Perplexity API key |
 | `{PROVIDER}_MODEL` | varies | Model override (API providers) |
-| `CODEX_MODEL` | gpt-5.5 | Model passed to `codex exec -m` |
+| `CODEX_MODEL` | (unset) | Model passed to `codex exec -m`, only when set (else the codex CLI's own configured model) |
 | `ANTIGRAVITY_MODEL` | Gemini 3.5 Flash (High) | Model passed to `agy --model` |
 | `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |
