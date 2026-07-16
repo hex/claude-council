@@ -93,8 +93,8 @@ multiSelect: true
 Options:
   - All providers (Recommended) - query every configured provider in parallel
   - Gemini (gemini-3.1-pro-preview) - Google's reasoning model
-  - OpenAI (gpt-5.5-pro) - OpenAI's reasoning model
-  - Grok (grok-4.20-reasoning) - xAI's reasoning model
+  - OpenAI (gpt-5.6-sol) - OpenAI's reasoning model
+  - Grok (grok-4.5) - xAI's reasoning model
   - Perplexity (sonar-reasoning-pro) - search-augmented reasoning
 
 Question 2: "How verbose should the responses be?"
