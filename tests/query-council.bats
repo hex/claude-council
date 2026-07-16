@@ -16,6 +16,10 @@ setup() {
     # Hide codex/gemini binaries so binary-gated discovery doesn't make real CLI
     # calls during arg-parsing tests. The cli-providers.bats file does the
     # opposite — it keeps them on PATH on purpose.
+    # Resolve bash before the strip: removing a CLI's directory can also remove
+    # the bash users actually run (e.g. Homebrew's 5.x), and falling back to
+    # /bin/bash 3.2 masks expansion errors that are fatal on modern bash.
+    HOST_BASH="$(command -v bash)"
     export PATH=$(path_without_clis)
 
     # Hermetic provider dir: --providers=<name> runs these stubs with no network
@@ -47,7 +51,7 @@ EOF
 # Run query-council hermetically: no pane, no auto-context, stub providers.
 run_council() {
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" \
-        bash "$SCRIPT" --no-pane --no-auto-context "$@"
+        "$HOST_BASH" "$SCRIPT" --no-pane --no-auto-context "$@"
 }
 
 # ============================================================================
@@ -134,6 +138,17 @@ run_council() {
     echo "$output" | jq -e '.round1' >/dev/null
     [[ "$(echo "$output" | jq -r '.round1.gemini.status')" == "success" ]]
     [[ "$(echo "$output" | jq -r '.round1.gemini.response')" == "hello from the stub" ]]
+}
+
+@test "query-council: a hyphenated provider name produces a success slot in round1" {
+    # grok-cli's hyphen must not break the MODEL override-var derivation
+    # (GROK-CLI_MODEL is an invalid bash name; expanding it kills the worker).
+    write_stub grok-cli "hello from the hyphenated stub"
+    run_council --providers=grok-cli "test"
+    [ "$status" -eq 0 ]
+    [[ "$stderr" != *"invalid variable name"* ]]
+    [[ "$(echo "$output" | jq -r '.round1."grok-cli".status')" == "success" ]]
+    [[ "$(echo "$output" | jq -r '.round1."grok-cli".response')" == "hello from the hyphenated stub" ]]
 }
 
 @test "query-council: accepts the prompt via --prompt=" {

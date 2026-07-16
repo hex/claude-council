@@ -65,12 +65,20 @@ api_sibling() {
     echo ""
 }
 
+# Env-var prefix for a provider name: uppercased, with hyphens mapped to
+# underscores (grok-cli -> GROK_CLI). A hyphen kept in the name would make
+# derived vars like GROK-CLI_MODEL invalid, and expanding an invalid name
+# via ${!var} is fatal on bash 5.x.
+provider_env_prefix() {
+    echo "$1" | tr '[:lower:]-' '[:upper:]_'
+}
+
 # True (exit 0) if the API key env var for an API provider is set. Uses the
 # same <NAME>_API_KEY convention discover_providers gates on, so any API
 # provider is covered without a per-provider case arm.
 api_key_present() {
     local var
-    var="$(echo "$1" | tr '[:lower:]' '[:upper:]')_API_KEY"
+    var="$(provider_env_prefix "$1")_API_KEY"
     [[ -n "${!var:-}" ]]
 }
 

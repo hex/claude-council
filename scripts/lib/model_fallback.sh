@@ -4,6 +4,8 @@
 
 LIB_MODEL_FALLBACK_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "${LIB_MODEL_FALLBACK_DIR}/cache.sh"
+# provider_env_prefix lives in providers.sh; needed for key-hash derivation.
+source "${LIB_MODEL_FALLBACK_DIR}/providers.sh"
 
 # One source of truth for the fallback map, as "provider:fallback" tokens; the
 # preferred model is whatever get_model returns, so it is not repeated here.
@@ -33,7 +35,7 @@ COUNCIL_AVAILABILITY_TTL="${COUNCIL_AVAILABILITY_TTL:-86400}"
 # (region and tier), not on the provider name, so verdicts are scoped to it.
 model_fallback_key_hash() {
     local var val
-    var="$(echo "$1" | tr '[:lower:]' '[:upper:]')_API_KEY"
+    var="$(provider_env_prefix "$1")_API_KEY"
     val="${!var:-}"
     printf '%s' "$val" | sha256_hex | cut -c1-16
 }

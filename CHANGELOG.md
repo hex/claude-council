@@ -4,6 +4,23 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixed
+
+- **`grok-cli` crashed every round-1 query on modern bash.** Deriving the
+  model-override variable from the provider name kept the hyphen
+  (`GROK-CLI_MODEL`), and expanding an invalid name via `${!var}` is fatal on
+  bash 5.x — the worker died before calling the CLI, so grok-cli always
+  reported "No response received". Env-var prefixes now map hyphens to
+  underscores (`provider_env_prefix`), covering the model override, API-key
+  presence, and fallback key-hash derivations.
+- **Hermetic tests ran under the wrong bash.** Stripping CLI directories from
+  PATH could also strip the directory of the bash users actually run (e.g.
+  Homebrew's 5.x), silently demoting the suite to macOS's bash 3.2 — where
+  invalid-name expansion is non-fatal, which is exactly how the grok-cli crash
+  escaped CI. query-council tests now resolve bash before the strip.
+
 ## 2026.7.6
 
 ### Added

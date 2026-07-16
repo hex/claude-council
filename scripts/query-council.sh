@@ -354,7 +354,7 @@ run_provider_with_model_fallback() {
     local provider="$1" script="$2" prompt="$3" img="${4:-}" mime="${5:-}"
     local upper override_var preferred fallback keyhash resp rc=0
 
-    upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+    upper=$(provider_env_prefix "$provider")
     override_var="${upper}_MODEL"
     preferred=$(get_model "$provider")
     fallback=$(model_fallback_for "$provider")
@@ -429,7 +429,7 @@ attempt_api_fallback() {
     sibling_preferred=$(get_model "$sibling")
     sibling_model="$sibling_preferred"
     sibling_fallback=$(model_fallback_for "$sibling")
-    sib_override="$(echo "$sibling" | tr '[:lower:]' '[:upper:]')_MODEL"
+    sib_override="$(provider_env_prefix "$sibling")_MODEL"
     if [[ -z "${!sib_override:-}" && -n "$sibling_fallback" ]]; then
         local sib_keyhash
         sib_keyhash=$(model_fallback_key_hash "$sibling")
@@ -518,7 +518,7 @@ query_provider() {
     preferred=$(get_model "$provider")
     model="$preferred"
     fallback=$(model_fallback_for "$provider")
-    override_var="$(echo "$provider" | tr '[:lower:]' '[:upper:]')_MODEL"
+    override_var="$(provider_env_prefix "$provider")_MODEL"
     # A known-bad preferred model must be resolved BEFORE the answer cache is
     # read: the cache is keyed by model, and a cached fallback answer lives under
     # the fallback's key. Resolving late would miss it and re-call the API.
