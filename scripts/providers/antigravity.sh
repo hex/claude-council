@@ -40,12 +40,16 @@ ${SYSTEM}
 
 ${PROMPT}"
 
-MODEL=$(get_model antigravity)
 # Flags must precede the prompt: agy uses Go's flag package, which stops
 # parsing at the first positional argument, so flags after the prompt get
 # folded into the prompt text. --sandbox restricts terminal access as
 # defense-in-depth alongside the guard.
-ARGS=(--sandbox --model "$MODEL" -p "$FULL_PROMPT")
+ARGS=(--sandbox)
+# --model only on an explicit override: a pinned label would override the
+# model selected in the Antigravity app, so an unset ANTIGRAVITY_MODEL defers
+# to agy's own selection (mirrors codex.sh and grok-cli.sh).
+[[ -n "${ANTIGRAVITY_MODEL:-}" ]] && ARGS+=(--model "$ANTIGRAVITY_MODEL")
+ARGS+=(-p "$FULL_PROMPT")
 
 # Bound the CLI the way API providers are bounded by curl --max-time. GNU
 # `timeout` is absent on stock macOS, so use perl's alarm (perl is already a

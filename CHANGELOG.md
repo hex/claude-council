@@ -8,12 +8,14 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ### Changed
 
-- **codex defers to the user's own model configuration.** codex.sh no longer
-  pins `-m gpt-5.5`: an unset `CODEX_MODEL` now passes no `-m` at all, so the
-  model configured in `~/.codex/config.toml` (or the CLI's own default)
-  decides — the same deference grok-cli.sh already practices. The pinned id
-  was silently overriding user config with an older model. Set `CODEX_MODEL`
-  to force a specific model; the header label reads `default` when unset.
+- **codex and antigravity defer to the user's own model choice.** Neither
+  script pins a model anymore: an unset `CODEX_MODEL` passes no `-m`, so
+  `~/.codex/config.toml` (or the CLI's own default) decides, and an unset
+  `ANTIGRAVITY_MODEL` passes no `--model`, so the model selected in the
+  Antigravity app decides — the same deference grok-cli.sh already practices.
+  The pinned ids were silently overriding user configuration. Set the
+  `*_MODEL` variable to force a specific model; the header label reads
+  `default` when unset.
 
 ## 2026.7.7
 

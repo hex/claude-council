@@ -165,10 +165,13 @@ source_lib_and_call() {
     [[ "$output" == "grok-cli" ]]
 }
 
-@test "get_model: antigravity default is a Gemini Flash model" {
-    run source_lib_and_call 'get_model antigravity'
+@test "get_model: antigravity without an override labels agy's own selection, not a pinned label" {
+    # antigravity.sh passes no --model when ANTIGRAVITY_MODEL is unset (the
+    # model selected in the Antigravity app decides), so the display/cache
+    # label must say so rather than name a model that was never requested.
+    run source_lib_and_call 'unset ANTIGRAVITY_MODEL; get_model antigravity'
     [ "$status" -eq 0 ]
-    [[ "$output" == "Gemini 3.5 Flash (High)" ]]
+    [[ "$output" == "default" ]]
 }
 
 @test "get_model: grok-cli without an override labels the CLI's own default, not a pinned id" {

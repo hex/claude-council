@@ -110,12 +110,12 @@ default_provider_set() {
     prefer_cli_over_api "${discovered[@]+"${discovered[@]}"}"
 }
 
-# Default model per provider. CLI defaults mirror what the CLI itself picks
-# when invoked without -m, so the cache key and pane header match what's
-# actually run. Bump when the CLI ships a new default we want to track.
-# grok-cli's default differs by auth mode and codex's by ~/.codex/config.toml,
-# so their scripts pass no -m unless the *_MODEL override is set and the unset
-# case reads as the label "default" here.
+# Default model per provider. API defaults are pinned ids; bump when a vendor
+# ships a new flagship we want to track. CLI providers pass no model flag
+# unless the *_MODEL override is set — their effective model comes from the
+# CLI's own resolution (auth mode for grok, ~/.codex/config.toml for codex,
+# the app's selected model for agy) — so the unset case reads as the label
+# "default" here.
 get_model() {
     case "$1" in
         gemini)     echo "${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
@@ -124,7 +124,7 @@ get_model() {
         grok-cli)   echo "${GROK_CLI_MODEL:-default}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
         codex)      echo "${CODEX_MODEL:-default}" ;;
-        antigravity) echo "${ANTIGRAVITY_MODEL:-Gemini 3.5 Flash (High)}" ;;
+        antigravity) echo "${ANTIGRAVITY_MODEL:-default}" ;;
         *)          echo "unknown" ;;
     esac
 }

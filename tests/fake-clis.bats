@@ -139,6 +139,19 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args[-1]')" == *"Do NOT use any tools"* ]]
 }
 
+@test "antigravity.sh: passes no --model when ANTIGRAVITY_MODEL is unset, deferring to agy's own selection" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset ANTIGRAVITY_MODEL
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    assert_json_eq "$call" '.bin' "agy"
+    # A pinned --model overrides the model selected in the Antigravity app;
+    # omit it so the user's own selection decides.
+    [[ "$(echo "$call" | jq -r '.args | index("--model")')" == "null" ]]
+}
+
 @test "antigravity.sh: a hung CLI is bounded by COUNCIL_TIMEOUT and reports a timeout" {
     export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_TIMEOUT=1
     local start end

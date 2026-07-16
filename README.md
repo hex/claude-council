@@ -27,7 +27,7 @@ You get side-by-side responses from each configured provider:
    Use UUID primary keys — they avoid enumeration, work across distributed
    services, and survive imports/exports cleanly.
 
-🟦 Antigravity - Gemini 3.5 Flash (High)
+🟦 Antigravity - default
    UUIDv7 specifically: security of non-guessable IDs plus the index
    locality of time-ordered sequences.
 
@@ -402,7 +402,7 @@ export PERPLEXITY_API_KEY="your-key"
 If the `codex`, `agy`, or `grok` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
 
 - `codex` (OpenAI Codex CLI) shadows the `openai` API provider — uses your `~/.codex/config.toml` model unless `CODEX_MODEL` is set
-- `antigravity` (Antigravity CLI, `agy`) shadows the `gemini` API provider
+- `antigravity` (Antigravity CLI, `agy`) shadows the `gemini` API provider — uses the model selected in the Antigravity app unless `ANTIGRAVITY_MODEL` is set
 - `grok-cli` (xAI Grok CLI, `grok`) shadows the `grok` API provider — uses the grok CLI's own default model unless `GROK_CLI_MODEL` is set
 
 CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai`, `--providers=gemini`, or `--providers=grok`. Listing both API and CLI together (e.g., `--providers=grok,grok-cli`) runs them side-by-side for comparison.
@@ -413,7 +413,7 @@ Override CLI model selection (defaults mirror what each CLI picks itself):
 
 ```bash
 export CODEX_MODEL="gpt-5-codex"                # default: the codex CLI's own configured model
-export ANTIGRAVITY_MODEL="Gemini 3.1 Pro (High)"  # default: Gemini 3.5 Flash (High)
+export ANTIGRAVITY_MODEL="Gemini 3.1 Pro (High)"  # default: the model selected in the Antigravity app
 export GROK_CLI_MODEL="grok-4.3"                # default: the grok CLI's own default model
 ```
 

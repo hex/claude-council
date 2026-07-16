@@ -509,7 +509,7 @@ claude-council/
 | `PERPLEXITY_API_KEY` | - | Perplexity API key |
 | `{PROVIDER}_MODEL` | varies | Model override (API providers) |
 | `CODEX_MODEL` | (unset) | Model passed to `codex exec -m`, only when set (else the codex CLI's own configured model) |
-| `ANTIGRAVITY_MODEL` | Gemini 3.5 Flash (High) | Model passed to `agy --model` |
+| `ANTIGRAVITY_MODEL` | (unset) | Model passed to `agy --model`, only when set (else the model selected in the Antigravity app) |
 | `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
