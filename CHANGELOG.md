@@ -4,18 +4,29 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.7.8
+
+### Fixed
+
+- **codex and antigravity now defer to your own model choice.** Both providers
+  pinned a model id (`-m gpt-5.5`, `--model "Gemini 3.5 Flash (High)"`) that
+  silently overrode the model you configured — codex's `~/.codex/config.toml`
+  and the model selected in the Antigravity app. With `CODEX_MODEL` /
+  `ANTIGRAVITY_MODEL` unset, no model flag is passed at all and the CLI's own
+  resolution decides, completing the deference pattern grok-cli already used.
+  Set the `*_MODEL` variable to force a specific model; header and cache
+  labels read `default` when unset.
+
+### Docs
+
+- Synced the `/ask` command and provider-integration skill model tables with
+  the actual API defaults (`gpt-5.6-sol`, `grok-4.5`) — they still listed the
+  fallback models as defaults.
 
 ### Changed
 
-- **codex and antigravity defer to the user's own model choice.** Neither
-  script pins a model anymore: an unset `CODEX_MODEL` passes no `-m`, so
-  `~/.codex/config.toml` (or the CLI's own default) decides, and an unset
-  `ANTIGRAVITY_MODEL` passes no `--model`, so the model selected in the
-  Antigravity app decides — the same deference grok-cli.sh already practices.
-  The pinned ids were silently overriding user configuration. Set the
-  `*_MODEL` variable to force a specific model; the header label reads
-  `default` when unset.
+- Dropped a dead `providers.sh` source line from the codex and antigravity
+  provider scripts.
 
 ## 2026.7.7
 
