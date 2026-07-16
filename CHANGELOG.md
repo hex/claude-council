@@ -4,22 +4,25 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.7.7
 
 ### Fixed
 
-- **`grok-cli` crashed every round-1 query on modern bash.** Deriving the
-  model-override variable from the provider name kept the hyphen
-  (`GROK-CLI_MODEL`), and expanding an invalid name via `${!var}` is fatal on
-  bash 5.x — the worker died before calling the CLI, so grok-cli always
-  reported "No response received". Env-var prefixes now map hyphens to
-  underscores (`provider_env_prefix`), covering the model override, API-key
-  presence, and fallback key-hash derivations.
-- **Hermetic tests ran under the wrong bash.** Stripping CLI directories from
-  PATH could also strip the directory of the bash users actually run (e.g.
-  Homebrew's 5.x), silently demoting the suite to macOS's bash 3.2 — where
-  invalid-name expansion is non-fatal, which is exactly how the grok-cli crash
-  escaped CI. query-council tests now resolve bash before the strip.
+- **`grok-cli` crashed on every council query on modern bash.** The
+  model-override variable was derived by uppercasing the provider name
+  verbatim, producing `GROK-CLI_MODEL` — an invalid bash name whose `${!var}`
+  expansion is fatal on bash 5.x. The round-1 worker died before invoking the
+  CLI, so grok-cli always reported "No response received". Env-var prefixes
+  now map hyphens to underscores via a shared `provider_env_prefix` helper,
+  covering the model override, API-key presence, and fallback key-hash
+  derivations.
+- **The test suite ran under the wrong bash, which is how the crash escaped
+  435 green tests.** Stripping CLI directories from PATH for hermetic tests
+  could also strip the directory of the bash users actually run (e.g.
+  Homebrew's 5.x), silently demoting the suite to macOS's `/bin/bash` 3.2 —
+  where invalid-name expansion is non-fatal. Tests now resolve `HOST_BASH`
+  before the strip and run the script under it at every invocation site, with
+  a hyphenated-provider regression test (436 tests total).
 
 ## 2026.7.6
 
