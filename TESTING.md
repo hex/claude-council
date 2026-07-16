@@ -47,7 +47,7 @@ bats --verbose-run tests/cache.bats
 | `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
-| `query-council.bats` | 26 tests | argument parsing, error cases, flags, local-council fallback hint, model-fallback wrapper (preferred-then-fallback retry, cached-verdict skip, explicit `<PROVIDER>_MODEL` opt-out, no verdict remembered when the fallback also fails), round 2 and CLI-sibling fallback carrying `model_fallback` |
+| `query-council.bats` | 27 tests | argument parsing, error cases, flags, local-council fallback hint, hyphenated provider names (env-var prefix derivation), model-fallback wrapper (preferred-then-fallback retry, cached-verdict skip, explicit `<PROVIDER>_MODEL` opt-out, no verdict remembered when the fallback also fails), round 2 and CLI-sibling fallback carrying `model_fallback` |
 | `argmax.bats` | 4 tests | large response/prompt/debate-round-2 round-trip through final JSON (MSYS ARG_MAX marshalling guard) |
 | `fake-clis.bats` | 21 tests | fixture self-checks, codex.sh/antigravity.sh/grok-cli.sh against fake binaries |
 | `format-output.bats` | 13 tests | defensive parsing: empty/missing/non-string responses, raw preservation, CLI→API fallback-note rendering, model-fallback note (preferred model named, absent when unset) |
@@ -65,7 +65,7 @@ bats --verbose-run tests/cache.bats
 | `retry.bats` | 11 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file, ensure_error_body http_status stamping (object and string `.error`, Gemini's string `.error.status` left alone, synthesised message, 200 passthrough) |
 | `model_fallback.bats` | 28 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (grok-4.5's EU region block, end to end) |
 
-**Total: 435 tests** across 24 `.bats` files.
+**Total: 436 tests** across 24 `.bats` files.
 
 ### Hermetic CLI Fixture
 
