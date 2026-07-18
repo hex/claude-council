@@ -449,7 +449,7 @@ claude-council/
 │       ├── retry.sh             # Retry with backoff + off-argv secret config
 │       ├── roles.sh             # Role management
 │       ├── tokens.sh            # Reasoning-model token-cap bumping
-│       └── verbosity.sh         # Response verbosity directives
+│       └── verbosity.sh         # Shared system prompt, inline-answer guard, verbosity directives
 ├── skills/
 │   ├── council-execution/
 │   │   └── SKILL.md             # Standard query execution
