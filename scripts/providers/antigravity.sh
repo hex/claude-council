@@ -26,8 +26,8 @@ if ! command -v agy >/dev/null 2>&1; then
     exit 1
 fi
 
-# agy is an agentic coding assistant, not a chat CLI: left unconstrained it
-# answers by writing a report artifact to disk and returning a pointer to it.
+# agy answers by writing a report artifact to disk unless pinned inline —
+# see INLINE_ANSWER_GUARD in lib/verbosity.sh.
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 FULL_PROMPT="${INLINE_ANSWER_GUARD}
 

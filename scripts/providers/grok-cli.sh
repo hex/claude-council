@@ -26,9 +26,8 @@ if ! command -v grok >/dev/null 2>&1; then
     exit 1
 fi
 
-# grok is agentic in -p mode too: on a complex prompt it can narrate a plan
-# and go explore the workspace, and plain output then carries only that
-# narration instead of an answer.
+# grok narrates a plan and goes exploring the workspace unless pinned inline —
+# see INLINE_ANSWER_GUARD in lib/verbosity.sh.
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 FULL_PROMPT="${INLINE_ANSWER_GUARD}
 
@@ -42,7 +41,10 @@ ${PROMPT}"
 # read-only profile rather than inherit a permissive user config — a defense
 # against model-generated file writes or shell from an adversarial prompt
 # (mirrors codex's -s read-only and agy's --sandbox guard).
-ARGS=(-p "$FULL_PROMPT" --output-format plain --sandbox read-only)
+# --no-plan disables plan mode structurally: without it grok can answer a
+# complex prompt with only its plan narration. The prompt guard still covers
+# non-plan tool use.
+ARGS=(-p "$FULL_PROMPT" --output-format plain --sandbox read-only --no-plan)
 # -m only on an explicit override: the CLI's default model differs by auth
 # mode, and a pinned id is rejected ("unknown model id") under XAI_API_KEY
 # env auth, so an unset GROK_CLI_MODEL defers to the CLI's own default.

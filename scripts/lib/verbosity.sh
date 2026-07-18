@@ -1,6 +1,6 @@
 #!/bin/bash
-# ABOUTME: Shared system-prompt + verbosity directive for all providers
-# ABOUTME: Single source of truth for both the base prompt and verbosity levels
+# ABOUTME: Shared system prompt, inline-answer guard, and verbosity directives
+# ABOUTME: Single source of truth for the prompt scaffolding all providers share
 
 # Base system prompt — used by every provider. Edit here to change the persona
 # globally. Perplexity appends an additional citation clause.
@@ -13,8 +13,8 @@ BASE_SYSTEM_PROMPT="You are an expert software engineering consultant. Provide c
 # Guard for agentic CLI providers (agy, grok): left unconstrained they answer
 # by exploring the workspace or writing a report artifact, and a headless
 # print-mode run then relays only their narration. The guard pins the complete
-# answer inline as plain text — the only effective control where the CLI
-# offers no flag to disable tools.
+# answer inline as plain text. agy offers no flag to disable tools, so this is
+# its only control; grok additionally pins --no-plan at the flag level.
 # shellcheck disable=SC2034
 INLINE_ANSWER_GUARD="IMPORTANT: Respond with your complete answer as plain text directly in this conversation. Do NOT use any tools. Do NOT write, create, or edit any files. Do NOT create artifacts, reports, or documents. Do NOT reference external files. Provide your entire response inline as text."
 

@@ -136,7 +136,8 @@ teardown() {
     # -p is the last flag; the prompt is the final positional arg and carries the guard
     [[ "$(echo "$call" | jq -r '.args[-2]')" == "-p" ]]
     [[ "$(echo "$call" | jq -r '.args[-1]')" == *"another question"* ]]
-    [[ "$(echo "$call" | jq -r '.args[-1]')" == *"Do NOT use any tools"* ]]
+    # Leads with the guard — buried below the prompt it weighs less
+    [[ "$(echo "$call" | jq -r '.args[-1]')" == "IMPORTANT: Respond with your complete answer"* ]]
 }
 
 @test "antigravity.sh: passes no --model when ANTIGRAVITY_MODEL is unset, deferring to agy's own selection" {
@@ -181,7 +182,7 @@ teardown() {
     [[ "$output" == *"FAKE-GROK-RESPONSE"* ]]
 }
 
-@test "grok-cli.sh: sends -p prompt, plain output, model flag, and read-only sandbox" {
+@test "grok-cli.sh: sends -p prompt with guard, plain output, no-plan, model flag, and read-only sandbox" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     export GROK_CLI_MODEL="test-model-g"
     run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
@@ -189,24 +190,15 @@ teardown() {
     local call
     call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
     assert_json_eq "$call" '.bin' "grok"
-    # -p carries the user question as its value
+    # -p carries the user question, led by the inline-answer guard — grok can
+    # otherwise narrate a plan and go exploring instead of answering
     [[ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"the user question"* ]]
+    # Leads with the guard — buried below the prompt it weighs less
+    [[ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" == "IMPORTANT: Respond with your complete answer"* ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--no-plan")')" != "null" ]]
     [[ "$(echo "$call" | jq -r '.args | index("--output-format") as $i | .[$i+1]')" == "plain" ]]
     [[ "$(echo "$call" | jq -r '.args | index("-m") as $i | .[$i+1]')" == "test-model-g" ]]
     [[ "$(echo "$call" | jq -r '.args | index("--sandbox") as $i | .[$i+1]')" == "read-only" ]]
-}
-
-@test "grok-cli.sh: prompt carries the inline-answer guard so an agentic run can't stop at its preamble" {
-    # grok is agentic: on complex prompts it sometimes narrates a plan and goes
-    # off to explore the workspace, and -p print mode then relays only that
-    # narration. The guard pins the answer inline, like antigravity's.
-    export COUNCIL_FAKE_BEHAVIOR=valid
-    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
-    [ "$status" -eq 0 ]
-    local call
-    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
-    assert_json_eq "$call" '.bin' "grok"
-    [[ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"Do NOT use any tools"* ]]
 }
 
 @test "grok-cli.sh: passes no -m when GROK_CLI_MODEL is unset, deferring to the CLI's own default" {
