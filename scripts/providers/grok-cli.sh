@@ -26,8 +26,13 @@ if ! command -v grok >/dev/null 2>&1; then
     exit 1
 fi
 
+# grok is agentic in -p mode too: on a complex prompt it can narrate a plan
+# and go explore the workspace, and plain output then carries only that
+# narration instead of an answer.
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
-FULL_PROMPT="${SYSTEM}
+FULL_PROMPT="${INLINE_ANSWER_GUARD}
+
+${SYSTEM}
 
 ${PROMPT}"
 

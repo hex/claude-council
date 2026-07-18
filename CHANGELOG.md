@@ -4,6 +4,18 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixed
+
+- **grok-cli sometimes answered with a plan narration instead of an answer.**
+  grok is agentic in `-p` print mode: on a complex prompt it can announce a
+  plan ("Checking the workspace...") and go explore files, and plain output
+  then carries only that narration. Its prompt now leads with the same
+  inline-answer guard antigravity uses (hoisted to `verbosity.sh` as the
+  shared `INLINE_ANSWER_GUARD`), pinning the complete answer to plain text
+  with no tool use.
+
 ## 2026.7.8
 
 ### Fixed

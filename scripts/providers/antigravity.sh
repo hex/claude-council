@@ -28,12 +28,8 @@ fi
 
 # agy is an agentic coding assistant, not a chat CLI: left unconstrained it
 # answers by writing a report artifact to disk and returning a pointer to it.
-# This guard makes it answer inline as plain text with no tool use — the only
-# effective control, since agy exposes no flag to disable tools or set output.
-GUARD="IMPORTANT: Respond with your complete answer as plain text directly in this conversation. Do NOT use any tools. Do NOT write, create, or edit any files. Do NOT create artifacts, reports, or documents. Do NOT reference external files. Provide your entire response inline as text."
-
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
-FULL_PROMPT="${GUARD}
+FULL_PROMPT="${INLINE_ANSWER_GUARD}
 
 ${SYSTEM}
 

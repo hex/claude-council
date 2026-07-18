@@ -10,6 +10,14 @@
 # shellcheck disable=SC2034
 BASE_SYSTEM_PROMPT="You are an expert software engineering consultant. Provide clear, practical responses with code examples where helpful. Be thorough but concise - focus on actionable guidance."
 
+# Guard for agentic CLI providers (agy, grok): left unconstrained they answer
+# by exploring the workspace or writing a report artifact, and a headless
+# print-mode run then relays only their narration. The guard pins the complete
+# answer inline as plain text — the only effective control where the CLI
+# offers no flag to disable tools.
+# shellcheck disable=SC2034
+INLINE_ANSWER_GUARD="IMPORTANT: Respond with your complete answer as plain text directly in this conversation. Do NOT use any tools. Do NOT write, create, or edit any files. Do NOT create artifacts, reports, or documents. Do NOT reference external files. Provide your entire response inline as text."
+
 # Writes a verbosity directive into the named variable based on the level.
 # Levels: brief, standard (no prefix), detailed.
 #
