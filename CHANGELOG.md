@@ -11,10 +11,12 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - **grok-cli sometimes answered with a plan narration instead of an answer.**
   grok is agentic in `-p` print mode: on a complex prompt it can announce a
   plan ("Checking the workspace...") and go explore files, and plain output
-  then carries only that narration. Its prompt now leads with the same
-  inline-answer guard antigravity uses (hoisted to `verbosity.sh` as the
-  shared `INLINE_ANSWER_GUARD`), pinning the complete answer to plain text
-  with no tool use.
+  then carries only that narration. Two-layer fix: `--no-plan` disables plan
+  mode at the flag level, and the prompt now leads with the same inline-answer
+  guard antigravity uses (hoisted to `verbosity.sh` as the shared
+  `INLINE_ANSWER_GUARD`), pinning the complete answer to plain text with no
+  tool use. A pre-fix cached narration can still serve until its TTL (1h)
+  expires; `--no-cache` bypasses it.
 
 ## 2026.7.8
 
