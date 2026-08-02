@@ -576,3 +576,99 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"OK"* ]]
 }
+
+# ============================================================================
+# kimi-cli — subscription-auth sibling of the kimi API provider
+# ============================================================================
+
+@test "discover_providers: includes kimi-cli when the kimi binary is on PATH" {
+    if ! command_exists kimi; then skip "kimi CLI not installed"; fi
+    run source_lib_and_call 'discover_providers'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"kimi-cli"* ]]
+}
+
+@test "kimi-cli shadows the kimi API provider, so the subscription is preferred" {
+    run source_lib_and_call 'shadow_origin kimi'
+    [ "$status" -eq 0 ]
+    [ "$output" = "kimi-cli" ]
+}
+
+@test "kimi-cli falls back to the kimi API provider when it fails" {
+    run source_lib_and_call 'api_sibling kimi-cli'
+    [ "$status" -eq 0 ]
+    [ "$output" = "kimi" ]
+}
+
+@test "kimi-cli is binary-gated, not key-gated" {
+    # A key must not conjure the CLI provider into existence; only the binary does.
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export PATH="$(path_without_clis)"
+        export KIMI_API_KEY=k
+        source '${PROVIDERS_LIB}'
+        discover_providers
+    "
+    [[ "$output" != *"kimi-cli"* ]]
+}
+
+@test "get_model: labels both kimi providers instead of reporting unknown" {
+    run source_lib_and_call 'get_model kimi'
+    [ "$output" = "kimi-k3" ]
+    run source_lib_and_call 'get_model kimi-cli'
+    [ "$output" = "default" ]
+}
+
+# ============================================================================
+# ollama — local daemon, binary-gated, no key and no subscription
+# ============================================================================
+
+@test "discover_providers: includes ollama when the binary is on PATH" {
+    if ! command_exists ollama; then skip "ollama not installed"; fi
+    run source_lib_and_call 'discover_providers'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"ollama"* ]]
+}
+
+@test "ollama is binary-gated, not key-gated" {
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export PATH="$(path_without_clis)"
+        source '${PROVIDERS_LIB}'
+        discover_providers
+    "
+    [[ "$output" != *"ollama"* ]]
+}
+
+@test "ollama has no API sibling and shadows nothing" {
+    # It is neither a cheaper CLI for a paid API nor shadowed by one; a local
+    # model is its own thing, so both directions must stay empty.
+    run source_lib_and_call 'api_sibling ollama'
+    [ "$output" = "" ]
+    run source_lib_and_call 'shadow_origin ollama'
+    [ "$output" = "" ]
+}
+
+@test "the whole council runs on subscriptions and local models, with no API key" {
+    # The configuration this plugin is actually used with here: Codex and Kimi
+    # via subscription, Ollama locally. A regression that made any of them
+    # key-gated would silently empty the council.
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY KIMI_API_KEY MOONSHOT_API_KEY
+        source '${PROVIDERS_LIB}'
+        discover_providers
+    "
+    [ "$status" -eq 0 ]
+    for p in codex kimi-cli ollama; do
+        if command_exists "${p%-cli}" || command_exists "$p"; then
+            [[ "$output" == *"$p"* ]]
+        fi
+    done
+    # No API provider may appear without its key.
+    [[ "$output" != *"perplexity"* ]]
+    [[ "$output" != *"gemini"* ]]
+}

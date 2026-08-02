@@ -24,6 +24,12 @@ discover_providers() {
             grok-cli)
                 command -v grok >/dev/null 2>&1 && is_available=true
                 ;;
+            kimi-cli)
+                command -v kimi >/dev/null 2>&1 && is_available=true
+                ;;
+            ollama)
+                command -v ollama >/dev/null 2>&1 && is_available=true
+                ;;
             *)
                 # API providers gate on <NAME>_API_KEY — the same check
                 # api_key_present makes, so there's one definition of it.
@@ -43,7 +49,7 @@ discover_providers() {
 # Both shadow_origin and api_sibling derive from this list, so they cannot
 # drift: adding a pair is a one-line change here that propagates to
 # prefer_cli_over_api, the --list-available display, and the CLI→API fallback.
-SHADOW_PAIRS="openai:codex gemini:antigravity grok:grok-cli"
+SHADOW_PAIRS="openai:codex gemini:antigravity grok:grok-cli kimi:kimi-cli"
 
 # Returns the CLI provider that shadows the given API provider (empty if none).
 shadow_origin() {
@@ -125,6 +131,9 @@ get_model() {
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
         codex)      echo "${CODEX_MODEL:-default}" ;;
         antigravity) echo "${ANTIGRAVITY_MODEL:-default}" ;;
+        kimi)       echo "${KIMI_MODEL:-kimi-k3}" ;;
+        kimi-cli)   echo "${KIMI_CLI_MODEL:-default}" ;;
+        ollama)     echo "${OLLAMA_MODEL:-local}" ;;
         *)          echo "unknown" ;;
     esac
 }
@@ -165,14 +174,19 @@ coerce_result_json() {
 # Vendor color for a provider name. CLI variants share their vendor's color
 # (codex with openai, antigravity with gemini, grok-cli with grok) since they
 # speak for the same vendor.
-# Caller is responsible for defining BLUE/WHITE/RED/GREEN/CYAN globals.
+# Callers define BLUE/WHITE/RED/GREEN/MAGENTA/CYAN; the expansions below
+# default to empty so a provider that no arm names cannot abort the caller
+# under `set -u` (check-status.sh defines no CYAN, so the default arm used to
+# kill the whole status run the moment any new provider was added).
 provider_color() {
     case "$1" in
-        gemini|antigravity) echo -e "${BLUE}" ;;
-        openai|codex)      echo -e "${WHITE}" ;;
-        grok|grok-cli)     echo -e "${RED}" ;;
-        perplexity)        echo -e "${GREEN}" ;;
-        *)                 echo -e "${CYAN}" ;;
+        gemini|antigravity) echo -e "${BLUE:-}" ;;
+        openai|codex)      echo -e "${WHITE:-}" ;;
+        grok|grok-cli)     echo -e "${RED:-}" ;;
+        perplexity)        echo -e "${GREEN:-}" ;;
+        kimi|kimi-cli)     echo -e "${MAGENTA:-}" ;;
+        ollama)            echo -e "${CYAN:-}" ;;
+        *)                 echo -e "${CYAN:-}" ;;
     esac
 }
 
@@ -183,6 +197,8 @@ provider_emoji() {
         openai|codex)      echo "🔳" ;;
         grok|grok-cli)     echo "🟥" ;;
         perplexity)        echo "🟩" ;;
+        kimi|kimi-cli)     echo "🟪" ;;
+        ollama)            echo "⬜" ;;
         *)                 echo "⬛" ;;
     esac
 }

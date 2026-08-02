@@ -48,6 +48,7 @@ command_exists() {
 # Helper: clear every provider API key so discovery sees none of them
 unset_provider_keys() {
     unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
+    unset KIMI_API_KEY MOONSHOT_API_KEY
 }
 
 # Helper: assert a string is empty or whitespace-only
@@ -58,10 +59,14 @@ assert_blank() {
 # Helper: compute a PATH that excludes the directories holding codex and gemini.
 # Use when a test needs to assert "no providers available" on a developer machine
 # that has the CLI agents installed.
+# Removes the DIRECTORY each binary-gated CLI lives in, so discovery finds
+# none of them. Caveat worth knowing before adding an entry: a CLI installed
+# into a shared prefix takes that whole prefix out of PATH for the test — put
+# nothing here that commonly shares a directory with jq, curl or node.
 path_without_clis() {
     local clean=$PATH
     local cli dir
-    for cli in codex gemini agy grok; do
+    for cli in codex gemini agy grok kimi ollama; do
         dir=$(dirname "$(command -v "$cli" 2>/dev/null)" 2>/dev/null || true)
         [[ -n "$dir" ]] || continue
         clean=$(echo "$clean" | tr ':' '\n' | grep -vF -- "$dir" | tr '\n' ':')

@@ -22,6 +22,8 @@ BLUE='\033[34m'
 WHITE='\033[37m'
 RED='\033[31m'
 GREEN='\033[32m'
+MAGENTA='\033[35m'
+CYAN='\033[36m'
 DIM='\033[2m'
 RESET='\033[0m'
 
@@ -119,6 +121,13 @@ check_provider() {
             http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
                 --config "$cfg" \
                 "https://api.x.ai/v1/models" 2>/dev/null || true)
+            rm -f "$cfg"
+            ;;
+        kimi)
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+                --config "$cfg" \
+                "https://api.moonshot.ai/v1/models" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
         perplexity)
@@ -219,10 +228,15 @@ remediation_for() {
         openai:no_key)        echo "export OPENAI_API_KEY=<key>" ;;
         grok:no_key)          echo "export XAI_API_KEY=<key>" ;;
         perplexity:no_key)    echo "export PERPLEXITY_API_KEY=<key>" ;;
+        kimi:no_key)          echo "export KIMI_API_KEY=<key>" ;;
         codex:no_binary)      echo "npm install -g @openai/codex" ;;
         codex:unauthed)       echo "codex login" ;;
         antigravity:no_binary) echo "install the Antigravity CLI (agy)" ;;
         grok-cli:no_binary)   echo "install the Grok CLI (grok)" ;;
+        kimi-cli:no_binary)   echo "install the Kimi Code CLI (kimi)" ;;
+        kimi-cli:unauthed)    echo "kimi login" ;;
+        ollama:no_binary)     echo "install Ollama (ollama.com)" ;;
+        ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;
         *:auth_error)         echo "key rejected - regenerate it" ;;
         *)                    echo "" ;;
@@ -239,6 +253,7 @@ gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "GEMINI_MODEL" "gemini-
 openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "gpt-5.6-sol")
 grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "grok-4.5")
 perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "sonar-reasoning-pro")
+kimi_status=$(check_provider "kimi" "KIMI_API_KEY" "KIMI_MODEL" "kimi-k3")
 # codex login status exits non-zero when logged out; agy has no
 # equivalent offline auth probe, so it stays a single-tier check. `grok models`
 # prints "You are not authenticated." with exit 0 when logged out, which the
@@ -246,6 +261,8 @@ perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY
 codex_status=$(check_cli_provider "codex" "codex" login status)
 antigravity_status=$(check_cli_provider "antigravity" "agy")
 grokcli_status=$(check_cli_provider "grok-cli" "grok" models)
+kimicli_status=$(check_cli_provider "kimi-cli" "kimi")
+ollama_status=$(check_cli_provider "ollama" "ollama" list)
 
 # Format output
 # Usage: format_status <display_name> <provider_id> <status>
@@ -308,6 +325,9 @@ format_status "Gemini"     "gemini"     "$gemini_status"
 format_status "OpenAI"     "openai"     "$openai_status"
 format_status "Grok"       "grok"       "$grok_status"
 format_status "Perplexity" "perplexity" "$perplexity_status"
+format_status "Kimi" "kimi" "$kimi_status"
+format_status "Kimi CLI" "kimi-cli" "$kimicli_status"
+format_status "Ollama" "ollama" "$ollama_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
 format_status "Antigravity" "antigravity" "$antigravity_status"
 format_status "Grok CLI"   "grok-cli"   "$grokcli_status"
@@ -317,13 +337,17 @@ echo ""
 # Summary. available_count=$((...)) rather than ((available_count++)): under
 # set -e a post-increment returning 0 would abort the script on the first hit.
 available_count=0
+provider_total=10
 [[ "$gemini_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$openai_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$grok_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$perplexity_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$kimi_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$kimicli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$ollama_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$grokcli_status" == ok:* ]] && available_count=$((available_count + 1))
 
-echo -e "${DIM}${available_count}/7 providers available${RESET}"
+echo -e "${DIM}${available_count}/${provider_total} providers available${RESET}"
 echo ""
