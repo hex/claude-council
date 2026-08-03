@@ -286,6 +286,27 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args | index("-m") as $i | .[$i+1]')" == "test-model-k" ]]
 }
 
+@test "kimi-cli.sh: pins a no-tools agent so an auto-approving print run cannot write files or run shell" {
+    # kimi -p runs under the auto permission policy: tool calls are approved
+    # with no prompt, so an unrestricted invocation grants shell and file-write
+    # access on an attacker-influenceable prompt. --plan would be the natural
+    # read-only pin but kimi rejects it alongside --prompt, so the restriction
+    # rides an agent file whose disallowedTools are enforced before execution.
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local call agent_file
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    agent_file=$(echo "$call" | jq -r '.args | index("--agent-file") as $i | .[$i+1]')
+    [ -f "$agent_file" ]
+    # The pin is only worth as much as the file it points at
+    command grep -q 'disallowedTools' "$agent_file"
+    command grep -q 'Bash' "$agent_file"
+    # and never the auto-approve escape hatches
+    [[ "$(echo "$call" | jq -r '.args | index("--yolo")')" == "null" ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--auto")')" == "null" ]]
+}
+
 @test "kimi-cli.sh: passes no -m when KIMI_CLI_MODEL is unset, deferring to the CLI's own default" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     unset KIMI_CLI_MODEL

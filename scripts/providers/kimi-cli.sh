@@ -36,7 +36,21 @@ ${PROMPT}"
 # answer, and appends a "To resume this session: …" footer. All three would end
 # up quoted verbatim in the council's synthesis. The JSONL stream separates them
 # cleanly — role "assistant" is the answer, role "meta" is the session hint.
-ARGS=(-p "$FULL_PROMPT" --output-format stream-json)
+# Restrict the agent to no tools at all. This matters more here than for the
+# other CLIs: `kimi -p` runs under the auto permission policy, so every tool
+# call — file writes, shell — is approved with no prompt. codex merely
+# inherited whatever ~/.codex/config.toml defaulted to; this grants execution
+# unconditionally, on a prompt that can carry --file contents or, in debate
+# mode, another provider's answer. Same intent as codex's -s read-only and
+# grok-cli's --sandbox read-only.
+#
+# --agent-file rather than --plan: kimi's read-only plan mode is the obvious
+# candidate but the CLI rejects it outright here — "error: Cannot combine
+# --prompt with --plan" (verified against kimi-code 0.31.1). An agent file is
+# the mechanism that does compose with -p, and its tools/disallowedTools are
+# enforced before execution rather than only shaping what the model is offered.
+AGENT_FILE="$SCRIPT_DIR/../../prompts/kimi-cli-agent.md"
+ARGS=(-p "$FULL_PROMPT" --output-format stream-json --agent-file "$AGENT_FILE")
 # -m only on an explicit override, so an unset KIMI_CLI_MODEL defers to the
 # CLI's own default_model in config.toml (mirrors codex.sh and grok-cli.sh).
 [[ -n "${KIMI_CLI_MODEL:-}" ]] && ARGS+=(-m "$KIMI_CLI_MODEL")

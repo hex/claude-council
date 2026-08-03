@@ -35,6 +35,13 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   and a new provider cannot leave it behind.
 - **`path_without_clis` could not hide newly added binary-gated CLIs**, so
   tests asserting the no-providers path saw a populated council.
+- **The Kimi CLI ran with tool execution auto-approved.** `kimi -p` handles
+  tool calls under the auto permission policy, so file writes and shell
+  commands were approved with no prompt — on a prompt that can carry `--file`
+  contents or, in debate mode, another provider's answer. The other CLI
+  providers each pin a restriction for exactly this reason. Kimi's read-only
+  plan mode cannot be used here (`kimi` rejects `--plan` alongside `--prompt`),
+  so the council now passes an agent file that grants no tools at all.
 - **A stray line from the Kimi CLI discarded a complete answer.** The stream
   was slurped as one JSON value sequence, so any unstructured line beside it —
   an upgrade notice, a warning — aborted the parse; the provider then reported
