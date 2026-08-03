@@ -56,6 +56,13 @@ assert_blank() {
     [[ -z "${1//[[:space:]]/}" ]]
 }
 
+# Helper: assert a string carries something a user could act on. A provider that
+# fails silently is worse than one that fails loudly — the council stores the
+# script's own output as the error text, so a blank one renders an empty slot.
+assert_not_blank() {
+    [[ -n "${1//[[:space:]]/}" ]]
+}
+
 # Helper: compute a PATH that excludes the directories holding codex and gemini.
 # Use when a test needs to assert "no providers available" on a developer machine
 # that has the CLI agents installed.

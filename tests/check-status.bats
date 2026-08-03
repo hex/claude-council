@@ -117,6 +117,22 @@ EOF
     [[ "$output" == *"10/10 providers available"* ]]
 }
 
+@test "check-status: the footer total equals the number of provider rows printed" {
+    # The denominator used to be a literal, hand-bumped 3 -> 4 -> 6 -> 7 -> 10 as
+    # the roster grew. Pin it to what the user can actually count on screen so a
+    # future provider cannot add a row and leave the total behind. Provider rows
+    # are the only tab-separated lines check-status emits.
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=200
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local rows total
+    rows=$(printf '%s\n' "$output" | grep -c "$(printf '\t')")
+    total=$(printf '%s\n' "$output" | sed -n 's|.*[0-9][0-9]*/\([0-9][0-9]*\) providers available.*|\1|p')
+    [ "$rows" -gt 0 ]
+    [ "$total" = "$rows" ]
+}
+
 @test "check-status: HTTP 401 reports auth failure with regenerate remediation" {
     shadow_curl
     export COUNCIL_FAKE_HTTP_CODE=401

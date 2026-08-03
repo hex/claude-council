@@ -30,9 +30,28 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   defined; under `set -u` that aborted the entire status run the moment a new
   provider was added. The colour expansions now default to empty.
 - **The provider total in the status footer was hardcoded.** `N/7` would have
-  misreported the moment the roster changed; it is now derived.
+  misreported the moment the roster changed. `format_status` now counts each
+  row as it prints it, so the denominator is what the user can count on screen
+  and a new provider cannot leave it behind.
 - **`path_without_clis` could not hide newly added binary-gated CLIs**, so
   tests asserting the no-providers path saw a populated council.
+- **A stray line from the Kimi CLI discarded a complete answer.** The stream
+  was slurped as one JSON value sequence, so any unstructured line beside it —
+  an upgrade notice, a warning — aborted the parse; the provider then reported
+  "no assistant content" and, with a key set, silently billed the API sibling
+  instead. It is now read line by line, skipping only what will not parse.
+- **A downed Ollama daemon produced a blank error.** `ollama list` exits
+  non-zero when the daemon is not running, which under `set -euo pipefail`
+  aborted the script before its own guard could speak — leaving the council an
+  empty error slot. The call is guarded and reports the daemon state instead.
+- **An image query could route to a sibling that also cannot see.** Routing was
+  gated on a sibling existing rather than on it being vision-capable, which was
+  safe only while every sibling had vision; `kimi` is the first that does not,
+  so the query spent a paid API call on an equally blind answer and skipped the
+  "(answered without the image)" tag that marks one.
+- **`query-council.bats` kept a second copy of the provider-key unset list**
+  that went stale, so the no-providers tests failed on any machine exporting a
+  newly added key. It calls the shared helper now.
 
 ## 2026.7.9
 

@@ -271,6 +271,13 @@ format_status() {
     local provider_id="$2"
     local status="$3"
 
+    # The footer's denominator, counted here rather than written down. A literal
+    # has been hand-bumped 3 -> 4 -> 6 -> 7 -> 10 as the roster grew, and each
+    # bump was a chance to forget; counting a row as it prints makes the total
+    # equal to what the user can actually see, by construction. Assignment form,
+    # not ((n++)): under set -e a post-increment returning 0 aborts the script.
+    provider_total=$((provider_total + 1))
+
     local emoji color
     emoji=$(provider_emoji "$provider_id")
     color=$(provider_color "$provider_id")
@@ -321,6 +328,7 @@ format_status() {
     echo -e "  ${emoji} ${color}${name}${RESET}\t${status_icon} ${status_text}  ${model_text}"
 }
 
+provider_total=0
 format_status "Gemini"     "gemini"     "$gemini_status"
 format_status "OpenAI"     "openai"     "$openai_status"
 format_status "Grok"       "grok"       "$grok_status"
@@ -337,7 +345,6 @@ echo ""
 # Summary. available_count=$((...)) rather than ((available_count++)): under
 # set -e a post-increment returning 0 would abort the script on the first hit.
 available_count=0
-provider_total=10
 [[ "$gemini_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$openai_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$grok_status" == ok:* ]] && available_count=$((available_count + 1))

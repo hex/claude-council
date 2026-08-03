@@ -241,6 +241,105 @@ teardown() {
 }
 
 # ============================================================================
+# kimi-cli.sh against the fake binary
+# ============================================================================
+
+@test "kimi-cli.sh: returns fake response on valid behavior" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"FAKE-KIMI-RESPONSE"* ]]
+}
+
+@test "kimi-cli.sh: concatenates assistant chunks in order and drops the meta event" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    # Two assistant chunks joined in stream order, with no separator inserted
+    [[ "$output" == "FAKE-KIMI-RESPONSE: deterministic answer" ]]
+    # The resume hint rides the same stream as role "meta" and must not be
+    # quoted into the council's synthesis
+    [[ "$output" != *"resume"* ]]
+}
+
+@test "kimi-cli.sh: an unstructured notice beside the stream does not lose the answer" {
+    # The CLI is free to print an upgrade notice alongside its JSONL. Slurping
+    # the stream as one value makes a single such line abort the whole parse and
+    # discard a complete answer, which then silently bills the API sibling.
+    export COUNCIL_FAKE_BEHAVIOR=dirty-stream
+    run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"FAKE-KIMI-RESPONSE: deterministic answer"* ]]
+    [[ "$output" != *"Update available"* ]]
+}
+
+@test "kimi-cli.sh: sends -p prompt, stream-json output, and model flag" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    export KIMI_CLI_MODEL="test-model-k"
+    run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    assert_json_eq "$call" '.bin' "kimi"
+    [[ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"the user question"* ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--output-format") as $i | .[$i+1]')" == "stream-json" ]]
+    [[ "$(echo "$call" | jq -r '.args | index("-m") as $i | .[$i+1]')" == "test-model-k" ]]
+}
+
+@test "kimi-cli.sh: passes no -m when KIMI_CLI_MODEL is unset, deferring to the CLI's own default" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset KIMI_CLI_MODEL
+    run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    [[ "$(echo "$call" | jq -r '.args | index("-m")')" == "null" ]]
+}
+
+@test "kimi-cli.sh: an empty stream is reported as an error, not as an empty answer" {
+    export COUNCIL_FAKE_BEHAVIOR=empty
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"no assistant content"* ]]
+}
+
+@test "kimi-cli.sh: a hung CLI is bounded by COUNCIL_TIMEOUT and reports a timeout" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_TIMEOUT=1
+    local start end
+    start=$SECONDS
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    end=$SECONDS
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"timed out"* ]]
+    [ $((end - start)) -lt 10 ]
+}
+
+@test "kimi-cli.sh: surfaces stderr and exits 1 on error behavior" {
+    export COUNCIL_FAKE_BEHAVIOR=error
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"fake provider failure"* ]]
+}
+
+# ============================================================================
+# ollama.sh against the fake binary
+# ============================================================================
+
+@test "ollama.sh: a daemon that is down reports a diagnosable error, not a blank one" {
+    # Discovery gates ollama on `command -v ollama` alone, so binary-installed
+    # but daemon-not-running is a routine state. `ollama list` failing must not
+    # abort the script before the guard below it can speak: the council stores
+    # the provider's own output as the error text, so a silent exit renders an
+    # empty error slot the user cannot act on.
+    export COUNCIL_FAKE_BEHAVIOR=error
+    unset OLLAMA_MODEL
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/ollama.sh" "test prompt"
+    [ "$status" -ne 0 ]
+    assert_not_blank "$stderr"
+    [[ "$stderr" == *"Ollama"* || "$stderr" == *"ollama"* ]]
+}
+
+# ============================================================================
 # Discovery with fakes — replaces skip-gated coverage
 # ============================================================================
 

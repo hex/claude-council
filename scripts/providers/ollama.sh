@@ -53,7 +53,19 @@ ENDPOINT="${HOST%/}/v1/chat/completions"
 # hardcoding one that may not be pulled here.
 MODEL="${OLLAMA_MODEL:-}"
 if [[ -z "$MODEL" ]]; then
-    MODEL=$(ollama list 2>/dev/null | awk 'NR==2 {print $1}')
+    # Guard the call rather than piping it straight into awk. Discovery gates
+    # this provider on the binary alone, so "installed but daemon not running"
+    # is routine — and there `ollama list` exits non-zero, which under
+    # `set -euo pipefail` kills the script on this very assignment, before the
+    # empty-MODEL guard below can say anything. The council stores a provider's
+    # own output as its error text, so that abort renders a blank error slot.
+    # Merging stderr keeps the daemon's diagnostic for the message; on success
+    # `ollama list` writes only the table.
+    if ! MODEL_LIST=$(ollama list 2>&1); then
+        echo "Error: could not reach the Ollama daemon (start it with 'ollama serve'): $(echo "$MODEL_LIST" | head -1)" >&2
+        exit 1
+    fi
+    MODEL=$(echo "$MODEL_LIST" | awk 'NR==2 {print $1}')
     if [[ -z "$MODEL" ]]; then
         echo "Error: no local Ollama model found — run 'ollama pull <model>'" >&2
         exit 1

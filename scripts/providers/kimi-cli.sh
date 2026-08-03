@@ -53,9 +53,11 @@ trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
 if perl -e 'alarm shift; exec @ARGV' "$COUNCIL_TIMEOUT" kimi "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then
     # Concatenate every assistant chunk; a long answer may arrive in several.
-    # Non-JSON lines are skipped rather than aborting the run: the CLI is free
-    # to print an unstructured warning alongside the stream.
-    RESPONSE=$(jq -rs 'map(select(type == "object" and .role == "assistant") | .content // empty) | join("")' "$OUT_TMP" 2>/dev/null || true)
+    # Read line by line (-nR + inputs) rather than slurping: `jq -s` parses the
+    # whole stream as one value sequence, so a single unstructured line — an
+    # upgrade notice, a warning — aborts the parse and discards a complete
+    # answer. `fromjson?` drops what won't parse and keeps the rest.
+    RESPONSE=$(jq -rnR '[inputs | fromjson? | select(type == "object" and .role == "assistant") | .content // empty] | join("")' "$OUT_TMP" 2>/dev/null || true)
     if [[ -z "${RESPONSE//[[:space:]]/}" ]]; then
         echo "Error from kimi CLI: no assistant content in response" >&2
         exit 1

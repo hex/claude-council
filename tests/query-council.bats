@@ -12,9 +12,11 @@ source "${LIB_DIR}/providers.sh"
 setup() {
     mkdir -p "$TEST_CACHE_DIR"
     export COUNCIL_CACHE_DIR="$TEST_CACHE_DIR"
-    # Unset all provider keys to test error cases. XAI_API_KEY also has to go,
-    # since keys.sh's resolve_grok_key copies it to GROK_API_KEY automatically.
-    unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
+    # Unset all provider keys to test error cases. Call the shared helper rather
+    # than repeating the list: a second copy silently goes stale the next time a
+    # provider is added, and the no-providers tests below then see a populated
+    # council on any machine that exports the new key.
+    unset_provider_keys
     # Hide codex/gemini binaries so binary-gated discovery doesn't make real CLI
     # calls during arg-parsing tests. The cli-providers.bats file does the
     # opposite — it keeps them on PATH on purpose. The stripped PATH can demote
