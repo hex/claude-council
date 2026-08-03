@@ -71,7 +71,22 @@ if perl -e 'alarm shift; exec @ARGV' "$COUNCIL_TIMEOUT" kimi "${ARGS[@]}" >"$OUT
     # whole stream as one value sequence, so a single unstructured line — an
     # upgrade notice, a warning — aborts the parse and discards a complete
     # answer. `fromjson?` drops what won't parse and keeps the rest.
-    RESPONSE=$(jq -rnR '[inputs | fromjson? | select(type == "object" and .role == "assistant") | .content // empty] | join("")' "$OUT_TMP" 2>/dev/null || true)
+    #
+    # Two shapes beyond the plain string chunk have to be handled, because both
+    # fail silently: content may arrive as a [{type,text}] array, and adding an
+    # array to a string is a jq type error that the `|| true` below swallows
+    # into "no content"; and an assistant message carrying tool_calls narrates
+    # the call rather than answering, so its text would otherwise be spliced
+    # into the synthesis — the very interleaving reading stream-json avoids.
+    RESPONSE=$(jq -rnR '
+        [ inputs
+          | fromjson?
+          | select(type == "object" and .role == "assistant" and (has("tool_calls") | not))
+          | .content
+          | if   type == "array"  then map(select(.type == "text") | .text // empty) | join("")
+            elif type == "string" then .
+            else empty end
+        ] | join("")' "$OUT_TMP" 2>/dev/null || true)
     if [[ -z "${RESPONSE//[[:space:]]/}" ]]; then
         echo "Error from kimi CLI: no assistant content in response" >&2
         exit 1

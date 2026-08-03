@@ -14,6 +14,10 @@
 #   error          - generic failure on stderr, exit 1
 #   dirty-stream   - kimi only: an unstructured notice line ahead of the JSONL,
 #                    which a real CLI is free to print (upgrade notices etc.)
+#   array-content  - kimi only: content as a [{type,text}] array rather than a
+#                    string, the other shape the message format allows
+#   tool-narration - kimi only: an assistant message carrying tool_calls, whose
+#                    content narrates the call rather than answering
 #
 # Every invocation appends {bin, args} to $COUNCIL_FAKE_STATE_DIR/calls.jsonl
 # so tests can assert exactly what the plugin sent to the CLI.
@@ -65,6 +69,14 @@ if [[ " \$* " == *" --output-format stream-json "* ]]; then
             exit 0 ;;
         dirty-stream)
             echo "Update available: kimi 2.0 -> 2.1"
+            echo '{"role":"assistant","content":"$marker: deterministic answer"}'
+            exit 0 ;;
+        array-content)
+            echo '{"role":"assistant","content":[{"type":"text","text":"$marker: deterministic answer"}]}'
+            exit 0 ;;
+        tool-narration)
+            echo '{"role":"assistant","content":"Let me check the directory.","tool_calls":[{"type":"function","id":"tc_1","function":{"name":"Shell","arguments":"{}"}}]}'
+            echo '{"role":"tool","tool_call_id":"tc_1","content":"file1.py"}'
             echo '{"role":"assistant","content":"$marker: deterministic answer"}'
             exit 0 ;;
         empty)

@@ -273,6 +273,29 @@ teardown() {
     [[ "$output" != *"Update available"* ]]
 }
 
+@test "kimi-cli.sh: content arriving as an array is read, not dropped" {
+    # The message format allows content as [{type,text}] as well as a plain
+    # string. Adding a string to an array is a jq type error, which the
+    # command substitution's `|| true` swallows — so the shape difference
+    # surfaces as "no assistant content" over a perfectly good answer.
+    export COUNCIL_FAKE_BEHAVIOR=array-content
+    run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"FAKE-KIMI-RESPONSE: deterministic answer"* ]]
+}
+
+@test "kimi-cli.sh: narration attached to a tool call is not spliced into the answer" {
+    # An assistant message carrying tool_calls narrates the call ("Let me check
+    # the directory."); only the message that answers should reach the council.
+    # Reading stream-json instead of the text renderer exists precisely to keep
+    # this kind of chatter out of the synthesis.
+    export COUNCIL_FAKE_BEHAVIOR=tool-narration
+    run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "FAKE-KIMI-RESPONSE: deterministic answer" ]]
+    [[ "$output" != *"Let me check"* ]]
+}
+
 @test "kimi-cli.sh: sends -p prompt, stream-json output, and model flag" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     export KIMI_CLI_MODEL="test-model-k"
