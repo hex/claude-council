@@ -240,8 +240,8 @@ standard mode. Use it for high-stakes decisions, not quick questions.
 
 ### Local Council (--local)
 
-If you have no provider keys and no `codex` / `agy` / `grok` CLI installed, you can
-still convene a council — locally, using Claude alone:
+If you have no provider keys and no `codex` / `agy` / `grok` / `kimi` CLI and no
+`ollama` installed, you can still convene a council, locally, using Claude alone:
 
 ```bash
 # Explicit
@@ -313,7 +313,7 @@ Attach one image (e.g. a UI screenshot) so vision-capable providers can critique
 
 - Single image per query, raw size up to 10 MB, extensions: png / jpg / jpeg / webp / gif.
 - `gemini`, `openai`, `grok`, and `perplexity` receive the image alongside the prompt.
-- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok` (the slot is marked as a fallback). If the sibling is unusable (no API key) or already answering in its own slot, the CLI provider answers text-only instead.
+- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok` (the slot is marked as a fallback). `kimi-cli`'s sibling `kimi` is text-only, so an image is never routed there. If the sibling is unusable (no API key), not vision-capable, or already answering in its own slot, the CLI provider answers text-only instead and its answer is prefixed with `(answered without the image)`. Selecting `kimi` or `ollama` directly is likewise text-only.
 
 Privacy: the image is sent to the providers that can see it, but its bytes are **not** written to cache entries or the saved `council-*.md` transcripts — only a hash of the image keys the cache.
 
@@ -396,17 +396,25 @@ export GEMINI_API_KEY="your-key"
 export OPENAI_API_KEY="your-key"
 export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
 export PERPLEXITY_API_KEY="your-key"
+export KIMI_API_KEY="your-key"         # MOONSHOT_API_KEY is read as a fallback,
+                                       # but only KIMI_API_KEY makes kimi discoverable
 ```
+
+`ollama` needs no key at all: install it, pull a model, and it joins the council
+as a local provider.
 
 ### CLI Providers (subscription auth, no API key)
 
-If the `codex`, `agy`, or `grok` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
+If the `codex`, `agy`, `grok`, or `kimi` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
 
 - `codex` (OpenAI Codex CLI) shadows the `openai` API provider — uses your `~/.codex/config.toml` model unless `CODEX_MODEL` is set
 - `antigravity` (Antigravity CLI, `agy`) shadows the `gemini` API provider — uses the model selected in the Antigravity app unless `ANTIGRAVITY_MODEL` is set
 - `grok-cli` (xAI Grok CLI, `grok`) shadows the `grok` API provider — uses the grok CLI's own default model unless `GROK_CLI_MODEL` is set
+- `kimi-cli` (Kimi Code CLI, `kimi`) shadows the `kimi` API provider, using the kimi CLI's own configured model unless `KIMI_CLI_MODEL` is set
 
-CLI providers use your existing CLI subscription — no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai`, `--providers=gemini`, or `--providers=grok`. Listing both API and CLI together (e.g., `--providers=grok,grok-cli`) runs them side-by-side for comparison.
+`ollama` is also discovered from `PATH`, but it is local and keyless rather than subscription-backed, so it shadows nothing and has no API sibling.
+
+CLI providers use your existing CLI subscription: no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai`, `--providers=gemini`, `--providers=grok`, or `--providers=kimi`. Listing both API and CLI together (e.g., `--providers=grok,grok-cli`) runs them side-by-side for comparison.
 
 If a CLI provider fails at query time and its API sibling's key is set, the council automatically retries through that API sibling and marks the slot as a fallback (the answer is shown under the CLI slot with the API model's name and a "fell back to … API" note). The fallback is skipped when the sibling is already in your selected providers, so you never get the same vendor's answer twice.
 
@@ -416,7 +424,13 @@ Override CLI model selection (defaults mirror what each CLI picks itself):
 export CODEX_MODEL="gpt-5-codex"                # default: the codex CLI's own configured model
 export ANTIGRAVITY_MODEL="Gemini 3.1 Pro (High)"  # default: the model selected in the Antigravity app
 export GROK_CLI_MODEL="grok-4.3"                # default: the grok CLI's own default model
+export KIMI_CLI_MODEL="kimi-k3"                 # default: the kimi CLI's own configured model
 ```
+
+The Kimi CLI runs every prompt under an agent definition that grants it no tools
+(`prompts/kimi-cli-agent.md`). Its print mode auto-approves tool calls, so the
+council denies them outright rather than letting a prompt drive file writes or
+shell commands.
 
 ### Verbosity
 
@@ -474,9 +488,13 @@ export GEMINI_MODEL="gemini-3.1-pro-preview"       # default
 export OPENAI_MODEL="gpt-5.6-sol"                   # default
 export GROK_MODEL="grok-4.5"                        # default
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
+export KIMI_MODEL="kimi-k3"                         # default
+export OLLAMA_MODEL="llama3.2"                      # default: whichever model `ollama list` shows first
+export OLLAMA_HOST="http://localhost:11434"         # default
 ```
 
-Response length cap (default: 2048):
+Response length cap (default: 2048; `ollama` uses 4096, since local reasoning
+models spend much of the budget on thinking that never reaches the answer):
 
 ```bash
 export COUNCIL_MAX_TOKENS=4096  # longer responses
@@ -525,6 +543,8 @@ The bump applies to:
 - **Gemini**: `gemini-3*`, `*thinking*`
 - **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`, `grok-build-*`
 - **Perplexity**: `sonar-reasoning*`, `*deep-research*`
+- **Kimi**: `kimi-k*` (so the default model always triggers the bump)
+- **Ollama**: `*r1*`, `*reason*`, `*gpt-oss*`, `qwen*`, `gemma*`, `deepseek*`
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
@@ -648,7 +668,7 @@ bash scripts/query-council.sh --list-default
 ## Requirements
 
 - `curl` and `jq` for API calls
-- Valid API keys for at least one provider, OR `codex` / `agy` (Antigravity) / `grok` CLI installed
+- Valid API keys for at least one provider, OR `codex` / `agy` (Antigravity) / `grok` / `kimi` CLI installed, OR `ollama` running locally
 - Optional: a Rich-capable Python (`python3` with a modern `rich`, or `uv`) upgrades the tmux pane's markdown rendering; without it the built-in perl renderer is used
 
 ## Development
@@ -688,7 +708,7 @@ bats tests/roles.bats
 ```
 
 CLI-provider paths are tested hermetically: `tests/fixtures/fake-clis.bash`
-installs fake `codex`/`agy`/`grok` executables onto `PATH` whose behavior is
+installs fake `codex`/`agy`/`grok`/`kimi`/`ollama` executables onto `PATH` whose behavior is
 switched via `COUNCIL_FAKE_BEHAVIOR` and which record every invocation, so
 provider scripts, async jobs, and the stop gate run end-to-end with no
 network and no real CLIs.

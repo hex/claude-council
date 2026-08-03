@@ -27,6 +27,8 @@ Each provider is a shell script in `scripts/providers/` that:
 | OpenAI | `OPENAI_API_KEY` | gpt-5.6-sol |
 | Grok | `XAI_API_KEY` (or `GROK_API_KEY`) | grok-4.5 |
 | Perplexity | `PERPLEXITY_API_KEY` | sonar-reasoning-pro |
+| Kimi | `KIMI_API_KEY` | kimi-k3 |
+| Ollama | none (local) | first model `ollama list` shows |
 
 ## Troubleshooting
 

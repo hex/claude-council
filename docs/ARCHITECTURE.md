@@ -31,10 +31,16 @@
         |       |       |       |       |       |       |
         v       v       v       v       v       v       v
    +--------+ +-----+ +------+ +-----+ +------+ +-----------+ +---------+
-   | gemini | |open | | grok | |perp | |codex | |antigravity| | grok-   |
-   |  .sh   | | .sh | |  .sh | |.sh  | |  .sh | |    .sh    | | cli.sh  |
+   | gemini | |open | | grok | |perp | | kimi | |  codex    | | anti-   |
+   |  .sh   | | .sh | |  .sh | |.sh  | |  .sh | |   .sh     | |grav .sh |
    +--------+ +-----+ +------+ +-----+ +------+ +-----------+ +---------+
-   (API)      (API)   (API)    (API)   (CLI)    (CLI)         (CLI)
+   (API)      (API)   (API)    (API)   (API)    (CLI)         (CLI)
+
+                    +----------+ +----------+ +----------+
+                    | grok-cli | | kimi-cli | |  ollama  |
+                    |   .sh    | |   .sh    | |   .sh    |
+                    +----------+ +----------+ +----------+
+                    (CLI)        (CLI)        (local)
         |               |               |               |
         |    +----------+----------+----------+        |
         +--->|      lib/cache.sh   |<---------+--------+
@@ -133,21 +139,24 @@ EXIT:   0 = success, non-zero = failure (error to stderr)
 
 Two flavors share the interface:
 
-- **API providers** (`gemini`, `openai`, `grok`, `perplexity`) — gated on
+- **API providers** (`gemini`, `openai`, `grok`, `perplexity`, `kimi`), gated on
   `{PROVIDER}_API_KEY`, talk to vendor APIs over HTTPS, charge per call.
-- **CLI providers** (`codex`, `antigravity`, `grok-cli`) — gated on the binary
-  being on `PATH`, use the user's existing CLI subscription auth, no per-call cost.
-  When both an API and CLI sibling exist (codex+openai, antigravity+gemini,
-  grok-cli+grok), the orchestrator prefers the CLI by default; explicit
+- **CLI providers** (`codex`, `antigravity`, `grok-cli`, `kimi-cli`), gated on the
+  binary being on `PATH`, use the user's existing CLI subscription auth, no per-call
+  cost. When both an API and CLI sibling exist (codex+openai, antigravity+gemini,
+  grok-cli+grok, kimi-cli+kimi), the orchestrator prefers the CLI by default; explicit
   `--providers` wins over the policy. If a CLI provider fails at query time, the
   council retries through its API sibling (when that key is set) and marks the
   slot as a fallback.
+- **`ollama`**, also gated on the binary being on `PATH`, but local and keyless:
+  it shadows nothing, has no API sibling, and costs nothing per call.
 
 Environment-based configuration:
 - `{PROVIDER}_API_KEY` - Required authentication for API providers
 - `{PROVIDER}_MODEL` - Model override (also applies to CLI providers via
-  `CODEX_MODEL` / `ANTIGRAVITY_MODEL` / `GROK_CLI_MODEL`)
-- `COUNCIL_MAX_TOKENS` - Response length limit (API providers only)
+  `CODEX_MODEL` / `ANTIGRAVITY_MODEL` / `GROK_CLI_MODEL` / `KIMI_CLI_MODEL`)
+- `COUNCIL_MAX_TOKENS` - Response length limit (API providers only; `ollama`
+  raises its own base to 4096)
 - `COUNCIL_DEBUG` - Enable verbose logging
 
 ### Vision / Image Input (`--image`)
@@ -163,8 +172,11 @@ Per-provider disposition when an image is attached:
   `image_url` (Chat Completions), grok and perplexity as an OpenAI-compatible
   `image_url` data-URI on their `/chat/completions` endpoint.
 - **codex, antigravity, grok-cli** (CLI, cannot accept an image) route to their
-  vision API sibling — codex→openai, antigravity→gemini, grok-cli→grok — with
-  the image.
+  vision API sibling, codex→openai, antigravity→gemini, grok-cli→grok, with
+  the image. The route is taken only when the sibling is itself vision-capable,
+  so **kimi-cli** does not use it: its sibling `kimi` is text-only.
+- **kimi, kimi-cli, ollama** answer text-only, prefixed with
+  `(answered without the image)`.
 
 Privacy invariant: only the image's SHA-256 keys the cache. The base64 lives
 solely in a temp file passed to providers; it is never written to cache entries
@@ -210,8 +222,9 @@ is_model_unavailable_error(body):        # retry.sh
     (handles xAI's bare-string .error as well as the usual .error.message)
 
 model_fallback_for(provider) -> model    # model_fallback.sh
-  - one verified fallback per API provider (openai, grok, gemini, perplexity)
-  - empty for CLI providers, which degrade to their API sibling instead
+  - one verified fallback per API provider (openai, grok, gemini, perplexity, kimi)
+  - empty for CLI providers, which degrade to their API sibling instead, and for
+    ollama, whose models are whatever is installed locally
 
 model_unavailable_cached/remember(provider, model, key_hash):
   - TTL-cached "unavailable" verdict, scoped to provider + preferred model + key
@@ -412,7 +425,8 @@ claude-council/
 ├── prompts/
 │   ├── role-injection.md        # {{VAR}} template for role-wrapped prompts
 │   ├── synthesis.md             # Synthesis structure + calibration rules
-│   └── stop-review-gate.md      # Stop-gate reviewer contract
+│   ├── stop-review-gate.md      # Stop-gate reviewer contract
+│   └── kimi-cli-agent.md        # No-tools agent definition passed to the kimi CLI
 ├── schemas/
 │   └── agent-analysis.schema.json  # Deep-execution agent reply contract
 ├── scripts/
@@ -430,9 +444,12 @@ claude-council/
 │   │   ├── openai.sh            # API
 │   │   ├── grok.sh              # API
 │   │   ├── perplexity.sh        # API
+│   │   ├── kimi.sh              # API (Moonshot)
 │   │   ├── codex.sh             # CLI (subscription auth, shadows openai)
 │   │   ├── antigravity.sh       # CLI (subscription auth, shadows gemini)
-│   │   └── grok-cli.sh          # CLI (subscription auth, shadows grok)
+│   │   ├── grok-cli.sh          # CLI (subscription auth, shadows grok)
+│   │   ├── kimi-cli.sh          # CLI (subscription auth, shadows kimi)
+│   │   └── ollama.sh            # Local (no key, no sibling)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
@@ -466,7 +483,7 @@ claude-council/
 │   ├── run_tests.sh             # Test runner
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── fixtures/
-│   │   └── fake-clis.bash       # Fake codex/agy/grok binaries on PATH
+│   │   └── fake-clis.bash       # Fake codex/agy/grok/kimi/ollama binaries on PATH
 │   ├── agent-analysis.bats
 │   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
 │   ├── cache.bats
@@ -507,11 +524,16 @@ claude-council/
 | `XAI_API_KEY` | - | xAI API key (preferred) |
 | `GROK_API_KEY` | - | xAI API key (legacy alias; `XAI_API_KEY` wins if both set) |
 | `PERPLEXITY_API_KEY` | - | Perplexity API key |
+| `KIMI_API_KEY` | - | Moonshot/Kimi API key; the only var that makes `kimi` discoverable |
+| `MOONSHOT_API_KEY` | - | Read as a fallback by `kimi.sh`, but does not satisfy discovery |
 | `{PROVIDER}_MODEL` | varies | Model override (API providers) |
 | `CODEX_MODEL` | (unset) | Model passed to `codex exec -m`, only when set (else the codex CLI's own configured model) |
 | `ANTIGRAVITY_MODEL` | (unset) | Model passed to `agy --model`, only when set (else the model selected in the Antigravity app) |
 | `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
-| `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens |
+| `KIMI_CLI_MODEL` | (unset) | Model passed to `kimi -m`, only when set (else the kimi CLI's own configured model) |
+| `OLLAMA_MODEL` | (unset) | Local model id; when unset, whichever model `ollama list` shows first |
+| `OLLAMA_HOST` | http://localhost:11434 | Ollama server, following Ollama's own convention |
+| `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens (`ollama` uses a 4096 base) |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
 | `COUNCIL_RETRY_DELAY` | 1 | Initial retry delay (s) |
 | `COUNCIL_TIMEOUT` | 300 | Request timeout (s) |

@@ -41,7 +41,7 @@ bats --verbose-run tests/cache.bats
 | File | Tests | Coverage |
 |------|-------|----------|
 | `cache.bats` | 26 tests | cache_key (incl. verbosity/token/image components), cache_get/set, cache_valid, TTL, clear, self-ignoring dir |
-| `cli-providers.bats` | 45 tests | codex/antigravity/grok-cli discovery, CLI-prefers-API policy, shadow_origin↔api_sibling single source, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, CLI→API fallback (dedup, cache reuse, missing-script, round 2), gated E2E |
+| `cli-providers.bats` | 54 tests | codex/antigravity/grok-cli/kimi-cli/ollama discovery, CLI-prefers-API policy, shadow_origin↔api_sibling single source, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, CLI→API fallback (dedup, cache reuse, missing-script, round 2), gated E2E |
 | `display.bats` | 43 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, waiting-line truncation + autowrap guard, renderer selection (Rich feature probe, uv route + timeout, perl fallback, COUNCIL_RENDERER=perl, runtime fallback + stdout forwarding, think-block styling incl. unclosed tags, code-theme direction, link style, COLUMNS=0) |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
@@ -49,23 +49,23 @@ bats --verbose-run tests/cache.bats
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 27 tests | argument parsing, error cases, flags, local-council fallback hint, hyphenated provider names (env-var prefix derivation), model-fallback wrapper (preferred-then-fallback retry, cached-verdict skip, explicit `<PROVIDER>_MODEL` opt-out, no verdict remembered when the fallback also fails), round 2 and CLI-sibling fallback carrying `model_fallback` |
 | `argmax.bats` | 4 tests | large response/prompt/debate-round-2 round-trip through final JSON (MSYS ARG_MAX marshalling guard) |
-| `fake-clis.bats` | 23 tests | fixture self-checks, codex.sh/antigravity.sh/grok-cli.sh against fake binaries |
+| `fake-clis.bats` | 35 tests | fixture self-checks, codex.sh/antigravity.sh/grok-cli.sh/kimi-cli.sh/ollama.sh against fake binaries (kimi-cli: stream-json parsing, dirty-stream tolerance, array-form content, tool-call narration excluded, no-tools agent pinned; ollama: daemon-down diagnostic) |
 | `format-output.bats` | 13 tests | defensive parsing: empty/missing/non-string responses, raw preservation, CLI→API fallback-note rendering, model-fallback note (preferred model named, absent when unset) |
 | `prompts.bats` | 11 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh contract enforcement, schema sync |
-| `check-status.bats` | 26 tests | two-tier CLI availability, remediation strings, HTTP probe branches (401/403/500/000), rejected-key classification (Gemini/xAI answer a bad key with 400, not 401) and its false-positive guards (a typo'd model is not a bad key), transfer-failure exit codes, curl writing nothing, unusable jq, Perplexity's minimum max_tokens, `-X POST` and `--max-time` on every probe, temp-file cleanup, keys off the curl argv, ms clock |
+| `check-status.bats` | 27 tests | two-tier CLI availability, remediation strings, HTTP probe branches (401/403/500/000), rejected-key classification (Gemini/xAI answer a bad key with 400, not 401) and its false-positive guards (a typo'd model is not a bad key), transfer-failure exit codes, curl writing nothing, unusable jq, Perplexity's minimum max_tokens, `-X POST` and `--max-time` on every probe, temp-file cleanup, keys off the curl argv, ms clock |
 | `jobs.bats` | 16 tests | job store, --async lifecycle, --result/--jobs/--cancel, self-ignoring cache dir |
 | `stop-gate.bats` | 10 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
 | `theme.bats` | 24 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
-| `providers.bats` | 27 tests | API provider payloads, response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url, grok/perplexity image_url), model-unavailable exit-3 classification per provider (grok 403 region block, openai/gemini/perplexity 404/400) vs. ordinary errors (401/500) still exiting 1, bare-string `.error` extraction without crashing |
-| `image.bats` | 8 tests | --image validation (missing/bad-type/oversize), vision routing, CLI→sibling routing, non-vision text-only tag, base64 never in the cache |
+| `providers.bats` | 34 tests | API provider payloads (gemini, openai, grok, perplexity, kimi), response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url, grok/perplexity image_url), model-unavailable exit-3 classification per provider (grok 403 region block, openai/gemini/perplexity 404/400) vs. ordinary errors (401/500) still exiting 1, bare-string `.error` extraction without crashing |
+| `image.bats` | 9 tests | --image validation (missing/bad-type/oversize), vision routing, CLI→sibling routing (only when the sibling can see), non-vision text-only tag, base64 never in the cache |
 | `pane-watcher.bats` | 3 tests | standalone pane watcher: banner + response render, error notice, SetMark, watch-dir cleanup |
 | `export.bats` | 5 tests | markdown transcript export writing + formatting |
 | `release.bats` | 5 tests | release.sh version bump/commit/tag, staged-index guard, green-suite gate |
 | `retry.bats` | 11 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file, ensure_error_body http_status stamping (object and string `.error`, Gemini's string `.error.status` left alone, synthesised message, 200 passthrough) |
 | `model_fallback.bats` | 28 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (grok-4.5's EU region block, end to end) |
 
-**Total: 438 tests** across 24 `.bats` files.
+**Total: 468 tests** across 24 `.bats` files.
 
 ### Hermetic CLI Fixture
 
@@ -80,7 +80,8 @@ setup() { install_fake_clis; }
 
 - `COUNCIL_FAKE_BEHAVIOR` switches scenarios: `valid` (default), `empty`,
   `malformed-json`, `block-verdict`, `rate-limit`, `auth-failure`,
-  `slow` (honors `COUNCIL_FAKE_SLEEP`), `error`.
+  `slow` (honors `COUNCIL_FAKE_SLEEP`), `hang`, `error`, and, for the kimi
+  fake only, `dirty-stream`, `array-content` and `tool-narration`.
 - `--version` always succeeds, mirroring real CLIs where the version probe
   works even when logged out.
 - Every invocation appends `{bin, args}` to
@@ -137,10 +138,12 @@ Manual testing procedures for features that require API calls or Claude Code int
    export GEMINI_API_KEY="your-key"
    export OPENAI_API_KEY="your-key"
    export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
+   export KIMI_API_KEY="your-key"
    ```
 
-   Alternatively, install `codex`, `agy` (Antigravity), and/or `grok` CLIs — they're
-   discovered automatically via PATH and use your existing subscription auth.
+   Alternatively, install `codex`, `agy` (Antigravity), `grok` and/or `kimi` CLIs.
+   They're discovered automatically via PATH and use your existing subscription
+   auth. `ollama` is discovered the same way and needs no key at all.
 
 2. **Plugin loaded** in Claude Code:
    ```bash
@@ -236,7 +239,7 @@ echo '{"metadata":{"quiet_mode":true},"round1":{"gemini":{"status":"success","re
 
 ---
 
-### 2b. CLI Providers (codex / antigravity / grok-cli)
+### 2b. CLI Providers (codex / antigravity / grok-cli / kimi-cli) and local ollama
 
 **Test A**: CLI providers explicitly
 ```bash
@@ -256,7 +259,9 @@ echo '{"metadata":{"quiet_mode":true},"round1":{"gemini":{"status":"success","re
 
 **Expected**:
 - [ ] Discovery finds 6 providers but only 4 are queried (codex, antigravity, grok, perplexity)
-- [ ] With the `grok` CLI also installed, discovery finds 7 and shadows 3 API siblings (`openai`, `gemini`, `grok`) — still only 4 queried (codex, antigravity, grok-cli, perplexity)
+- [ ] With the `grok` CLI also installed, discovery finds 7 and shadows 3 API siblings (`openai`, `gemini`, `grok`), still only 4 queried (codex, antigravity, grok-cli, perplexity)
+- [ ] With the `kimi` CLI also installed, `kimi-cli` shadows the `kimi` API provider the same way
+- [ ] With `ollama` installed it is simply added: it shadows nothing and displaces no API provider
 - [ ] No `openai` or `gemini` (API) entry in the output — they were shadowed
 - [ ] To force the API instead, use `--providers=openai,gemini` explicitly
 
@@ -498,6 +503,7 @@ rm combined-test.md
 
 **Expected**:
 - [ ] codex's slot is answered by openai, antigravity's by gemini, and grok-cli's by grok (marked as a fallback), all seeing the image
+- [ ] kimi-cli is NOT routed to its sibling: `kimi` cannot see, so kimi-cli answers text-only, prefixed `(answered without the image)`
 
 ---
 
@@ -505,8 +511,8 @@ rm combined-test.md
 
 ### No API Keys and no CLI agents
 ```bash
-unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
-# Strip /opt/homebrew/bin and ~/.nvm from PATH so codex/agy/grok aren't discovered (grok also installs there via homebrew/npm)
+unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY KIMI_API_KEY MOONSHOT_API_KEY
+# Strip /opt/homebrew/bin and ~/.nvm from PATH so codex/agy/grok/kimi/ollama aren't discovered (several install there via homebrew/npm)
 bash scripts/query-council.sh "Test question" 2>&1
 ```
 **Expected**: `Error: No providers configured.` followed by a hint to set an
