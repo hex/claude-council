@@ -454,10 +454,12 @@ continuation already triggered by a stop hook, caps blocks per session at
 (or set `"enabled": false`) to turn it off.
 
 Privacy: the review sends your full uncommitted `git diff` to the configured
-provider. With a CLI provider (`codex`, `agy`, `grok`) it stays within that tool's own
-subscription auth; with an API provider (`gemini`, `openai`, `grok`,
-`perplexity`) the diff is transmitted to that third-party API. Keep the reviewer
-on a local CLI provider if your working tree may contain secrets.
+provider, named by its provider id. With `ollama` it never leaves the machine.
+With a CLI provider (`codex`, `antigravity`, `grok-cli`, `kimi-cli`) it stays
+within that tool's own subscription auth; with an API provider (`gemini`,
+`openai`, `grok`, `perplexity`, `kimi`) the diff is transmitted to that
+third-party API — `kimi` sends it to Moonshot. Keep the reviewer on `ollama`,
+or on a CLI provider, if your working tree may contain secrets.
 
 ## Reference
 
