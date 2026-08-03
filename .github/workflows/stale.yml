@@ -1,0 +1,79 @@
+name: stale
+
+# Closes pull requests that have gone quiet after changes were requested, so the
+# open list reflects work that is actually moving.
+#
+# The failure mode of every stale bot is nagging a contributor for a reply the
+# MAINTAINER owes. This action cannot tell whose turn it is, so the exemption
+# below carries that job: label a PR `needs-maintainer` (or `blocked`, or `keep`)
+# and it is skipped for as long as the label is on it. Reach for that label the
+# moment a review raises a question only the maintainer can answer.
+#
+# Issues are deliberately left alone: `days-before-issue-stale: -1` disables that
+# half entirely. A bug report going quiet does not make the bug less real.
+
+on:
+  schedule:
+    # Daily, off-hours. Cron on GitHub is best-effort under load, so a missed run
+    # simply means a PR is marked a day later.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Log what would be marked or closed, without touching anything'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write          # PRs are issues to the API; needed for labels and comments
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned by digest for the same reason the shellcheck download is: the tag
+      # names a release, only the hash names the bytes. It matters more here than
+      # for a linter, because a behaviour change in this action closes other
+      # people's pull requests. v11.0.0 is an ESM migration plus a dependency
+      # security fix, with no change to the staling logic itself.
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          # Manual runs default to a dry run so the first look is free; the
+          # scheduled run supplies no inputs, so it evaluates false and acts.
+          debug-only: ${{ inputs.dry-run || false }}
+
+          # 45 days quiet before a warning, 14 more before closing. Deliberately
+          # slower than the common 30/7: a drive-by contributor may be waiting on
+          # a decision, and a closed PR is a worse signal to them than a slow one.
+          days-before-pr-stale: 45
+          days-before-pr-close: 14
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
+
+          exempt-pr-labels: 'needs-maintainer,blocked,keep'
+          exempt-draft-pr: true
+
+          stale-pr-label: 'stale'
+          remove-stale-when-updated: true
+
+          stale-pr-message: >
+            This pull request has had no activity for 45 days, so it is being
+            marked stale. Push a commit or leave a comment and the label comes
+            off automatically. It will close in 14 days otherwise, and a closed
+            pull request can be reopened at any time.
+
+
+            If it is stalled on something only a maintainer can answer, say so
+            here and it will be exempted rather than closed.
+
+          close-pr-message: >
+            Closing after 59 days without activity. Nothing here says the work
+            was wrong, only that it stopped moving. Reopen whenever you want to
+            pick it up.
+
+          # Oldest first, so a long-quiet PR is handled before a recent one if the
+          # run hits the API budget.
+          ascending: true
+          operations-per-run: 100
