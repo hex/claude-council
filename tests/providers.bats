@@ -300,3 +300,60 @@ run_provider() {
     [ "$status" -eq 1 ]
     [[ "$stderr" == *"upstream gateway error"* ]]
 }
+
+# ---- kimi (Moonshot) ----
+
+@test "kimi: extracts content and surfaces errors" {
+    FAKE_BODY='{"choices":[{"message":{"content":"KIMI_OK"}}]}'
+    run_provider kimi.sh "hi" KIMI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "KIMI_OK" ]
+}
+
+@test "kimi: missing key fails before any request" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider kimi.sh "hi"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"KIMI_API_KEY not set"* ]]
+    assert_blank "$(cat "$ARGV_FILE")"
+}
+
+@test "kimi: MOONSHOT_API_KEY is accepted as an alias" {
+    FAKE_BODY='{"choices":[{"message":{"content":"ALIAS_OK"}}]}'
+    run_provider kimi.sh "hi" MOONSHOT_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "ALIAS_OK" ]
+}
+
+@test "kimi: routes to the Moonshot chat-completions endpoint" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider kimi.sh "hi" KIMI_API_KEY=k
+    [ "$status" -eq 0 ]
+    grep -qF "https://api.moonshot.ai/v1/chat/completions" "$ARGV_FILE"
+}
+
+@test "kimi: bearer key never appears in the process argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider kimi.sh "hi" KIMI_API_KEY=SEKRET_KIMI
+    [ "$status" -eq 0 ]
+    ! grep -qF "SEKRET_KIMI" "$ARGV_FILE"
+    grep -qF "SEKRET_KIMI" "$CONFIG_FILE"
+}
+
+@test "kimi: request payload is sent off-argv via a file" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider kimi.sh "UNIQUE_KIMI_MARKER_77" KIMI_API_KEY=k
+    [ "$status" -eq 0 ]
+    ! grep -qF "UNIQUE_KIMI_MARKER_77" "$ARGV_FILE"
+    grep -qF "UNIQUE_KIMI_MARKER_77" "$DATA_FILE"
+}
+
+@test "kimi: an unavailable model exits 3, an ordinary error exits 1" {
+    FAKE_BODY='{"error":{"message":"model not found","type":"invalid_request_error"}}'
+    FAKE_HTTP=404 run_provider kimi.sh "hi" KIMI_API_KEY=k
+    [ "$status" -eq 3 ]
+
+    FAKE_BODY='{"error":{"message":"invalid api key"}}'
+    FAKE_HTTP=401 run_provider kimi.sh "hi" KIMI_API_KEY=k
+    [ "$status" -eq 1 ]
+}

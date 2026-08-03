@@ -49,9 +49,9 @@ setup() {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    # antigravity (no auth probe) is the only available provider; codex and
-    # grok-cli both probe auth and report unauthed under auth-failure
-    [[ "$output" == *"1/7 providers available"* ]]
+    # antigravity and kimi-cli have no offline auth probe, so both still count;
+    # codex and grok-cli both probe auth and report unauthed under auth-failure
+    [[ "$output" == *"2/10 providers available"* ]]
 }
 
 @test "check-status: missing API key shows exact export remediation" {
@@ -103,7 +103,7 @@ exit 0
 EOF
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
-    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k
+    export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k KIMI_API_KEY=k
     export COUNCIL_FAKE_BEHAVIOR=valid
 }
 
@@ -113,8 +113,24 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connected"* ]]
-    # 4 API providers + codex + antigravity + grok-cli, all healthy
-    [[ "$output" == *"7/7 providers available"* ]]
+    # 5 API providers + codex + antigravity + grok-cli + kimi-cli + ollama, all healthy
+    [[ "$output" == *"10/10 providers available"* ]]
+}
+
+@test "check-status: the footer total equals the number of provider rows printed" {
+    # The denominator used to be a literal, hand-bumped 3 -> 4 -> 6 -> 7 -> 10 as
+    # the roster grew. Pin it to what the user can actually count on screen so a
+    # future provider cannot add a row and leave the total behind. Provider rows
+    # are the only tab-separated lines check-status emits.
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=200
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local rows total
+    rows=$(printf '%s\n' "$output" | grep -c "$(printf '\t')")
+    total=$(printf '%s\n' "$output" | sed -n 's|.*[0-9][0-9]*/\([0-9][0-9]*\) providers available.*|\1|p')
+    [ "$rows" -gt 0 ]
+    [ "$total" = "$rows" ]
 }
 
 @test "check-status: HTTP 401 reports auth failure with regenerate remediation" {
@@ -126,9 +142,9 @@ EOF
     [[ "$output" == *"key rejected - regenerate it"* ]]
     # Every API provider must classify 401, not just whichever one happens to be
     # first: a substring match alone cannot tell four rows from one.
-    [ "$(auth_failures "$output")" -eq 4 ]
-    # Only the three CLI providers remain available (codex, antigravity, grok-cli)
-    [[ "$output" == *"3/7 providers available"* ]]
+    [ "$(auth_failures "$output")" -eq 5 ]
+    # Only the five local providers remain (codex, antigravity, grok-cli, kimi-cli, ollama)
+    [[ "$output" == *"5/10 providers available"* ]]
 }
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
@@ -140,7 +156,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Auth failed (HTTP 403)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
-    [ "$(auth_failures "$output")" -eq 4 ]
+    [ "$(auth_failures "$output")" -eq 5 ]
 }
 
 @test "check-status: HTTP 500 reports a generic error with the code" {
@@ -151,7 +167,7 @@ EOF
     [[ "$output" == *"Error (HTTP 500)"* ]]
     # A server-side fault is not a credentials problem
     [ "$(auth_failures "$output")" -eq 0 ]
-    [[ "$output" == *"3/7 providers available"* ]]
+    [[ "$output" == *"5/10 providers available"* ]]
 }
 
 @test "check-status: curl failure (000) reports a connection timeout" {
@@ -160,7 +176,7 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]
-    [[ "$output" == *"3/7 providers available"* ]]
+    [[ "$output" == *"5/10 providers available"* ]]
 }
 
 # Gemini and xAI answer a rejected key with 400 rather than a 401, so the status
@@ -215,9 +231,9 @@ auth_failures() {
     export COUNCIL_FAKE_HTTP_BODY='{"error":{"code":400,"message":"* GetModelRequest.name: unexpected model name format\n","status":"INVALID_ARGUMENT"}}'
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    # All four API providers show the generic error: proves output was produced,
+    # All five API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -229,9 +245,9 @@ auth_failures() {
     export COUNCIL_FAKE_HTTP_BODY='{"code":"invalid-argument","error":"Model not found: grok-does-not-exist"}'
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    # All four API providers show the generic error: proves output was produced,
+    # All five API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -243,9 +259,9 @@ auth_failures() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     # A malformed request is not a credentials problem; do not offer to regenerate
-    # All four API providers show the generic error: proves output was produced,
+    # All five API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 4 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }

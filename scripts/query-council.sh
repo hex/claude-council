@@ -557,8 +557,13 @@ query_provider() {
         if provider_vision_capable "$provider"; then
             img_file="$IMAGE_B64_FILE"; img_mime="$IMAGE_MIME"
         else
+            # The sibling must actually gain us vision. Every sibling used to be
+            # vision-capable, so existence alone was a safe proxy; kimi is the
+            # first that is not, and routing to it would spend a paid API call
+            # on an answer just as blind — while skipping the tag below, so the
+            # synthesis would weigh it as though it had seen the image.
             local sibling; sibling=$(api_sibling "$provider")
-            if [[ -n "$sibling" ]]; then
+            if [[ -n "$sibling" ]] && provider_vision_capable "$sibling"; then
                 local fb_json
                 fb_json=$(attempt_api_fallback "$provider" "$final_prompt")
                 if [[ -n "$fb_json" ]]; then

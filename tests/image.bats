@@ -98,6 +98,25 @@ PROV
     [[ "$resp" == *"MIME=image/png"* ]]
 }
 
+@test "image: a CLI whose sibling is also blind answers text-only rather than paying the sibling" {
+    local fd="${BATS_TEST_TMPDIR}/fp"; mkdir -p "$fd"
+    write_echo_provider "$fd/kimi-cli.sh"   # healthy CLI: must be the one that answers
+    write_echo_provider "$fd/kimi.sh"       # sibling exists, but is not vision-capable
+    # Routing to a sibling is only worth it when the sibling gains vision. kimi
+    # is the first sibling that cannot see, so handing it the query would spend
+    # a paid API call to get an answer that is just as blind — and, because the
+    # sibling path skips the tag, one the synthesis would weigh as sighted.
+    run --separate-stderr env PROVIDERS_DIR="$fd" KIMI_API_KEY=k \
+        bash "$SCRIPT" --no-cache --no-pane --no-auto-context \
+        --image="$IMG" --providers=kimi-cli "look"
+    [ "$status" -eq 0 ]
+    local fb; fb=$(echo "$output" | jq -r '.round1."kimi-cli".fallback // empty')
+    [ -z "$fb" ]
+    local resp; resp=$(echo "$output" | jq -r '.round1."kimi-cli".response')
+    [[ "$resp" == *"(answered without the image)"* ]]
+    [[ "$resp" == *"IMG=|"* ]]   # empty image field: it never got the base64
+}
+
 # A fixed-text provider for privacy assertions: it accepts the prompt and image
 # args but never repeats the bytes, so any base64 found in the cache can only
 # have come from the pipeline itself, not the provider's response.

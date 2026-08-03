@@ -12,9 +12,9 @@ A Claude Code plugin that consults multiple AI coding agents in parallel and sho
 /plugin install claude-council
 
 # 2. Configure at least one provider — any of these works:
-export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY
-                                    # OR install the codex / antigravity (agy) / grok CLIs (uses your existing
-                                    # subscription — no API key needed)
+export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY
+                                    # OR install the codex / antigravity (agy) / grok / kimi CLIs (uses your
+                                    # existing subscription — no API key needed)
 
 # 3. Ask anything
 /claude-council:ask "Should I use UUID or BIGINT primary keys for a SaaS users table?"
@@ -48,8 +48,9 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 
 ## Features
 
-- Query Gemini, OpenAI (GPT/Codex), Grok, and Perplexity simultaneously
-- Use the `codex`, `agy` (Antigravity), and `grok` CLIs (subscription auth) when installed — preferred over their API siblings
+- Query Gemini, OpenAI (GPT/Codex), Grok, Perplexity, and Kimi (Moonshot AI) simultaneously
+- Use the `codex`, `agy` (Antigravity), `grok`, and `kimi` (Kimi Code) CLIs (subscription auth) when installed — preferred over their API siblings
+- Run a local `ollama` model as a council member — no key, no subscription, no network
 - Side-by-side comparison of responses with vendor-colored headers
 - Streaming tmux pane that renders responses as they land
 - Specialized roles, debate mode, and agent-enhanced deep analysis for high-stakes decisions
@@ -453,10 +454,12 @@ continuation already triggered by a stop hook, caps blocks per session at
 (or set `"enabled": false`) to turn it off.
 
 Privacy: the review sends your full uncommitted `git diff` to the configured
-provider. With a CLI provider (`codex`, `agy`, `grok`) it stays within that tool's own
-subscription auth; with an API provider (`gemini`, `openai`, `grok`,
-`perplexity`) the diff is transmitted to that third-party API. Keep the reviewer
-on a local CLI provider if your working tree may contain secrets.
+provider, named by its provider id. With `ollama` it never leaves the machine.
+With a CLI provider (`codex`, `antigravity`, `grok-cli`, `kimi-cli`) it stays
+within that tool's own subscription auth; with an API provider (`gemini`,
+`openai`, `grok`, `perplexity`, `kimi`) the diff is transmitted to that
+third-party API — `kimi` sends it to Moonshot. Keep the reviewer on `ollama`,
+or on a CLI provider, if your working tree may contain secrets.
 
 ## Reference
 
@@ -496,6 +499,8 @@ in the response header:
 | grok | `grok-4.5` | `grok-4.20-reasoning` |
 | gemini | `gemini-3.1-pro-preview` | `gemini-pro-latest` |
 | perplexity | `sonar-reasoning-pro` | `sonar-pro` |
+| kimi | `kimi-k3` | `kimi-k2.6` |
+| ollama | first local model (`OLLAMA_MODEL` to pin) | — |
 
 The same substitution is also noted on stderr and folded into the synthesis,
 so it's visible even in quiet mode or a headless run. Setting `<PROVIDER>_MODEL`

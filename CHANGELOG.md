@@ -4,6 +4,62 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+
+- **Kimi (Moonshot AI) as a council member, in both flavours.** `kimi-cli`
+  drives the Kimi Code CLI on subscription auth and is registered as the shadow
+  partner of the `kimi` API provider, so an installed CLI is preferred and the
+  API only steps in when it fails — the same policy codex/antigravity/grok-cli
+  already follow. The CLI is read via `--output-format stream-json`: its text
+  renderer interleaves visible reasoning with the answer, prefixes every line
+  with `• ` and appends a session-resume footer, all of which would otherwise
+  be quoted verbatim in the synthesis.
+- **A local `ollama` model as a council member.** No key, no subscription, no
+  network. Binary-gated like the CLI providers; without `OLLAMA_MODEL` it uses
+  the first locally installed model rather than a hardcoded id that may not be
+  pulled. Local reasoning models spend most of their budget on thinking that
+  never reaches `.content`, so the token floor is raised and an exhausted
+  budget is reported as such instead of as an unknown error.
+
+### Fixed
+
+- **Any provider no colour arm named crashed `check-status.sh`.**
+  `provider_color`'s default arm expands `${CYAN}`, which check-status never
+  defined; under `set -u` that aborted the entire status run the moment a new
+  provider was added. The colour expansions now default to empty.
+- **The provider total in the status footer was hardcoded.** `N/7` would have
+  misreported the moment the roster changed. `format_status` now counts each
+  row as it prints it, so the denominator is what the user can count on screen
+  and a new provider cannot leave it behind.
+- **`path_without_clis` could not hide newly added binary-gated CLIs**, so
+  tests asserting the no-providers path saw a populated council.
+- **The Kimi CLI ran with tool execution auto-approved.** `kimi -p` handles
+  tool calls under the auto permission policy, so file writes and shell
+  commands were approved with no prompt — on a prompt that can carry `--file`
+  contents or, in debate mode, another provider's answer. The other CLI
+  providers each pin a restriction for exactly this reason. Kimi's read-only
+  plan mode cannot be used here (`kimi` rejects `--plan` alongside `--prompt`),
+  so the council now passes an agent file that grants no tools at all.
+- **A stray line from the Kimi CLI discarded a complete answer.** The stream
+  was slurped as one JSON value sequence, so any unstructured line beside it —
+  an upgrade notice, a warning — aborted the parse; the provider then reported
+  "no assistant content" and, with a key set, silently billed the API sibling
+  instead. It is now read line by line, skipping only what will not parse.
+- **A downed Ollama daemon produced a blank error.** `ollama list` exits
+  non-zero when the daemon is not running, which under `set -euo pipefail`
+  aborted the script before its own guard could speak — leaving the council an
+  empty error slot. The call is guarded and reports the daemon state instead.
+- **An image query could route to a sibling that also cannot see.** Routing was
+  gated on a sibling existing rather than on it being vision-capable, which was
+  safe only while every sibling had vision; `kimi` is the first that does not,
+  so the query spent a paid API call on an equally blind answer and skipped the
+  "(answered without the image)" tag that marks one.
+- **`query-council.bats` kept a second copy of the provider-key unset list**
+  that went stale, so the no-providers tests failed on any machine exporting a
+  newly added key. It calls the shared helper now.
+
 ## 2026.7.9
 
 ### Fixed
