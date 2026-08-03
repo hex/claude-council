@@ -4,7 +4,7 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.8.1
 
 ### Added
 
@@ -59,6 +59,28 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - **`query-council.bats` kept a second copy of the provider-key unset list**
   that went stale, so the no-providers tests failed on any machine exporting a
   newly added key. It calls the shared helper now.
+- **The Kimi CLI's stream carries two more shapes than the parser handled.**
+  Content may arrive as a `[{type,text}]` array, which was a jq type error the
+  `|| true` swallowed into "no content"; and an assistant message carrying
+  `tool_calls` narrates the call rather than answering, so its text was being
+  concatenated into the response.
+
+### Docs
+
+- **The stop-gate privacy note named seven of the ten providers it accepts.**
+  Choosing `kimi` sends your full uncommitted diff to Moonshot, a third party
+  the note never mentioned, and it also hid the better option: `ollama` keeps
+  the diff on the machine. Two pre-existing errors went with it, since the CLI
+  list gave binary names where the config field takes provider ids.
+- **A documentation audit found 15 places where the docs contradicted the
+  code.** TESTING.md claimed 438 tests against an actual 468, with five stale
+  per-file rows, and mentioned neither new provider anywhere. README's
+  max-tokens default is wrong for `ollama` (4096), and its vision-sibling rule
+  listed two skip conditions where there are now three. ARCHITECTURE's file
+  tree, fan-out diagram, provider tables and configuration reference all
+  predated three provider scripts. Provider enumerations were also stale in the
+  plugin description, the ask command's frontmatter, the provider-integration
+  skill's table, and two help strings in `query-council.sh`.
 
 ## 2026.7.9
 
