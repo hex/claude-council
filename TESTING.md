@@ -49,7 +49,7 @@ bats --verbose-run tests/cache.bats
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 27 tests | argument parsing, error cases, flags, local-council fallback hint, hyphenated provider names (env-var prefix derivation), model-fallback wrapper (preferred-then-fallback retry, cached-verdict skip, explicit `<PROVIDER>_MODEL` opt-out, no verdict remembered when the fallback also fails), round 2 and CLI-sibling fallback carrying `model_fallback` |
 | `argmax.bats` | 4 tests | large response/prompt/debate-round-2 round-trip through final JSON (MSYS ARG_MAX marshalling guard) |
-| `fake-clis.bats` | 35 tests | fixture self-checks, codex.sh/antigravity.sh/grok-cli.sh/kimi-cli.sh/ollama.sh against fake binaries (kimi-cli: stream-json parsing, dirty-stream tolerance, array-form content, tool-call narration excluded, no-tools agent pinned; ollama: daemon-down diagnostic) |
+| `fake-clis.bats` | 54 tests | fixture self-checks, codex.sh/antigravity.sh/grok-cli.sh/kimi-cli.sh/ollama.sh against fake binaries (kimi-cli: stream-json parsing, dirty-stream tolerance, array-form content, tool-call narration excluded, no-tools agent pinned; ollama: daemon-down diagnostic; antigravity: the argv spill past `COUNCIL_ARGV_LIMIT`, its dedicated `--add-dir` directory, the guard and system prompt staying on argv while only the question is written out, cleanup after a failing CLI and under a spaced `TMPDIR`; `COUNCIL_PROVIDERS` roster precedence and its agreement with `--list-default` and `--list-available`) |
 | `format-output.bats` | 13 tests | defensive parsing: empty/missing/non-string responses, raw preservation, CLI→API fallback-note rendering, model-fallback note (preferred model named, absent when unset) |
 | `prompts.bats` | 11 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh contract enforcement, schema sync |
@@ -65,13 +65,14 @@ bats --verbose-run tests/cache.bats
 | `retry.bats` | 11 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file, ensure_error_body http_status stamping (object and string `.error`, Gemini's string `.error.status` left alone, synthesised message, 200 passthrough) |
 | `model_fallback.bats` | 28 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (grok-4.5's EU region block, end to end) |
 
-**Total: 468 tests** across 24 `.bats` files.
+**Total: 487 tests** across 24 `.bats` files.
 
 ### Hermetic CLI Fixture
 
-`tests/fixtures/fake-clis.bash` installs real fake `codex`/`agy`/`grok`
-executables into a temp dir prepended to `PATH`, so provider scripts, async
-jobs, and the stop gate run end-to-end with no network or real CLIs:
+`tests/fixtures/fake-clis.bash` installs real fake
+`codex`/`agy`/`grok`/`kimi`/`ollama` executables into a temp dir prepended to
+`PATH`, so provider scripts, async jobs, and the stop gate run end-to-end with
+no network or real CLIs:
 
 ```bash
 load fixtures/fake-clis

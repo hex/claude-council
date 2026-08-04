@@ -533,6 +533,8 @@ claude-council/
 | `KIMI_CLI_MODEL` | (unset) | Model passed to `kimi -m`, only when set (else the kimi CLI's own configured model) |
 | `OLLAMA_MODEL` | (unset) | Local model id; when unset, whichever model `ollama list` shows first |
 | `OLLAMA_HOST` | http://localhost:11434 | Ollama server, following Ollama's own convention |
+| `COUNCIL_PROVIDERS` | (unset) | Comma-separated roster queried by default, ahead of discovery; `--providers` still wins per call |
+| `COUNCIL_ARGV_LIMIT` | 24000 | Prompt length past which `antigravity` writes the question to a file and points `agy` at it, since Windows caps a command line at 32k |
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens (`ollama` uses a 4096 base) |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
 | `COUNCIL_RETRY_DELAY` | 1 | Initial retry delay (s) |
