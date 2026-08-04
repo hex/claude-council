@@ -411,3 +411,139 @@ teardown() {
     [[ "$output" == *"FAKE-CODEX-RESPONSE"* ]]
     [ $((end - start)) -ge 1 ]
 }
+
+# ============================================================================
+# antigravity.sh: the argv spill path
+#
+# agy has no stdin path, so the prompt is the value of -p and rides the command
+# line. Windows caps that at 32k. Past COUNCIL_ARGV_LIMIT the prompt spills to a
+# file. The limit is set low here so the tests stay fast and also prove the knob
+# is read rather than hardcoded.
+# ============================================================================
+
+@test "antigravity.sh: a prompt past COUNCIL_ARGV_LIMIT spills to a file instead of riding argv" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
+    local big
+    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
+    [ "$status" -eq 0 ]
+    local call prompt_arg
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    prompt_arg=$(echo "$call" | jq -r '.args[-1]')
+    # The body must NOT be on argv — that is the whole point of the spill
+    [[ "$prompt_arg" != *"ZZZZZZZZZZ"* ]]
+    [[ "$prompt_arg" == *"council-agy-prompt"* ]]
+}
+
+@test "antigravity.sh: a prompt under COUNCIL_ARGV_LIMIT rides argv unchanged" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100000
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "a short question"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    [[ "$(echo "$call" | jq -r '.args[-1]')" == *"a short question"* ]]
+    # No spill means no widened workspace
+    [[ "$(echo "$call" | jq -r '.args | index("--add-dir")')" == "null" ]]
+}
+
+@test "antigravity.sh: the spill grants --add-dir a dedicated directory, not the whole temp root" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
+    local big
+    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
+    [ "$status" -eq 0 ]
+    local call granted
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    granted=$(echo "$call" | jq -r '.args | index("--add-dir") as $i | .[$i+1]')
+    [[ -n "$granted" && "$granted" != "null" ]]
+    # --sandbox is agy's entire restriction surface (it has no allowed-tools
+    # flag), so the directory handed to --add-dir is the one place that posture
+    # can be widened. Granting the temp root exposes every other process's
+    # scratch files to the agent; the spill needs a directory of its own.
+    local temp_root="${TMPDIR:-/tmp}"
+    temp_root="${temp_root%/}"
+    [[ "${granted%/}" != "$temp_root" ]]
+    [[ "${granted%/}" != "/tmp" ]]
+}
+
+@test "antigravity.sh: a spilled prompt still leads with the response-format guard" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
+    local big
+    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
+    [ "$status" -eq 0 ]
+    local call prompt_arg
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    prompt_arg=$(echo "$call" | jq -r '.args[-1]')
+    # The short-prompt path deliberately leads with this guard because, buried
+    # below the prompt, it weighs less. The spill path must not silently drop it.
+    [[ "$prompt_arg" == "IMPORTANT: Respond with your complete answer"* ]]
+}
+
+@test "antigravity.sh: the spill file does not survive the run" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
+    local big
+    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
+    [ "$status" -eq 0 ]
+    local call spill
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    # Recover the path agy was pointed at and confirm the trap removed it
+    spill=$(echo "$call" | jq -r '.args[-1]' | grep -o '[^ ]*council-agy-prompt[^ ]*' | head -1)
+    [[ -n "$spill" ]]
+    [[ ! -e "$spill" ]]
+}
+
+# ============================================================================
+# COUNCIL_PROVIDERS: pinning a standing roster
+# ============================================================================
+
+@test "default_provider_set: COUNCIL_PROVIDERS pins the roster over discovery" {
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export COUNCIL_PROVIDERS='codex'
+        source '${PROVIDERS_LIB}'
+        default_provider_set
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "codex" ]]
+}
+
+@test "default_provider_set: an unset COUNCIL_PROVIDERS falls back to discovery" {
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        unset COUNCIL_PROVIDERS
+        source '${PROVIDERS_LIB}'
+        default_provider_set
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"codex"* ]]
+    [[ "$output" == *"antigravity"* ]]
+}
+
+@test "default_provider_set: an empty COUNCIL_PROVIDERS falls back to discovery" {
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export COUNCIL_PROVIDERS=''
+        source '${PROVIDERS_LIB}'
+        default_provider_set
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"antigravity"* ]]
+}
+
+@test "--list-default reports the roster COUNCIL_PROVIDERS actually pins" {
+    # --list-default promises "providers a default query would actually run".
+    # If the env var is honoured only at the query call site, this lies.
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export COUNCIL_PROVIDERS='codex'
+        bash '${SCRIPTS_DIR}/query-council.sh' --list-default
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "codex" ]]
+}

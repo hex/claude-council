@@ -431,7 +431,9 @@ The Antigravity CLI cannot take its prompt on stdin — `--print` with no value
 prints the help — so the prompt is the value of `-p` and rides the command line.
 Windows caps that at 32k, which a `--file`-sized prompt would exceed
 (CreateProcess fails with error 206), so past `COUNCIL_ARGV_LIMIT` (default
-24000 chars) the prompt is written to a file and agy is told to read it.
+24000 chars) the prompt is written to a file and agy is told to read it. The
+file gets a directory of its own, which is the only thing `--add-dir` opens to
+the sandboxed agent, and it is removed when the run ends.
 
 ### Pinning a standing provider roster
 
@@ -442,6 +444,9 @@ an explicit `--providers` still overrides it per call.
 ```bash
 export COUNCIL_PROVIDERS="codex,antigravity"  # queried by default, nothing else
 ```
+
+`--list-default` reports the pinned roster too, so tooling built on it sees the
+same providers a query would actually run.
 
 The Kimi CLI runs every prompt under an agent definition that grants it no tools
 (`prompts/kimi-cli-agent.md`). Its print mode auto-approves tool calls, so the

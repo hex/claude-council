@@ -110,7 +110,22 @@ prefer_cli_over_api() {
 }
 
 # Discovery + policy in one step: the providers a default query would run.
+#
+# COUNCIL_PROVIDERS pins a standing roster ahead of discovery, which otherwise
+# enlists every agent on PATH (ollama in particular joins uninvited once
+# installed) with no way to say "these, every time" short of retyping
+# --providers. A pinned roster is taken verbatim, like --providers: the
+# CLI-prefers-API filter exists to resolve what discovery guessed at, and there
+# is nothing to guess when the set was named explicitly.
+#
+# This lives here rather than at the query call site so that --list-default,
+# which promises the providers a default query would actually run, keeps telling
+# the truth.
 default_provider_set() {
+    if [[ -n "${COUNCIL_PROVIDERS:-}" ]]; then
+        echo "${COUNCIL_PROVIDERS//,/ }"
+        return 0
+    fi
     local discovered
     read -ra discovered <<< "$(discover_providers)"
     prefer_cli_over_api "${discovered[@]+"${discovered[@]}"}"

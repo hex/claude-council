@@ -265,13 +265,10 @@ if [[ -n "$ROLES" ]]; then
 fi
 
 # Get list of providers to query. Precedence: --providers beats COUNCIL_PROVIDERS
-# beats discovery. The env var is what pins a standing roster — discovery alone
-# enlists everything on PATH (ollama in particular joins uninvited), and there is
-# otherwise no way to say "these two, every time" short of retyping the flag.
+# beats discovery — the latter two are resolved inside default_provider_set, so
+# every caller of it sees the same roster.
 if [[ -n "$FILTER_PROVIDERS" ]]; then
     IFS=',' read -ra PROVIDERS <<< "$FILTER_PROVIDERS"
-elif [[ -n "${COUNCIL_PROVIDERS:-}" ]]; then
-    IFS=',' read -ra PROVIDERS <<< "$COUNCIL_PROVIDERS"
 else
     read -ra PROVIDERS <<< "$(default_provider_set)"
 fi
