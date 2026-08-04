@@ -60,6 +60,14 @@ SPILL_DIR=""
 # failing command, and removing ERR_TMP can fail on Windows when agy still holds
 # it open — the platform the spill exists for. Chained, that would strand a file
 # holding the whole prompt in a temp directory nothing ever cleans.
+#
+# Note for anyone hardening this: on bash 3.2, the macOS system shell this
+# targets, a `set -u` fatality (an unbound variable in an expansion, `[[ ]]` or
+# `(( ))`) arrives at the trap with `$?` already 0, so the script exits 0 where
+# bash 5 exits 1, and the council records a successful empty answer. Capturing
+# and re-exiting `$?` does not help, because there is nothing left to capture.
+# Anything interpolated into an arithmetic comparison has to be validated
+# before it gets there, which is what the COUNCIL_ARGV_LIMIT check below does.
 trap 'rm -rf "$ERR_TMP" ${SPILL_DIR:+"$SPILL_DIR"}' EXIT
 
 # The prompt is the value of -p, and agy cannot take it any other way: `--print`
