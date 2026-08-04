@@ -4,6 +4,48 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.8.2
+
+### Added
+
+- **A large prompt reaches the Antigravity CLI on Windows.** `agy` takes its
+  prompt only as the value of `-p`, and Windows caps a command line at 32k, so
+  a `--file`-sized prompt died in CreateProcess before agy ever started. Past
+  `COUNCIL_ARGV_LIMIT` (24000 by default) the question is written to a file of
+  its own and agy is pointed at it. Found and diagnosed by @DavidChin0.
+- **`COUNCIL_PROVIDERS` pins a standing roster.** Discovery enlists every agent
+  on PATH, ollama included once installed, with no way to say "these, every
+  time" short of retyping `--providers`. Precedence is `--providers`, then
+  `COUNCIL_PROVIDERS`, then discovery; `--list-default` and `--list-available`
+  both report the pinned set, and either accepts spaces around its commas.
+
+### Fixed
+
+- The spill gets a directory of its own. `--add-dir` had been handed the whole
+  temp root, 17,980 entries on the machine it was found on, and it is the only
+  lever that widens `--sandbox` because agy has no allowed-tools flag.
+- The spilled file holds the question and nothing else. It had carried the
+  answer guard, system prompt and verbosity directive into a file the argv
+  prompt then told agy to treat as material rather than instructions, so a
+  `--verbosity brief` run past the size limit lost its directive entirely.
+- The spill prompt no longer forbids the one file it must read. The shared
+  guard ends with "Do NOT reference external files", which contradicted the
+  sentence naming a file to open.
+- A malformed `COUNCIL_ARGV_LIMIT` such as `24k` warns and falls back to 24000.
+  Fed to an arithmetic comparison it evaluated false and skipped the spill in
+  silence, reintroducing the failure the spill exists to prevent.
+- A roster naming nothing usable says which roster emptied, instead of advising
+  you to set an API key you already have.
+- `--list-available` and `--list-default` agree about what a default query
+  runs, and providers left out by a pinned roster are no longer labelled as
+  shadowed by the CLI-prefers-API policy that was never involved.
+
+### Changed
+
+- Test inventory in `TESTING.md` corrected, and `COUNCIL_PROVIDERS` and
+  `COUNCIL_ARGV_LIMIT` added to the configuration table in
+  `docs/ARCHITECTURE.md`.
+
 ## 2026.8.1
 
 ### Added
