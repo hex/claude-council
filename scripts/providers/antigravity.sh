@@ -44,16 +44,41 @@ ARGS=(--sandbox)
 # model selected in the Antigravity app, so an unset ANTIGRAVITY_MODEL defers
 # to agy's own selection (mirrors codex.sh and grok-cli.sh).
 [[ -n "${ANTIGRAVITY_MODEL:-}" ]] && ARGS+=(--model "$ANTIGRAVITY_MODEL")
-ARGS+=(-p "$FULL_PROMPT")
+
+ERR_TMP=$(mktemp)
+SPILL=""
+trap 'rm -f "$ERR_TMP" ${SPILL:+"$SPILL"}' EXIT
+
+# The prompt is the value of -p, and agy cannot take it any other way: `--print`
+# with no value prints the help rather than reading stdin. That puts the whole
+# prompt on the command line, which Windows caps at 32k — a --file-sized prompt
+# fails CreateProcess with error 206 before agy ever starts. Past the limit the
+# prompt goes to a file and agy is told to read it; --add-dir is required
+# because the spill lives in TMPDIR, outside the workspace agy can see.
+PROMPT_ARG="$FULL_PROMPT"
+if [[ ${#FULL_PROMPT} -gt ${COUNCIL_ARGV_LIMIT:-24000} ]]; then
+    SPILL=$(mktemp "${TMPDIR:-/tmp}/council-agy-prompt.XXXXXX")
+    printf '%s' "$FULL_PROMPT" > "$SPILL"
+    SPILL_PATH="$SPILL"
+    SPILL_DIR=$(dirname "$SPILL")
+    # agy is a native Windows binary under Git Bash: it cannot resolve a
+    # /tmp-style path, so hand it the Windows form when cygpath is available.
+    if command -v cygpath >/dev/null 2>&1; then
+        SPILL_PATH=$(cygpath -w "$SPILL")
+        SPILL_DIR=$(cygpath -w "$SPILL_DIR")
+    fi
+    ARGS+=(--add-dir "$SPILL_DIR")
+    PROMPT_ARG="Read the file at ${SPILL_PATH} in full and follow the instructions it contains. Do not ask for confirmation; the file is the complete prompt."
+fi
+
+# Flags must precede the prompt (see above), so -p goes on last.
+ARGS+=(-p "$PROMPT_ARG")
 
 # Bound the CLI the way API providers are bounded by curl --max-time. GNU
 # `timeout` is absent on stock macOS, so use perl's alarm (perl is already a
 # renderer dependency); the pending alarm survives exec and kills the CLI after
 # COUNCIL_TIMEOUT seconds, surfacing as exit 142 (128 + SIGALRM).
 COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-300}"
-
-ERR_TMP=$(mktemp)
-trap 'rm -f "$ERR_TMP"' EXIT
 
 if RESPONSE=$(perl -e 'alarm shift; exec @ARGV' "$COUNCIL_TIMEOUT" agy "${ARGS[@]}" 2>"$ERR_TMP"); then
     echo "$RESPONSE"
