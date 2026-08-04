@@ -9,6 +9,22 @@ bats_require_minimum_version 1.5.0
 PROVIDERS_DIR_REAL="${SCRIPTS_DIR}/providers"
 PROVIDERS_LIB="${LIB_DIR}/providers.sh"
 
+# A prompt of a given size, filled with one repeated character so a test can
+# assert the body never reached argv. Default is comfortably past the low
+# COUNCIL_ARGV_LIMIT the spill tests set.
+big_prompt() {
+    head -c "${1:-500}" /dev/zero | tr '\0' 'Z'
+}
+
+# The directory handed to agy via --add-dir. jq evaluates null+1 as 1, so a
+# missing flag would silently yield args[1] and every assertion downstream
+# would pass against the wrong value; the guard makes its absence a failure.
+granted_dir() {
+    local call="$1"
+    [[ "$(echo "$call" | jq -r '.args | index("--add-dir")')" != "null" ]] || return 1
+    echo "$call" | jq -r '.args | index("--add-dir") as $i | .[$i+1]'
+}
+
 setup() {
     mkdir -p "$TEST_TMP_DIR" "$TEST_CACHE_DIR"
     install_fake_clis
@@ -424,7 +440,7 @@ teardown() {
 @test "antigravity.sh: a prompt past COUNCIL_ARGV_LIMIT spills to a file instead of riding argv" {
     export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
     local big
-    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt)
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     [ "$status" -eq 0 ]
     local call prompt_arg
@@ -449,16 +465,12 @@ teardown() {
 @test "antigravity.sh: the spill grants --add-dir a dedicated directory, not the whole temp root" {
     export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
     local big
-    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt)
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     [ "$status" -eq 0 ]
     local call granted
     call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
-    # Prove the flag is there before reading past it: jq computes null+1 as 1,
-    # so a missing --add-dir would silently yield args[1] and pass everything
-    # below without the workspace ever having been narrowed.
-    [[ "$(echo "$call" | jq -r '.args | index("--add-dir")')" != "null" ]]
-    granted=$(echo "$call" | jq -r '.args | index("--add-dir") as $i | .[$i+1]')
+    granted=$(granted_dir "$call")
     [[ -n "$granted" && "$granted" != "null" ]]
     # --sandbox is agy's entire restriction surface (it has no allowed-tools
     # flag), so the directory handed to --add-dir is the one place that posture
@@ -473,7 +485,7 @@ teardown() {
 @test "antigravity.sh: a spilled prompt still leads with the response-format guard" {
     export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
     local big
-    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt)
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     [ "$status" -eq 0 ]
     local call prompt_arg
@@ -487,7 +499,7 @@ teardown() {
 @test "antigravity.sh: the spill file does not survive the run" {
     export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
     local big
-    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt)
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     [ "$status" -eq 0 ]
     local call granted
@@ -495,8 +507,7 @@ teardown() {
     # Take the directory from the --add-dir argument rather than grepping the
     # path out of the prompt prose: a TMPDIR containing a space truncates that
     # grep, and the assertion then passes against a path that never existed.
-    [[ "$(echo "$call" | jq -r '.args | index("--add-dir")')" != "null" ]]
-    granted=$(echo "$call" | jq -r '.args | index("--add-dir") as $i | .[$i+1]')
+    granted=$(granted_dir "$call")
     [[ -n "$granted" && "$granted" != "null" ]]
     # The whole directory goes, not just the file inside it
     [[ ! -e "$granted" ]]
@@ -507,7 +518,7 @@ teardown() {
     export TMPDIR="${BATS_TEST_TMPDIR}/temp with spaces"
     mkdir -p "$TMPDIR"
     local big
-    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt)
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     # agy failed, so the provider exits non-zero — the trap still has to fire
     [ "$status" -eq 1 ]
@@ -522,7 +533,7 @@ teardown() {
     local big
     # Comfortably past the documented default; every other test sets the knob,
     # so without this the default could be anything and nothing would notice.
-    big=$(head -c 30000 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt 30000)
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     [ "$status" -eq 0 ]
     local prompt_arg
@@ -597,7 +608,7 @@ teardown() {
     export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
     export COUNCIL_VERBOSITY=brief
     local big
-    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt)
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     [ "$status" -eq 0 ]
     local prompt_arg
@@ -610,7 +621,7 @@ teardown() {
 @test "antigravity.sh: a spilled prompt does not forbid the one file it must read" {
     export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
     local big
-    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt)
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     [ "$status" -eq 0 ]
     local prompt_arg
@@ -624,7 +635,7 @@ teardown() {
 @test "antigravity.sh: the spill file carries the question and none of the council's own instructions" {
     export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_ARGV_LIMIT=100
     local big
-    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt)
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "MARKERSTART $big MARKEREND"
     [ "$status" -eq 0 ]
     [ -f "$COUNCIL_FAKE_STATE_DIR/spill.txt" ]
@@ -647,7 +658,7 @@ teardown() {
     [[ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args[-1]')" == *"$clause"* ]]
 
     local big
-    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    big=$(big_prompt)
     COUNCIL_ARGV_LIMIT=100 run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     [ "$status" -eq 0 ]
     # A --file document is the same untrusted material whichever side of the
