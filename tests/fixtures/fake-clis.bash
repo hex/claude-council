@@ -61,7 +61,7 @@ EOF
 # see what crossed into the file versus what stayed on argv.
 SPILLED=\$(printf '%s\\n' "\$@" | grep -o '[^[:space:]]*council-agy-prompt[^[:space:]]*' | head -1 || true)
 if [[ -n "\${SPILLED:-}" && -f "\$SPILLED" ]]; then
-    cp "\$SPILLED" "\${COUNCIL_FAKE_STATE_DIR}/spill.txt"
+    cp "\$SPILLED" "\${COUNCIL_FAKE_STATE_DIR:?}/spill.txt"
 fi
 EOF
     fi

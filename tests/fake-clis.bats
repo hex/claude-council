@@ -734,3 +734,59 @@ teardown() {
     [[ "$output" == *"Outside the COUNCIL_PROVIDERS roster"* ]]
     [[ "$output" != *"Shadowed by CLI policy"* ]]
 }
+
+@test "a roster that parses to nothing names the roster, not the provider setup" {
+    # Providers are installed and discoverable here, so the generic "no
+    # providers configured, set an API key" advice would send the reader off to
+    # fix something that is not broken.
+    run --separate-stderr bash -c "
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export COUNCIL_PROVIDERS=' , '
+        bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --no-auto-context 'ping'
+    "
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"COUNCIL_PROVIDERS names no usable provider"* ]]
+    [[ "$stderr" != *"Set an API key"* ]]
+}
+
+@test "an empty --providers list names the flag rather than the provider setup" {
+    run --separate-stderr bash -c "
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --no-auto-context --providers=',' 'ping'
+    "
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"--providers named no usable provider"* ]]
+    [[ "$stderr" != *"Set an API key"* ]]
+}
+
+@test "a genuinely empty environment still gets the provider-setup advice" {
+    # The roster branches must not swallow the case they were carved out of.
+    local emptydir="${BATS_TEST_TMPDIR}/no-providers"
+    mkdir -p "$emptydir"
+    run --separate-stderr bash -c "
+        export PROVIDERS_DIR='$emptydir'
+        unset COUNCIL_PROVIDERS
+        bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --no-auto-context 'ping'
+    "
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"Set an API key"* ]]
+}
+
+@test "antigravity.sh: a malformed COUNCIL_ARGV_LIMIT still spills rather than silently skipping" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    # "24k" is the shape of typo a documented byte-count knob invites. A bare
+    # [[ -gt ]] against it errors and evaluates false, which puts the whole
+    # prompt back on argv -- the exact Windows CreateProcess failure the spill
+    # exists to prevent, reintroduced silently.
+    export COUNCIL_ARGV_LIMIT="24k"
+    local big
+    big=$(big_prompt 30000)
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
+    [ "$status" -eq 0 ]
+    local prompt_arg
+    prompt_arg=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args[-1]')
+    [[ "$prompt_arg" == *"council-agy-prompt"* ]]
+    [[ "$prompt_arg" != *"ZZZZZZZZZZ"* ]]
+    # The bad value must not pass unremarked
+    [[ "$stderr" == *"COUNCIL_ARGV_LIMIT"* ]]
+}

@@ -68,8 +68,17 @@ trap 'rm -rf "$ERR_TMP" ${SPILL_DIR:+"$SPILL_DIR"}' EXIT
 # fails CreateProcess with error 206 before agy ever starts. Past the limit the
 # prompt goes to a file and agy is told to read it; --add-dir is required
 # because the spill lives outside the workspace agy can see.
+ARGV_LIMIT="${COUNCIL_ARGV_LIMIT:-24000}"
+# A byte count invites values like "24k". Fed straight to `-gt` that errors and
+# evaluates false, which puts the whole prompt back on argv and reintroduces the
+# CreateProcess failure this exists to prevent, with nothing on stderr to say so.
+if [[ ! "$ARGV_LIMIT" =~ ^[0-9]+$ ]]; then
+    echo "Warning: COUNCIL_ARGV_LIMIT must be a plain byte count, got '$ARGV_LIMIT'; using 24000." >&2
+    ARGV_LIMIT=24000
+fi
+
 PROMPT_ARG="$FULL_PROMPT"
-if [[ ${#FULL_PROMPT} -gt ${COUNCIL_ARGV_LIMIT:-24000} ]]; then
+if [[ ${#FULL_PROMPT} -gt $ARGV_LIMIT ]]; then
     # A directory of its own rather than the temp root. --add-dir is the only
     # lever that widens --sandbox (agy has no allowed-tools flag), so it grants
     # the agent exactly one file instead of every other process's scratch space.

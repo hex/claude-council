@@ -286,6 +286,19 @@ else
 fi
 
 if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
+    # A roster that parses to nothing reaches here with providers installed and
+    # keys set, so the advice below would send the reader to fix what is not
+    # broken. Name the roster instead.
+    if [[ -n "$FILTER_PROVIDERS" ]]; then
+        echo "Error: --providers named no usable provider: '$FILTER_PROVIDERS'" >&2
+        exit 1
+    fi
+    if [[ -n "${COUNCIL_PROVIDERS:-}" ]]; then
+        echo "Error: COUNCIL_PROVIDERS names no usable provider: '$COUNCIL_PROVIDERS'" >&2
+        echo "  Expected a comma-separated list, e.g. COUNCIL_PROVIDERS=\"codex,antigravity\"." >&2
+        echo "  Unset it to fall back to discovering whatever is installed." >&2
+        exit 1
+    fi
     echo "Error: No providers configured." >&2
     echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)" >&2
     echo "  or install a CLI agent (codex, agy, grok, kimi) or ollama." >&2
