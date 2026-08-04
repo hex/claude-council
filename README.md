@@ -427,6 +427,29 @@ export GROK_CLI_MODEL="grok-4.3"                # default: the grok CLI's own de
 export KIMI_CLI_MODEL="kimi-k3"                 # default: the kimi CLI's own configured model
 ```
 
+The Antigravity CLI cannot take its prompt on stdin — `--print` with no value
+prints the help — so the prompt is the value of `-p` and rides the command line.
+Windows caps that at 32k, which a `--file`-sized prompt would exceed
+(CreateProcess fails with error 206), so past `COUNCIL_ARGV_LIMIT` (default
+24000 chars) the prompt is written to a file and agy is told to read it. The
+file gets a directory of its own, which is the only thing `--add-dir` opens to
+the sandboxed agent, and it is removed when the run ends.
+
+### Pinning a standing provider roster
+
+Discovery enlists everything it finds, which is rarely what you want once more
+than a couple of agents are installed. `COUNCIL_PROVIDERS` pins the default set;
+an explicit `--providers` still overrides it per call.
+
+```bash
+export COUNCIL_PROVIDERS="codex,antigravity"  # queried by default, nothing else
+```
+
+`--list-default` and `--list-available` both report the pinned roster, so neither
+tooling nor the human-readable view disagrees with what a query would actually
+run. Spaces around the commas are fine, in the variable and in `--providers`
+alike.
+
 The Kimi CLI runs every prompt under an agent definition that grants it no tools
 (`prompts/kimi-cli-agent.md`). Its print mode auto-approves tool calls, so the
 council denies them outright rather than letting a prompt drive file writes or

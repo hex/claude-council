@@ -46,6 +46,14 @@ write_fake_cli() {
 set -euo pipefail
 jq -cn --arg bin "$bin" '{bin: \$bin, args: \$ARGS.positional}' --args -- "\$@" \\
     >> "\${COUNCIL_FAKE_STATE_DIR:?}/calls.jsonl"
+# A spilled prompt is named inside the prompt prose rather than passed as its
+# own argument, so recover it by shape and copy it out. The provider's trap
+# deletes the original on exit, and tests need to see what crossed into the
+# file versus what stayed on argv.
+SPILLED=\$(printf '%s\\n' "\$@" | grep -o '[^[:space:]]*council-agy-prompt[^[:space:]]*' | head -1 || true)
+if [[ -n "\${SPILLED:-}" && -f "\$SPILLED" ]]; then
+    cp "\$SPILLED" "\${COUNCIL_FAKE_STATE_DIR}/spill.txt"
+fi
 # Version probes succeed regardless of behavior, mirroring real CLIs where
 # --version works even when logged out
 if [[ "\${1:-}" == "--version" ]]; then
