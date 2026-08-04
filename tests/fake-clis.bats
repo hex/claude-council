@@ -454,6 +454,10 @@ teardown() {
     [ "$status" -eq 0 ]
     local call granted
     call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    # Prove the flag is there before reading past it: jq computes null+1 as 1,
+    # so a missing --add-dir would silently yield args[1] and pass everything
+    # below without the workspace ever having been narrowed.
+    [[ "$(echo "$call" | jq -r '.args | index("--add-dir")')" != "null" ]]
     granted=$(echo "$call" | jq -r '.args | index("--add-dir") as $i | .[$i+1]')
     [[ -n "$granted" && "$granted" != "null" ]]
     # --sandbox is agy's entire restriction surface (it has no allowed-tools
@@ -486,12 +490,45 @@ teardown() {
     big=$(head -c 500 /dev/zero | tr '\0' 'Z')
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
     [ "$status" -eq 0 ]
-    local call spill
+    local call granted
     call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
-    # Recover the path agy was pointed at and confirm the trap removed it
-    spill=$(echo "$call" | jq -r '.args[-1]' | grep -o '[^ ]*council-agy-prompt[^ ]*' | head -1)
-    [[ -n "$spill" ]]
-    [[ ! -e "$spill" ]]
+    # Take the directory from the --add-dir argument rather than grepping the
+    # path out of the prompt prose: a TMPDIR containing a space truncates that
+    # grep, and the assertion then passes against a path that never existed.
+    [[ "$(echo "$call" | jq -r '.args | index("--add-dir")')" != "null" ]]
+    granted=$(echo "$call" | jq -r '.args | index("--add-dir") as $i | .[$i+1]')
+    [[ -n "$granted" && "$granted" != "null" ]]
+    # The whole directory goes, not just the file inside it
+    [[ ! -e "$granted" ]]
+}
+
+@test "antigravity.sh: a spill outlives neither a failing agy nor a TMPDIR with spaces" {
+    export COUNCIL_FAKE_BEHAVIOR=error COUNCIL_ARGV_LIMIT=100
+    export TMPDIR="${BATS_TEST_TMPDIR}/temp with spaces"
+    mkdir -p "$TMPDIR"
+    local big
+    big=$(head -c 500 /dev/zero | tr '\0' 'Z')
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
+    # agy failed, so the provider exits non-zero — the trap still has to fire
+    [ "$status" -eq 1 ]
+    # Nothing the provider created may survive, whatever the exit path
+    run find "$TMPDIR" -name 'council-agy*' -print
+    [ -z "$output" ]
+}
+
+@test "antigravity.sh: COUNCIL_ARGV_LIMIT defaults to 24000 when unset" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset COUNCIL_ARGV_LIMIT
+    local big
+    # Comfortably past the documented default; every other test sets the knob,
+    # so without this the default could be anything and nothing would notice.
+    big=$(head -c 30000 /dev/zero | tr '\0' 'Z')
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "$big"
+    [ "$status" -eq 0 ]
+    local prompt_arg
+    prompt_arg=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args[-1]')
+    [[ "$prompt_arg" == *"council-agy-prompt"* ]]
+    [[ "$prompt_arg" != *"ZZZZZZZZZZ"* ]]
 }
 
 # ============================================================================
@@ -616,4 +653,73 @@ teardown() {
     # A --file document is the same untrusted material whichever side of the
     # size limit it lands on; the framing must not depend on its length.
     [[ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args[-1]')" == *"$clause"* ]]
+}
+
+@test "default_provider_set: a pinned roster of several providers keeps them all" {
+    # Every other roster test pins a single name, which a broken comma split
+    # would satisfy just as well as a working one.
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export COUNCIL_PROVIDERS='codex,antigravity'
+        source '${PROVIDERS_LIB}'
+        default_provider_set
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "codex antigravity" ]]
+}
+
+@test "default_provider_set: a trailing comma does not leave whitespace in machine-readable output" {
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export COUNCIL_PROVIDERS='codex,'
+        source '${PROVIDERS_LIB}'
+        default_provider_set
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "codex" ]]
+}
+
+@test "provider roster: --providers and COUNCIL_PROVIDERS parse a spaced list the same way" {
+    # The README presents these as one mechanism at two precedences, so a value
+    # a user pastes into a shell rc must not parse differently from the flag.
+    local spaced="codex, antigravity"
+
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export COUNCIL_PROVIDERS='$spaced'
+        source '${PROVIDERS_LIB}'
+        default_provider_set
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == "codex antigravity" ]]
+
+    run --separate-stderr env PROVIDERS_DIR="${PROVIDERS_DIR_REAL}" \
+        bash "${SCRIPTS_DIR}/query-council.sh" --no-cache --no-pane --no-auto-context \
+        --providers="$spaced" "ping"
+    [ "$status" -eq 0 ]
+    # A space kept inside an entry becomes a provider named " antigravity",
+    # which resolves to no script at all
+    [[ "$output" != *"Script not found"* ]]
+    echo "$output" | jq -e '.round1 | has("antigravity")' >/dev/null
+}
+
+@test "--list-available reports the same default set as --list-default when a roster is pinned" {
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export COUNCIL_PROVIDERS='codex'
+        bash '${SCRIPTS_DIR}/query-council.sh' --list-available
+    "
+    [ "$status" -eq 0 ]
+    # Two views of one roster disagreeing is the defect --list-default already
+    # had; it must not survive in the human-readable view either.
+    [[ "$output" == *"Default query set (1)"* ]]
+    # The rest sit out because the roster excludes them, not because a shadow
+    # pair preferred a sibling — naming the wrong reason sends the reader
+    # hunting for a CLI-prefers-API interaction that never happened.
+    [[ "$output" == *"Outside the COUNCIL_PROVIDERS roster"* ]]
+    [[ "$output" != *"Shadowed by CLI policy"* ]]
 }

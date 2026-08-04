@@ -445,8 +445,10 @@ an explicit `--providers` still overrides it per call.
 export COUNCIL_PROVIDERS="codex,antigravity"  # queried by default, nothing else
 ```
 
-`--list-default` reports the pinned roster too, so tooling built on it sees the
-same providers a query would actually run.
+`--list-default` and `--list-available` both report the pinned roster, so neither
+tooling nor the human-readable view disagrees with what a query would actually
+run. Spaces around the commas are fine, in the variable and in `--providers`
+alike.
 
 The Kimi CLI runs every prompt under an agent definition that grants it no tools
 (`prompts/kimi-cli-agent.md`). Its print mode auto-approves tool calls, so the

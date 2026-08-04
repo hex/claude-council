@@ -191,7 +191,7 @@ if [[ "$LIST_DEFAULT" == true ]]; then
 fi
 
 # --list-available: human-readable view of everything configured, grouped by
-# whether the CLI-prefers-API policy would query them or shadow them.
+# whether a default query would run them, and why the rest sit it out.
 if [[ "$LIST_AVAILABLE" == true ]]; then
     read -ra DISCOVERED <<< "$(discover_providers)"
     if [[ ${#DISCOVERED[@]} -eq 0 ]]; then
@@ -200,7 +200,9 @@ if [[ "$LIST_AVAILABLE" == true ]]; then
         echo "  or install a CLI agent (codex, agy, grok, kimi) or ollama."
         exit 0
     fi
-    read -ra DEFAULT_SET <<< "$(prefer_cli_over_api "${DISCOVERED[@]+"${DISCOVERED[@]}"}")"
+    # Same source as --list-default, so the two views cannot disagree about
+    # what a default query would run when COUNCIL_PROVIDERS pins a roster.
+    read -ra DEFAULT_SET <<< "$(default_provider_set)"
     # Space-padded set for bash 3.2 compat (no associative arrays).
     in_default=" ${DEFAULT_SET[*]+${DEFAULT_SET[*]}} "
     SHADOWED=()
@@ -214,15 +216,25 @@ if [[ "$LIST_AVAILABLE" == true ]]; then
     done
     if [[ ${#SHADOWED[@]} -gt 0 ]]; then
         echo ""
-        echo "Shadowed by CLI policy (use --providers=<name> to force):"
-        for p in "${SHADOWED[@]}"; do
-            cli=$(shadow_origin "$p")
-            if [[ -n "$cli" ]]; then
-                printf '  %-10s (%s preferred)\n' "$p" "$cli"
-            else
+        # A pinned roster and the CLI-prefers-API policy leave providers out for
+        # different reasons, and naming the wrong one sends the reader looking
+        # for a shadow pair that was never involved.
+        if [[ -n "${COUNCIL_PROVIDERS:-}" ]]; then
+            echo "Outside the COUNCIL_PROVIDERS roster (use --providers=<name> to force):"
+            for p in "${SHADOWED[@]}"; do
                 printf '  %s\n' "$p"
-            fi
-        done
+            done
+        else
+            echo "Shadowed by CLI policy (use --providers=<name> to force):"
+            for p in "${SHADOWED[@]}"; do
+                cli=$(shadow_origin "$p")
+                if [[ -n "$cli" ]]; then
+                    printf '  %-10s (%s preferred)\n' "$p" "$cli"
+                else
+                    printf '  %s\n' "$p"
+                fi
+            done
+        fi
     fi
     exit 0
 fi
@@ -268,7 +280,7 @@ fi
 # beats discovery — the latter two are resolved inside default_provider_set, so
 # every caller of it sees the same roster.
 if [[ -n "$FILTER_PROVIDERS" ]]; then
-    IFS=',' read -ra PROVIDERS <<< "$FILTER_PROVIDERS"
+    read -ra PROVIDERS <<< "$(parse_provider_list "$FILTER_PROVIDERS")"
 else
     read -ra PROVIDERS <<< "$(default_provider_set)"
 fi

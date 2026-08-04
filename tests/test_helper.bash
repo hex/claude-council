@@ -29,6 +29,11 @@ export COUNCIL_CACHE_TTL=3600
 export COUNCIL_NO_PANE=1
 export COUNCIL_AUTO_CLOSE=1
 
+# A roster pinned in the developer's own shell would otherwise decide which
+# providers the suite queries — the README tells users to export this, so a
+# machine configured as documented must not turn the suite red.
+unset COUNCIL_PROVIDERS
+
 # Setup - runs before each test
 setup() {
     mkdir -p "$TEST_TMP_DIR"

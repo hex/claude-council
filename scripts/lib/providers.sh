@@ -123,12 +123,24 @@ prefer_cli_over_api() {
 # the truth.
 default_provider_set() {
     if [[ -n "${COUNCIL_PROVIDERS:-}" ]]; then
-        echo "${COUNCIL_PROVIDERS//,/ }"
+        parse_provider_list "$COUNCIL_PROVIDERS"
         return 0
     fi
     local discovered
     read -ra discovered <<< "$(discover_providers)"
     prefer_cli_over_api "${discovered[@]+"${discovered[@]}"}"
+}
+
+# Splits a comma-separated roster into space-separated names, tolerating spaces
+# around the commas and dropping empty entries. --providers and COUNCIL_PROVIDERS
+# are documented as one mechanism at two precedences, so they share this rather
+# than each splitting their own way: a roster pasted into a shell rc is where a
+# stray space actually turns up, and an entry of " antigravity" resolves to no
+# provider script at all.
+parse_provider_list() {
+    local parsed
+    read -ra parsed <<< "${1//,/ }"
+    echo "${parsed[*]+"${parsed[*]}"}"
 }
 
 # Default model per provider. API defaults are pinned ids; bump when a vendor
