@@ -18,6 +18,14 @@ BASE_SYSTEM_PROMPT="You are an expert software engineering consultant. Provide c
 # shellcheck disable=SC2034
 INLINE_ANSWER_GUARD="IMPORTANT: Respond with your complete answer as plain text directly in this conversation. Do NOT use any tools. Do NOT write, create, or edit any files. Do NOT create artifacts, reports, or documents. Do NOT reference external files. Provide your entire response inline as text."
 
+# Companion for the one case where a provider must hand the question over as a
+# file: agy takes its prompt only as the value of -p, which Windows caps at 32k,
+# so a large prompt is written out and named instead. The blanket "do not
+# reference external files" above would contradict the very next sentence, so
+# this permits exactly the named file and holds the rest of the line.
+# shellcheck disable=SC2034
+SPILLED_ANSWER_GUARD="IMPORTANT: Respond with your complete answer as plain text directly in this conversation. The single file named below is the only file you may open, and reading it is the only tool use permitted. Do NOT write, create, or edit any files. Do NOT create artifacts, reports, or documents. Do NOT open any other file. Provide your entire response inline as text."
+
 # Writes a verbosity directive into the named variable based on the level.
 # Levels: brief, standard (no prefix), detailed.
 #
