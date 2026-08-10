@@ -57,7 +57,7 @@ bats --verbose-run tests/cache.bats
 | `jobs.bats` | 16 tests | job store, --async lifecycle, --result/--jobs/--cancel, self-ignoring cache dir |
 | `stop-gate.bats` | 10 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
 | `theme.bats` | 24 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
-| `providers.bats` | 35 tests | API provider payloads (gemini, openai, grok, perplexity, kimi), response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url, grok/perplexity image_url), model-unavailable exit-3 classification per provider (grok 403 region block, openai/gemini/perplexity 404/400) vs. ordinary errors (401/500) still exiting 1, bare-string `.error` extraction without crashing, the temperature Moonshot's models accept |
+| `providers.bats` | 40 tests | API provider payloads (gemini, openai, grok, perplexity, kimi), response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url, grok/perplexity image_url), model-unavailable exit-3 classification per provider (grok 403 region block, openai/gemini/perplexity 404/400) vs. ordinary errors (401/500) still exiting 1, bare-string `.error` extraction without crashing, the temperature Moonshot's models accept, and a gated real-endpoint acceptance check per provider |
 | `image.bats` | 9 tests | --image validation (missing/bad-type/oversize), vision routing, CLI→sibling routing (only when the sibling can see), non-vision text-only tag, base64 never in the cache |
 | `pane-watcher.bats` | 3 tests | standalone pane watcher: banner + response render, error notice, SetMark, watch-dir cleanup |
 | `export.bats` | 5 tests | markdown transcript export writing + formatting |
@@ -65,7 +65,7 @@ bats --verbose-run tests/cache.bats
 | `retry.bats` | 11 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file, ensure_error_body http_status stamping (object and string `.error`, Gemini's string `.error.status` left alone, synthesised message, 200 passthrough) |
 | `model_fallback.bats` | 28 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (grok-4.5's EU region block, end to end) |
 
-**Total: 492 tests** across 24 `.bats` files.
+**Total: 497 tests** across 24 `.bats` files.
 
 ### Hermetic CLI Fixture
 
@@ -88,6 +88,23 @@ setup() { install_fake_clis; }
 - Every invocation appends `{bin, args}` to
   `$COUNCIL_FAKE_STATE_DIR/calls.jsonl`, so tests can assert exactly what a
   provider script sent (model flag, prompt assembly, subcommands).
+
+### Real-endpoint tests (`COUNCIL_E2E=1`)
+
+The hermetic tests drive a fake `curl` and fake CLI binaries, so they assert
+what a provider sends and never what the endpoint does with it. A payload that
+cannot succeed passes every one of them: Moonshot accepts no temperature but 1,
+and `kimi.sh` sent 0.7 for as long as nothing called the real API.
+
+Eight tests close that gap, skipped by default and run with the gate set:
+
+```bash
+COUNCIL_E2E=1 bats tests/providers.bats tests/cli-providers.bats
+```
+
+Each skips again when its own key or CLI is absent, so a partial setup runs the
+part it can. They cost real tokens and depend on live services, which is why
+they stay out of the default suite and out of CI.
 
 ### Adding Tests
 

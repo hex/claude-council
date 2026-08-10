@@ -7,6 +7,15 @@ bats_require_minimum_version 1.5.0
 
 PROVIDERS="${SCRIPTS_DIR}/providers"
 
+# setup() clears every provider key before each test, so the gated E2E tests
+# below take a copy here, at file scope, where the real environment is still
+# visible. Reading the live variables inside a test would skip unconditionally.
+E2E_GEMINI_KEY="${GEMINI_API_KEY:-}"
+E2E_OPENAI_KEY="${OPENAI_API_KEY:-}"
+E2E_GROK_KEY="${XAI_API_KEY:-${GROK_API_KEY:-}}"
+E2E_PERPLEXITY_KEY="${PERPLEXITY_API_KEY:-}"
+E2E_KIMI_KEY="${KIMI_API_KEY:-${MOONSHOT_API_KEY:-}}"
+
 setup() {
     FAKE_DIR="${BATS_TEST_TMPDIR}/fakebin"
     mkdir -p "$FAKE_DIR"
@@ -366,4 +375,62 @@ run_provider() {
     run_provider kimi.sh "hi" KIMI_API_KEY=k
     [ "$status" -eq 0 ]
     [[ "$(jq -r '.temperature' "$DATA_FILE")" == "1" ]]
+}
+
+# ============================================================================
+# Real-endpoint acceptance (gated — set COUNCIL_E2E=1 to run)
+#
+# The fake curl above asserts what each provider sends: the endpoint, the key
+# off argv, the prompt in a body file. It cannot assert the endpoint accepts
+# it. Moonshot rejects every temperature but 1, so kimi shipped a payload that
+# could not succeed while every hermetic test passed and `check-status` still
+# reported it connected, because that probe is a /models GET rather than a
+# completion. These send a real completion through each provider script.
+# ============================================================================
+
+e2e_gate() {
+    [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real API calls"
+    [[ -n "${1:-}" ]] || skip "no API key set for this provider"
+}
+
+# Runs a provider against the real endpoint with its key restored. PATH is left
+# alone so the real curl is used, not the fake one run_provider installs.
+run_e2e() {
+    local script="$1" keyvar="$2" keyval="$3"
+    run --separate-stderr env "$keyvar=$keyval" bash "$PROVIDERS/$script" "Reply with exactly the word: OK"
+}
+
+@test "gemini: the live endpoint accepts our payload (E2E)" {
+    e2e_gate "$E2E_GEMINI_KEY"
+    run_e2e gemini.sh GEMINI_API_KEY "$E2E_GEMINI_KEY"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OK"* ]]
+}
+
+@test "openai: the live endpoint accepts our payload (E2E)" {
+    e2e_gate "$E2E_OPENAI_KEY"
+    run_e2e openai.sh OPENAI_API_KEY "$E2E_OPENAI_KEY"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OK"* ]]
+}
+
+@test "grok: the live endpoint accepts our payload (E2E)" {
+    e2e_gate "$E2E_GROK_KEY"
+    run_e2e grok.sh XAI_API_KEY "$E2E_GROK_KEY"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OK"* ]]
+}
+
+@test "perplexity: the live endpoint accepts our payload (E2E)" {
+    e2e_gate "$E2E_PERPLEXITY_KEY"
+    run_e2e perplexity.sh PERPLEXITY_API_KEY "$E2E_PERPLEXITY_KEY"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OK"* ]]
+}
+
+@test "kimi: the live endpoint accepts our payload, temperature included (E2E)" {
+    e2e_gate "$E2E_KIMI_KEY"
+    run_e2e kimi.sh KIMI_API_KEY "$E2E_KIMI_KEY"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OK"* ]]
 }
