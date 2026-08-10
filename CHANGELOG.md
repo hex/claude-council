@@ -4,6 +4,33 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.8.3
+
+### Fixed
+
+- **The Kimi API provider answers again.** It sent `temperature: 0.7` to match
+  the other providers, and Moonshot rejects every value but `1` across its model
+  line, so every Kimi API query failed outright with "invalid temperature: only 1
+  is allowed for this model". Anyone with `KIMI_API_KEY` set has had a dead
+  provider in the council since Kimi was added. `check-status` reported it
+  connected throughout, because that probe is a `/models` GET rather than a
+  completion.
+- **The documented Kimi model list named ids Moonshot no longer serves.** Four
+  of the nine answer: `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.7-code-highspeed`
+  and `kimi-k2.6`. `kimi-k2.5`, the `moonshot-v1-*` ids and every
+  `-vision-preview` variant return 404.
+
+### Changed
+
+- **Five gated tests check that the real endpoints accept what each provider
+  sends.** The hermetic tests drive a fake `curl`, so they assert the endpoint,
+  the key staying off argv and the prompt reaching the body file, and none of
+  them can assert the endpoint accepts any of it. The Kimi payload passed every
+  one while failing every real call. Run them with `COUNCIL_E2E=1`; they skip by
+  default, skip again when a key is absent, and never run in CI.
+- Test inventory corrected in `TESTING.md`, which also documents `COUNCIL_E2E`.
+  That gate gated three CLI tests already without appearing in any documentation.
+
 ## 2026.8.2
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "claude-council",
-  "version": "2026.8.2",
+  "version": "2026.8.3",
   "description": "Consult multiple AI coding agents (Gemini, OpenAI, Grok, Perplexity, Kimi, plus codex, antigravity, grok and kimi CLIs when installed, and a local ollama model) to get diverse perspectives on coding problems",
   "author": {
     "name": "hex",
