@@ -50,8 +50,9 @@ if [[ -z "$API_KEY" ]]; then
 fi
 
 # Model selection (override via KIMI_MODEL env var)
-# Available: kimi-k3, kimi-k2.7-code, kimi-k2.7-code-highspeed, kimi-k2.6,
-# kimi-k2.5, moonshot-v1-{8k,32k,128k,auto} and the -vision-preview variants.
+# Served: kimi-k3, kimi-k2.7-code, kimi-k2.7-code-highspeed, kimi-k2.6. Moonshot
+# retires ids without notice and answers a retired one with 404, so treat this
+# list as a starting point and check the vendor's own before pinning KIMI_MODEL.
 MODEL="${KIMI_MODEL:-kimi-k3}"
 
 # Kimi Open Platform endpoint (OpenAI-compatible Chat Completions)

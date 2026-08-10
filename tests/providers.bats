@@ -397,7 +397,12 @@ e2e_gate() {
 # alone so the real curl is used, not the fake one run_provider installs.
 run_e2e() {
     local script="$1" keyvar="$2" keyval="$3"
-    run --separate-stderr env "$keyvar=$keyval" bash "$PROVIDERS/$script" "Reply with exactly the word: OK"
+    # Exported rather than passed through `env KEY=value`, which would put the
+    # key in argv until the exec. The window is sub-millisecond, but this suite
+    # asserts elsewhere that a bearer key never reaches argv at all, and a test
+    # that holds the code to a rule it breaks itself is a poor guard.
+    export "$keyvar=$keyval"
+    run --separate-stderr bash "$PROVIDERS/$script" "Reply with exactly the word: OK"
 }
 
 @test "gemini: the live endpoint accepts our payload (E2E)" {
