@@ -357,3 +357,13 @@ run_provider() {
     FAKE_HTTP=401 run_provider kimi.sh "hi" KIMI_API_KEY=k
     [ "$status" -eq 1 ]
 }
+
+@test "kimi: sends the only temperature its models accept" {
+    # Every Moonshot model rejects any temperature but 1 with
+    # "invalid temperature: only 1 is allowed for this model", so the 0.7 the
+    # other providers use makes every kimi query fail against the real API.
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider kimi.sh "hi" KIMI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [[ "$(jq -r '.temperature' "$DATA_FILE")" == "1" ]]
+}

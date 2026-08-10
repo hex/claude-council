@@ -97,7 +97,11 @@ PAYLOAD=$(jq -n \
             role: "user",
             content: $content
         }],
-        temperature: 0.7,
+        # Moonshot rejects every value but 1 across its whole model line, with
+        # "invalid temperature: only 1 is allowed for this model". The 0.7 the
+        # other API providers send fails the request outright rather than
+        # degrading, so this is the only value the endpoint accepts.
+        temperature: 1,
         max_tokens: $tokens
     }')
 
