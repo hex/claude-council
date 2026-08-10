@@ -15,10 +15,14 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   provider in the council since Kimi was added. `check-status` reported it
   connected throughout, because that probe is a `/models` GET rather than a
   completion.
-- **The documented Kimi model list named ids Moonshot no longer serves.** Four
-  of the nine answer: `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.7-code-highspeed`
-  and `kimi-k2.6`. `kimi-k2.5`, the `moonshot-v1-*` ids and every
-  `-vision-preview` variant return 404.
+- **The documented Kimi model list named ids that not every account can reach.**
+  Moonshot closed the `moonshot-v1` series, its `-vision-preview` variants and
+  `kimi-k2.5` to newly registered accounts ahead of a 2026-08-31 sunset, so a
+  recent key gets 404 for ids the vendor still documents while an older key does
+  not. `kimi-latest` was discontinued outright on 2026-01-28, and
+  `moonshot-v1-auto` appears in no Moonshot documentation at all. The comment
+  now points at `GET /v1/models`, which answers this per key, instead of naming
+  a set that is correct for one account and wrong for the next.
 
 ### Changed
 
