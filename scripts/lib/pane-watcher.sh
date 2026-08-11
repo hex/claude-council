@@ -135,7 +135,9 @@ print_banner() {
         error)    printf -v status_inline ' \033[22;3;31m(error)\033[23;1m' ;;
     esac
 
-    printf '\n\n\033[1;38;2;%s;48;2;%sm  %s%s%s  \033[K\033[0m\n\n' \
+    # One leading blank line, not two: print_response leaves one below the
+    # answer above, and the two margins stack into the gap between blocks.
+    printf '\n\033[1;38;2;%s;48;2;%sm  %s%s%s  \033[K\033[0m\n\n' \
         "$fg" "$bg" "$upper" "$model_inline" "$status_inline"
 }
 
@@ -155,8 +157,9 @@ print_response() {
     printf '\033Ptmux;\033\033]1337;SetMark\a\033\\'
     print_banner "$name"
     "$WATCH/render.sh" < "$WATCH/responses/${name}.md"
-    # Extra blank lines so the loading line below has top margin.
-    printf '\n\n'
+    # One blank line of top margin for whatever comes next: the loading line
+    # during a run, the following banner once another answer lands.
+    printf '\n'
 }
 
 # Print the notice for a provider that failed without producing a response.

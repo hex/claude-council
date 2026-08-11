@@ -88,6 +88,23 @@ count_matches() {
     printf '%s' "$2" | grep -o "$1" | wc -l | tr -d ' '
 }
 
+# Drop terminal escapes so blank lines can be counted. The DCS goes first: the
+# SetMark passthrough wraps an OSC inside it, and it sits on the line above a
+# banner, so leaving its bytes behind makes a blank line look occupied.
+plain_text() {
+    printf '%s' "$1" | perl -0777 -pe '
+        s/\eP.*?\e\\//gs;
+        s/\e\][^\a]*\a//g;
+        s/\e\[[0-9;?]*[a-zA-Z]//g;
+        s/\r//g;
+    '
+}
+
+# Blank lines immediately above the first line containing $1.
+blank_lines_before() {
+    printf '%s' "$2" | awk -v m="$1" 'index($0, m) { print b + 0; exit } NF == 0 { b++; next } { b = 0 }'
+}
+
 @test "watcher: renders a response under its provider banner and exits on .done" {
     printf '## Hello\n' > "$W/responses/gemini.md"
     printf 'gemini\tcomplete\t1234\tgemini-2.5-pro\n' >> "$W/status"
@@ -112,6 +129,18 @@ count_matches() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"grok error"* ]]
     [[ "$output" == *"API key missing"* ]]
+}
+
+@test "watcher: leaves two blank lines between one provider block and the next" {
+    printf 'First answer\n' > "$W/responses/gemini.md"
+    printf 'Second answer\n' > "$W/responses/openai.md"
+    printf 'gemini\tcomplete\t1000\t\n' >> "$W/status"
+    printf 'openai\tcomplete\t2000\t\n' >> "$W/status"
+    run_watcher
+    [ "$status" -eq 0 ]
+    text=$(plain_text "$output")
+    [[ "$text" == *"First answer"* ]]
+    [ "$(blank_lines_before OPENAI "$text")" -eq 2 ]
 }
 
 @test "watcher: removes the watch dir on exit" {
