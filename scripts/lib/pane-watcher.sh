@@ -287,6 +287,11 @@ clear_loading
 if [[ "${COUNCIL_AUTO_CLOSE:-0}" != 1 ]]; then
     close_prompt() { printf '\n\033[2m[esc/ctrl-d] close\033[0m '; }
     close_prompt
+    # This loop polls once a second, not eight times, so two matching readings
+    # already mean a full second of stability — the protection four ticks buy
+    # in the main loop, without making the reader wait four seconds to see the
+    # reflow they just asked for.
+    WIDTH_SETTLE_TICKS=2
     esc=$(printf '\033')
     # read -n1 leaves the tty non-canonical, so ctrl-d arrives as a literal EOT
     # byte rather than closing the stream.
