@@ -4,6 +4,38 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.8.5
+
+### Fixes
+
+- **Dragging a pane border no longer re-renders the pane at widths you passed
+  through.** The reflow waited one poll (120ms) for the width to hold still
+  before redrawing. tmux moves a pane in whole-cell steps, so a continuous
+  drag reports the same width on two consecutive polls often enough to satisfy
+  that — firing a full redraw at a width the drag abandoned a moment later.
+  Each one costs about a second of renderer startup for five providers, and
+  takes the scrollback with it. The width must now hold for roughly half a
+  second, which a moving drag never satisfies and a deliberate resize doesn't
+  notice. The wait is scaled to each loop's clock: the close prompt polls once
+  a second rather than eight times, so it settles in two readings instead of
+  four and still reflows about a second after you let go.
+
+### Other
+
+- The redraw's settle counter, the record of the width the pane was drawn at,
+  and the redraw itself now live in one function. Both callers previously
+  repeated the same two-step update and could have advanced one without the
+  other.
+- The rationale for the CLI timeout default had been copied verbatim into four
+  provider scripts while `docs/ARCHITECTURE.md` already stated it. Each copy is
+  now a one-line pointer there.
+
+### Docs
+
+- The README screenshot is served from a new path. The image had been replaced
+  in place, and GitHub serves README images through a cache keyed by URL, so
+  the previous capture kept being shown.
+
 ## 2026.8.4
 
 ### Features
