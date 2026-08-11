@@ -4,6 +4,97 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.8.4
+
+### Features
+
+- **The streaming pane reflows when you resize the window.** Wrap width was
+  chosen once per answer, at the moment it landed, and baked into the
+  scrollback as real newlines — so answers that arrived before and after a
+  resize sat side by side at different widths, which reads as broken output.
+  When a new width holds still for a moment, every answer so far is
+  re-rendered to it, at the close prompt as well as mid-run. The redraw clears
+  the pane's scrollback along with the screen, so no old-width copies survive
+  in history; the cost is that it resets copy-mode position.
+- **Response banners name the model that answered.** Every CLI-backed provider
+  used to read `default`, because the council passes no model flag and so had
+  nothing to name. It does have something: each CLI records its selection in
+  its own config, and reading it is free and needs no extra call — codex from
+  `$CODEX_HOME/config.toml`, grok from `~/.grok/config.toml`, kimi from
+  `~/.kimi-code/config.toml`, and agy from its CLI settings. The value also
+  reaches the cache key, which is the point: reconfiguring a CLI's model now
+  stops the council serving back an answer the previous model gave.
+
+### Fixes
+
+- **A CLI provider no longer gets a deadline four times stricter than an API
+  one.** The API providers wrap `curl` in `curl_with_retry`, so
+  `COUNCIL_TIMEOUT` bounds one attempt and their real ceiling is
+  `(COUNCIL_MAX_RETRIES + 1)` times it. The CLI providers never retry, so the
+  same number was a hard deadline. One value the user sets once meant two
+  different things, and a council carrying a large `--file` dropped kimi on
+  that difference while the API path survived far longer on the same run. CLI
+  providers now default to `COUNCIL_CLI_TIMEOUT` (1200s), matching the API
+  ceiling. Retries are deliberately not extended to the CLI path: a CLI that
+  is slow is not failing transiently, and retrying a fifteen-minute run four
+  times is worse than reporting it.
+- **A kimi timeout reports a timeout.** When the watchdog killed the CLI, bash
+  printed its own report of the signalled child — `Alarm clock: 14`, the PID
+  and the entire command line — on the provider's stderr, which the council
+  stores verbatim as the error text. The pane showed that instead of the
+  timeout message the script already emitted, carrying an absolute plugin path
+  into the display.
+- **The ask command can no longer be talked out of running the council.** A
+  question ending "in exactly this shape and nothing else, no extra sections"
+  was read as governing the command's own reply — and the command's own reply
+  is the provider display, so it answered directly and queried nobody. The
+  question is now declared as data: formatting directives inside it constrain
+  what each provider is asked to return, never the command's output, and never
+  authorize skipping the run.
+- **codex's model is read from `CODEX_HOME`.** codex scopes its configuration
+  to that variable, so a relocated config left the banner naming a model codex
+  itself ignores.
+- **A config the council can't parse no longer takes the run down with it.**
+  Reading a CLI's model left the parser's own stderr and exit status
+  unhandled, so a corrupt config printed a parser complaint as that provider's
+  error text and returned non-zero from a function called under
+  `set -euo pipefail`. One unreadable file could end the whole council run
+  instead of degrading one banner to `default`.
+- **Three ways a valid config was misread.** A commented table header
+  (`[models] # mine`) lost its entire table, so an annotated config silently
+  reverted to `default` and orphaned every answer cached under a real model
+  id. TOML literal strings (`model = 'gpt-x'`) were skipped, so the feature
+  did nothing with no error to explain it. And a bracketed line inside a
+  multi-line value hijacked the parser's idea of which table it was in — with
+  a body line of exactly `[]` re-entering the root table, so quoted lines
+  inside a string were read as configuration.
+- **The close prompt no longer stacks.** Resizing twice with nothing on screen
+  printed a second and third `[esc/ctrl-d] close`; and when the pane's input
+  was already gone, the same dead tty failed the width query, which read as a
+  resize and wiped the reader's scrollback on the way out.
+
+### Changed
+
+- **Two blank lines between provider blocks instead of four.** The response
+  renderer's trailing margin and the banner's leading margin were written
+  without each other in view, and both survived into the gap.
+- **The council answers to its own name.** The ask command described the
+  situations it should volunteer in but never the phrasings that ask for it
+  outright, so "a full council review" matched nothing. Direct mentions now
+  trigger it, and the plugin's keywords cover the full provider set.
+
+### Docs
+
+- **The README leads with a screenshot** of five providers answering the same
+  question with the synthesis alongside.
+- Architecture and testing docs updated: `COUNCIL_CLI_TIMEOUT` and why the CLI
+  bound differs, the file tree, and corrected per-suite test counts.
+
+### Other
+
+- Extracted `json_value` alongside `toml_value` so the per-provider config
+  table reads as a table.
+
 ## 2026.8.3
 
 ### Fixed
