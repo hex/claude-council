@@ -609,10 +609,22 @@ Automatic retry on transient failures (429 rate limits, 5xx server errors):
 ```bash
 export COUNCIL_MAX_RETRIES=3    # default: 3 retries
 export COUNCIL_RETRY_DELAY=1    # default: 1 second initial delay (doubles each retry)
-export COUNCIL_TIMEOUT=300      # default: 300 seconds per request
+export COUNCIL_TIMEOUT=300      # default: 300 seconds per API request
+export COUNCIL_CLI_TIMEOUT=1200 # default: 1200 seconds per CLI-provider run
 ```
 
 Timeouts fail fast (no retry) to prevent blocking on hung providers.
+
+Retries apply to the API providers, whose requests go through `curl`; a
+transient 429 or 5xx is worth another attempt. The CLI providers get a single
+attempt, because a CLI that is merely slow is not a transient failure and
+retrying it multiplies the wait. That is why their default bound is higher: an
+API provider may spend up to `(COUNCIL_MAX_RETRIES + 1) × COUNCIL_TIMEOUT`,
+so one shared number would give a CLI a deadline four times stricter. Setting
+`COUNCIL_TIMEOUT` explicitly overrides both.
+
+CLI providers reading a large `--file` are the ones that hit this — a 64KB
+payload has taken kimi past fifteen minutes.
 
 ### Display & Terminal Integration
 

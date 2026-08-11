@@ -54,7 +54,12 @@ ARGS=(-p "$FULL_PROMPT" --output-format plain --sandbox read-only --no-plan)
 # `timeout` is absent on stock macOS, so use perl's alarm (perl is already a
 # renderer dependency); the pending alarm survives exec and kills the CLI after
 # COUNCIL_TIMEOUT seconds, surfacing as exit 142 (128 + SIGALRM).
-COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-300}"
+# CLI providers get one attempt at this; the API providers wrap curl in
+# curl_with_retry, so their effective ceiling is (COUNCIL_MAX_RETRIES + 1)
+# times their own 300s. Matching that here stops the same config value
+# from imposing a deadline four times stricter on a CLI, which is what
+# dropped kimi from councils carrying a large --file payload.
+COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
 
 ERR_TMP=$(mktemp)
 trap 'rm -f "$ERR_TMP"' EXIT

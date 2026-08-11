@@ -118,6 +118,14 @@ teardown() {
     [ $((end - start)) -lt 10 ]
 }
 
+@test "codex.sh: COUNCIL_CLI_TIMEOUT bounds the run when COUNCIL_TIMEOUT is unset" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_CLI_TIMEOUT=1
+    unset COUNCIL_TIMEOUT
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"timed out after 1s"* ]]
+}
+
 @test "codex.sh: surfaces stderr and exits 1 on rate-limit behavior" {
     export COUNCIL_FAKE_BEHAVIOR=rate-limit
     run "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
@@ -186,6 +194,14 @@ teardown() {
     [[ "$stderr" != *"Alarm clock"* ]]
     [[ "$stderr" != *"exec @ARGV"* ]]
     [ $((end - start)) -lt 10 ]
+}
+
+@test "antigravity.sh: COUNCIL_CLI_TIMEOUT bounds the run when COUNCIL_TIMEOUT is unset" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_CLI_TIMEOUT=1
+    unset COUNCIL_TIMEOUT
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/antigravity.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"timed out after 1s"* ]]
 }
 
 @test "antigravity.sh: surfaces stderr and exits 1 on auth-failure behavior" {
@@ -259,6 +275,14 @@ teardown() {
     [[ "$stderr" != *"Alarm clock"* ]]
     [[ "$stderr" != *"exec @ARGV"* ]]
     [ $((end - start)) -lt 10 ]
+}
+
+@test "grok-cli.sh: COUNCIL_CLI_TIMEOUT bounds the run when COUNCIL_TIMEOUT is unset" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_CLI_TIMEOUT=1
+    unset COUNCIL_TIMEOUT
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"timed out after 1s"* ]]
 }
 
 @test "grok-cli.sh: surfaces stderr and exits 1 on error behavior" {
@@ -390,6 +414,14 @@ teardown() {
     [[ "$stderr" != *"Alarm clock"* ]]
     [[ "$stderr" != *"exec @ARGV"* ]]
     [ $((end - start)) -lt 10 ]
+}
+
+@test "kimi-cli.sh: COUNCIL_CLI_TIMEOUT bounds the run when COUNCIL_TIMEOUT is unset" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_CLI_TIMEOUT=1
+    unset COUNCIL_TIMEOUT
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"timed out after 1s"* ]]
 }
 
 @test "kimi-cli.sh: surfaces stderr and exits 1 on error behavior" {
