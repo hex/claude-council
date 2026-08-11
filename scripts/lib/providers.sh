@@ -143,23 +143,73 @@ parse_provider_list() {
     echo "${parsed[*]+"${parsed[*]}"}"
 }
 
+# Reads one bare key from a TOML file — the root table when $2 is empty, the
+# named table otherwise. Deliberately minimal: enough for the three CLI configs
+# below, with no arrays, no multi-line values and no dotted keys. Returns
+# nothing when the file, table or key is absent, so callers fall back.
+toml_value() {
+    local file="$1" table="$2" key="$3"
+    [[ -f "$file" ]] || return 0
+    awk -v want="$table" -v key="$key" '
+        /^[[:space:]]*\[/ {
+            cur = $0
+            sub(/^[[:space:]]*\[/, "", cur)
+            sub(/\][[:space:]]*$/, "", cur)
+            next
+        }
+        cur == want && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+            if (match($0, /"[^"]*"/)) {
+                print substr($0, RSTART + 1, RLENGTH - 2)
+                exit
+            }
+        }
+    ' "$file"
+}
+
+# The model a CLI provider will use when the council passes no model flag,
+# read from the CLI's own configuration. This is what the CLI would select,
+# not a record of what a given run did — the two can diverge if the model is
+# switched mid-run or the vendor substitutes one server-side. Empty when the
+# CLI keeps no such config (agy) or has not been configured yet.
+cli_config_model() {
+    case "$1" in
+        codex)      toml_value "$HOME/.codex/config.toml" "" model ;;
+        grok-cli)   toml_value "$HOME/.grok/config.toml" models default ;;
+        kimi-cli)   toml_value "$HOME/.kimi-code/config.toml" "" default_model ;;
+    esac
+}
+
 # Default model per provider. API defaults are pinned ids; bump when a vendor
 # ships a new flagship we want to track. CLI providers pass no model flag
-# unless the *_MODEL override is set — their effective model comes from the
-# CLI's own resolution (auth mode for grok, ~/.codex/config.toml for codex,
-# the app's selected model for agy) — so the unset case reads as the label
-# "default" here.
+# unless the *_MODEL override is set, so their model is whatever their own
+# config selects; "default" remains for the CLIs that publish no such config
+# and for a CLI that has not been configured. The value reaches the cache key,
+# so reconfiguring a CLI's model correctly stops the council serving an answer
+# the previous model gave.
+# Resolves a CLI provider's model: the explicit override in $2, else what the
+# CLI's own config selects, else the label. Kept separate from get_model so the
+# three-stage fallback is stated once rather than per provider.
+cli_model() {
+    local provider="$1" override="$2" configured
+    if [[ -n "$override" ]]; then
+        printf '%s\n' "$override"
+        return 0
+    fi
+    configured=$(cli_config_model "$provider")
+    printf '%s\n' "${configured:-default}"
+}
+
 get_model() {
     case "$1" in
         gemini)     echo "${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
         openai)     echo "${OPENAI_MODEL:-gpt-5.6-sol}" ;;
         grok)       echo "${GROK_MODEL:-grok-4.5}" ;;
-        grok-cli)   echo "${GROK_CLI_MODEL:-default}" ;;
+        grok-cli)   cli_model grok-cli "${GROK_CLI_MODEL:-}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
-        codex)      echo "${CODEX_MODEL:-default}" ;;
-        antigravity) echo "${ANTIGRAVITY_MODEL:-default}" ;;
+        codex)      cli_model codex "${CODEX_MODEL:-}" ;;
+        antigravity) cli_model antigravity "${ANTIGRAVITY_MODEL:-}" ;;
         kimi)       echo "${KIMI_MODEL:-kimi-k3}" ;;
-        kimi-cli)   echo "${KIMI_CLI_MODEL:-default}" ;;
+        kimi-cli)   cli_model kimi-cli "${KIMI_CLI_MODEL:-}" ;;
         ollama)     echo "${OLLAMA_MODEL:-local}" ;;
         *)          echo "unknown" ;;
     esac

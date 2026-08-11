@@ -165,22 +165,69 @@ source_lib_and_call() {
     [[ "$output" == "grok-cli" ]]
 }
 
-@test "get_model: antigravity without an override labels agy's own selection, not a pinned label" {
-    # antigravity.sh passes no --model when ANTIGRAVITY_MODEL is unset (the
-    # model selected in the Antigravity app decides), so the display/cache
-    # label must say so rather than name a model that was never requested.
-    run source_lib_and_call 'unset ANTIGRAVITY_MODEL; get_model antigravity'
+# A HOME with no CLI config in it, so these read the fixtures below rather
+# than whatever the developer has configured on their own machine.
+empty_home() {
+    HOME_FIXTURE=$(mktemp -d "${TEST_TMP_DIR}/home.XXXXXX")
+    export HOME_FIXTURE
+}
+
+write_cli_config() {
+    mkdir -p "$HOME_FIXTURE/$1"
+    printf '%s\n' "$2" > "$HOME_FIXTURE/$1/config.toml"
+}
+
+@test "get_model: antigravity without an override still labels agy's own selection" {
+    # agy exposes no config file and names no model in its output, so there is
+    # nothing truthful to print but the label.
+    empty_home
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset ANTIGRAVITY_MODEL; get_model antigravity"
     [ "$status" -eq 0 ]
     [[ "$output" == "default" ]]
 }
 
-@test "get_model: grok-cli without an override labels the CLI's own default, not a pinned id" {
-    # grok-cli.sh passes no -m when GROK_CLI_MODEL is unset (the CLI's default
-    # differs by auth mode), so the display/cache label must say so rather than
-    # name a model that was never requested.
-    run source_lib_and_call 'unset GROK_CLI_MODEL; get_model grok-cli'
+@test "get_model: grok-cli reads the model its own config selects" {
+    empty_home
+    write_cli_config .grok '[models]
+default = "grok-9.9-test"'
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset GROK_CLI_MODEL; get_model grok-cli"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "grok-9.9-test" ]]
+}
+
+@test "get_model: codex reads the model its own config selects" {
+    empty_home
+    write_cli_config .codex 'model = "gpt-test-9"
+model_reasoning_effort = "xhigh"'
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CODEX_MODEL; get_model codex"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "gpt-test-9" ]]
+}
+
+@test "get_model: kimi-cli reads the model its own config selects" {
+    empty_home
+    write_cli_config .kimi-code 'default_model = "moonshot-ai/kimi-test-3"
+
+[models."moonshot-ai/kimi-other"]
+model = "kimi-other"'
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset KIMI_CLI_MODEL; get_model kimi-cli"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "moonshot-ai/kimi-test-3" ]]
+}
+
+@test "get_model: a CLI with no config on disk falls back to the label" {
+    empty_home
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CODEX_MODEL; get_model codex"
     [ "$status" -eq 0 ]
     [[ "$output" == "default" ]]
+}
+
+@test "get_model: an explicit override beats the CLI's own config" {
+    empty_home
+    write_cli_config .codex 'model = "gpt-test-9"'
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; export CODEX_MODEL=pinned-model; get_model codex"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "pinned-model" ]]
 }
 
 # ============================================================================
@@ -614,9 +661,12 @@ EOF
 }
 
 @test "get_model: labels both kimi providers instead of reporting unknown" {
-    run source_lib_and_call 'get_model kimi'
+    # An unconfigured HOME, so the CLI side falls back to the label rather than
+    # picking up whatever kimi the developer running this has configured.
+    empty_home
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; get_model kimi"
     [ "$output" = "kimi-k3" ]
-    run source_lib_and_call 'get_model kimi-cli'
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; get_model kimi-cli"
     [ "$output" = "default" ]
 }
 
