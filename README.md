@@ -2,7 +2,7 @@
 
 A Claude Code plugin that consults multiple AI coding agents in parallel and shows you their answers side-by-side. Useful when one model's bias could mislead you and the right call depends on cross-checking — architecture decisions, debugging dead ends, security reviews, framework picks.
 
-![Five providers answering in the streaming tmux pane, with the synthesis alongside](docs/images/streaming-pane.png)
+![Five providers answering in the streaming tmux pane, with the synthesis alongside](docs/images/council-pane.png)
 
 Five providers answering the same question. Each banner names the provider, the
 model that answered and how long it took; the synthesis separates what they all

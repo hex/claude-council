@@ -421,7 +421,7 @@ claude-council/
 ├── docs/
 │   ├── ARCHITECTURE.md          # This file
 │   └── images/
-│       └── streaming-pane.png   # README screenshot of a five-provider run
+│       └── council-pane.png   # README screenshot of a five-provider run
 ├── hooks/
 │   └── hooks.json               # Stop hook registration (stop gate)
 ├── prompts/
