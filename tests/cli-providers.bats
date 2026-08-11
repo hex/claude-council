@@ -242,6 +242,29 @@ model = "kimi-other"'
     [[ "$output" == "gpt-relocated-1" ]]
 }
 
+@test "get_model: an unreadable config falls back quietly, without leaking a parser error" {
+    # A provider's stderr is stored verbatim as its error text, so a parser
+    # complaint about a corrupt config would surface in the pane in place of
+    # an answer — the same way bash's own signal notice used to.
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.codex"
+    head -c 200 /dev/urandom > "$HOME_FIXTURE/.codex/config.toml"
+    run --separate-stderr source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CODEX_MODEL; get_model codex"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "default" ]]
+    [ -z "$stderr" ]
+}
+
+@test "get_model: malformed agy settings fall back quietly too" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.gemini/antigravity-cli"
+    printf '{not valid json' > "$HOME_FIXTURE/.gemini/antigravity-cli/settings.json"
+    run --separate-stderr source_lib_and_call "export HOME='$HOME_FIXTURE'; unset ANTIGRAVITY_MODEL; get_model antigravity"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "default" ]]
+    [ -z "$stderr" ]
+}
+
 @test "get_model: a CLI with no config on disk falls back to the label" {
     empty_home
     run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CODEX_MODEL; get_model codex"

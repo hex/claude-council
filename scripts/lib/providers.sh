@@ -150,6 +150,10 @@ parse_provider_list() {
 toml_value() {
     local file="$1" table="$2" key="$3"
     [[ -f "$file" ]] || return 0
+    # Errors are swallowed and the read reports nothing, so a corrupt config
+    # degrades to the "default" label. Neither half is optional: awk's
+    # complaint would otherwise be stored as the provider's error text, and
+    # its non-zero exit would abort the caller under set -e.
     awk -v want="$table" -v key="$key" '
         /^[[:space:]]*\[/ {
             cur = $0
@@ -163,15 +167,16 @@ toml_value() {
                 exit
             }
         }
-    ' "$file"
+    ' "$file" 2>/dev/null || true
 }
 
-# Reads one top-level key from a JSON file, the counterpart to toml_value.
-# Returns nothing when the file, the key, or jq's parse is absent.
+# Reads one top-level key from a JSON file, the counterpart to toml_value, and
+# swallows failure the same way: malformed JSON reports nothing rather than
+# failing the caller under set -e.
 json_value() {
     local file="$1" key="$2"
     [[ -f "$file" ]] || return 0
-    jq -r --arg k "$key" '.[$k] // empty' "$file" 2>/dev/null
+    jq -r --arg k "$key" '.[$k] // empty' "$file" 2>/dev/null || true
 }
 
 # The model a CLI provider will use when the council passes no model flag,
