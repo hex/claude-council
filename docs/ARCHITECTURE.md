@@ -419,7 +419,9 @@ claude-council/
 ├── config/
 │   └── roles.json               # Role definitions
 ├── docs/
-│   └── ARCHITECTURE.md          # This file
+│   ├── ARCHITECTURE.md          # This file
+│   └── images/
+│       └── streaming-pane.png   # README screenshot of a five-provider run
 ├── hooks/
 │   └── hooks.json               # Stop hook registration (stop gate)
 ├── prompts/
@@ -458,9 +460,9 @@ claude-council/
 │       ├── jobs.sh              # Background job store
 │       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
 │       ├── model_fallback.sh    # Fallback model per provider + TTL-cached unavailable verdicts
-│       ├── pane-watcher.sh      # Runs in the tmux pane: streams status + rendered responses
+│       ├── pane-watcher.sh      # Runs in the tmux pane: streams status + rendered responses, re-renders them all on resize
 │       ├── prompts.sh           # Template loading + {{VAR}} interpolation
-│       ├── providers.sh         # Discovery + CLI-prefers-API policy + vendor display
+│       ├── providers.sh         # Discovery, CLI-prefers-API policy, vendor display, model resolution from each CLI's own config
 │       ├── render.pl            # Dependency-free markdown renderer (perl fallback)
 │       ├── render.py            # Council-tuned Rich markdown renderer
 │       ├── retry.sh             # Retry with backoff + off-argv secret config
@@ -538,7 +540,8 @@ claude-council/
 | `COUNCIL_MAX_TOKENS` | 2048 | Max response tokens (`ollama` uses a 4096 base) |
 | `COUNCIL_MAX_RETRIES` | 3 | Retry attempts |
 | `COUNCIL_RETRY_DELAY` | 1 | Initial retry delay (s) |
-| `COUNCIL_TIMEOUT` | 300 | Request timeout (s) |
+| `COUNCIL_TIMEOUT` | 300 | Per-request timeout for API providers (s); set explicitly it also overrides the CLI bound |
+| `COUNCIL_CLI_TIMEOUT` | 1200 | Bound for a CLI provider run (s). Higher because CLI providers get one attempt while API providers retry, so a shared value would be `COUNCIL_MAX_RETRIES + 1` times stricter for a CLI |
 | `COUNCIL_CACHE_DIR` | .claude/council-cache | Cache location |
 | `COUNCIL_CACHE_TTL` | 3600 | Cache lifetime (s) |
 | `COUNCIL_AVAILABILITY_TTL` | 86400 | Model-unavailable verdict cache lifetime (s); `0` re-checks every query |

@@ -426,7 +426,10 @@ CLI providers use your existing CLI subscription: no API key, no per-call cost. 
 
 If a CLI provider fails at query time and its API sibling's key is set, the council automatically retries through that API sibling and marks the slot as a fallback (the answer is shown under the CLI slot with the API model's name and a "fell back to … API" note). The fallback is skipped when the sibling is already in your selected providers, so you never get the same vendor's answer twice.
 
-Override CLI model selection (defaults mirror what each CLI picks itself):
+Override CLI model selection. Left unset, the council reads what each CLI has
+selected — `~/.codex/config.toml` (or `$CODEX_HOME`), `~/.grok/config.toml`,
+`~/.kimi-code/config.toml`, and agy's own settings — and names that model in
+the response banner, so you can see which model answered without pinning one:
 
 ```bash
 export CODEX_MODEL="gpt-5-codex"                # default: the codex CLI's own configured model
