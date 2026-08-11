@@ -176,6 +176,13 @@ cli_config_model() {
         codex)      toml_value "$HOME/.codex/config.toml" "" model ;;
         grok-cli)   toml_value "$HOME/.grok/config.toml" models default ;;
         kimi-cli)   toml_value "$HOME/.kimi-code/config.toml" "" default_model ;;
+        # agy records the app's current selection as a display label, spaces
+        # and all ("Gemini 3.6 Flash (High)"). The key is absent until a model
+        # has actually been selected, so a fresh install still reads as unset.
+        antigravity)
+            [[ -f "$HOME/.gemini/antigravity-cli/settings.json" ]] || return 0
+            jq -r '.model // empty' "$HOME/.gemini/antigravity-cli/settings.json" 2>/dev/null
+            ;;
     esac
 }
 

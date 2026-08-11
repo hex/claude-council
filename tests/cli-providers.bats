@@ -177,10 +177,24 @@ write_cli_config() {
     printf '%s\n' "$2" > "$HOME_FIXTURE/$1/config.toml"
 }
 
-@test "get_model: antigravity without an override still labels agy's own selection" {
-    # agy exposes no config file and names no model in its output, so there is
-    # nothing truthful to print but the label.
+@test "get_model: antigravity reads the model selected in the app" {
+    # agy writes the selection it is using into its CLI settings, so the label
+    # can name it. The value is the app's display label, spaces and all.
     empty_home
+    mkdir -p "$HOME_FIXTURE/.gemini/antigravity-cli"
+    printf '{"enableTelemetry":false,"model":"Gemini Test 9 (High)"}\n' \
+        > "$HOME_FIXTURE/.gemini/antigravity-cli/settings.json"
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset ANTIGRAVITY_MODEL; get_model antigravity"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "Gemini Test 9 (High)" ]]
+}
+
+@test "get_model: antigravity falls back to the label before any model is selected" {
+    # The key only appears once agy has run with a selection, so a fresh
+    # install has settings.json without it.
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.gemini/antigravity-cli"
+    printf '{"enableTelemetry":false}\n' > "$HOME_FIXTURE/.gemini/antigravity-cli/settings.json"
     run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset ANTIGRAVITY_MODEL; get_model antigravity"
     [ "$status" -eq 0 ]
     [[ "$output" == "default" ]]
