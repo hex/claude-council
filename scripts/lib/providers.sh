@@ -166,6 +166,14 @@ toml_value() {
     ' "$file"
 }
 
+# Reads one top-level key from a JSON file, the counterpart to toml_value.
+# Returns nothing when the file, the key, or jq's parse is absent.
+json_value() {
+    local file="$1" key="$2"
+    [[ -f "$file" ]] || return 0
+    jq -r --arg k "$key" '.[$k] // empty' "$file" 2>/dev/null
+}
+
 # The model a CLI provider will use when the council passes no model flag,
 # read from the CLI's own configuration. This is what the CLI would select,
 # not a record of what a given run did — the two can diverge if the model is
@@ -185,10 +193,7 @@ cli_config_model() {
         # agy records the app's current selection as a display label, spaces
         # and all ("Gemini 3.6 Flash (High)"). The key is absent until a model
         # has actually been selected, so a fresh install still reads as unset.
-        antigravity)
-            [[ -f "$HOME/.gemini/antigravity-cli/settings.json" ]] || return 0
-            jq -r '.model // empty' "$HOME/.gemini/antigravity-cli/settings.json" 2>/dev/null
-            ;;
+        antigravity) json_value "$HOME/.gemini/antigravity-cli/settings.json" model ;;
     esac
 }
 
