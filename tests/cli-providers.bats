@@ -229,6 +229,19 @@ model = "kimi-other"'
     [[ "$output" == "moonshot-ai/kimi-test-3" ]]
 }
 
+@test "get_model: codex config is read from CODEX_HOME when it is set" {
+    # codex scopes its config to $CODEX_HOME (its own --help documents
+    # "$CODEX_HOME/<name>.config.toml"), so assuming ~/.codex reads the wrong
+    # file for anyone who relocates it.
+    empty_home
+    mkdir -p "$HOME_FIXTURE/elsewhere"
+    printf 'model = "gpt-relocated-1"\n' > "$HOME_FIXTURE/elsewhere/config.toml"
+    write_cli_config .codex 'model = "gpt-wrong-home"'
+    run source_lib_and_call "export HOME='$HOME_FIXTURE' CODEX_HOME='$HOME_FIXTURE/elsewhere'; unset CODEX_MODEL; get_model codex"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "gpt-relocated-1" ]]
+}
+
 @test "get_model: a CLI with no config on disk falls back to the label" {
     empty_home
     run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CODEX_MODEL; get_model codex"

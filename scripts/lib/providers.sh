@@ -173,7 +173,13 @@ toml_value() {
 # CLI keeps no such config (agy) or has not been configured yet.
 cli_config_model() {
     case "$1" in
-        codex)      toml_value "$HOME/.codex/config.toml" "" model ;;
+        # codex scopes its config to CODEX_HOME, per its own --help.
+        codex)      toml_value "${CODEX_HOME:-$HOME/.codex}/config.toml" "" model ;;
+        # grok's default differs by auth mode (see grok-cli.sh), so a config
+        # read could in principle name a model the run did not use. Checked
+        # under the council's own XAI_API_KEY env auth: `grok models` reports
+        # the same id the config holds, and a run's JSON envelope attributes
+        # its usage to that same id. Config and run agree there.
         grok-cli)   toml_value "$HOME/.grok/config.toml" models default ;;
         kimi-cli)   toml_value "$HOME/.kimi-code/config.toml" "" default_model ;;
         # agy records the app's current selection as a display label, spaces
