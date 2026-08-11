@@ -169,6 +169,32 @@ blank_lines_before() {
     [[ "$(after_last_redraw "$output")" == *"Hello from gemini"* ]]
 }
 
+@test "watcher: a width that keeps moving does not redraw until it settles" {
+    rm -f "$W/.done"
+    fake_stty 40
+    count_renders
+    printf 'Hello from gemini\n' > "$W/responses/gemini.md"
+    printf 'gemini\tcomplete\t1234\t\n' >> "$W/status"
+    (
+        await_renders 1
+        # A drag: a new width every tick, none of them held. tmux moves in
+        # whole-cell steps, so consecutive polls can repeat a width the drag
+        # is about to abandon — settling on the first repeat would redraw at
+        # a width nobody chose, at ~1s and a scrollback wipe each time.
+        for w in 44 44 52 52 61 61 70 70 78 78; do
+            echo "$w" > "$COLS_FILE"
+            sleep 0.13
+        done
+        echo 100 > "$COLS_FILE"
+        await_renders 2
+        touch "$W/.done"
+    ) &
+    run_watcher
+    [ "$status" -eq 0 ]
+    # Exactly one redraw, at the width the drag came to rest on.
+    [ "$(count_matches GEMINI "$output")" -eq 2 ]
+}
+
 @test "watcher: replays responses and error notices in the order they appeared" {
     rm -f "$W/.done"
     fake_stty 40

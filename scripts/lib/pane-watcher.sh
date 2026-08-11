@@ -196,29 +196,43 @@ redraw_all() {
     done
 }
 
-# True when width $1 differs from what the pane was drawn at and matches the
-# previous tick's reading. A redraw costs the reader their scrollback, so the
-# width has to hold still for a tick first: dragging a pane border reports a
-# stream of intermediate widths, and only the one the drag settles on is worth
-# rendering. Polling 8x/s makes the wait invisible, and no signal trap can beat
-# it — bash defers a trap until the running foreground command returns, so a
-# WINCH handler would fire no earlier than the sleep it interrupted.
-width_settled() {
-    local cols="$1" settled=1
-    [[ $cols -ne $rendered_cols && $cols -eq $previous_cols ]] && settled=0
+# How many consecutive equal readings count as "the resize has finished".
+# One is not enough: tmux moves a pane in whole-cell steps, so a drag reports
+# the same width on two consecutive 120ms polls often enough that a one-tick
+# settle fires at widths the drag immediately abandons — and a redraw costs
+# about a second of renderer startup plus the reader's scrollback. Four ticks
+# is half a second, imperceptible after a deliberate resize, and long enough
+# that a moving drag never satisfies it.
+WIDTH_SETTLE_TICKS=4
+
+# Redraw the pane at width $1, but only once that width has held for
+# WIDTH_SETTLE_TICKS readings and differs from what the pane was drawn at.
+# Owns all three pieces of state, so no call site can advance one and forget
+# another. Returns 0 only when something was actually redrawn.
+#
+# No signal trap can beat polling here — bash defers a trap until the running
+# foreground command returns, so a WINCH handler would fire no earlier than
+# the sleep it interrupted.
+reflow_to() {
+    local cols="$1"
+    if [[ $cols -eq $previous_cols ]]; then
+        stable_ticks=$((stable_ticks + 1))
+    else
+        stable_ticks=1
+    fi
     previous_cols=$cols
-    return $settled
+    [[ $cols -ne $rendered_cols && $stable_ticks -ge $WIDTH_SETTLE_TICKS ]] || return 1
+    rendered_cols=$cols
+    redraw_all
 }
 
 pane_cols rendered_cols
 previous_cols=$rendered_cols
+stable_ticks=0
 
 while true; do
     pane_cols cols
-    if width_settled "$cols"; then
-        redraw_all
-        rendered_cols=$cols
-    fi
+    reflow_to "$cols" || true
     # 1. Track status events silently (state + timing for banners later);
     #    print only error notices since they don't get a response file.
     if [[ -f "$WATCH/status" ]]; then
@@ -300,14 +314,9 @@ if [[ "${COUNCIL_AUTO_CLOSE:-0}" != 1 ]]; then
             continue
         fi
         pane_cols cols
-        if width_settled "$cols"; then
-            # Reprint the prompt only when the redraw actually cleared it away.
-            # An empty pane draws nothing, and prompting again would stack a
-            # second copy under the first.
-            if redraw_all; then
-                close_prompt
-            fi
-            rendered_cols=$cols
-        fi
+        # Reprint the prompt only when the redraw actually cleared it away.
+        # An empty pane draws nothing, and prompting again would stack a
+        # second copy under the first.
+        reflow_to "$cols" && close_prompt
     done
 fi
