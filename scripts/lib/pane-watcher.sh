@@ -182,8 +182,10 @@ print_error_notice() {
 # only way to get one width throughout is to render the stored markdown again.
 # \033[3J drops the scrollback along with the screen, or the old-width copies
 # remain in tmux history — at the cost of the reader's copy-mode position.
+# Returns non-zero when there was nothing to draw, so a caller that follows a
+# redraw with its own output doesn't emit it against an untouched screen.
 redraw_all() {
-    [[ ${#display_events[@]} -eq 0 ]] && return 0
+    [[ ${#display_events[@]} -eq 0 ]] && return 1
     printf '\033[?7h\033[2J\033[3J\033[H'
     local event
     for event in "${display_events[@]}"; do
@@ -292,12 +294,20 @@ if [[ "${COUNCIL_AUTO_CLOSE:-0}" != 1 ]]; then
             # mean the pane's input is gone and nobody is coming to press a key.
             dead_reads=$((dead_reads + 1))
             [[ $dead_reads -gt 4 ]] && break
+            # And skip the width check on this path: the same dead tty fails
+            # the width query, which reads as a resize to the 80-column
+            # fallback and would wipe the scrollback on the way out.
+            continue
         fi
         pane_cols cols
         if width_settled "$cols"; then
-            redraw_all
+            # Reprint the prompt only when the redraw actually cleared it away.
+            # An empty pane draws nothing, and prompting again would stack a
+            # second copy under the first.
+            if redraw_all; then
+                close_prompt
+            fi
             rendered_cols=$cols
-            close_prompt
         fi
     done
 fi

@@ -154,15 +154,33 @@ toml_value() {
     # degrades to the "default" label. Neither half is optional: awk's
     # complaint would otherwise be stored as the provider's error text, and
     # its non-zero exit would abort the caller under set -e.
-    awk -v want="$table" -v key="$key" '
+    #
+    # A table header must match in full, trailing comment included. Matching
+    # loosely on a leading "[" would take "[models] # mine" as a table named
+    # "models] # mine" — losing the whole table — and would let any bracketed
+    # line inside a multi-line value masquerade as a header.
+    awk -v want="$table" -v key="$key" -v q="'" '
+        # Multi-line values are skipped wholesale. Their bodies are arbitrary
+        # text, and a line reading "[models]" inside one is a valid table
+        # header by shape alone — no pattern can tell it from the real thing,
+        # only knowing we are inside a string can.
+        {
+            marks = gsub(/"""/, "&") + gsub(q q q, "&")
+            if (instr) { if (marks % 2) instr = 0; next }
+            if (marks % 2) { instr = 1; next }
+        }
         /^[[:space:]]*\[/ {
-            cur = $0
-            sub(/^[[:space:]]*\[/, "", cur)
-            sub(/\][[:space:]]*$/, "", cur)
+            if ($0 ~ /^[[:space:]]*\[[^]]*\][[:space:]]*(#.*)?$/) {
+                cur = $0
+                sub(/^[[:space:]]*\[/, "", cur)
+                sub(/\][[:space:]]*(#.*)?$/, "", cur)
+            }
             next
         }
         cur == want && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
-            if (match($0, /"[^"]*"/)) {
+            # Basic strings first, then TOML literal strings; both are valid
+            # for these keys and users write either.
+            if (match($0, /"[^"]*"/) || match($0, q "[^" q "]*" q)) {
                 print substr($0, RSTART + 1, RLENGTH - 2)
                 exit
             }

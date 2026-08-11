@@ -265,6 +265,35 @@ model = "kimi-other"'
     [ -z "$stderr" ]
 }
 
+@test "get_model: a commented table header is still a table header" {
+    empty_home
+    write_cli_config .grok '[models] # the ones I use
+default = "grok-commented"'
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset GROK_CLI_MODEL; get_model grok-cli"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "grok-commented" ]]
+}
+
+@test "get_model: a single-quoted TOML value is read like a double-quoted one" {
+    empty_home
+    write_cli_config .codex "model = 'gpt-literal-1'"
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CODEX_MODEL; get_model codex"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "gpt-literal-1" ]]
+}
+
+@test "get_model: a bracketed line inside a multi-line value is not a table header" {
+    empty_home
+    write_cli_config .codex 'notify = """
+[models]
+foo = "bar"
+"""
+model = "gpt-root-wins"'
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CODEX_MODEL; get_model codex"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "gpt-root-wins" ]]
+}
+
 @test "get_model: a CLI with no config on disk falls back to the label" {
     empty_home
     run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CODEX_MODEL; get_model codex"
