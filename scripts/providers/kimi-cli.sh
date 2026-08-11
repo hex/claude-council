@@ -65,7 +65,14 @@ ERR_TMP=$(mktemp)
 OUT_TMP=$(mktemp)
 trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
-if perl -e 'alarm shift; exec @ARGV' "$COUNCIL_TIMEOUT" kimi "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then
+# Only the reaping shell's own stderr is silenced, not the CLI's: when the
+# alarm kills the child, bash reports the signal itself ("Alarm clock: 14",
+# with the PID and the whole command line) on this script's stderr, and the
+# council stores provider stderr verbatim as the error text — so that report
+# would reach the pane in place of the timeout message below. The child keeps
+# its own redirections, so its output still lands in the temp files.
+{ if perl -e 'alarm shift; exec @ARGV' "$COUNCIL_TIMEOUT" kimi "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi; } 2>/dev/null
+if [[ $rc -eq 0 ]]; then
     # Concatenate every assistant chunk; a long answer may arrive in several.
     # Read line by line (-nR + inputs) rather than slurping: `jq -s` parses the
     # whole stream as one value sequence, so a single unstructured line — an
@@ -93,7 +100,6 @@ if perl -e 'alarm shift; exec @ARGV' "$COUNCIL_TIMEOUT" kimi "${ARGS[@]}" >"$OUT
     fi
     echo "$RESPONSE"
 else
-    rc=$?
     if [[ $rc -eq 142 ]]; then
         echo "Error from kimi CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
     else
