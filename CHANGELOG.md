@@ -4,6 +4,39 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.8.6
+
+### Fixes
+
+- **The council no longer treats agreement as a result.** Providers are handed a
+  description of your problem and never the system itself, so none of them can
+  test a premise your question asserts — they reason from it correctly and agree
+  with each other while doing it. Unanimity therefore measures how clearly the
+  question was framed, not whether the framing was true, and the more confident
+  it reads the better it hides that nobody could check. Two places said the
+  opposite. The synthesis was told to keep it *short* when every provider
+  agreed, which shortened the answer exactly where the premise had been examined
+  least; it now says they agreed and then names the assumption the whole answer
+  rests on. Agent mode (`--agents`) called high-confidence agreement a stronger
+  signal, which holds for reasoning and not at all for premises.
+- **Questions are checked before they are sent.** The council now separates what
+  you have observed from what you are assuming: claims it can verify locally it
+  verifies, correcting the question when one is wrong, and the rest are labelled
+  and passed through as stated. A provider told "I have not checked whether X
+  holds" can answer "then check X first". One told "X holds" never will.
+
+### Docs
+
+- The README's worked example only ever showed a *divergent* synthesis, which is
+  the case the council always handled well. It now also shows the unanimous one.
+  New section on the observed-versus-assumed labelling, since you will see your
+  own question relabelled before it goes out.
+
+Reported by a peer session whose council returned a unanimous, competent and
+wrong answer: five providers produced a genuinely good design, and one agent
+that could read the disk then measured its premise away — of 4792 logged
+failures, the effect the question assumed was present in about 2 percent.
+
 ## 2026.8.5
 
 ### Fixes
