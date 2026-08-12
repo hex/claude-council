@@ -143,6 +143,34 @@ If the question is vague or could be interpreted multiple ways, ask for clarific
 - Question is specific and clear
 - Context from conversation already clarifies intent
 
+## Step 0.5: Separate What Is Observed From What Is Assumed
+
+Before sending the question, check it for premises the asker has stated as fact
+but not verified. Providers receive a description and never the system itself,
+so they cannot test a premise even in principle — they will reason correctly
+from whatever the question asserts and agree with each other while doing it.
+A false premise therefore produces confident unanimity, which is the failure
+mode hardest to notice.
+
+1. Identify each load-bearing factual claim in the question — what exists on
+   disk, what some other component already does, how often something happens,
+   what a log contains.
+2. For claims you can check cheaply right here (a file exists, a function is
+   defined, a count), check them, and correct the question if a claim is wrong.
+3. For claims you cannot check, do not drop them and do not silently soften
+   them. Label them, and pass the labelled version to the providers:
+
+```
+OBSERVED: <what has actually been confirmed, and how>
+NOT VERIFIED: <what is being assumed, and what would confirm it>
+```
+
+A provider told "I have not checked whether X holds" can answer "then check X
+first", which a provider told "X holds" never will.
+
+When the answer depends mainly on facts that live on this machine, prefer
+establishing those facts before spending the council on the question.
+
 ## Step 1: Auto-Context Detection
 
 Unless `--no-auto-context` or `--file=` is in $ARGUMENTS, detect and include relevant files:

@@ -97,7 +97,12 @@ With pre-analyzed responses, generate a richer synthesis than the standard mode:
 
 ### Confidence-Weighted Consensus
 Weight agreement by each provider's confidence level. High-confidence agreement
-is stronger signal than low-confidence agreement.
+is stronger signal than low-confidence agreement — but only about the reasoning,
+never about the premises. Every provider read the same description of a system
+none of them can inspect, so confident unanimity can equally mean the question
+asserted something false and each provider reasoned from it correctly. When
+agreement is both broad and confident, say so and then name the premise the
+whole answer rests on, and whether anyone was in a position to check it.
 
 ### Blind Spot Analysis
 Cross-reference each provider's blind spots against other providers' recommendations.
