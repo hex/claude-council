@@ -5,10 +5,11 @@ A Claude Code plugin that consults multiple AI coding agents in parallel and sho
 ![Five providers answering in the streaming tmux pane, with the synthesis alongside](docs/images/council-pane.png)
 
 Five providers answering the same question. Each banner names the provider, the
-model that answered and how long it took; the synthesis separates what they all
+model that answered and how long it took. The synthesis separates what they all
 agreed on from where they diverged — here, whether trapping `EXIT INT TERM` on
 one handler is correct, or whether signals should be converted into exits
-first.
+first — and when they agree instead, it names the assumption the answer rests
+on.
 
 [Quick start](#quick-start) · [Usage](#usage) · [Configuration](#configuration) · [Reference](#reference) · [Development](#development)
 
@@ -50,6 +51,17 @@ You get side-by-side responses from each configured provider:
 ## Synthesis
 Two providers prefer UUID(v7), two prefer BIGINT. Choice depends on
 whether you need distributed ID generation.
+```
+
+When they all agree instead, the synthesis says what that agreement rests on,
+because agreement is where it is easiest to stop asking:
+
+```
+## Synthesis
+All five recommend SQLite. Read that as agreement about the reasoning, not
+as verification: every provider was given the same description of a system
+none of them can inspect. The answer assumes this stays single-node — the
+one premise that would flip it, and the one nobody here could check.
 ```
 
 Inside tmux, results stream into a side pane in real time with vendor-colored banners. Run `/claude-council:status` to confirm what's configured and connected.
@@ -283,6 +295,26 @@ Get just the bottom line without individual provider responses:
 ```
 
 Quiet mode still queries all providers and analyzes their responses, but only shows the synthesis with consensus/divergence analysis. Use when you want a quick answer without scrolling through multiple perspectives.
+
+### Stated vs Assumed
+
+Providers are given a description of your problem and never the system itself,
+so they cannot test a premise your question asserts — they will reason from it
+correctly, and agree with each other while doing it. A wrong assumption
+therefore produces confident unanimity, which is the hardest failure to spot.
+
+Before the question goes out, the council checks the claims it can check here
+and labels the rest:
+
+```
+OBSERVED: four sessions logged this failure, confirmed in .cs/memory/
+NOT VERIFIED: that the error text carries the tokens those notes are keyed on
+```
+
+A provider told "I have not checked whether X holds" can answer "then check X
+first". One told "X holds" never will. If the answer turns mainly on facts
+living on your disk, establish those first — a single agent that can read the
+filesystem beats five that cannot.
 
 ### Auto-Context Injection
 
