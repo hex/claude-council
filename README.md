@@ -40,7 +40,7 @@ You get side-by-side responses from each configured provider:
    UUIDv7 specifically: security of non-guessable IDs plus the index
    locality of time-ordered sequences.
 
-🟥 Grok - grok-4.5
+🟥 Grok - grok-latest
    BIGINT autoincrement — smaller index, faster joins. Handle public-
    exposure concerns with a separate UUID slug column.
 
@@ -550,14 +550,20 @@ Detail-heavy knobs you'll only need occasionally. The defaults are sensible for 
 Override default models via environment variables:
 
 ```bash
-export GEMINI_MODEL="gemini-3.1-pro-preview"       # default
+export GEMINI_MODEL="gemini-pro-latest"             # default (tracks Google's current Pro)
 export OPENAI_MODEL="gpt-5.6-sol"                   # default
-export GROK_MODEL="grok-4.5"                        # default
+export GROK_MODEL="grok-latest"                     # default (tracks xAI's current flagship)
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
 export KIMI_MODEL="kimi-k3"                         # default
 export OLLAMA_MODEL="llama3.2"                      # default: whichever model `ollama list` shows first
 export OLLAMA_HOST="http://localhost:11434"         # default
 ```
+
+Gemini and Grok default to their vendor's rolling alias, so the council follows
+a new flagship without a release. Pin an explicit id when you need a fixed model
+across runs: cached answers key on the id, so an alias can serve an answer the
+model behind it no longer gives, and the response header names the alias rather
+than the model that answered.
 
 Response length cap (default: 2048; `ollama` uses 4096, since local reasoning
 models spend much of the budget on thinking that never reaches the answer):
@@ -574,14 +580,14 @@ council answers with a verified fallback model instead of failing, and says so
 in the response header:
 
 ```
-## 🟥 Grok - grok-4.20-reasoning (grok-4.5 unavailable)
+## 🟥 Grok - grok-4.20-reasoning (grok-latest unavailable)
 ```
 
 | Provider | Default | Fallback |
 |---|---|---|
 | openai | `gpt-5.6-sol` | `gpt-5.5-pro` |
-| grok | `grok-4.5` | `grok-4.20-reasoning` |
-| gemini | `gemini-3.1-pro-preview` | `gemini-pro-latest` |
+| grok | `grok-latest` | `grok-4.20-reasoning` |
+| gemini | `gemini-pro-latest` | `gemini-3.1-pro-preview` |
 | perplexity | `sonar-reasoning-pro` | `sonar-pro` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
 | ollama | first local model (`OLLAMA_MODEL` to pin) | — |

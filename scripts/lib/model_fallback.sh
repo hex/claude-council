@@ -13,7 +13,7 @@ source "${LIB_MODEL_FALLBACK_DIR}/providers.sh"
 # Each id is verified against the live API before it lands here: a model can be
 # listed by a provider's models endpoint and still fail a completion (gemini-2.5-pro
 # is listed by Google's, and 404s on generateContent).
-MODEL_FALLBACKS="openai:gpt-5.5-pro grok:grok-4.20-reasoning perplexity:sonar-pro gemini:gemini-pro-latest kimi:kimi-k2.6"
+MODEL_FALLBACKS="openai:gpt-5.5-pro grok:grok-4.20-reasoning perplexity:sonar-pro gemini:gemini-3.1-pro-preview kimi:kimi-k2.6"
 
 # The model a provider degrades to when its preferred model is unavailable.
 # Empty for CLI providers, which degrade to their API sibling instead.

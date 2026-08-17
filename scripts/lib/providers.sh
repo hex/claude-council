@@ -221,7 +221,10 @@ cli_config_model() {
 }
 
 # Default model per provider. API defaults are pinned ids; bump when a vendor
-# ships a new flagship we want to track. CLI providers pass no model flag
+# ships a new flagship we want to track. Gemini and Grok instead track their
+# vendor's rolling alias, which trades a pin for automatic flagship tracking:
+# the id in the cache key stays constant while the model behind it moves, so a
+# cached answer can outlive the model that gave it. CLI providers pass no model flag
 # unless the *_MODEL override is set, so their model is whatever their own
 # config selects; "default" remains for the CLIs that publish no such config
 # and for a CLI that has not been configured. The value reaches the cache key,
@@ -242,9 +245,9 @@ cli_model() {
 
 get_model() {
     case "$1" in
-        gemini)     echo "${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
+        gemini)     echo "${GEMINI_MODEL:-gemini-pro-latest}" ;;
         openai)     echo "${OPENAI_MODEL:-gpt-5.6-sol}" ;;
-        grok)       echo "${GROK_MODEL:-grok-4.5}" ;;
+        grok)       echo "${GROK_MODEL:-grok-latest}" ;;
         grok-cli)   cli_model grok-cli "${GROK_CLI_MODEL:-}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
         codex)      cli_model codex "${CODEX_MODEL:-}" ;;

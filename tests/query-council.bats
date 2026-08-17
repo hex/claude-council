@@ -279,28 +279,28 @@ EOF
 
 @test "wrapper: exit 3 on the preferred model retries with the fallback" {
     export GROK_API_KEY=k
-    write_model_aware_stub grok grok-4.5
+    write_model_aware_stub grok grok-latest
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
         "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
     assert_json_eq "$output" '.round1.grok.model' 'grok-4.20-reasoning'
-    assert_json_eq "$output" '.round1.grok.model_fallback' 'grok-4.5'
-    [[ "$stderr" == *"grok-4.5 unavailable"* ]]
+    assert_json_eq "$output" '.round1.grok.model_fallback' 'grok-latest'
+    [[ "$stderr" == *"grok-latest unavailable"* ]]
 }
 
 @test "wrapper: the preferred model is tried first, then the fallback" {
     export GROK_API_KEY=k
-    write_model_aware_stub grok grok-4.5
+    write_model_aware_stub grok grok-latest
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
         "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
-    [ "$(sed -n 1p "$CALLS_LOG")" = "grok-4.5" ]
+    [ "$(sed -n 1p "$CALLS_LOG")" = "grok-latest" ]
     [ "$(sed -n 2p "$CALLS_LOG")" = "grok-4.20-reasoning" ]
 }
 
 @test "wrapper: a cached verdict skips the known-bad preferred model" {
     export GROK_API_KEY=k
-    write_model_aware_stub grok grok-4.5
+    write_model_aware_stub grok grok-latest
     # First run discovers and remembers the verdict.
     env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
         "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1
@@ -313,8 +313,8 @@ EOF
 }
 
 @test "wrapper: an explicit GROK_MODEL override never falls back" {
-    export GROK_API_KEY=k GROK_MODEL=grok-4.5
-    write_model_aware_stub grok grok-4.5
+    export GROK_API_KEY=k GROK_MODEL=grok-latest
+    write_model_aware_stub grok grok-latest
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
         "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
     # The stub exits 3; with an override there is no fallback, so it is an error.
@@ -339,12 +339,12 @@ EOF
 
 @test "round2: the rebuttal slot carries the fallback model and the displaced one" {
     export GROK_API_KEY=k
-    write_model_aware_stub grok grok-4.5
+    write_model_aware_stub grok grok-latest
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
         "$HOST_BASH" "$SCRIPT" --providers=grok --debate --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
     assert_json_eq "$output" '.round2.grok.model' 'grok-4.20-reasoning'
-    assert_json_eq "$output" '.round2.grok.model_fallback' 'grok-4.5'
+    assert_json_eq "$output" '.round2.grok.model_fallback' 'grok-latest'
 }
 
 @test "sibling: a CLI provider's API sibling reports its own model fallback" {

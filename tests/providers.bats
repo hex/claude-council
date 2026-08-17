@@ -81,6 +81,38 @@ run_provider() {
     [[ "$stderr" == *"Error from Gemini: quota exceeded"* ]]
 }
 
+@test "gemini: the default model is the pro alias" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}'
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k
+    [ "$status" -eq 0 ]
+    grep -qF "models/gemini-pro-latest:generateContent" "$ARGV_FILE"
+}
+
+@test "grok: the default model is the grok alias" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider grok.sh "hi" XAI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.model' "$DATA_FILE")" = "grok-latest" ]
+}
+
+@test "grok: grok-latest gets the reasoning token bump" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider grok.sh "hi" XAI_API_KEY=k GROK_MODEL=grok-latest
+    [ "$status" -eq 0 ]
+    # The alias serves a reasoning model, whose thinking shares the cap with
+    # the visible answer; the 2048 base would truncate the answer.
+    [ "$(jq -r '.max_tokens' "$DATA_FILE")" -ge 32768 ]
+}
+
+@test "gemini: gemini-pro-latest gets the reasoning token bump" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}'
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k GEMINI_MODEL=gemini-pro-latest
+    [ "$status" -eq 0 ]
+    # The alias serves a Pro reasoning model, so the cap must be bumped; the
+    # 2048 base would leave the visible answer truncated mid-thought.
+    [ "$(jq -r '.generationConfig.maxOutputTokens' "$DATA_FILE")" -ge 32768 ]
+}
+
 @test "openai: gpt-5.1 routes to chat/completions and parses content" {
     FAKE_BODY='{"choices":[{"message":{"content":"OAI_CHAT"}}]}'
     run_provider openai.sh "hi" OPENAI_API_KEY=k OPENAI_MODEL=gpt-5.1

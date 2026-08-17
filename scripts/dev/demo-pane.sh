@@ -52,9 +52,9 @@ MD
 # All providers start "querying"
 for p in gemini openai grok perplexity; do
     case "$p" in
-        gemini)     m="gemini-3.1-pro-preview" ;;
+        gemini)     m="gemini-pro-latest" ;;
         openai)     m="gpt-5.6-sol" ;;
-        grok)       m="grok-4.5" ;;
+        grok)       m="grok-latest" ;;
         perplexity) m="sonar-reasoning-pro" ;;
     esac
     pane_status_event "$PANE" "$p" querying "" "$m"
@@ -63,9 +63,9 @@ done
 
 model_for() {
     case "$1" in
-        gemini)     echo "gemini-3.1-pro-preview" ;;
+        gemini)     echo "gemini-pro-latest" ;;
         openai)     echo "gpt-5.6-sol" ;;
-        grok)       echo "grok-4.5" ;;
+        grok)       echo "grok-latest" ;;
         perplexity) echo "sonar-reasoning-pro" ;;
     esac
 }

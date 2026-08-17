@@ -51,13 +51,13 @@ fi
 ENDPOINT="https://api.x.ai/v1/chat/completions"
 
 # Model selection (override via GROK_MODEL env var)
-MODEL="${GROK_MODEL:-grok-4.5}"
+MODEL="${GROK_MODEL:-grok-latest}"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models
-# (*-reasoning, grok-4*, grok-3-mini-*, grok-build-*) need a higher cap; for
+# (*-reasoning, grok-4*, grok-3-mini-*, grok-build-*, grok*-latest) need a higher cap; for
 # grok-build max_tokens caps visible output only (thinking uncapped), else shared.
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
-bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*reasoning*' 'grok-4*' 'grok-3-mini-*' 'grok-build-*'
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*reasoning*' 'grok-4*' 'grok-3-mini-*' 'grok-build-*' 'grok*-latest'
 
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 

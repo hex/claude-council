@@ -249,11 +249,13 @@ echo -e "${DIM}Provider Status:${RESET}"
 echo ""
 
 # Check each provider
-gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "GEMINI_MODEL" "gemini-3.1-pro-preview")
-openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "gpt-5.6-sol")
-grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "grok-4.5")
-perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "sonar-reasoning-pro")
-kimi_status=$(check_provider "kimi" "KIMI_API_KEY" "KIMI_MODEL" "kimi-k3")
+# The default model comes from get_model rather than a literal, so the status
+# check cannot report a model the council would not actually query.
+gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "GEMINI_MODEL" "$(get_model gemini)")
+openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "$(get_model openai)")
+grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "$(get_model grok)")
+perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "$(get_model perplexity)")
+kimi_status=$(check_provider "kimi" "KIMI_API_KEY" "KIMI_MODEL" "$(get_model kimi)")
 # codex login status exits non-zero when logged out; agy has no
 # equivalent offline auth probe, so it stays a single-tier check. `grok models`
 # prints "You are not authenticated." with exit 0 when logged out, which the

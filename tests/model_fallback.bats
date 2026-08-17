@@ -120,7 +120,17 @@ mf() {
     mf 'model_fallback_for perplexity'
     [ "$output" = "sonar-pro" ]
     mf 'model_fallback_for gemini'
-    [ "$output" = "gemini-pro-latest" ]
+    [ "$output" = "gemini-3.1-pro-preview" ]
+}
+
+@test "model_fallback_for: no provider degrades to the model it already prefers" {
+    # A fallback equal to the default makes the retry a second identical call:
+    # the provider is reported as degraded while nothing about the request changed.
+    mf 'for p in openai grok perplexity gemini kimi; do
+            f=$(model_fallback_for "$p")
+            [[ -z "$f" || "$f" != "$(get_model "$p")" ]] || { echo "$p"; exit 1; }
+        done'
+    [ "$status" -eq 0 ]
 }
 
 @test "model_fallback_for: a CLI provider has no fallback of its own" {
@@ -215,26 +225,26 @@ mf() {
 # Real API — skipped unless a key is present
 # ============================================================================
 
-# grok-4.5 is genuinely HTTP 403 in the EU today, so this is the one test in
-# the suite that exercises the whole path with no mocks: real 403 from xAI,
-# real classification, real fallback retry, real answer. It earns its keep by
-# catching a regression the classifier fixtures cannot — e.g. xAI changing its
-# error shape in a way that still satisfies the captured-body tests above but
-# breaks against the live API.
-@test "real xAI: grok-4.5 is classified and answered by the fallback model" {
+# The one test in the suite that exercises the whole path with no mocks: real
+# call to xAI, real classification of whatever comes back, real fallback retry
+# when the preferred model is blocked for this key, real answer. It earns its
+# keep by catching a regression the classifier fixtures cannot — e.g. xAI
+# changing its error shape in a way that still satisfies the captured-body
+# tests above but breaks against the live API.
+@test "real xAI: the default model answers, or its fallback does" {
     [[ -n "${XAI_API_KEY:-}${GROK_API_KEY:-}" ]] || skip "no xAI key present"
     run --separate-stderr env COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" COUNCIL_MAX_TOKENS=256 \
         bash "${SCRIPTS_DIR}/query-council.sh" \
         --providers=grok --no-pane --no-auto-context --no-cache "Reply with exactly the word: OK"
     [ "$status" -eq 0 ]
-    # Either grok-4.5 rolled out here (then no fallback), or it did not and the
-    # fallback answered. Both are correct; a hard error is not. The assertion
-    # must not fail merely because grok-4.5 started working after the EU rollout.
+    # Either the region serves the default (then no fallback), or it does not
+    # and the fallback answered. Both are correct; a hard error is not. Regional
+    # availability moves on its own schedule, so neither branch may fail the test.
     local model
     model=$(jq -r '.round1.grok.model' <<<"$output")
-    [[ "$model" == "grok-4.5" || "$model" == "grok-4.20-reasoning" ]]
+    [[ "$model" == "grok-latest" || "$model" == "grok-4.20-reasoning" ]]
     [ "$(jq -r '.round1.grok.status' <<<"$output")" = "success" ]
     if [[ "$model" == "grok-4.20-reasoning" ]]; then
-        [ "$(jq -r '.round1.grok.model_fallback' <<<"$output")" = "grok-4.5" ]
+        [ "$(jq -r '.round1.grok.model_fallback' <<<"$output")" = "grok-latest" ]
     fi
 }
