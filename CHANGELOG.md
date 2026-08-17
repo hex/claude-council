@@ -4,6 +4,43 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.8.7
+
+### Features
+
+- **Gemini and Grok track their vendor's rolling alias.** The defaults are
+  `gemini-pro-latest` and `grok-latest`, so a new flagship reaches the council
+  without waiting for a release. Pin an explicit id when you need a fixed model
+  across runs: cached answers key on the id, so an alias can serve an answer the
+  model behind it no longer gives.
+
+### Fixes
+
+- **A rolling alias no longer loses the reasoning-token bump.** The cap is
+  matched per provider by glob, and neither alias matched the existing patterns,
+  which would have dropped the cap to the 2048 base on models whose thinking
+  shares that budget with the visible answer — silent mid-sentence truncation.
+- **Gemini degrades across a tier.** Its fallback was the pinned id its own
+  alias serves, so a key without preview access paid two failing calls, was told
+  a different model had answered, and remembered no verdict. It now falls back
+  to `gemini-3.5-flash`.
+- **A deliberate `COUNCIL_MAX_TOKENS` is no longer overridden on
+  non-reasoning models.** Grok matches its alias literally, since xAI also
+  publishes non-reasoning `-latest` aliases whose whole budget is visible output.
+- **The test suite is hermetic against a documented environment.** A
+  `GEMINI_MODEL` or `GROK_MODEL` exported in your shell — which the README tells
+  you to do — turned the suite red.
+
+### Other
+
+- Provider scripts read their model from `get_model` instead of repeating the
+  default. The orchestrator labels answers and builds cache keys from
+  `get_model`, so drift between the two mislabelled a cached answer rather than
+  failing. `check-status` and the pane demo resolve models the same way.
+- Test counts and the new coverage are documented in TESTING.md.
+
+**Full Changelog**: https://github.com/hex/claude-council/compare/v2026.8.6...v2026.8.7
+
 ## 2026.8.6
 
 ### Fixes
