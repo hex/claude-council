@@ -57,9 +57,12 @@ MODEL="$(get_model grok)"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models need a
 # higher cap; for grok-build max_tokens caps visible output only (thinking
-# uncapped), else the two share it.
+# uncapped), else the two share it. The alias is matched literally rather than as
+# '*-latest': xAI publishes non-reasoning aliases too (grok-4.20-non-reasoning-latest),
+# whose whole budget is visible output, and raising the cap on those would override
+# a COUNCIL_MAX_TOKENS the user set deliberately.
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
-bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*reasoning*' 'grok-4*' 'grok-3-mini-*' 'grok-build-*' '*-latest'
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*reasoning*' 'grok-4*' 'grok-3-mini-*' 'grok-build-*' 'grok-latest'
 
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 

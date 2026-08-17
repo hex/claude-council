@@ -587,7 +587,7 @@ in the response header:
 |---|---|---|
 | openai | `gpt-5.6-sol` | `gpt-5.5-pro` |
 | grok | `grok-latest` | `grok-4.20-reasoning` |
-| gemini | `gemini-pro-latest` | `gemini-3.1-pro-preview` |
+| gemini | `gemini-pro-latest` | `gemini-3.5-flash` |
 | perplexity | `sonar-reasoning-pro` | `sonar-pro` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
 | ollama | first local model (`OLLAMA_MODEL` to pin) | — |

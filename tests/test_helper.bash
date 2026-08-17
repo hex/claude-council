@@ -34,6 +34,12 @@ export COUNCIL_AUTO_CLOSE=1
 # machine configured as documented must not turn the suite red.
 unset COUNCIL_PROVIDERS
 
+# Same reasoning for the per-provider model overrides: the README documents
+# exporting these, and a pinned one wins over the default the suite asserts.
+# A test that wants an override sets it on its own invocation.
+unset GEMINI_MODEL OPENAI_MODEL GROK_MODEL PERPLEXITY_MODEL KIMI_MODEL OLLAMA_MODEL
+unset CODEX_MODEL ANTIGRAVITY_MODEL GROK_CLI_MODEL KIMI_CLI_MODEL
+
 # Setup - runs before each test
 setup() {
     mkdir -p "$TEST_TMP_DIR"

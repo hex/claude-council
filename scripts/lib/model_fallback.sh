@@ -12,11 +12,14 @@ source "${LIB_MODEL_FALLBACK_DIR}/providers.sh"
 # Mirrors the SHADOW_PAIRS idiom in providers.sh. Adding a provider is one token.
 # Each id is verified against the live API before it lands here: a model can be
 # listed by a provider's models endpoint and still fail a completion (gemini-2.5-pro
-# is listed by Google's, and 404s on generateContent). A fallback is an older
-# pinned generation, not whatever the preferred id resolves to today — for the
-# providers whose default is a rolling alias those two can converge, and only the
-# pin keeps the retry from re-sending the request that just failed.
-MODEL_FALLBACKS="openai:gpt-5.5-pro grok:grok-4.20-reasoning perplexity:sonar-pro gemini:gemini-3.1-pro-preview kimi:kimi-k2.6"
+# is listed by Google's, and 404s on generateContent). A fallback must also name
+# a genuinely different model, which comparing ids cannot establish: gemini's
+# alias currently serves gemini-3.1-pro-preview, so pinning that id would read as
+# a degrade while re-sending the request that just failed — two paid calls, a
+# misleading notice, and no verdict remembered, since the retry failed too. Check
+# the served model (Gemini reports modelVersion) rather than the id, which is why
+# gemini degrades across a tier, to flash, rather than to another pro id.
+MODEL_FALLBACKS="openai:gpt-5.5-pro grok:grok-4.20-reasoning perplexity:sonar-pro gemini:gemini-3.5-flash kimi:kimi-k2.6"
 
 # The model a provider degrades to when its preferred model is unavailable.
 # Empty for CLI providers, which degrade to their API sibling instead.

@@ -120,7 +120,9 @@ mf() {
     mf 'model_fallback_for perplexity'
     [ "$output" = "sonar-pro" ]
     mf 'model_fallback_for gemini'
-    [ "$output" = "gemini-3.1-pro-preview" ]
+    # A flash id, not another pro id: gemini's default is an alias, and the pro id
+    # it currently serves would make the retry re-send the failed request.
+    [ "$output" = "gemini-3.5-flash" ]
 }
 
 @test "model_fallback_for: no provider degrades to the model it already prefers" {

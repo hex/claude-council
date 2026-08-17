@@ -81,18 +81,22 @@ run_provider() {
     [[ "$stderr" == *"Error from Gemini: quota exceeded"* ]]
 }
 
-@test "gemini: the default model is the pro alias" {
+@test "gemini: the default model is the pro alias, and it earns the token bump" {
     FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}'
     run_provider gemini.sh "hi" GEMINI_API_KEY=k
     [ "$status" -eq 0 ]
     grep -qF "models/gemini-pro-latest:generateContent" "$ARGV_FILE"
+    # The cap is asserted on the same run: the default is a reasoning model, and
+    # the pattern that bumps it is the one an id rename silently stops matching.
+    [ "$(jq -r '.generationConfig.maxOutputTokens' "$DATA_FILE")" -ge 32768 ]
 }
 
-@test "grok: the default model is the grok alias" {
+@test "grok: the default model is the grok alias, and it earns the token bump" {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider grok.sh "hi" XAI_API_KEY=k
     [ "$status" -eq 0 ]
     [ "$(jq -r '.model' "$DATA_FILE")" = "grok-latest" ]
+    [ "$(jq -r '.max_tokens' "$DATA_FILE")" -ge 32768 ]
 }
 
 @test "grok: an alias other than the default still gets the reasoning token bump" {

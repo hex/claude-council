@@ -55,10 +55,12 @@ MODEL="$(get_model gemini)"
 ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models need a
-# much higher cap since maxOutputTokens combines reasoning + output. The bump
-# only raises a ceiling, so a pattern that over-matches costs nothing.
+# much higher cap since maxOutputTokens combines reasoning + output. Google's
+# -latest aliases all serve models that think, so the alias pattern is scoped to
+# them rather than left as a bare '*-latest' that would also raise a deliberate
+# COUNCIL_MAX_TOKENS on some future non-reasoning alias.
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
-bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'gemini-3*' '*thinking*' '*-latest'
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'gemini-3*' '*thinking*' 'gemini-*-latest'
 
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
