@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -54,7 +55,7 @@ PAYLOAD_FILE=$(mktemp)
 trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE"' EXIT
 
 # Model selection (override via OPENAI_MODEL env var)
-MODEL="${OPENAI_MODEL:-gpt-5.6-sol}"
+MODEL="$(get_model openai)"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var)
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"

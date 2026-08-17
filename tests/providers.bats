@@ -95,21 +95,20 @@ run_provider() {
     [ "$(jq -r '.model' "$DATA_FILE")" = "grok-latest" ]
 }
 
-@test "grok: grok-latest gets the reasoning token bump" {
+@test "grok: an alias other than the default still gets the reasoning token bump" {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
-    run_provider grok.sh "hi" XAI_API_KEY=k GROK_MODEL=grok-latest
+    run_provider grok.sh "hi" XAI_API_KEY=k GROK_MODEL=grok-4-latest
     [ "$status" -eq 0 ]
-    # The alias serves a reasoning model, whose thinking shares the cap with
-    # the visible answer; the 2048 base would truncate the answer.
+    # An alias serves a reasoning model, whose thinking shares the cap with the
+    # visible answer; the 2048 base would truncate the answer. Pinned to an alias
+    # that is not the default, so the bump stays covered when the default moves.
     [ "$(jq -r '.max_tokens' "$DATA_FILE")" -ge 32768 ]
 }
 
-@test "gemini: gemini-pro-latest gets the reasoning token bump" {
+@test "gemini: an alias other than the default still gets the reasoning token bump" {
     FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}'
-    run_provider gemini.sh "hi" GEMINI_API_KEY=k GEMINI_MODEL=gemini-pro-latest
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k GEMINI_MODEL=gemini-flash-latest
     [ "$status" -eq 0 ]
-    # The alias serves a Pro reasoning model, so the cap must be bumped; the
-    # 2048 base would leave the visible answer truncated mid-thought.
     [ "$(jq -r '.generationConfig.maxOutputTokens' "$DATA_FILE")" -ge 32768 ]
 }
 

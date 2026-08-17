@@ -6,6 +6,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/display.sh"
+# get_model, so the demo advertises the models a real run would query.
+source "$SCRIPT_DIR/../lib/providers.sh"
 
 MODE="${1:-default}"
 
@@ -51,68 +53,53 @@ MD
 
 # All providers start "querying"
 for p in gemini openai grok perplexity; do
-    case "$p" in
-        gemini)     m="gemini-pro-latest" ;;
-        openai)     m="gpt-5.6-sol" ;;
-        grok)       m="grok-latest" ;;
-        perplexity) m="sonar-reasoning-pro" ;;
-    esac
-    pane_status_event "$PANE" "$p" querying "" "$m"
+    pane_status_event "$PANE" "$p" querying "" "$(get_model "$p")"
     sleep 0.15
 done
-
-model_for() {
-    case "$1" in
-        gemini)     echo "gemini-pro-latest" ;;
-        openai)     echo "gpt-5.6-sol" ;;
-        grok)       echo "grok-latest" ;;
-        perplexity) echo "sonar-reasoning-pro" ;;
-    esac
-}
 
 case "$MODE" in
     fast)
         sleep 0.5
-        pane_status_event "$PANE" gemini complete 187 "$(model_for gemini)"
+        pane_status_event "$PANE" gemini complete 187 "$(get_model gemini)"
         pane_response_write "$PANE" gemini "$(response_md gemini)"
         sleep 0.3
-        pane_status_event "$PANE" openai complete 240 "$(model_for openai)"
+        pane_status_event "$PANE" openai complete 240 "$(get_model openai)"
         pane_response_write "$PANE" openai "$(response_md openai)"
         sleep 0.3
-        pane_status_event "$PANE" grok complete 195 "$(model_for grok)"
+        pane_status_event "$PANE" grok complete 195 "$(get_model grok)"
         pane_response_write "$PANE" grok "$(response_md grok)"
         sleep 0.3
-        pane_status_event "$PANE" perplexity complete 312 "$(model_for perplexity)"
+        pane_status_event "$PANE" perplexity complete 312 "$(get_model perplexity)"
         pane_response_write "$PANE" perplexity "$(response_md perplexity)"
         ;;
     error)
         sleep 1.2
-        pane_status_event "$PANE" gemini complete 187 "$(model_for gemini)"
+        pane_status_event "$PANE" gemini complete 187 "$(get_model gemini)"
         pane_response_write "$PANE" gemini "$(response_md gemini)"
         sleep 1.5
-        pane_status_event "$PANE" grok cached "" "$(model_for grok)"
+        pane_status_event "$PANE" grok cached "" "$(get_model grok)"
         pane_response_write "$PANE" grok "$(response_md grok)"
         sleep 1.0
         pane_error_write "$PANE" openai "HTTP 503: Service unavailable
 Retried 3 times with exponential backoff
 Final response: {\"error\": {\"message\": \"upstream timeout\"}}"
-        pane_status_event "$PANE" openai error "" "$(model_for openai)"
+        pane_status_event "$PANE" openai error "" "$(get_model openai)"
         sleep 2.0
-        pane_status_event "$PANE" perplexity complete 4280 "$(model_for perplexity)"
+        pane_status_event "$PANE" perplexity complete 4280 "$(get_model perplexity)"
         pane_response_write "$PANE" perplexity "$(response_md perplexity)"
         ;;
     *)
         sleep 1.0
-        pane_status_event "$PANE" gemini complete 187 "$(model_for gemini)"
+        pane_status_event "$PANE" gemini complete 187 "$(get_model gemini)"
         pane_response_write "$PANE" gemini "$(response_md gemini)"
         sleep 1.5
-        pane_status_event "$PANE" openai complete 840 "$(model_for openai)"
+        pane_status_event "$PANE" openai complete 840 "$(get_model openai)"
         pane_response_write "$PANE" openai "$(response_md openai)"
         sleep 1.0
-        pane_status_event "$PANE" grok complete 1240 "$(model_for grok)"
+        pane_status_event "$PANE" grok complete 1240 "$(get_model grok)"
         pane_response_write "$PANE" grok "$(response_md grok)"
         sleep 2.5
-        pane_status_event "$PANE" perplexity complete 3920 "$(model_for perplexity)"
+        pane_status_event "$PANE" perplexity complete 3920 "$(get_model perplexity)"
         pane_response_write "$PANE" perplexity "$(response_md perplexity)"
         ;;
 esac

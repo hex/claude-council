@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -46,17 +47,18 @@ if [[ -z "$API_KEY" ]]; then
     exit 1
 fi
 
-# Model selection (override via GEMINI_MODEL env var)
-MODEL="${GEMINI_MODEL:-gemini-pro-latest}"
+# Model selection (override via GEMINI_MODEL env var). get_model owns the
+# default so the id sent here is the one the orchestrator labels and caches by.
+MODEL="$(get_model gemini)"
 
 # Gemini API endpoint
 ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent"
 
-# Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models
-# (gemini-3*, *-thinking-*, the *-latest aliases) need a much higher cap since
-# maxOutputTokens combines reasoning + output.
+# Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models need a
+# much higher cap since maxOutputTokens combines reasoning + output. The bump
+# only raises a ceiling, so a pattern that over-matches costs nothing.
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
-bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'gemini-3*' '*thinking*' 'gemini-*-latest'
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'gemini-3*' '*thinking*' '*-latest'
 
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 

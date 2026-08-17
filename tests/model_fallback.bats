@@ -126,11 +126,13 @@ mf() {
 @test "model_fallback_for: no provider degrades to the model it already prefers" {
     # A fallback equal to the default makes the retry a second identical call:
     # the provider is reported as degraded while nothing about the request changed.
-    mf 'for p in openai grok perplexity gemini kimi; do
-            f=$(model_fallback_for "$p")
-            [[ -z "$f" || "$f" != "$(get_model "$p")" ]] || { echo "$p"; exit 1; }
+    # The roster comes from the map itself, so a provider added there is covered.
+    mf 'for token in $MODEL_FALLBACKS; do
+            p="${token%%:*}"
+            [ "$(model_fallback_for "$p")" != "$(get_model "$p")" ] || echo "$p"
         done'
     [ "$status" -eq 0 ]
+    [ -z "$output" ]
 }
 
 @test "model_fallback_for: a CLI provider has no fallback of its own" {

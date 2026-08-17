@@ -71,13 +71,11 @@ rejected_key() {
 }
 
 # Check a single provider
-# Usage: check_provider <name> <api_key_var> <model_var> <default_model>
+# Usage: check_provider <name> <api_key_var> <model>
 check_provider() {
     local name="$1"
     local api_key="${!2:-}"
-    local model_var="$3"
-    local default_model="$4"
-    local model="${!model_var:-$default_model}"
+    local model="$3"
 
     if [[ -z "$api_key" ]]; then
         echo "no_key"
@@ -249,13 +247,13 @@ echo -e "${DIM}Provider Status:${RESET}"
 echo ""
 
 # Check each provider
-# The default model comes from get_model rather than a literal, so the status
-# check cannot report a model the council would not actually query.
-gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "GEMINI_MODEL" "$(get_model gemini)")
-openai_status=$(check_provider "openai" "OPENAI_API_KEY" "OPENAI_MODEL" "$(get_model openai)")
-grok_status=$(check_provider "grok" "GROK_API_KEY" "GROK_MODEL" "$(get_model grok)")
-perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "PERPLEXITY_MODEL" "$(get_model perplexity)")
-kimi_status=$(check_provider "kimi" "KIMI_API_KEY" "KIMI_MODEL" "$(get_model kimi)")
+# get_model resolves the override too, so the status check cannot report a model
+# the council would not actually query.
+gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "$(get_model gemini)")
+openai_status=$(check_provider "openai" "OPENAI_API_KEY" "$(get_model openai)")
+grok_status=$(check_provider "grok" "GROK_API_KEY" "$(get_model grok)")
+perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "$(get_model perplexity)")
+kimi_status=$(check_provider "kimi" "KIMI_API_KEY" "$(get_model kimi)")
 # codex login status exits non-zero when logged out; agy has no
 # equivalent offline auth probe, so it stays a single-tier check. `grok models`
 # prints "You are not authenticated." with exit 0 when logged out, which the

@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -55,7 +56,7 @@ fi
 # key issued since then gets 404 for ids the docs still list. `GET /v1/models`
 # on your own key is the only authoritative answer; a list here would be right
 # for whoever wrote it and wrong for the next reader.
-MODEL="${KIMI_MODEL:-kimi-k3}"
+MODEL="$(get_model kimi)"
 
 # Kimi Open Platform endpoint (OpenAI-compatible Chat Completions)
 ENDPOINT="${KIMI_ENDPOINT:-https://api.moonshot.ai/v1/chat/completions}"

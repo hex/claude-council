@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -48,7 +49,7 @@ fi
 
 # Model selection (override via PERPLEXITY_MODEL env var)
 # Available: sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro
-MODEL="${PERPLEXITY_MODEL:-sonar-reasoning-pro}"
+MODEL="$(get_model perplexity)"
 
 # Perplexity API endpoint (OpenAI-compatible)
 ENDPOINT="https://api.perplexity.ai/chat/completions"

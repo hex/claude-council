@@ -220,11 +220,14 @@ cli_config_model() {
     esac
 }
 
-# Default model per provider. API defaults are pinned ids; bump when a vendor
-# ships a new flagship we want to track. Gemini and Grok instead track their
-# vendor's rolling alias, which trades a pin for automatic flagship tracking:
-# the id in the cache key stays constant while the model behind it moves, so a
-# cached answer can outlive the model that gave it. CLI providers pass no model flag
+# Default model per provider, and the one place any of them is named: the
+# provider scripts read their model from here too. API defaults are pinned ids
+# (bump when a vendor ships a flagship we want to track), except gemini and grok,
+# which track their vendor's rolling alias. An alias trades the pin for automatic
+# tracking at a cost: the id in the cache key stays constant while the model
+# behind it moves, so a cached answer can outlive the model that gave it, and the
+# same is true of the model-unavailable verdicts keyed on it in model_fallback.sh.
+# CLI providers pass no model flag
 # unless the *_MODEL override is set, so their model is whatever their own
 # config selects; "default" remains for the CLIs that publish no such config
 # and for a CLI that has not been configured. The value reaches the cache key,

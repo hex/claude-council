@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/keys.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -50,14 +51,15 @@ fi
 # xAI API endpoint (OpenAI-compatible)
 ENDPOINT="https://api.x.ai/v1/chat/completions"
 
-# Model selection (override via GROK_MODEL env var)
-MODEL="${GROK_MODEL:-grok-latest}"
+# Model selection (override via GROK_MODEL env var). get_model owns the default
+# so the id sent here is the one the orchestrator labels and caches by.
+MODEL="$(get_model grok)"
 
-# Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models
-# (*-reasoning, grok-4*, grok-3-mini-*, grok-build-*, grok*-latest) need a higher cap; for
-# grok-build max_tokens caps visible output only (thinking uncapped), else shared.
+# Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models need a
+# higher cap; for grok-build max_tokens caps visible output only (thinking
+# uncapped), else the two share it.
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
-bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*reasoning*' 'grok-4*' 'grok-3-mini-*' 'grok-build-*' 'grok*-latest'
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*reasoning*' 'grok-4*' 'grok-3-mini-*' 'grok-build-*' '*-latest'
 
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 

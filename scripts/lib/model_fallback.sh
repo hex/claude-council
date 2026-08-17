@@ -12,7 +12,10 @@ source "${LIB_MODEL_FALLBACK_DIR}/providers.sh"
 # Mirrors the SHADOW_PAIRS idiom in providers.sh. Adding a provider is one token.
 # Each id is verified against the live API before it lands here: a model can be
 # listed by a provider's models endpoint and still fail a completion (gemini-2.5-pro
-# is listed by Google's, and 404s on generateContent).
+# is listed by Google's, and 404s on generateContent). A fallback is an older
+# pinned generation, not whatever the preferred id resolves to today — for the
+# providers whose default is a rolling alias those two can converge, and only the
+# pin keeps the retry from re-sending the request that just failed.
 MODEL_FALLBACKS="openai:gpt-5.5-pro grok:grok-4.20-reasoning perplexity:sonar-pro gemini:gemini-3.1-pro-preview kimi:kimi-k2.6"
 
 # The model a provider degrades to when its preferred model is unavailable.
@@ -27,7 +30,9 @@ model_fallback_for() {
 
 # How long an "unavailable" verdict stays fresh. Deliberately independent of
 # COUNCIL_CACHE_TTL and of --no-cache: a regional rollout moves on the order of
-# days, and forcing fresh answers should not force a re-failed API call.
+# days, and forcing fresh answers should not force a re-failed API call. Where the
+# preferred id is a rolling alias the verdict's subject can move under it, so a
+# day-old verdict can indict a model the alias no longer serves.
 # COUNCIL_AVAILABILITY_TTL=0 disables the cache entirely.
 COUNCIL_AVAILABILITY_TTL="${COUNCIL_AVAILABILITY_TTL:-86400}"
 
