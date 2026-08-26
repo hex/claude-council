@@ -722,11 +722,10 @@ fi
 
 # Open streaming pane (best effort) and signal "querying" via tab color.
 # An inherited COUNCIL_PANE_DIR naming an existing dir is a pane already
-# streaming this run — the tests drive the retry protocol through one, since
-# bats has no tmux to open a real pane in.
-if [[ -n "${COUNCIL_PANE_DIR:-}" && -d "$COUNCIL_PANE_DIR" ]]; then
-    :
-else
+# streaming this run, and it wins over --no-pane, which only stops a NEW pane
+# from opening — the tests drive the retry protocol through one, since bats
+# has no tmux to open a real pane in.
+if [[ ! -d "${COUNCIL_PANE_DIR:-}" ]]; then
     COUNCIL_PANE_DIR=""
     if [[ "$NO_PANE" != true ]]; then
         if pane_dir=$(display_pane_open 2>/dev/null); then
@@ -781,13 +780,15 @@ merge_result() {
 }
 
 # Fold the given providers' round-1 result files into RESULTS and print a
-# status line for each. ERRORS is rebuilt from scratch on every call: the retry
-# collects exactly the providers that failed before, so whatever is still
-# failing afterwards is the complete error list — and a provider that answered
-# on retry drops out of the red tab and the stderr summary. Args: provider...
+# status line for each. ERRORS (the stderr summary lines) and FAILED (the
+# provider names) are rebuilt from scratch on every call: the retry collects
+# exactly the providers that failed before, so whatever is still failing
+# afterwards is the complete error list — and a provider that answered on
+# retry drops out of the red tab and the stderr summary. Args: provider...
 collect_round1() {
     local provider result_file color model result status cached error_msg
     ERRORS=()
+    FAILED=()
     for provider in "$@"; do
         result_file="${TEMP_DIR}/${provider}.json"
         color=$(provider_color "$provider")
@@ -812,6 +813,7 @@ collect_round1() {
                 error_msg=$(echo "$result" | jq -r '.error')
                 echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET} - ${DIM}${error_msg}${RESET}" >&2
                 ERRORS+=("$provider: $error_msg")
+                FAILED+=("$provider")
             elif [[ "$cached" == "true" ]]; then
                 echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${CYAN}cached${RESET}" >&2
             else
@@ -820,6 +822,7 @@ collect_round1() {
         else
             echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}no response${RESET}" >&2
             ERRORS+=("$provider: No response received")
+            FAILED+=("$provider")
             RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --arg m "$model" '.[$p] = {status: "error", error: "No response received", model: $m, cached: false}')
         fi
     done
@@ -828,42 +831,27 @@ collect_round1() {
 # Offer the pane one chance to re-query the providers that failed round 1.
 # The producer runs the retry rather than the pane: it holds the API keys, and
 # its JSON output is what the synthesis, transcript and cache are built from.
-# Waits up to COUNCIL_RETRY_WAIT seconds (0 disables) for the watcher to touch
-# .retry; the reader closing the pane removes the watch dir, which declines.
+# Waits up to COUNCIL_RETRY_WAIT seconds (0 disables) for the pane's answer.
 # Offered once per run — a second failure just shows its error.
 offer_retry() {
     local wait="${COUNCIL_RETRY_WAIT:-45}" pane="${COUNCIL_PANE_DIR:-}"
-    [[ ${#ERRORS[@]} -gt 0 ]] || return 0
+    [[ ${#FAILED[@]} -gt 0 ]] || return 0
     [[ "$wait" =~ ^[0-9]+$ && $wait -gt 0 ]] || return 0
-    [[ -n "$pane" && -d "$pane" ]] || return 0
+    [[ -d "$pane" ]] || return 0
 
-    local failed=() err
-    for err in "${ERRORS[@]}"; do
-        failed+=("${err%%:*}")
-    done
-    pane_retry_offer_write "$pane" "$wait" "${failed[@]}"
+    pane_retry_offer_write "$pane" "$wait" "${FAILED[@]}"
     council_signal_attention
+    pane_retry_await "$pane" "$wait" || return 0
 
-    local deadline=$(( SECONDS + wait ))
-    while [[ $SECONDS -lt $deadline && ! -f "$pane/.retry" ]]; do
-        [[ -d "$pane" ]] || return 0
-        sleep 0.2
-    done
-    # Withdraw the offer before the last look at the answer, so a key pressed
-    # at the deadline is either honored or visibly too late, never lost.
-    rm -f "$pane/retry-offer"
-    sleep 0.3
-    [[ -f "$pane/.retry" ]] || return 0
-    rm -f "$pane/.retry"
-
-    echo -e "🔁 Retrying ${#failed[@]} failed provider(s): $(format_providers "${failed[@]}")..." >&2
-    query_round1 "${failed[@]}"
-    collect_round1 "${failed[@]}"
+    # collect_round1 rebuilds FAILED, so the roster is copied first.
+    local retry=("${FAILED[@]}")
+    echo -e "🔁 Retrying ${#retry[@]} failed provider(s): $(format_providers "${retry[@]}")..." >&2
+    query_round1 "${retry[@]}"
+    collect_round1 "${retry[@]}"
 }
 
 # Collect results
 RESULTS="{}"
-ERRORS=()
 collect_round1 "${PROVIDERS[@]}"
 offer_retry
 

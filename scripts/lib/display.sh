@@ -120,16 +120,33 @@ pane_error_write() {
 
 # Offer the pane a retry of the named providers: line 1 is how many seconds the
 # offer stays open (the watcher counts it down), one provider per line after.
-# The watcher answers by touching .retry; the producer withdraws the offer by
-# removing the file. Temp-then-rename, so the watcher never reads a partial file.
+# Temp-then-rename, so the watcher never reads a partial file.
 # Args: pane_dir seconds provider...
 pane_retry_offer_write() {
     local pane_dir="$1" seconds="$2"
     shift 2
     [[ -d "$pane_dir" ]] || return 0
     local tmp="$pane_dir/.retry-offer.tmp"
-    { printf '%s\n' "$seconds"; printf '%s\n' "$@"; } > "$tmp"
+    printf '%s\n' "$seconds" "$@" > "$tmp"
     mv -f "$tmp" "$pane_dir/retry-offer"
+}
+
+# Wait up to <seconds> for the pane to accept the offer. The watcher accepts by
+# renaming retry-offer to .retry, so an offer is either accepted or withdrawn,
+# never both: withdrawing removes retry-offer, and a rename that finds it gone
+# fails on the pane's side — no grace period to tune. Returns 0 when accepted
+# (.retry consumed), 1 when the deadline passed or the reader closed the pane,
+# which removes the watch dir. Args: pane_dir seconds
+pane_retry_await() {
+    local pane_dir="$1" seconds="$2"
+    local deadline=$(( SECONDS + seconds ))
+    while [[ $SECONDS -lt $deadline && ! -f "$pane_dir/.retry" ]]; do
+        [[ -d "$pane_dir" ]] || return 1
+        sleep 0.2
+    done
+    rm -f "$pane_dir/retry-offer"
+    [[ -f "$pane_dir/.retry" ]] || return 1
+    rm -f "$pane_dir/.retry"
 }
 
 

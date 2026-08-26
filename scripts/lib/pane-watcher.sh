@@ -238,10 +238,13 @@ reflow_to() {
 # nobody is coming to press a key: tty_dead=1 tells the caller to stop waiting.
 # A fast failure also skips the width check: the same dead tty fails the width
 # query, which reads as a resize to the 80-column fallback and would wipe the
-# scrollback on the way out.
+# scrollback on the way out. Each prompt calls read_key_arm before its loop so
+# the failure count starts fresh.
 tty_dead=0
-dead_reads=0
-dead_read_second=$SECONDS
+read_key_arm() {
+    dead_reads=0
+    dead_read_second=$SECONDS
+}
 read_key() {
     local __out="$1" __key
     if read -t 1 -n1 -s -r __key; then
@@ -263,11 +266,12 @@ esc=$(printf '\033')
 eot=$(printf '\004')
 
 # Show the producer's retry offer (retry-offer: seconds it stays open, then one
-# failed provider per line) and wait for the reader's answer. r touches .retry
-# and hands the live loop back for the re-query; esc/ctrl-d close the pane, and
-# the watch dir going away is what tells the producer to carry on without a
-# retry. Returns when the offer is withdrawn (the producer's deadline passed or
-# it consumed the answer) or the run finished.
+# failed provider per line) and wait for the reader's answer. r accepts by
+# renaming the offer to .retry — atomic against the producer withdrawing it, so
+# a key at the deadline is honored or visibly too late, never lost — and hands
+# the live loop back for the re-query; esc/ctrl-d close the pane, and the watch
+# dir going away is what tells the producer to carry on without a retry.
+# Returns when the offer is gone (accepted or withdrawn) or the run finished.
 retry_offer_prompt() {
     local seconds names="" line remaining key
     { read -r seconds; while IFS= read -r line; do names="${names:+$names, }$line"; done; } < "$WATCH/retry-offer"
@@ -277,9 +281,9 @@ retry_offer_prompt() {
     printf '\n'
     # This prompt polls once a second, so two equal readings are already a
     # full second of stability (see the close prompt).
+    local settle=$WIDTH_SETTLE_TICKS
     WIDTH_SETTLE_TICKS=2
-    dead_reads=0
-    dead_read_second=$SECONDS
+    read_key_arm
     while [[ -f "$WATCH/retry-offer" && ! -f "$WATCH/.done" && $tty_dead -eq 0 ]]; do
         remaining=$(( deadline - SECONDS ))
         (( remaining < 0 )) && remaining=0
@@ -288,7 +292,7 @@ retry_offer_prompt() {
         case $? in
             0)
                 case "$key" in
-                    r|R) touch "$WATCH/.retry"; break ;;
+                    r|R) mv -f "$WATCH/retry-offer" "$WATCH/.retry" 2>/dev/null; break ;;
                     "$esc"|"$eot") exit 0 ;;
                 esac
                 ;;
@@ -300,7 +304,7 @@ retry_offer_prompt() {
                 ;;
         esac
     done
-    WIDTH_SETTLE_TICKS=4
+    WIDTH_SETTLE_TICKS=$settle
     # Nobody at the keyboard: close, so the producer is not kept waiting.
     [[ $tty_dead -eq 1 ]] && exit 0
     printf '\r\033[K'
@@ -356,13 +360,8 @@ while true; do
     spinner_frame=$((spinner_frame + 1))
     draw_loading "$cols"
 
-    # A pending offer the reader has not answered yet. Once r is pressed the
-    # producer has ~0.3s to withdraw the offer, and .retry keeps this from
-    # prompting again in the meantime.
-    if [[ -f "$WATCH/retry-offer" && ! -f "$WATCH/.retry" ]]; then
-        retry_offer_prompt
-        continue
-    fi
+    # An offer on the table: accepting renames it away, so no second prompt.
+    [[ -f "$WATCH/retry-offer" ]] && retry_offer_prompt
 
     [[ -f "$WATCH/.done" ]] && break
     sleep 0.12
@@ -382,8 +381,7 @@ if [[ "${COUNCIL_AUTO_CLOSE:-0}" != 1 ]]; then
     WIDTH_SETTLE_TICKS=2
     # Reading with a timeout instead of blocking keeps the pane reflowing while
     # the reader resizes it after the run, which is when they most often do.
-    dead_reads=0
-    dead_read_second=$SECONDS
+    read_key_arm
     while [[ $tty_dead -eq 0 ]]; do
         read_key key
         case $? in

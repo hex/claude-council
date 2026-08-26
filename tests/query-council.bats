@@ -388,28 +388,26 @@ EOF
 }
 
 # Stand in for the pane watcher: wait for the retry offer, keep a copy of it,
-# then answer with $1 — "retry" presses r, "close" removes the watch dir the
-# way the watcher's exit trap does. Gives up after ~5s so a producer that never
-# offers cannot hang the test.
+# then answer with $1 — "retry" accepts the way the watcher does (renaming the
+# offer to .retry), "close" removes the watch dir the way the watcher's exit
+# trap does. A run that ends without offering releases the wait too.
 play_pane() {
-    local answer="$1" waited=0
-    while [[ ! -f "$PANE/retry-offer" ]]; do
-        sleep 0.05
-        waited=$((waited + 1))
-        [[ $waited -gt 100 ]] && return 0
-    done
+    local answer="$1"
+    await_any_file "$PANE/retry-offer" "$PANE/run-over" || return 0
+    [[ -f "$PANE/retry-offer" ]] || return 0
     cp "$PANE/retry-offer" "$PANE/offer-seen"
     case "$answer" in
-        retry) touch "$PANE/.retry" ;;
+        retry) mv "$PANE/retry-offer" "$PANE/.retry" ;;
         close) rm -rf "$PANE" ;;
     esac
 }
 
 # Run with a pre-created watch dir standing in for an open pane (bats has no
-# tmux), so the retry protocol can be driven through the dir's files.
+# tmux), so the retry protocol can be driven through the dir's files. The
+# run-over marker lets a waiting play_pane stop once the run has ended.
 run_council_with_pane() {
-    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_PANE_DIR="$PANE" \
-        "$HOST_BASH" "$SCRIPT" --no-pane --no-auto-context --no-cache "$@"
+    COUNCIL_PANE_DIR="$PANE" run_council --no-cache "$@"
+    touch "$PANE/run-over" 2>/dev/null || true
 }
 
 setup_pane() {

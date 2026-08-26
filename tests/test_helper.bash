@@ -62,6 +62,24 @@ unset_provider_keys() {
     unset KIMI_API_KEY MOONSHOT_API_KEY
 }
 
+# Helper: block until any of the given files exists. Gives up after ~8s so a
+# producer or watcher that never writes the file cannot hang the test. Written
+# with `if`, not `[[ ]] && return`, so it survives errexit inside bats.
+await_any_file() {
+    local waited=0 f
+    while true; do
+        for f in "$@"; do
+            [[ -e "$f" ]] && return 0
+        done
+        sleep 0.05
+        waited=$((waited + 1))
+        if [[ $waited -gt 160 ]]; then
+            echo "timed out waiting for any of: $*" >&2
+            return 1
+        fi
+    done
+}
+
 # Helper: assert a string is empty or whitespace-only
 assert_blank() {
     [[ -z "${1//[[:space:]]/}" ]]
