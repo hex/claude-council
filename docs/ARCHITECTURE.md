@@ -460,7 +460,7 @@ claude-council/
 │       ├── jobs.sh              # Background job store
 │       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
 │       ├── model_fallback.sh    # Fallback model per provider + TTL-cached unavailable verdicts
-│       ├── pane-watcher.sh      # Runs in the tmux pane: streams status + rendered responses, re-renders them all on resize
+│       ├── pane-watcher.sh      # Runs in the tmux pane: streams status + rendered responses, re-renders them all on resize, offers a retry of failed providers
 │       ├── prompts.sh           # Template loading + {{VAR}} interpolation
 │       ├── providers.sh         # Discovery, CLI-prefers-API policy, vendor display, model resolution from each CLI's own config
 │       ├── render.pl            # Dependency-free markdown renderer (perl fallback)
