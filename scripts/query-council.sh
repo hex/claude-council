@@ -720,11 +720,18 @@ ${FILE_CONTENT}
 ${PROMPT}"
 fi
 
-# Open streaming pane (best effort) and signal "querying" via tab color
-COUNCIL_PANE_DIR=""
-if [[ "$NO_PANE" != true ]]; then
-    if pane_dir=$(display_pane_open 2>/dev/null); then
-        COUNCIL_PANE_DIR="$pane_dir"
+# Open streaming pane (best effort) and signal "querying" via tab color.
+# An inherited COUNCIL_PANE_DIR naming an existing dir is a pane already
+# streaming this run — the tests drive the retry protocol through one, since
+# bats has no tmux to open a real pane in.
+if [[ -n "${COUNCIL_PANE_DIR:-}" && -d "$COUNCIL_PANE_DIR" ]]; then
+    :
+else
+    COUNCIL_PANE_DIR=""
+    if [[ "$NO_PANE" != true ]]; then
+        if pane_dir=$(display_pane_open 2>/dev/null); then
+            COUNCIL_PANE_DIR="$pane_dir"
+        fi
     fi
 fi
 # Probe /dev/tty once and cache the result for the council_signal_* helpers.
@@ -737,25 +744,31 @@ COUNCIL_START_MS=$(now_ms)
 # without bound (the prune-on-the-hot-path analog of jobs_prune in run_async).
 [[ "$USE_CACHE" == true ]] && cache_prune 2>/dev/null || true
 
+# Query the given providers in parallel with their round-1 roles and wait for
+# all of them. Shared by the first pass and the retry, so a retried provider
+# gets exactly the query it failed. Args: provider...
+query_round1() {
+    local provider provider_role pid
+    local pids=()
+    for provider in "$@"; do
+        # Get role for this provider (empty if no roles assigned)
+        provider_role=""
+        if [[ -n "$ROLE_ASSIGNMENTS" ]]; then
+            provider_role=$(get_provider_role "$provider" "$ROLE_ASSIGNMENTS")
+        fi
+        rm -f "${TEMP_DIR}/${provider}.json"
+        query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" "$provider_role" &
+        pids+=($!)
+    done
+    for pid in "${pids[@]}"; do
+        wait "$pid" 2>/dev/null || true
+    done
+}
+
 # Launch all queries in parallel
 FORMATTED_PROVIDERS=$(format_providers "${PROVIDERS[@]}")
 echo -e "🚀 Querying ${#PROVIDERS[@]} providers in parallel: ${FORMATTED_PROVIDERS}..." >&2
-
-PIDS=()
-for provider in "${PROVIDERS[@]}"; do
-    # Get role for this provider (empty if no roles assigned)
-    provider_role=""
-    if [[ -n "$ROLE_ASSIGNMENTS" ]]; then
-        provider_role=$(get_provider_role "$provider" "$ROLE_ASSIGNMENTS")
-    fi
-    query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" "$provider_role" &
-    PIDS+=($!)
-done
-
-# Wait for all to complete
-for pid in "${PIDS[@]}"; do
-    wait "$pid" 2>/dev/null || true
-done
+query_round1 "${PROVIDERS[@]}"
 
 # Fold one provider's coerced result into an accumulator object under its
 # provider key. Both blobs reach jq via STDIN, never argv: on MSYS/Windows
@@ -767,45 +780,92 @@ merge_result() {
     printf '%s\n%s' "$1" "$3" | jq -s --arg p "$2" '.[0] + {($p): .[1]}'
 }
 
+# Fold the given providers' round-1 result files into RESULTS and print a
+# status line for each. ERRORS is rebuilt from scratch on every call: the retry
+# collects exactly the providers that failed before, so whatever is still
+# failing afterwards is the complete error list — and a provider that answered
+# on retry drops out of the red tab and the stderr summary. Args: provider...
+collect_round1() {
+    local provider result_file color model result status cached error_msg
+    ERRORS=()
+    for provider in "$@"; do
+        result_file="${TEMP_DIR}/${provider}.json"
+        color=$(provider_color "$provider")
+        model=$(get_model "$provider")
+
+        if [[ -f "$result_file" ]]; then
+            # coerce_result_json adds the model and guarantees valid JSON, so a
+            # provider that wrote malformed output can't crash the whole run here.
+            result=$(coerce_result_json "$(cat "$result_file")" "$model")
+            RESULTS=$(merge_result "$RESULTS" "$provider" "$result")
+
+            # Show the model that actually answered: on a fallback the slot carries
+            # the API sibling's model, not this provider's CLI default. coerce_result_json
+            # guarantees .model is present.
+            model=$(echo "$result" | jq -r '.model')
+
+            # Track errors and show status
+            status=$(echo "$result" | jq -r '.status')
+            cached=$(echo "$result" | jq -r '.cached // false')
+
+            if [[ "$status" == "error" ]]; then
+                error_msg=$(echo "$result" | jq -r '.error')
+                echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET} - ${DIM}${error_msg}${RESET}" >&2
+                ERRORS+=("$provider: $error_msg")
+            elif [[ "$cached" == "true" ]]; then
+                echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${CYAN}cached${RESET}" >&2
+            else
+                echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${GREEN}success${RESET}" >&2
+            fi
+        else
+            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}no response${RESET}" >&2
+            ERRORS+=("$provider: No response received")
+            RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --arg m "$model" '.[$p] = {status: "error", error: "No response received", model: $m, cached: false}')
+        fi
+    done
+}
+
+# Offer the pane one chance to re-query the providers that failed round 1.
+# The producer runs the retry rather than the pane: it holds the API keys, and
+# its JSON output is what the synthesis, transcript and cache are built from.
+# Waits up to COUNCIL_RETRY_WAIT seconds (0 disables) for the watcher to touch
+# .retry; the reader closing the pane removes the watch dir, which declines.
+# Offered once per run — a second failure just shows its error.
+offer_retry() {
+    local wait="${COUNCIL_RETRY_WAIT:-45}" pane="${COUNCIL_PANE_DIR:-}"
+    [[ ${#ERRORS[@]} -gt 0 ]] || return 0
+    [[ "$wait" =~ ^[0-9]+$ && $wait -gt 0 ]] || return 0
+    [[ -n "$pane" && -d "$pane" ]] || return 0
+
+    local failed=() err
+    for err in "${ERRORS[@]}"; do
+        failed+=("${err%%:*}")
+    done
+    pane_retry_offer_write "$pane" "$wait" "${failed[@]}"
+    council_signal_attention
+
+    local deadline=$(( SECONDS + wait ))
+    while [[ $SECONDS -lt $deadline && ! -f "$pane/.retry" ]]; do
+        [[ -d "$pane" ]] || return 0
+        sleep 0.2
+    done
+    # Withdraw the offer before the last look at the answer, so a key pressed
+    # at the deadline is either honored or visibly too late, never lost.
+    rm -f "$pane/retry-offer"
+    sleep 0.3
+    [[ -f "$pane/.retry" ]] || return 0
+    rm -f "$pane/.retry"
+
+    echo -e "🔁 Retrying ${#failed[@]} failed provider(s): $(format_providers "${failed[@]}")..." >&2
+    query_round1 "${failed[@]}"
+    collect_round1 "${failed[@]}"
+}
+
 # Collect results
 RESULTS="{}"
 ERRORS=()
-
-for provider in "${PROVIDERS[@]}"; do
-    result_file="${TEMP_DIR}/${provider}.json"
-    color=$(provider_color "$provider")
-    model=$(get_model "$provider")
-
-    if [[ -f "$result_file" ]]; then
-        # coerce_result_json adds the model and guarantees valid JSON, so a
-        # provider that wrote malformed output can't crash the whole run here.
-        result=$(coerce_result_json "$(cat "$result_file")" "$model")
-        RESULTS=$(merge_result "$RESULTS" "$provider" "$result")
-
-        # Show the model that actually answered: on a fallback the slot carries
-        # the API sibling's model, not this provider's CLI default. coerce_result_json
-        # guarantees .model is present.
-        model=$(echo "$result" | jq -r '.model')
-
-        # Track errors and show status
-        status=$(echo "$result" | jq -r '.status')
-        cached=$(echo "$result" | jq -r '.cached // false')
-
-        if [[ "$status" == "error" ]]; then
-            error_msg=$(echo "$result" | jq -r '.error')
-            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET} - ${DIM}${error_msg}${RESET}" >&2
-            ERRORS+=("$provider: $error_msg")
-        elif [[ "$cached" == "true" ]]; then
-            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${CYAN}cached${RESET}" >&2
-        else
-            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${GREEN}success${RESET}" >&2
-        fi
-    else
-        echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}no response${RESET}" >&2
-        ERRORS+=("$provider: No response received")
-        RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --arg m "$model" '.[$p] = {status: "error", error: "No response received", model: $m, cached: false}')
-    fi
-done
+collect_round1 "${PROVIDERS[@]}"
+offer_retry
 
 # Debate mode: Round 2 rebuttals
 ROUND2_RESULTS="{}"

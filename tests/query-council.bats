@@ -365,3 +365,120 @@ EOF
     assert_json_eq "$output" '.round1.codex.model' 'gpt-5.5-pro'
     assert_json_eq "$output" '.round1.codex.model_fallback' 'gpt-5.6-sol'
 }
+
+# ============================================================================
+# Retry offer: the producer re-queries failed providers when the pane asks
+# ============================================================================
+
+# A stub that fails its first call and answers on the second, so a retry has
+# something to recover. Records calls in CALLS_LOG like write_stub.
+write_flaky_stub() {
+    local name="$1"
+    cat > "$STUB_DIR/${name}.sh" <<EOF
+#!/bin/bash
+echo "${name}" >> "${CALLS_LOG}"
+if [[ ! -f "${STUB_DIR}/${name}.failed-once" ]]; then
+    touch "${STUB_DIR}/${name}.failed-once"
+    echo "Error from ${name}: transient failure" >&2
+    exit 1
+fi
+printf '%s\n' "ANSWER-FROM-${name}"
+EOF
+    chmod +x "$STUB_DIR/${name}.sh"
+}
+
+# Stand in for the pane watcher: wait for the retry offer, keep a copy of it,
+# then answer with $1 — "retry" presses r, "close" removes the watch dir the
+# way the watcher's exit trap does. Gives up after ~5s so a producer that never
+# offers cannot hang the test.
+play_pane() {
+    local answer="$1" waited=0
+    while [[ ! -f "$PANE/retry-offer" ]]; do
+        sleep 0.05
+        waited=$((waited + 1))
+        [[ $waited -gt 100 ]] && return 0
+    done
+    cp "$PANE/retry-offer" "$PANE/offer-seen"
+    case "$answer" in
+        retry) touch "$PANE/.retry" ;;
+        close) rm -rf "$PANE" ;;
+    esac
+}
+
+# Run with a pre-created watch dir standing in for an open pane (bats has no
+# tmux), so the retry protocol can be driven through the dir's files.
+run_council_with_pane() {
+    run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_PANE_DIR="$PANE" \
+        "$HOST_BASH" "$SCRIPT" --no-pane --no-auto-context --no-cache "$@"
+}
+
+setup_pane() {
+    PANE="${BATS_TEST_TMPDIR}/pane"
+    mkdir -p "$PANE"
+}
+
+@test "retry: re-queries only the failed providers when the pane presses r" {
+    setup_pane
+    write_stub gemini
+    write_flaky_stub grok
+    play_pane retry &
+    COUNCIL_RETRY_WAIT=5 run_council_with_pane --providers=gemini,grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'success'
+    assert_json_eq "$output" '.round1.grok.response' 'ANSWER-FROM-grok'
+    assert_json_eq "$output" '.round1.gemini.status' 'success'
+    [ "$(grep -c '^gemini$' "$CALLS_LOG")" -eq 1 ]
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 2 ]
+    # The offer names the wait in seconds, then only the providers that failed.
+    [ "$(cat "$PANE/offer-seen")" = $'5\ngrok' ]
+    # Both signal files are consumed, so a later run cannot mistake them.
+    [ ! -f "$PANE/retry-offer" ]
+    [ ! -f "$PANE/.retry" ]
+    # The pane saw grok query, fail, query again and complete.
+    [ "$(awk -F'\t' '$1 == "grok" { print $2 }' "$PANE/status" | paste -sd, -)" = "querying,error,querying,complete" ]
+    # A provider that answered on retry is no longer an error.
+    [[ "$stderr" != *"Errors:"* ]]
+}
+
+@test "retry: an unanswered offer expires and the run reports the error" {
+    setup_pane
+    write_flaky_stub grok
+    play_pane ignore &
+    COUNCIL_RETRY_WAIT=1 run_council_with_pane --providers=grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
+    [ -f "$PANE/offer-seen" ]
+    [ ! -f "$PANE/retry-offer" ]
+    [[ "$stderr" == *"Errors:"* ]]
+}
+
+@test "retry: closing the pane at the offer lets the run finish without a retry" {
+    setup_pane
+    write_flaky_stub grok
+    play_pane close &
+    COUNCIL_RETRY_WAIT=5 run_council_with_pane --providers=grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
+    [ ! -d "$PANE" ]
+}
+
+@test "retry: COUNCIL_RETRY_WAIT=0 never offers" {
+    setup_pane
+    write_flaky_stub grok
+    play_pane retry &
+    COUNCIL_RETRY_WAIT=0 run_council_with_pane --providers=grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ ! -f "$PANE/offer-seen" ]
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
+}
+
+@test "retry: no offer is written without a pane" {
+    write_flaky_stub grok
+    COUNCIL_RETRY_WAIT=5 run_council --no-cache --providers=grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
+}

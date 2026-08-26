@@ -229,6 +229,83 @@ reflow_to() {
     redraw_all
 }
 
+# Poll the pane's tty for one keypress for up to a second, writing it into the
+# variable named by $1. Returns 0 with a key, 1 after a full-second timeout
+# (a real tick: safe to check the width), 2 on a fast failure.
+# bash 3.2 reports both a timeout and a closed stdin as status 1, so they can
+# only be told apart by cost: a timeout burns the full second, EOF returns at
+# once. Several failures inside one second mean the pane's input is gone and
+# nobody is coming to press a key: tty_dead=1 tells the caller to stop waiting.
+# A fast failure also skips the width check: the same dead tty fails the width
+# query, which reads as a resize to the 80-column fallback and would wipe the
+# scrollback on the way out.
+tty_dead=0
+dead_reads=0
+dead_read_second=$SECONDS
+read_key() {
+    local __out="$1" __key
+    if read -t 1 -n1 -s -r __key; then
+        printf -v "$__out" '%s' "$__key"
+        return 0
+    fi
+    if [[ $SECONDS -ne $dead_read_second ]]; then
+        dead_read_second=$SECONDS
+        dead_reads=1
+        return 1
+    fi
+    dead_reads=$((dead_reads + 1))
+    [[ $dead_reads -gt 4 ]] && tty_dead=1
+    return 2
+}
+esc=$(printf '\033')
+# read -n1 leaves the tty non-canonical, so ctrl-d arrives as a literal EOT
+# byte rather than closing the stream.
+eot=$(printf '\004')
+
+# Show the producer's retry offer (retry-offer: seconds it stays open, then one
+# failed provider per line) and wait for the reader's answer. r touches .retry
+# and hands the live loop back for the re-query; esc/ctrl-d close the pane, and
+# the watch dir going away is what tells the producer to carry on without a
+# retry. Returns when the offer is withdrawn (the producer's deadline passed or
+# it consumed the answer) or the run finished.
+retry_offer_prompt() {
+    local seconds names="" line remaining key
+    { read -r seconds; while IFS= read -r line; do names="${names:+$names, }$line"; done; } < "$WATCH/retry-offer"
+    [[ "$seconds" =~ ^[0-9]+$ ]] || seconds=0
+    local deadline=$(( SECONDS + seconds ))
+    clear_loading
+    printf '\n'
+    # This prompt polls once a second, so two equal readings are already a
+    # full second of stability (see the close prompt).
+    WIDTH_SETTLE_TICKS=2
+    dead_reads=0
+    dead_read_second=$SECONDS
+    while [[ -f "$WATCH/retry-offer" && ! -f "$WATCH/.done" && $tty_dead -eq 0 ]]; do
+        remaining=$(( deadline - SECONDS ))
+        (( remaining < 0 )) && remaining=0
+        printf '\r\033[K\033[2m[r] retry failed (%s) · [esc/ctrl-d] close  %ds\033[0m ' "$names" "$remaining"
+        read_key key
+        case $? in
+            0)
+                case "$key" in
+                    r|R) touch "$WATCH/.retry"; break ;;
+                    "$esc"|"$eot") exit 0 ;;
+                esac
+                ;;
+            1)
+                pane_cols cols
+                # The loop reprints the prompt on its next tick, so a redraw
+                # that cleared it needs no extra handling here.
+                reflow_to "$cols" || true
+                ;;
+        esac
+    done
+    WIDTH_SETTLE_TICKS=4
+    # Nobody at the keyboard: close, so the producer is not kept waiting.
+    [[ $tty_dead -eq 1 ]] && exit 0
+    printf '\r\033[K'
+}
+
 pane_cols rendered_cols
 previous_cols=$rendered_cols
 stable_ticks=0
@@ -279,6 +356,14 @@ while true; do
     spinner_frame=$((spinner_frame + 1))
     draw_loading "$cols"
 
+    # A pending offer the reader has not answered yet. Once r is pressed the
+    # producer has ~0.3s to withdraw the offer, and .retry keeps this from
+    # prompting again in the meantime.
+    if [[ -f "$WATCH/retry-offer" && ! -f "$WATCH/.retry" ]]; then
+        retry_offer_prompt
+        continue
+    fi
+
     [[ -f "$WATCH/.done" ]] && break
     sleep 0.12
 done
@@ -295,36 +380,21 @@ if [[ "${COUNCIL_AUTO_CLOSE:-0}" != 1 ]]; then
     # in the main loop, without making the reader wait four seconds to see the
     # reflow they just asked for.
     WIDTH_SETTLE_TICKS=2
-    esc=$(printf '\033')
-    # read -n1 leaves the tty non-canonical, so ctrl-d arrives as a literal EOT
-    # byte rather than closing the stream.
-    eot=$(printf '\004')
     # Reading with a timeout instead of blocking keeps the pane reflowing while
     # the reader resizes it after the run, which is when they most often do.
     dead_reads=0
     dead_read_second=$SECONDS
-    while true; do
-        if read -t 1 -n1 -s -r key; then
-            [[ "$key" = "$esc" || "$key" = "$eot" ]] && break
-        elif [[ $SECONDS -ne $dead_read_second ]]; then
-            dead_read_second=$SECONDS
-            dead_reads=1
-        else
-            # bash 3.2 reports both a timeout and a closed stdin as status 1,
-            # so they can only be told apart by cost: a timeout burns the full
-            # second, EOF returns at once. Several failures inside one second
-            # mean the pane's input is gone and nobody is coming to press a key.
-            dead_reads=$((dead_reads + 1))
-            [[ $dead_reads -gt 4 ]] && break
-            # And skip the width check on this path: the same dead tty fails
-            # the width query, which reads as a resize to the 80-column
-            # fallback and would wipe the scrollback on the way out.
-            continue
-        fi
-        pane_cols cols
-        # Reprint the prompt only when the redraw actually cleared it away.
-        # An empty pane draws nothing, and prompting again would stack a
-        # second copy under the first.
-        reflow_to "$cols" && close_prompt
+    while [[ $tty_dead -eq 0 ]]; do
+        read_key key
+        case $? in
+            0) [[ "$key" = "$esc" || "$key" = "$eot" ]] && break ;;
+            1)
+                pane_cols cols
+                # Reprint the prompt only when the redraw actually cleared it
+                # away. An empty pane draws nothing, and prompting again would
+                # stack a second copy under the first.
+                reflow_to "$cols" && close_prompt
+                ;;
+        esac
     done
 fi

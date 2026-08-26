@@ -269,3 +269,78 @@ blank_lines_before() {
         < /dev/null
     [ "$status" -eq 0 ]
 }
+
+# ----- Retry offer -----
+
+# A producer's offer: open for $1 seconds, naming the providers after it.
+write_offer() {
+    local seconds="$1"; shift
+    (source "$LIB" && pane_retry_offer_write "$W" "$seconds" "$@")
+}
+
+# Play the producer's side of an accepted offer: once .retry lands, consume it
+# the way offer_retry does, deliver the retried answer, and end the run.
+producer_accepts_retry() {
+    local waited=0
+    while [[ ! -f "$W/.retry" ]]; do
+        sleep 0.05
+        waited=$((waited + 1))
+        [[ $waited -gt 160 ]] && return 0
+    done
+    touch "$W/retry-pressed"
+    rm -f "$W/retry-offer" "$W/.retry"
+    printf 'kimi-cli\tquerying\t\t\n' >> "$W/status"
+    printf 'Answer on retry\n' > "$W/responses/kimi-cli.md"
+    printf 'kimi-cli\tcomplete\t900\t\n' >> "$W/status"
+    touch "$W/.done"
+}
+
+@test "watcher: offers a retry naming the failed providers, and r asks the producer for one" {
+    rm -f "$W/.done"
+    (source "$LIB" && pane_error_write "$W" kimi-cli "Error from kimi CLI: transient")
+    printf 'kimi-cli\terror\t\t\n' >> "$W/status"
+    write_offer 5 kimi-cli
+    producer_accepts_retry &
+    run --separate-stderr env COUNCIL_AUTO_CLOSE=1 COUNCIL_NO_TTY_QUERY=1 \
+        PATH="$FAKE_BIN:$PATH" \
+        perl -e 'alarm shift; exec @ARGV' 12 bash "$WATCHER" "$W" "$LIB" \
+        < <(sleep 1; printf 'r'; sleep 10)
+    [ "$status" -eq 0 ]
+    [ -z "$stderr" ]
+    [[ "$output" == *"[r] retry failed (kimi-cli)"* ]]
+    # The countdown shows the seconds the producer said the offer stays open.
+    [[ "$output" == *"5s"* ]]
+    # The prompt sits under the error and the retried answer lands after it.
+    [[ "$output" == *"kimi-cli error"*"[r] retry failed"*"KIMI-CLI"*"Answer on retry"* ]]
+}
+
+@test "watcher: esc at the retry offer closes the pane" {
+    rm -f "$W/.done"
+    write_offer 5 kimi-cli
+    run --separate-stderr env COUNCIL_AUTO_CLOSE=1 COUNCIL_NO_TTY_QUERY=1 \
+        PATH="$FAKE_BIN:$PATH" \
+        perl -e 'alarm shift; exec @ARGV' 8 bash "$WATCHER" "$W" "$LIB" \
+        < <(sleep 1; printf '\033'; sleep 10)
+    # .done never arrives, so only the close can end the wait — and the watch
+    # dir going away is what tells the producer to carry on without a retry.
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[r] retry failed (kimi-cli)"* ]]
+    [ ! -d "$W" ]
+}
+
+@test "watcher: a withdrawn offer falls back to the plain close prompt" {
+    rm -f "$W/.done"
+    write_offer 5 kimi-cli
+    # The producer's deadline passes: it withdraws the offer and finishes.
+    ( sleep 1.5; rm -f "$W/retry-offer"; touch "$W/.done" ) &
+    run --separate-stderr env COUNCIL_AUTO_CLOSE=0 COUNCIL_NO_TTY_QUERY=1 \
+        PATH="$FAKE_BIN:$PATH" \
+        perl -e 'alarm shift; exec @ARGV' 12 bash "$WATCHER" "$W" "$LIB" \
+        < <(sleep 4; printf '\033'; sleep 10)
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[r] retry failed (kimi-cli)"*"[esc/ctrl-d] close"* ]]
+    # Only the offer prompt carries the [r]; the close prompt must not lie.
+    [ "$(count_matches '\[r\] retry' "$output")" -ge 1 ]
+    [[ "${output##*retry failed}" == *"[esc/ctrl-d] close"* ]]
+    [[ "${output##*\[esc/ctrl-d\] close}" != *"[r]"* ]]
+}

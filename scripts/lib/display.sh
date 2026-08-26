@@ -118,6 +118,20 @@ pane_error_write() {
     printf '%s' "$message" > "$pane_dir/errors/${provider}.txt"
 }
 
+# Offer the pane a retry of the named providers: line 1 is how many seconds the
+# offer stays open (the watcher counts it down), one provider per line after.
+# The watcher answers by touching .retry; the producer withdraws the offer by
+# removing the file. Temp-then-rename, so the watcher never reads a partial file.
+# Args: pane_dir seconds provider...
+pane_retry_offer_write() {
+    local pane_dir="$1" seconds="$2"
+    shift 2
+    [[ -d "$pane_dir" ]] || return 0
+    local tmp="$pane_dir/.retry-offer.tmp"
+    { printf '%s\n' "$seconds"; printf '%s\n' "$@"; } > "$tmp"
+    mv -f "$tmp" "$pane_dir/retry-offer"
+}
+
 
 # ----- Pane lifecycle -----
 

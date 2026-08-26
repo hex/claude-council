@@ -87,6 +87,23 @@ Final response: {\"error\": {\"message\": \"upstream timeout\"}}"
         sleep 2.0
         pane_status_event "$PANE" perplexity complete 4280 "$(get_model perplexity)"
         pane_response_write "$PANE" perplexity "$(response_md perplexity)"
+        # Offer the retry the way query-council's offer_retry does: open for
+        # ten seconds, withdrawn before the last look, answered with a
+        # re-query when r was pressed.
+        pane_retry_offer_write "$PANE" 10 openai
+        for _ in $(seq 50); do
+            [[ -f "$PANE/.retry" || ! -d "$PANE" ]] && break
+            sleep 0.2
+        done
+        rm -f "$PANE/retry-offer"
+        sleep 0.3
+        if [[ -f "$PANE/.retry" ]]; then
+            rm -f "$PANE/.retry"
+            pane_status_event "$PANE" openai querying "" "$(get_model openai)"
+            sleep 1.5
+            pane_status_event "$PANE" openai complete 1480 "$(get_model openai)"
+            pane_response_write "$PANE" openai "$(response_md openai)"
+        fi
         ;;
     *)
         sleep 1.0
