@@ -287,7 +287,8 @@ producer_awaits_retry() {
         printf 'Answer on retry\n' > "$W/responses/kimi-cli.md"
         printf 'kimi-cli\tcomplete\t900\t\n' >> "$W/status"
     fi
-    touch "$W/.done"
+    # The watcher may already have left (esc, dead tty) and removed the dir.
+    touch "$W/.done" 2>/dev/null || true
 }
 
 # Keep the watcher's stdin open exactly as long as the watcher lives (its EXIT
@@ -343,4 +344,46 @@ until_watcher_exits() {
     [[ "$output" == *"[r] retry failed (kimi-cli)"*"[esc/ctrl-d] close"* ]]
     # The close prompt must not keep advertising a retry nobody can take.
     [[ "${output##*\[esc/ctrl-d\] close}" != *"[r]"* ]]
+}
+
+@test "watcher: the retry prompt fits the pane width with autowrap off" {
+    rm -f "$W/.done"
+    fake_stty 40
+    write_offer 5 gemini openai grok perplexity
+    producer_awaits_retry 1 &
+    run --separate-stderr env COUNCIL_AUTO_CLOSE=1 COUNCIL_NO_TTY_QUERY=1 \
+        PATH="$FAKE_BIN:$PATH" \
+        perl -e 'alarm shift; exec @ARGV' 8 bash "$WATCHER" "$W" "$LIB"
+    [ "$status" -eq 0 ]
+    # Drawn between DECAWM off/on like the waiting line, so a prompt wider
+    # than the pane clips instead of leaving a stale wrapped row every tick.
+    [[ "$output" == *$'\033[?7l'*"[r] retry failed ("*$'\033[?7h'* ]]
+    # The provider list is cut to the pane, not the countdown after it.
+    [[ "$output" == *"…"*"close"* ]]
+    [[ "$output" != *"perplexity"* ]]
+}
+
+@test "watcher: a provider that fails again on retry replays both errors, each once" {
+    rm -f "$W/.done"
+    fake_stty 40
+    (source "$LIB" && pane_error_write "$W" kimi-cli "first failure")
+    printf 'kimi-cli\terror\t\t\n' >> "$W/status"
+    write_offer 5 kimi-cli
+    (
+        (source "$LIB" && pane_retry_await "$W" 8)
+        printf 'kimi-cli\tquerying\t\t\n' >> "$W/status"
+        (source "$LIB" && pane_error_write "$W" kimi-cli "second failure")
+        printf 'kimi-cli\terror\t\t\n' >> "$W/status"
+        touch "$W/.done"
+    ) &
+    run --separate-stderr env COUNCIL_AUTO_CLOSE=0 COUNCIL_NO_TTY_QUERY=1 \
+        PATH="$FAKE_BIN:$PATH" \
+        perl -e 'alarm shift; exec @ARGV' 16 bash "$WATCHER" "$W" "$LIB" \
+        < <(sleep 1; printf 'r'; sleep 3; echo 100 > "$COLS_FILE"; sleep 4; printf '\033'; until_watcher_exits)
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'\033[3J'* ]]
+    replay=$(after_last_redraw "$output")
+    [ "$(count_matches 'first failure' "$replay")" -eq 1 ]
+    [ "$(count_matches 'second failure' "$replay")" -eq 1 ]
+    [[ "$replay" == *"first failure"*"second failure"* ]]
 }

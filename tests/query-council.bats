@@ -376,7 +376,10 @@ write_flaky_stub() {
     local name="$1"
     cat > "$STUB_DIR/${name}.sh" <<EOF
 #!/bin/bash
+prompt="\${1:-}"
+[[ "\$prompt" == "--prompt-file" ]] && prompt="\$(cat "\$2")"
 echo "${name}" >> "${CALLS_LOG}"
+printf '%s' "\$prompt" > "${STUB_DIR}/${name}.last_prompt"
 if [[ ! -f "${STUB_DIR}/${name}.failed-once" ]]; then
     touch "${STUB_DIR}/${name}.failed-once"
     echo "Error from ${name}: transient failure" >&2
@@ -412,7 +415,9 @@ run_council_with_pane() {
 
 setup_pane() {
     PANE="${BATS_TEST_TMPDIR}/pane"
-    mkdir -p "$PANE"
+    # The responses/ subdir is what display_pane_open creates; it is how the
+    # producer tells a watch dir from any other directory the variable names.
+    mkdir -p "$PANE/responses"
 }
 
 @test "retry: re-queries only the failed providers when the pane presses r" {
@@ -427,6 +432,8 @@ setup_pane() {
     assert_json_eq "$output" '.round1.gemini.status' 'success'
     [ "$(grep -c '^gemini$' "$CALLS_LOG")" -eq 1 ]
     [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 2 ]
+    # The retry sends the query the provider failed, not a variant of it.
+    cmp -s "$STUB_DIR/grok.last_prompt" "$STUB_DIR/gemini.last_prompt"
     # The offer names the wait in seconds, then only the providers that failed.
     [ "$(cat "$PANE/offer-seen")" = $'5\ngrok' ]
     # Both signal files are consumed, so a later run cannot mistake them.
@@ -478,5 +485,19 @@ setup_pane() {
     COUNCIL_RETRY_WAIT=5 run_council --no-cache --providers=grok "q"
     [ "$status" -eq 0 ]
     assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
+}
+
+@test "retry: an inherited COUNCIL_PANE_DIR that is not a watch dir is ignored" {
+    # A leaked export naming some ordinary directory must not turn it into a
+    # pane: nothing would be streamed into it and no watcher would ever answer
+    # the offer, so the run would wait out the whole window for nobody.
+    PANE="${BATS_TEST_TMPDIR}/not-a-pane"
+    mkdir -p "$PANE"
+    write_flaky_stub grok
+    COUNCIL_RETRY_WAIT=5 run_council_with_pane --providers=grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ ! -f "$PANE/status" ]
     [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
 }

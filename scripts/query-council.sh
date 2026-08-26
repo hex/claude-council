@@ -721,11 +721,14 @@ ${PROMPT}"
 fi
 
 # Open streaming pane (best effort) and signal "querying" via tab color.
-# An inherited COUNCIL_PANE_DIR naming an existing dir is a pane already
-# streaming this run, and it wins over --no-pane, which only stops a NEW pane
-# from opening — the tests drive the retry protocol through one, since bats
-# has no tmux to open a real pane in.
-if [[ ! -d "${COUNCIL_PANE_DIR:-}" ]]; then
+# An inherited COUNCIL_PANE_DIR naming a watch dir — one with the responses/
+# subdir display_pane_open creates — is a pane already streaming this run, and
+# it wins over --no-pane, which only stops a NEW pane from opening. The tests
+# drive the retry protocol through one, since bats has no tmux to open a real
+# pane in. The shape check keeps a leaked export naming some ordinary directory
+# from being taken for a pane: nothing would watch it, and the retry offer
+# would wait its whole window for nobody.
+if [[ ! -d "${COUNCIL_PANE_DIR:-}/responses" ]]; then
     COUNCIL_PANE_DIR=""
     if [[ "$NO_PANE" != true ]]; then
         if pane_dir=$(display_pane_open 2>/dev/null); then
@@ -839,7 +842,8 @@ offer_retry() {
     [[ "$wait" =~ ^[0-9]+$ && $wait -gt 0 ]] || return 0
     [[ -d "$pane" ]] || return 0
 
-    pane_retry_offer_write "$pane" "$wait" "${FAILED[@]}"
+    # A write that fails means the reader closed the pane: no offer, no wait.
+    pane_retry_offer_write "$pane" "$wait" "${FAILED[@]}" || return 0
     council_signal_attention
     pane_retry_await "$pane" "$wait" || return 0
 

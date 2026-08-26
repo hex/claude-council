@@ -17,10 +17,12 @@ This outputs the path to the saved file (e.g., `.claude/council-cache/council-17
 
 **CRITICAL**: Always place `--` before the prompt to prevent prompt text containing dashes from being parsed as flags.
 
-Inside tmux, a provider failure makes the streaming pane offer the user a retry
-for `COUNCIL_RETRY_WAIT` seconds (default 45); the script waits for that answer,
-and an accepted retry adds another provider round. Give the Bash call timeout
-headroom for both, or a slow retry is cut off and the transcript is lost.
+**Run this Bash call with `timeout: 600000`** (ten minutes). The Bash tool's
+two-minute default is shorter than a slow council round, and inside tmux a
+provider failure makes the streaming pane offer the user a retry for
+`COUNCIL_RETRY_WAIT` seconds (default 45) and then runs another provider round
+if accepted. A call cut off mid-run loses the whole transcript, the answers
+that did arrive included.
 
 ## Step 2: Read and Display the Output VERBATIM
 

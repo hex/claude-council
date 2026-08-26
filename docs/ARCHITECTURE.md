@@ -554,7 +554,7 @@ claude-council/
 | `COUNCIL_RICH_PROBE_TIMEOUT` | 10 | Seconds before the pane-open uv probe for Rich is abandoned (guards against a cold uv cache on a dead network stalling pane opening) |
 | `COUNCIL_THEME` | auto-detected | Force pane render palette (emphasis + muted text): `light` / `dark` (else OSC 11 query; `COLORFGBG` only asserts `light`, never `dark` since it goes stale; otherwise attribute-only emphasis that inherits the foreground, and muted text keeps faint/bright-black) |
 | `COUNCIL_AUTO_CLOSE` | - | Set to `1` to auto-close the pane on completion (skip the keypress wait); used by tests/demos |
-| `COUNCIL_RETRY_WAIT` | 45 | Seconds the pane's offer to retry failed providers stays open; the run waits for the answer. `0` disables the offer |
+| `COUNCIL_RETRY_WAIT` | 45 | Seconds the pane's offer to retry failed providers stays open; the run waits for the answer. `0` disables the offer; `--async` workers default to `0` |
 | `COUNCIL_ATTENTION_THRESHOLD` | 2000 | iTerm2 dock-bounce threshold in ms (only triggers if total elapsed >= this) |
 | `COUNCIL_VERBOSITY` | standard | Response style: `brief` / `standard` / `detailed` (prepended to all providers' system prompts) |
 | `OPENAI_REASONING_EFFORT` | medium | Reasoning model effort |

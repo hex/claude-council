@@ -162,11 +162,12 @@ print_response() {
     printf '\n'
 }
 
-# Print the notice for a provider that failed without producing a response.
+# Print the notice for a provider that failed without producing a response,
+# with the error text in $2 (a file; defaults to the provider's live one).
 print_error_notice() {
-    local name="$1" err_line
+    local name="$1" file="${2:-$WATCH/errors/${1}.txt}" err_line
     printf '\n\033[1;38;2;185;28;28m✗ %s error\033[0m\n' "$name"
-    if [[ -f "$WATCH/errors/${name}.txt" ]]; then
+    if [[ -f "$file" ]]; then
         # `|| -n` keeps the last line: the producer stores a command
         # substitution, which has no trailing newline, so a plain read loop
         # would return non-zero on it and show nothing for a one-line error.
@@ -175,7 +176,7 @@ print_error_notice() {
             # error text so it can't drive the terminal on display.
             err_line=$(printf '%s' "$err_line" | LC_ALL=C tr -d '\000-\010\013-\037\177')
             printf '   \033[2;38;2;252;165;165m%s\033[0m\n' "$err_line"
-        done < "$WATCH/errors/${name}.txt"
+        done < "$file"
     fi
     echo
 }
@@ -194,7 +195,10 @@ redraw_all() {
     for event in "${display_events[@]}"; do
         case "$event" in
             response:*) print_response "${event#response:}" ;;
-            error:*)    print_error_notice "${event#error:}" ;;
+            error:*)
+                IFS=$'\t' read -r name file <<<"${event#error:}"
+                print_error_notice "$name" "$file"
+                ;;
         esac
     done
 }
@@ -276,7 +280,7 @@ retry_offer_prompt() {
     local seconds names="" line remaining key
     { read -r seconds; while IFS= read -r line; do names="${names:+$names, }$line"; done; } < "$WATCH/retry-offer"
     [[ "$seconds" =~ ^[0-9]+$ ]] || seconds=0
-    local deadline=$(( SECONDS + seconds ))
+    local deadline=$(( SECONDS + seconds )) budget shown
     clear_loading
     printf '\n'
     # This prompt polls once a second, so two equal readings are already a
@@ -287,17 +291,33 @@ retry_offer_prompt() {
     while [[ -f "$WATCH/retry-offer" && ! -f "$WATCH/.done" && $tty_dead -eq 0 ]]; do
         remaining=$(( deadline - SECONDS ))
         (( remaining < 0 )) && remaining=0
-        printf '\r\033[K\033[2m[r] retry failed (%s) · [esc/ctrl-d] close  %ds\033[0m ' "$names" "$remaining"
+        # "[r] retry failed () · [esc/ctrl-d] close  NNs " is 46 columns; the
+        # provider list gets the rest, cut with an ellipsis so the countdown
+        # survives. Autowrap off while drawing, as for the waiting line: a
+        # prompt wider than the pane must clip, not leave a stale wrapped row
+        # every tick.
+        pane_cols cols
+        budget=$(( cols - 46 )); (( budget < 8 )) && budget=8
+        shown=$names
+        (( ${#shown} > budget )) && shown="${shown:0:budget-1}…"
+        printf '\r\033[K\033[?7l\033[2m[r] retry failed (%s) · [esc/ctrl-d] close  %ds\033[0m \033[?7h' "$shown" "$remaining"
         read_key key
         case $? in
             0)
                 case "$key" in
-                    r|R) mv -f "$WATCH/retry-offer" "$WATCH/.retry" 2>/dev/null; break ;;
+                    r|R)
+                        # A rename that finds the offer gone lost the race
+                        # with the producer's withdrawal: say so, or the
+                        # reader takes the resumed spinner for a retry.
+                        if ! mv -f "$WATCH/retry-offer" "$WATCH/.retry" 2>/dev/null; then
+                            printf '\r\033[K\033[2mretry offer expired\033[0m\n'
+                        fi
+                        break
+                        ;;
                     "$esc"|"$eot") exit 0 ;;
                 esac
                 ;;
             1)
-                pane_cols cols
                 # The loop reprints the prompt on its next tick, so a redraw
                 # that cleared it needs no extra handling here.
                 reflow_to "$cols" || true
@@ -317,6 +337,13 @@ stable_ticks=0
 while true; do
     pane_cols cols
     reflow_to "$cols" || true
+    # Note an offer now, act on it after this tick's steps: the producer writes
+    # it only after every round-1 status and response is on disk, so whatever
+    # was on disk when it appeared is drained and drawn before the prompt. The
+    # check at the end of the tick would run against a status snapshot taken
+    # before the render, and could name a provider whose error is not yet shown.
+    offer_pending=0
+    [[ -f "$WATCH/retry-offer" ]] && offer_pending=1
     # 1. Track status events silently (state + timing for banners later);
     #    print only error notices since they don't get a response file.
     if [[ -f "$WATCH/status" ]]; then
@@ -331,8 +358,13 @@ while true; do
             [[ -n "$model" ]] && provider_models[idx]="$model"
             if [[ "$state" == "error" ]]; then
                 clear_loading
-                print_error_notice "$provider"
-                display_events+=("error:$provider")
+                # Replay from a snapshot of the text: a provider that fails
+                # again on retry overwrites errors/<name>.txt, and each
+                # failure must be replayed in its own words.
+                snap="$WATCH/errors/${provider}.shown${#display_events[@]}.txt"
+                cp "$WATCH/errors/${provider}.txt" "$snap" 2>/dev/null || true
+                print_error_notice "$provider" "$snap"
+                display_events+=("error:${provider}"$'\t'"$snap")
             fi
         done
     fi
@@ -361,7 +393,7 @@ while true; do
     draw_loading "$cols"
 
     # An offer on the table: accepting renames it away, so no second prompt.
-    [[ -f "$WATCH/retry-offer" ]] && retry_offer_prompt
+    [[ $offer_pending -eq 1 ]] && retry_offer_prompt
 
     [[ -f "$WATCH/.done" ]] && break
     sleep 0.12

@@ -82,6 +82,10 @@ run_worker() {
     job_write "$JOB_ID" running
     job_set "$JOB_ID" pid "$$"
     trap 'if [[ "$(job_status "$JOB_ID" 2>/dev/null)" == "running" ]]; then job_write "$JOB_ID" failed; fi' EXIT
+    # A detached worker inherits TMUX and can open a pane, but nobody is
+    # committed to answering its retry offer; waiting the window out would only
+    # deliver the result late. An explicit COUNCIL_RETRY_WAIT still opts in.
+    export COUNCIL_RETRY_WAIT="${COUNCIL_RETRY_WAIT:-0}"
     local outfile
     outfile=$(run_sync "$JOB_ID")
     job_set "$JOB_ID" outfile "$outfile"

@@ -526,3 +526,15 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
     run tmux_version_supports_pane ""
     [ "$status" -ne 0 ]
 }
+
+@test "display: pane_retry_await keeps the offer open for the whole window" {
+    source "$LIB"
+    # An integer-SECONDS deadline can expire within milliseconds of being set;
+    # the window is a promise to the reader, so it must hold for its full length.
+    local start end
+    start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
+    run pane_retry_await "$PANE_DIR" 1
+    end=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
+    [ "$status" -eq 1 ]
+    perl -e 'exit(($ARGV[1] - $ARGV[0]) >= 1.0 ? 0 : 1)' "$start" "$end"
+}

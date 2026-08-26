@@ -222,3 +222,20 @@ wait_for_job() {
     run jq -r '.status' "${COUNCIL_JOBS_DIR}/zombie.json"
     [ "$output" == "failed" ]
 }
+
+@test "run-council --async: a failing provider does not hold the worker for a retry answer" {
+    # A detached worker inherits TMUX and can open a pane, but nobody is
+    # committed to watching it; waiting the full retry window would just
+    # deliver the result late. Only an explicit COUNCIL_RETRY_WAIT opts in.
+    export COUNCIL_FAKE_BEHAVIOR=auth-failure
+    unset COUNCIL_RETRY_WAIT
+    local pane="${BATS_TEST_TMPDIR}/pane"
+    mkdir -p "$pane/responses"
+    export COUNCIL_PANE_DIR="$pane"
+    local id
+    id=$(bash "$RUN_COUNCIL" --async --providers=codex -- "test question" | head -1)
+    # wait_for_job's deadline is well under the default retry window.
+    run wait_for_job "$id"
+    [ "$output" == "completed" ]
+    [ ! -f "$pane/retry-offer" ]
+}

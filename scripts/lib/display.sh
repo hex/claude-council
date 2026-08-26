@@ -120,29 +120,35 @@ pane_error_write() {
 
 # Offer the pane a retry of the named providers: line 1 is how many seconds the
 # offer stays open (the watcher counts it down), one provider per line after.
-# Temp-then-rename, so the watcher never reads a partial file.
-# Args: pane_dir seconds provider...
+# Temp-then-rename, so the watcher never reads a partial file. Unlike the other
+# writers this reports failure (1): the reader can close the pane — removing
+# the watch dir — between any check and the write, and an offer that could not
+# be written is a declined one, which the caller must learn as a status, never
+# as errexit. Args: pane_dir seconds provider...
 pane_retry_offer_write() {
     local pane_dir="$1" seconds="$2"
     shift 2
-    [[ -d "$pane_dir" ]] || return 0
     local tmp="$pane_dir/.retry-offer.tmp"
-    printf '%s\n' "$seconds" "$@" > "$tmp"
-    mv -f "$tmp" "$pane_dir/retry-offer"
+    printf '%s\n' "$seconds" "$@" > "$tmp" 2>/dev/null || return 1
+    mv -f "$tmp" "$pane_dir/retry-offer" 2>/dev/null || return 1
 }
 
 # Wait up to <seconds> for the pane to accept the offer. The watcher accepts by
 # renaming retry-offer to .retry, so an offer is either accepted or withdrawn,
 # never both: withdrawing removes retry-offer, and a rename that finds it gone
 # fails on the pane's side — no grace period to tune. Returns 0 when accepted
-# (.retry consumed), 1 when the deadline passed or the reader closed the pane,
-# which removes the watch dir. Args: pane_dir seconds
+# (.retry consumed), 1 when the window passed or the reader closed the pane,
+# which removes the watch dir.
+# The window is counted in 0.2s ticks, not against an integer-SECONDS deadline:
+# that deadline can expire within milliseconds of being set, and the window is
+# a promise to the reader. Args: pane_dir seconds
 pane_retry_await() {
     local pane_dir="$1" seconds="$2"
-    local deadline=$(( SECONDS + seconds ))
-    while [[ $SECONDS -lt $deadline && ! -f "$pane_dir/.retry" ]]; do
+    local ticks=$(( seconds * 5 ))
+    while [[ $ticks -gt 0 && ! -f "$pane_dir/.retry" ]]; do
         [[ -d "$pane_dir" ]] || return 1
         sleep 0.2
+        ticks=$(( ticks - 1 ))
     done
     rm -f "$pane_dir/retry-offer"
     [[ -f "$pane_dir/.retry" ]] || return 1
