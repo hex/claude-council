@@ -167,7 +167,10 @@ print_error_notice() {
     local name="$1" err_line
     printf '\n\033[1;38;2;185;28;28m✗ %s error\033[0m\n' "$name"
     if [[ -f "$WATCH/errors/${name}.txt" ]]; then
-        while IFS= read -r err_line; do
+        # `|| -n` keeps the last line: the producer stores a command
+        # substitution, which has no trailing newline, so a plain read loop
+        # would return non-zero on it and show nothing for a one-line error.
+        while IFS= read -r err_line || [[ -n "$err_line" ]]; do
             # Scrub raw control bytes (keep tab) from the provider's
             # error text so it can't drive the terminal on display.
             err_line=$(printf '%s' "$err_line" | LC_ALL=C tr -d '\000-\010\013-\037\177')

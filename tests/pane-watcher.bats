@@ -131,6 +131,18 @@ blank_lines_before() {
     [[ "$output" == *"API key missing"* ]]
 }
 
+@test "watcher: shows error text written the way the producer writes it, with no trailing newline" {
+    # The fixture goes through pane_error_write, not a hand-written file: the
+    # producer stores a command substitution, which has no trailing newline,
+    # and a reader that needs one shows nothing for every real error.
+    (source "$LIB" && pane_error_write "$W" kimi-cli "Error from kimi CLI: no assistant content in response")
+    printf 'kimi-cli\terror\t\t\n' >> "$W/status"
+    run_watcher
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"kimi-cli error"* ]]
+    [[ "$output" == *"no assistant content in response"* ]]
+}
+
 @test "watcher: leaves two blank lines between one provider block and the next" {
     printf 'First answer\n' > "$W/responses/gemini.md"
     printf 'Second answer\n' > "$W/responses/openai.md"
