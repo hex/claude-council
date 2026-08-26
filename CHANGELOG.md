@@ -4,6 +4,44 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.8.8
+
+### Features
+
+- **The pane offers to retry failed providers.** When a provider fails, the
+  pane shows `[r] retry failed (<providers>) · [esc/ctrl-d] close` with a
+  countdown. `r` re-queries only the failed providers inside the same run, so
+  a recovered answer reaches the synthesis, the saved transcript and the cache
+  like any other; `Esc` closes the pane and the run carries on with what it
+  has. The offer stays open `COUNCIL_RETRY_WAIT` seconds (default 45, `0`
+  disables), once per run. `--async` jobs default to `0`: nobody is committed
+  to answering a detached run's pane, so it never waits.
+
+### Fixes
+
+- **A failed provider's error text is shown in the pane.** The notice read
+  its text with a loop that drops a final line without a trailing newline —
+  which every real error is, since the producer stores a command
+  substitution. The pane showed `✗ kimi-cli error` with nothing under it.
+
+### Docs
+
+- README, ARCHITECTURE and the council-execution skill describe the offer;
+  the skill now names the Bash timeout to pass (`600000`), since an accepted
+  retry adds a provider round to a call whose default limit is two minutes.
+
+### Other
+
+- The round-1 launch and collect loops are functions the retry reuses, and
+  the offer handshake lives in `display.sh` (`pane_retry_offer_write` /
+  `pane_retry_await`) beside the other pane writers. Acceptance is a rename
+  of the offer file, atomic against its withdrawal.
+- 538 tests (was 524): the retry protocol on both sides, the error-text
+  fixture written the way the producer writes it, and test feeders that live
+  exactly as long as the watcher.
+
+**Full Changelog**: https://github.com/hex/claude-council/compare/v2026.8.7...v2026.8.8
+
 ## 2026.8.7
 
 ### Features
