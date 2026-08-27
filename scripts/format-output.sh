@@ -122,9 +122,12 @@ format_output() {
         return 0
     fi
 
-    # Get providers list from round1
+    # Get providers list from round1. Strip \r: jq's Windows build can
+    # CRLF-translate its stdout when piped rather than attached to a real
+    # console, and an unstripped \r riding along on the first provider name
+    # turns `.round1["gemini\r"]` into a silent key-miss (null) below.
     local providers
-    providers=$(echo "$json" | jq -r '.round1 | keys[]')
+    providers=$(echo "$json" | jq -r '.round1 | keys[]' | tr -d '\r')
 
     # If quiet mode, skip individual responses
     if [[ "$quiet" != "true" ]]; then

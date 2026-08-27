@@ -64,22 +64,29 @@ bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'gemini-3*' '*thinking*' 'gemi
 
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
+# Cap on internal "thinking" tokens (override via GEMINI_THINKING_BUDGET). A
+# reasoning model can otherwise burn the entire maxOutputTokens allowance on
+# invisible chain-of-thought and return an empty answer with no error field —
+# capping thinking guarantees room is left for the actual response, and tends
+# to cut the tail latency that causes request timeouts too.
+THINKING_BUDGET="${GEMINI_THINKING_BUDGET:-8192}"
+
 # Build request payload
 if [[ -n "$IMAGE_FILE" ]]; then
     PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" \
-        --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '{
+        --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" --argjson thinking "$THINKING_BUDGET" '{
         system_instruction: { parts: [{ text: $system }] },
         contents: [{ parts: [
             { text: $prompt },
             { inlineData: { mimeType: $mime, data: $b64 } }
         ]}],
-        generationConfig: { temperature: 0.7, maxOutputTokens: $tokens }
+        generationConfig: { temperature: 0.7, maxOutputTokens: $tokens, thinkingConfig: { thinkingBudget: $thinking } }
     }')
 else
-    PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
+    PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" --argjson thinking "$THINKING_BUDGET" '{
         system_instruction: { parts: [{ text: $system }] },
         contents: [{ parts: [{ text: $prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: $tokens }
+        generationConfig: { temperature: 0.7, maxOutputTokens: $tokens, thinkingConfig: { thinkingBudget: $thinking } }
     }')
 fi
 
@@ -97,11 +104,25 @@ RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
     -H "Content-Type: application/json" \
     --data-binary @"$PAYLOAD_FILE")
 
-# Extract text from response
-TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+# Extract text from response. Join every text part rather than assuming the
+# answer sits in parts[0] — a thought-signature part can precede it.
+TEXT=$(echo "$RESPONSE" | jq -r '[.candidates[0].content.parts[]? | select(.text) | .text] | join("") // empty')
 
 if [[ -z "$TEXT" ]]; then
-    ERROR=$(echo "$RESPONSE" | jq -r '.error.message // "Unknown error"')
+    # A well-formed HTTP error carries .error.message. A 200 with no visible
+    # text (most often the model spending its whole token budget on internal
+    # reasoning, or a safety block) carries neither .error nor .candidates —
+    # surface finishReason/blockReason/token usage instead of a bare
+    # "Unknown error" so the real cause is visible in logs.
+    ERROR=$(echo "$RESPONSE" | jq -r '
+        if (.error.message // "") != "" then .error.message
+        elif (.promptFeedback.blockReason // "") != "" then
+            "prompt blocked (" + .promptFeedback.blockReason + ")"
+        elif (.candidates[0].finishReason // "") != "" then
+            "empty response (finishReason: " + .candidates[0].finishReason +
+            ", thoughts tokens: " + ((.usageMetadata.thoughtsTokenCount // 0) | tostring) +
+            "/" + ((.usageMetadata.totalTokenCount // 0) | tostring) + ")"
+        else "Unknown error" end')
     echo "Error from Gemini: $ERROR" >&2
     is_model_unavailable_error "$RESPONSE" && exit 3
     exit 1
