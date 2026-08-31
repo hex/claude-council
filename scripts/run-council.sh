@@ -152,7 +152,7 @@ run_cancel() {
             # Mark first so the worker's exit trap sees a terminal status
             # and does not race it back to failed
             job_write "$JOB_ID" cancelled
-            [[ -n "$pid" ]] && kill_tree "$pid"
+            [[ -n "$pid" ]] && signal_tree TERM "$pid"
             echo "Cancelled $JOB_ID"
             ;;
         *)

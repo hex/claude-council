@@ -172,7 +172,7 @@ wait_for_job() {
 @test "run-council --cancel: kills the worker when jq emits CRLF" {
     # The status/pid read is a process substitution, where MSYS bash does not
     # strip the \r jq's Windows build appends. bash 5's kill tolerates a pid
-    # of "1234\r" but pgrep does not, so kill_tree ends the worker and leaves
+    # of "1234\r" but pgrep does not, so signal_tree ends the worker and leaves
     # its whole query tree running until the CLI gives up on its own.
     command -v pgrep >/dev/null 2>&1 || skip "pgrep not installed"
     install_crlf_jq

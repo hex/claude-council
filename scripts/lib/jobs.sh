@@ -3,6 +3,7 @@
 # ABOUTME: One <id>.json + <id>.log per job in a per-workspace state directory
 
 source "$(dirname "${BASH_SOURCE[0]}")/hash.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/deadline.sh"
 
 # State directory resolution: explicit override, else plugin data dir, else
 # tmp - namespaced by a hash of the workspace root so concurrent projects
@@ -99,11 +100,3 @@ jobs_prune() {
     find "$dir" -name 'stop-gate-*.count' -mtime +1 -delete 2>/dev/null || true
 }
 
-# Terminate a process and all of its descendants, leaves first.
-kill_tree() {
-    local pid="$1" child
-    for child in $(pgrep -P "$pid" 2>/dev/null); do
-        kill_tree "$child"
-    done
-    kill -TERM "$pid" 2>/dev/null || true
-}

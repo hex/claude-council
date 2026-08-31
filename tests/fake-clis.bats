@@ -103,6 +103,18 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args | index("-s") as $i | .[$i+1]')" == "read-only" ]]
 }
 
+@test "codex.sh: a CLI that exits 0 on the deadline signal is a timeout, not an empty answer" {
+    export COUNCIL_FAKE_BEHAVIOR=hang-handled COUNCIL_FAKE_SLEEP=30 COUNCIL_TIMEOUT=1
+    local start end
+    start=$SECONDS
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    end=$SECONDS
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"timed out"* ]]
+    [ -z "$output" ]
+    [ $((end - start)) -lt 10 ]
+}
+
 @test "codex.sh: a hung CLI is bounded by COUNCIL_TIMEOUT and reports a timeout" {
     export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=30 COUNCIL_TIMEOUT=1
     local start end

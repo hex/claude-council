@@ -11,6 +11,8 @@
 #   slow           - sleep COUNCIL_FAKE_SLEEP (default 5s) then respond
 #   hang           - exec sleep COUNCIL_FAKE_SLEEP (default 300s); replaces the
 #                    process so the deadline watchdog's SIGTERM kills it cleanly
+#   hang-handled   - sleep COUNCIL_FAKE_SLEEP but exit 0, silently, on SIGTERM:
+#                    the codex wrapper's response to the deadline
 #   error          - generic failure on stderr, exit 1
 #   dirty-stream   - kimi only: an unstructured notice line ahead of the JSONL,
 #                    which a real CLI is free to print (upgrade notices etc.)
@@ -117,6 +119,7 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     auth-failure)   echo "Error: not logged in" >&2; exit 1 ;;
     slow)           sleep "\${COUNCIL_FAKE_SLEEP:-5}"; echo "$marker: slow answer" ;;
     hang)           exec sleep "\${COUNCIL_FAKE_SLEEP:-300}" ;;
+    hang-handled)   trap 'exit 0' TERM; sleep "\${COUNCIL_FAKE_SLEEP:-300}" & wait ;;
     error)          echo "Error: fake provider failure" >&2; exit 1 ;;
     *)              echo "Unknown COUNCIL_FAKE_BEHAVIOR: \${COUNCIL_FAKE_BEHAVIOR}" >&2; exit 64 ;;
 esac

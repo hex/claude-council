@@ -49,7 +49,7 @@ bats --verbose-run tests/cache.bats
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 33 tests | argument parsing, error cases, flags, local-council fallback hint, hyphenated provider names (env-var prefix derivation), model-fallback wrapper (preferred-then-fallback retry, cached-verdict skip, explicit `<PROVIDER>_MODEL` opt-out, no verdict remembered when the fallback also fails), round 2 and CLI-sibling fallback carrying `model_fallback`, the pane's retry offer (offer file contents, r re-queries only the failed providers and clears the error list, expiry, pane closed at the offer, `COUNCIL_RETRY_WAIT=0`, no pane, a leaked non-watch-dir `COUNCIL_PANE_DIR` ignored) |
 | `argmax.bats` | 4 tests | large response/prompt/debate-round-2 round-trip through final JSON (MSYS ARG_MAX marshalling guard) |
-| `fake-clis.bats` | 62 tests | fixture self-checks, codex.sh/antigravity.sh/grok-cli.sh/kimi-cli.sh/ollama.sh against fake binaries (kimi-cli: stream-json parsing, dirty-stream tolerance, array-form content, tool-call narration excluded, no-tools agent pinned; ollama: daemon-down diagnostic; antigravity: the argv spill past `COUNCIL_ARGV_LIMIT`, its dedicated `--add-dir` directory, the guard and system prompt staying on argv while only the question is written out, cleanup after a failing CLI and under a spaced `TMPDIR`; `COUNCIL_PROVIDERS` roster precedence and its agreement with `--list-default` and `--list-available`; per-CLI timeout bounds via `COUNCIL_CLI_TIMEOUT`, and that a timeout reports only the timeout, never the shell's own signal notice) |
+| `fake-clis.bats` | 63 tests | fixture self-checks, codex.sh/antigravity.sh/grok-cli.sh/kimi-cli.sh/ollama.sh against fake binaries (kimi-cli: stream-json parsing, dirty-stream tolerance, array-form content, tool-call narration excluded, no-tools agent pinned; ollama: daemon-down diagnostic; antigravity: the argv spill past `COUNCIL_ARGV_LIMIT`, its dedicated `--add-dir` directory, the guard and system prompt staying on argv while only the question is written out, cleanup after a failing CLI and under a spaced `TMPDIR`; `COUNCIL_PROVIDERS` roster precedence and its agreement with `--list-default` and `--list-available`; per-CLI timeout bounds via `COUNCIL_CLI_TIMEOUT`, a CLI that exits 0 on the deadline's SIGTERM still reported as a timeout, and that a timeout reports only the timeout, never the shell's own signal notice) |
 | `format-output.bats` | 14 tests | defensive parsing: empty/missing/non-string responses, raw preservation, CLI→API fallback-note rendering, model-fallback note (preferred model named, absent when unset), the first provider key surviving CRLF from a Windows jq |
 | `prompts.bats` | 11 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh as the executable mirror of the agent-analysis schema, kept in sync with it |
@@ -64,9 +64,9 @@ bats --verbose-run tests/cache.bats
 | `release.bats` | 5 tests | release.sh version bump/commit/tag, staged-index guard, green-suite gate |
 | `retry.bats` | 11 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file, ensure_error_body http_status stamping (object and string `.error`, Gemini's string `.error.status` left alone, synthesised message, 200 passthrough) |
 | `model_fallback.bats` | 29 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs and the invariant that no provider degrades to the model it already prefers, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (default model or its fallback answers, end to end) |
-| `deadline.bats` | 4 tests | run_with_deadline: the caller's stdin reaches the command, the command's own status passes through, status 143 at the deadline, no watchdog outliving a fast call |
+| `deadline.bats` | 9 tests | run_with_deadline: the caller's stdin reaches the command, the command's own status passes through, status 143 at the deadline whatever the command did with the signal (a CLI that exits 0 on SIGTERM), SIGKILL after the grace period for one that ignores it, the command's own children not holding the captured stdout, no watchdog outliving a fast call, nothing on stderr for a signal-ended job, 0 = unbounded, a non-integer deadline rejected |
 
-**Total: 550 tests** across 25 `.bats` files.
+**Total: 556 tests** across 25 `.bats` files.
 
 ### Hermetic CLI Fixture
 
@@ -82,7 +82,8 @@ setup() { install_fake_clis; }
 
 - `COUNCIL_FAKE_BEHAVIOR` switches scenarios: `valid` (default), `empty`,
   `malformed-json`, `block-verdict`, `rate-limit`, `auth-failure`,
-  `slow` (honors `COUNCIL_FAKE_SLEEP`), `hang`, `error`, and, for the kimi
+  `slow` (honors `COUNCIL_FAKE_SLEEP`), `hang`, `hang-handled` (exits 0 on the
+  deadline's SIGTERM, as the codex wrapper does), `error`, and, for the kimi
   fake only, `dirty-stream`, `array-content` and `tool-narration`.
 - `--version` always succeeds, mirroring real CLIs where the version probe
   works even when logged out.
