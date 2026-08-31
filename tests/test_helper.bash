@@ -110,6 +110,23 @@ path_without_clis() {
     echo "${clean%:}"
 }
 
+# Helper: put a jq on PATH whose stdout ends every line with \r\n, as jq's
+# Windows build does when piped. Sets CRLF_BIN; prefix PATH="$CRLF_BIN:$PATH"
+# on the one invocation under test so the test's own jq calls stay clean.
+install_crlf_jq() {
+    local real_jq
+    real_jq=$(command -v jq)
+    CRLF_BIN="${BATS_TEST_TMPDIR}/crlf-bin"
+    mkdir -p "$CRLF_BIN"
+    cat > "$CRLF_BIN/jq" <<EOF
+#!/bin/bash
+"$real_jq" "\$@" | sed 's/\$/\r/'
+exit "\${PIPESTATUS[0]}"
+EOF
+    chmod +x "$CRLF_BIN/jq"
+    export CRLF_BIN
+}
+
 # Helper: assert JSON field equals value
 # Usage: assert_json_eq "$json" ".field" "expected"
 assert_json_eq() {

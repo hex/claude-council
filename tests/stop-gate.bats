@@ -81,6 +81,20 @@ dirty_diff() {
     [[ "$(echo "$output" | jq -r '.reason')" == *"tests are failing"* ]]
 }
 
+@test "stop-gate: verdict survives a jq that emits CRLF" {
+    # jq's Windows build CRLF-translates piped stdout, so the @tsv config read
+    # hands the gate "1\r" as max_iterations and "test-session\r" as the
+    # session id. On other platforms this passes trivially; the Windows CI job
+    # is where it earns its place.
+    install_crlf_jq
+    enable_gate
+    dirty_diff
+    export COUNCIL_FAKE_BEHAVIOR=block-verdict
+    PATH="$CRLF_BIN:$PATH" run bash "$GATE" <<< "$(stop_event)"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.decision' "block"
+}
+
 @test "stop-gate: allows when reviewer verdict is not BLOCK" {
     enable_gate
     dirty_diff

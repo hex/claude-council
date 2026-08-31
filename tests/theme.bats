@@ -59,17 +59,17 @@ setup() {
 # an ST-only delimiter). The parse/luminance logic now lives in a pure function
 # so every branch is testable without a terminal.
 
-@test "theme: osc reply — black background maps to dark" {
+@test "theme: osc reply - black background maps to dark" {
     run council_theme_from_osc_reply 'rgb:0000/0000/0000'
     [ "$output" = "dark" ]
 }
 
-@test "theme: osc reply — white background maps to light" {
+@test "theme: osc reply - white background maps to light" {
     run council_theme_from_osc_reply 'rgb:ffff/ffff/ffff'
     [ "$output" = "light" ]
 }
 
-@test "theme: osc reply — luminance threshold sits at 127" {
+@test "theme: osc reply - luminance threshold sits at 127" {
     # 0x80 = 128 on every channel -> lum 128 (> 127) -> light
     run council_theme_from_osc_reply 'rgb:8080/8080/8080'
     [ "$output" = "light" ]
@@ -78,7 +78,7 @@ setup() {
     [ "$output" = "dark" ]
 }
 
-@test "theme: osc reply — handles 8-bit channels and a full OSC frame" {
+@test "theme: osc reply - handles 8-bit channels and a full OSC frame" {
     run council_theme_from_osc_reply 'rgb:ff/ff/ff'
     [ "$output" = "light" ]
     # The tty returns the triplet wrapped in the OSC frame; parsing must find it.
@@ -86,7 +86,7 @@ setup() {
     [ "$output" = "dark" ]
 }
 
-@test "theme: osc reply — unparseable input yields empty (no assertion)" {
+@test "theme: osc reply - unparseable input yields empty (no assertion)" {
     run council_theme_from_osc_reply 'garbage'
     [ -z "$output" ]
     run council_theme_from_osc_reply ''
@@ -167,7 +167,7 @@ render_with_theme() {
     [[ "$output" == *"judge"* ]]
 }
 
-@test "renderer: fenced code block uses ┌/└ markers and copies content verbatim" {
+@test "renderer: fenced code block uses corner markers and copies content verbatim" {
     run render_with_theme dark $'```bash\n# cfg line\n**not bold**\n```'
     [ "$status" -eq 0 ]
     [[ "$output" == *"┌─────"* ]]     # open marker
@@ -180,7 +180,7 @@ render_with_theme() {
     [[ "$output" != *$'\033[1;97m'* ]]    # '**not bold**' is not turned into bold
 }
 
-@test "renderer: H1–H3 get distinct heading styles" {
+@test "renderer: H1-H3 get distinct heading styles" {
     run render_with_theme dark $'# Title One\n## Title Two\n### Title Three'
     [ "$status" -eq 0 ]
     [[ "$output" == *"Title One"* ]]

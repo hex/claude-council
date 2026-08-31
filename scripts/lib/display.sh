@@ -9,6 +9,8 @@
 # wrapper run as separate processes that inherit the tmux server's PATH and
 # cwd, so a relative path would not survive the hop.
 COUNCIL_DISPLAY_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=deadline.sh
+source "$COUNCIL_DISPLAY_DIR/deadline.sh"
 COUNCIL_RENDER_PL="$COUNCIL_DISPLAY_DIR/render.pl"
 COUNCIL_RENDER_PY="$COUNCIL_DISPLAY_DIR/render.py"
 COUNCIL_PANE_WATCHER="$COUNCIL_DISPLAY_DIR/pane-watcher.sh"
@@ -246,7 +248,7 @@ display_write_perl_renderer() {
 # exit 0, so an import-only probe would silently pick a mangling renderer.
 # Paths are absolute because the pane that runs the result inherits the tmux
 # server's PATH, not this shell's.
-# The uv probe is bounded by a perl alarm (COUNCIL_RICH_PROBE_TIMEOUT, default
+# The uv probe runs under run_with_deadline (COUNCIL_RICH_PROBE_TIMEOUT, default
 # 10s): a cold cache on a dead network otherwise stalls pane opening ~45s
 # before any provider is queried. --no-project keeps uv from resolving — and
 # syncing .venv/uv.lock into — whatever pyproject.toml the cwd contains. The
@@ -262,7 +264,7 @@ council_rich_python() {
         return 0
     fi
     uv=$(command -v uv 2>/dev/null) || uv=""
-    if [[ -n "$uv" ]] && perl -e 'alarm shift; exec @ARGV' "${COUNCIL_RICH_PROBE_TIMEOUT:-10}" \
+    if [[ -n "$uv" ]] && run_with_deadline "${COUNCIL_RICH_PROBE_TIMEOUT:-10}" \
         "$uv" run --quiet --no-project --with rich python3 -c "$probe" 2>/dev/null; then
         printf '%q %s' "$uv" 'run --quiet --no-project --offline --with rich python3'
         return 0

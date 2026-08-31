@@ -144,7 +144,9 @@ run_cancel() {
         exit 1
     fi
     local status pid
-    IFS=$'\t' read -r status pid < <(jq -r '[.status, .pid // ""] | @tsv' "$file")
+    # tr strips the \r jq's Windows build appends to piped stdout; read keeps
+    # it on the pid, and pgrep will not take "1234\r" as a parent.
+    IFS=$'\t' read -r status pid < <(jq -r '[.status, .pid // ""] | @tsv' "$file" | tr -d '\r')
     case "$status" in
         queued|running)
             # Mark first so the worker's exit trap sees a terminal status

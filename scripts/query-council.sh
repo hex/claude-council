@@ -915,8 +915,10 @@ if [[ "$DEBATE_MODE" == true ]]; then
             else
                 envelope=$(run_provider_with_model_fallback "$provider" "$script" "$debate_prompt") && r2_rc=0 || r2_rc=$?
                 if [[ ${r2_rc:-0} -eq 0 ]]; then
-                    jq -n --argjson e "$envelope" \
-                        '{status: "success", response: $e.response, model: $e.model, model_fallback: $e.model_fallback}' > "$output_file"
+                    # The envelope carries the full rebuttal, which embeds every
+                    # round-1 answer: stdin, never argv — see merge_result for
+                    # the MSYS ARG_MAX rationale.
+                    printf '%s' "$envelope" | jq '{status: "success", response: .response, model: .model, model_fallback: .model_fallback}' > "$output_file"
                 else
                     fb_json=$(attempt_api_fallback "$provider" "$debate_prompt")
                     if [[ -n "$fb_json" ]]; then

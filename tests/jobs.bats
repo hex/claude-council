@@ -74,6 +74,9 @@ wait_for_job() {
     job_write myjob queued
     job_set myjob outfile "/some/path.md"
     run jq -r '.outfile' "${COUNCIL_JOBS_DIR}/myjob.json"
+    # Shown on failure: what was stored, so a platform rewrite of the value
+    # is visible rather than inferred.
+    echo "stored outfile: $output"
     [ "$output" == "/some/path.md" ]
 }
 
@@ -164,6 +167,36 @@ wait_for_job() {
         sleep 1
         ! kill -0 "$pid" 2>/dev/null
     fi
+}
+
+@test "run-council --cancel: kills the worker when jq emits CRLF" {
+    # The status/pid read is a process substitution, where MSYS bash does not
+    # strip the \r jq's Windows build appends. bash 5's kill tolerates a pid
+    # of "1234\r" but pgrep does not, so kill_tree ends the worker and leaves
+    # its whole query tree running until the CLI gives up on its own.
+    command -v pgrep >/dev/null 2>&1 || skip "pgrep not installed"
+    install_crlf_jq
+    export COUNCIL_FAKE_BEHAVIOR=slow
+    export COUNCIL_FAKE_SLEEP=30
+    local id pid children waited=0
+    id=$(bash "$RUN_COUNCIL" --async --providers=codex -- "test question" | head -1)
+    await_any_file "${COUNCIL_JOBS_DIR}/${id}.json"
+    pid=$(jq -r '.pid // empty' "${COUNCIL_JOBS_DIR}/${id}.json")
+    [[ -n "$pid" ]]
+    # The query tree under the worker takes a moment to spawn.
+    while [[ -z "${children:=$(pgrep -P "$pid" || true)}" ]]; do
+        sleep 0.2
+        waited=$((waited + 1))
+        [[ $waited -lt 40 ]]
+    done
+    PATH="$CRLF_BIN:$PATH" run bash "$RUN_COUNCIL" --cancel="$id"
+    [ "$status" -eq 0 ]
+    sleep 1
+    ! kill -0 "$pid" 2>/dev/null
+    local child
+    for child in $children; do
+        ! kill -0 "$child" 2>/dev/null
+    done
 }
 
 @test "run-council: sync mode without flags is unchanged" {
