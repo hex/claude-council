@@ -9,55 +9,60 @@ Run one Workflow of parallel Claude analyst agents for deeper analysis. Each ana
 queries its provider, evaluates response quality, can ask follow-up questions, and
 returns a structured analysis that the workflow enforces against the schema.
 
-## Step 1: Determine Provider Details
+## Step 1: Resolve Providers and Write the Questions
 
-For each selected provider, gather:
-- Provider name and script path: `${CLAUDE_PLUGIN_ROOT}/scripts/providers/{name}.sh`
-- Model name: run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-available` or read the provider script defaults
-
-## Step 2: Prepare the Question and the Schema
-
-Write the final question — with the role injected and any file context included
-— to a file the analysts will read. A quoted heredoc marker means the shell
-does NOT interpret quotes, backticks or `$()` in the question; paste it
-verbatim, do not escape it:
+One shell call resolves what the workflow needs — each provider's model, its
+role, and the question file it will send — with the same helpers the standard
+flow uses. Paste the final question into the heredoc verbatim: the quoted
+marker means the shell does NOT interpret quotes, backticks or `$()` in it.
+The question is emitted once; each provider's role-injected variant is built
+in shell, not pasted again.
 
 ```bash
-mkdir -p .claude/council-cache
-cat > .claude/council-cache/.agents-question.txt <<'COUNCIL_Q_EOF'
-<the final question, verbatim>
+source "${CLAUDE_PLUGIN_ROOT}/scripts/lib/providers.sh"
+source "${CLAUDE_PLUGIN_ROOT}/scripts/lib/roles.sh"
+PROVIDERS=(<the selected providers, space separated>)
+ROLES="<the --roles value, or empty>"
+RUN=$(date +%s)                                  # names this run's files; Step 6 reuses it
+Q="$PWD/.claude/council-cache/.agents-$RUN"
+mkdir -p "$PWD/.claude/council-cache"
+cat > "$Q.txt" <<'COUNCIL_Q_EOF'
+<the question, verbatim>
 COUNCIL_Q_EOF
+# --file / auto-context: append the context to the question file here, e.g.
+#   { printf '\n\nHere is the content of %s:\n\n```\n' "<path>"; cat "<path>"; printf '```\n'; } >> "$Q.txt"
+ASSIGNMENTS=""
+[[ -n "$ROLES" ]] && ASSIGNMENTS=$(assign_roles_to_providers "$ROLES" "${PROVIDERS[@]}")
+echo "run $RUN"
+for p in "${PROVIDERS[@]}"; do
+    role=""
+    [[ -n "$ASSIGNMENTS" ]] && role=$(get_provider_role "$p" "$ASSIGNMENTS")
+    qf="$Q.txt"
+    if [[ -n "$role" ]]; then
+        qf="$Q-$p.txt"
+        build_prompt_with_role "$(cat "$Q.txt")" "$role" > "$qf"
+    fi
+    printf '%s\t%s\t%s\n' "$p" "$(get_model "$p")" "$qf"
+done
 ```
 
-**CRITICAL**: If a role was assigned to a provider (via --roles), build the
-role-injected question with the same helper the standard flow uses — source
-`scripts/lib/prompts.sh` and `scripts/lib/roles.sh`, then
-`build_prompt_with_role "<question>" "<role>"` — and write ITS output to the
-file. Roles differ per provider, so write one file per provider in that case
-(`.agents-question-<provider>.txt`) and pass each provider its own path. The
-role format itself is defined in `${CLAUDE_PLUGIN_ROOT}/prompts/role-injection.md`.
+It prints the run id, then one line per provider: name, model (shown in the
+Step 4 header), and the absolute path of that provider's question file.
 
-**CRITICAL**: If file context was gathered (via --file or auto-context), it
-belongs in the question file too.
+## Step 2: Run the Analyst Workflow
 
-Read `${CLAUDE_PLUGIN_ROOT}/schemas/agent-analysis.schema.json` with the Read
-tool; its parsed content is passed to the workflow as `args.schema`, where it
-becomes each analyst's enforced output contract.
-
-## Step 3: Run the Analyst Workflow
-
-Agent mode runs as one Workflow: one analyst agent per provider, all in
-parallel, each returning its analysis through the schema-enforced structured
-output — so no reply ever reaches this context as raw text that has to be
-pasted and validated. The user asked for agent mode (`--agents`, or yes to the
-prompt in ask.md Step 1.5), which is the opt-in the Workflow tool requires.
+Agent mode is one Workflow: one analyst agent per provider, in parallel, each
+returning its analysis through schema-enforced structured output. The user
+asked for agent mode (`--agents`, or yes to the prompt in ask.md Step 1.5),
+which is the opt-in the Workflow tool requires.
 
 If the Workflow tool is not available in this session, stop here: tell the
 user that `--agents` needs a Claude Code with the Workflow tool, and offer to
 run the same question in standard mode instead. Do not fall back to another
 way of spawning agents.
 
-Call the Workflow tool with this script, verbatim, via `script`:
+Read `${CLAUDE_PLUGIN_ROOT}/schemas/agent-analysis.schema.json` with the Read
+tool, then call the Workflow tool with this script, verbatim, via `script`:
 
 ```js
 export const meta = {
@@ -69,50 +74,56 @@ export const meta = {
 // file declares; without the declaration it validates the same keywords fine.
 const schema = { ...args.schema }
 delete schema.$schema
-// A barrier is right here: the synthesis that follows needs every analysis
-// together, and there is no later stage for a finished analyst to move on to.
-const analyses = await parallel(args.providers.map(p => () =>
+const template = `${args.pluginRoot}/skills/deep-execution/agent-prompt-template.md`
+// Single stage: there is no later step for a finished analyst to move on to,
+// so the barrier costs nothing.
+const results = await parallel(args.providers.map(p => () =>
   agent(
     `You are the council analyst for the provider "${p.name}".\n` +
-    `Read ${args.templatePath} and carry out every step in it, with these values:\n` +
+    `Read ${template} and carry out every step in it, with these values:\n` +
     `- {PROVIDER} = ${p.name}\n` +
-    `- {SCRIPT_PATH} = ${p.script}\n` +
+    `- {PLUGIN_ROOT} = ${args.pluginRoot}\n` +
     `- {QUESTION_FILE} = ${p.questionFile}\n` +
-    `- {SCHEMA_PATH} = ${args.schemaPath}\n` +
     `Your final answer is the Round 3 analysis object, returned through the structured output tool.`,
-    { label: p.name, phase: 'Analyze', schema, agentType: 'general-purpose' }
-  ).then(a => a && { provider: p.name, model: p.model, ...a })))
-const done = analyses.filter(Boolean)
-const failed = args.providers.map(p => p.name).filter(n => !done.some(a => a.provider === n))
+    { label: p.name, phase: 'Analyze', schema, agentType: 'general-purpose' })))
+// parallel() keeps a dead or skipped analyst's slot as null, index-aligned with args.providers.
+const failed = args.providers.filter((_, i) => !results[i]).map(p => p.name)
 if (failed.length) log(`no analysis from: ${failed.join(', ')}`)
-return { analyses: done, failed }
-```
-
-and these `args` (real JSON values, not a string):
-
-```json
-{
-  "providers": [
-    { "name": "gemini", "script": "<CLAUDE_PLUGIN_ROOT>/scripts/providers/gemini.sh",
-      "model": "<model from Step 1>", "questionFile": "<absolute path to the question file>" }
-  ],
-  "templatePath": "<CLAUDE_PLUGIN_ROOT>/skills/deep-execution/agent-prompt-template.md",
-  "schemaPath": "<CLAUDE_PLUGIN_ROOT>/schemas/agent-analysis.schema.json",
-  "schema": { "...the parsed schema file..." }
+return {
+  analyses: results.map((a, i) => a && { provider: args.providers[i].name, ...a }).filter(Boolean),
+  failed,
 }
 ```
 
-Expand `<CLAUDE_PLUGIN_ROOT>` to the real path before calling, and pass every
-path absolute — the analysts run in their own contexts. The workflow
-returns `{ analyses, failed }`: every object in `analyses` already satisfies the
-schema (an analyst that could not produce one is retried by the tool, and one
-that died or was skipped is simply absent), so there is nothing to validate
-here. Name each provider in `failed` under the provider failures in Step 5,
-and continue with the analyses that arrived.
+and these `args` (real JSON values, not a string; `pluginRoot` is the real
+path of `${CLAUDE_PLUGIN_ROOT}`, `questionFile` the path Step 1 printed):
+
+```json
+{
+  "pluginRoot": "<CLAUDE_PLUGIN_ROOT>",
+  "schema": { "...the parsed schema file..." },
+  "providers": [
+    { "name": "gemini", "questionFile": "<absolute path from Step 1>" }
+  ]
+}
+```
+
+The workflow returns `{ analyses, failed }`. Every object in `analyses`
+satisfies the schema; `failed` names the providers whose analyst died or was
+skipped. A provider that returned an error is not in `failed`: its analyst
+reports it as a `quality: poor` analysis whose `full_response` is the error
+text, which the synthesis weights accordingly.
+
+## Step 3: Read the Result
+
+Nothing to validate: use each analysis's fields directly in Steps 4-5, and
+carry `failed` into Step 5's provider failures.
 
 ## Step 4: Display Results
 
-For each provider with a valid analysis, display it using this format:
+For each analysis, display it using this format. `{MODEL}` is the Step 1
+model: a model-fallback re-run inside an analyst cannot change this header,
+and the displacement is visible only in the analysis text.
 
 ```
 ## {EMOJI} {PROVIDER} ({MODEL}) — Agent Analysis
@@ -146,7 +157,9 @@ Provider emojis (ALWAYS use emoji + space):
 
 ## Step 5: Enhanced Synthesis
 
-With pre-analyzed responses, generate a richer synthesis than the standard mode:
+With pre-analyzed responses, generate a richer synthesis than the standard mode.
+The calibration rules in `${CLAUDE_PLUGIN_ROOT}/prompts/synthesis.md` apply here
+too; the providers in `failed` are its "returned an error" case.
 
 ### Confidence-Weighted Consensus
 Weight agreement by each provider's confidence level. High-confidence agreement
@@ -171,18 +184,13 @@ confidence level.
 
 ## Step 6: Save Output
 
-Save the complete output (all provider analyses + synthesis) to a cache file:
-
-```bash
-mkdir -p .claude/council-cache
-```
-
-Write the output to `.claude/council-cache/council-agents-{TIMESTAMP}.md` where
-TIMESTAMP is the current Unix timestamp.
+Save the complete output (all provider analyses + synthesis) to
+`.claude/council-cache/council-agents-{RUN}.md`, where RUN is the run id
+Step 1 printed (the directory exists since Step 1).
 
 Tell the user:
 > ---
-> Full agent analysis saved to `.claude/council-cache/council-agents-{TIMESTAMP}.md`
+> Full agent analysis saved to `.claude/council-cache/council-agents-{RUN}.md`
 
 ## Error Handling
 

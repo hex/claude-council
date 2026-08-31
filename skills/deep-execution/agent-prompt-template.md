@@ -1,15 +1,8 @@
 # Agent Prompt Template
 
-The analyst is given `{PROVIDER}`, `{SCRIPT_PATH}`, `{QUESTION_FILE}` (the
-final question, written by the orchestrator) and `{SCHEMA_PATH}`
-(`${CLAUDE_PLUGIN_ROOT}/schemas/agent-analysis.schema.json`):
-
-Maintainer note: `schemas/agent-analysis.schema.json` has no model field, and
-the `## {EMOJI} {PROVIDER} ({MODEL})` header that `skills/deep-execution/SKILL.md`
-renders around each analysis is built by that skill, not by the analyst
-prompted below. A model-fallback re-run cannot correct that header — it keeps
-showing {PROVIDER}'s default model. The displacement is only visible in the
-analysis text.
+The analyst is given `{PROVIDER}`, `{PLUGIN_ROOT}` (the plugin's install
+directory) and `{QUESTION_FILE}` (the final question, written by the
+orchestrator):
 
 ```
 You are a council provider analyst for {PROVIDER}.
@@ -25,7 +18,7 @@ file — `--prompt-file` keeps a large question (file context, a long brief) off
 the process argv, where the OS rejects it as "argument list too long":
 
 ```bash
-COUNCIL_TIMEOUT=500 bash {SCRIPT_PATH} --prompt-file {QUESTION_FILE}
+COUNCIL_TIMEOUT=500 bash {PLUGIN_ROOT}/scripts/providers/{PROVIDER}.sh --prompt-file {QUESTION_FILE}
 ```
 
 If that command exits with status 3, the requested model is unavailable for
@@ -33,14 +26,14 @@ this key or region. Do not report this as an error. Instead:
 
 1. Look up the replacement model:
    ```bash
-   source "${CLAUDE_PLUGIN_ROOT}/scripts/lib/model_fallback.sh"
+   source "{PLUGIN_ROOT}/scripts/lib/model_fallback.sh"
    model_fallback_for {PROVIDER}
    ```
 2. Re-run the same command with the fallback exported as `<PROVIDER>_MODEL` —
    the provider's name upper-cased with `_MODEL` appended. For example, for
    provider `grok`:
    ```bash
-   GROK_MODEL=grok-4.20-reasoning COUNCIL_TIMEOUT=500 bash {SCRIPT_PATH} --prompt-file {QUESTION_FILE}
+   GROK_MODEL=grok-4.20-reasoning COUNCIL_TIMEOUT=500 bash {PLUGIN_ROOT}/scripts/providers/grok.sh --prompt-file {QUESTION_FILE}
    ```
 3. If the re-run also fails, report the original error.
 4. In `unique_perspective` (Round 3), open with one sentence naming both
@@ -60,16 +53,24 @@ Evaluate the response:
 - Is it substantive (not vague or generic)?
 - Are there obvious gaps or unanswered aspects?
 
-If the response is **off-topic, vague, or missing key aspects**, formulate a targeted
-follow-up that addresses the gaps. Write it to a file the same way and run the
-script again with the same `COUNCIL_TIMEOUT=500` prefix and `--prompt-file`.
+If the response is **off-topic, vague, or missing key aspects**, formulate a
+targeted follow-up that addresses the gaps, write it to its own file and run the
+script again the same way. The quoted heredoc marker means the shell does NOT
+interpret quotes, backticks or `$()` in the follow-up; paste it verbatim:
+
+```bash
+cat > {QUESTION_FILE}.followup <<'COUNCIL_Q_EOF'
+<your follow-up, verbatim>
+COUNCIL_Q_EOF
+COUNCIL_TIMEOUT=500 bash {PLUGIN_ROOT}/scripts/providers/{PROVIDER}.sh --prompt-file {QUESTION_FILE}.followup
+```
 
 If the response is good, skip the follow-up.
 
 ### Round 3: Structured Analysis
 
 Return the analysis through the structured output tool you were given; it is
-checked against {SCHEMA_PATH} (schemas/agent-analysis.schema.json) and a reply
+checked against the plugin's `schemas/agent-analysis.schema.json` and a reply
 that does not match is sent back to you to fix. The object:
 
 {
@@ -89,5 +90,4 @@ IMPORTANT:
 - full_response must contain the complete, unedited provider response
 - Be honest in your quality assessment - "good" means genuinely useful, not just "it returned text"
 - For blind_spots, think about what a different expert perspective might critique
-- Your reply is machine-validated against the schema; text outside the structured output is not read
 ```

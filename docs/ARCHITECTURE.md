@@ -378,6 +378,9 @@ User -> ask.md (--local, or accepts the offer when no providers found)
         resolves that many from a diverse order (default 4, up to 8)
              |
         spawn one general-purpose subagent per role (background, blind to each other)
+        (Agent fan-out, not a Workflow: members return display-verbatim markdown
+         with nothing to enforce, and this is the no-keys path, so it keeps
+         the smaller tool requirement)
              |
     +--------+--------+--------+
     |        |        |        |

@@ -240,7 +240,7 @@ Skip Step 3 (synthesis) — the local-council-execution skill generates its own.
 
 **Invoke the `deep-execution` skill** and follow its instructions. The skill runs one
 Workflow of analyst agents (one per provider), displays their analyses, and generates
-the synthesis. The user's `--agents` (or their yes above) is the opt-in that workflow needs.
+the synthesis.
 
 Skip Step 3 (synthesis) - the deep-execution skill generates its own enhanced synthesis.
 

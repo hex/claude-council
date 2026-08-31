@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Council agent analysis",
-  "description": "Structured analysis a deep-execution analyst returns after querying its provider. Enforced as the analyst's structured-output contract by the workflow that runs it; scripts/validate-analysis.sh mirrors it executably for the test suite.",
+  "description": "Structured analysis a deep-execution analyst returns after querying its provider.",
   "type": "object",
   "required": [
     "quality",
