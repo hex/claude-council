@@ -244,7 +244,7 @@ FAKE
     [[ "$output" == *"SENTINEL_REACHED"* ]]
 }
 
-@test "display: pane_response_write is atomic — no temp file, complete content" {
+@test "display: pane_response_write is atomic - no temp file, complete content" {
     source "$LIB"
     mkdir -p "$PANE_DIR/responses"
     pane_response_write "$PANE_DIR" gemini "$(printf 'a\nb\nc')"

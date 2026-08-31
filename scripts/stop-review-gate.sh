@@ -16,9 +16,11 @@ EVENT=$(cat)
 # disabled - the gate fails open by design.
 CONFIG=".claude/council-stop-gate.json"
 [[ -f "$CONFIG" ]] || exit 0
+# tr strips the \r jq's Windows build appends to piped stdout: read keeps it
+# on the last field, and "1\r" is not a number max_iterations can compare to.
 ENABLED="" PROVIDER="" MAX_ITER=""
 IFS=$'\t' read -r ENABLED PROVIDER MAX_ITER < <(
-    jq -r '[(.enabled // false), (.provider // "codex"), (.max_iterations // 1)] | @tsv' "$CONFIG" 2>/dev/null
+    jq -r '[(.enabled // false), (.provider // "codex"), (.max_iterations // 1)] | @tsv' "$CONFIG" 2>/dev/null | tr -d '\r'
 ) || true
 [[ "$ENABLED" == "true" ]] || exit 0
 
@@ -33,7 +35,7 @@ esac
 # Guard 1: never re-gate a continuation already triggered by a stop hook
 SESSION_ID=""
 IFS=$'\t' read -r ACTIVE SESSION_ID < <(
-    echo "$EVENT" | jq -r '[(.stop_hook_active // false), (.session_id // "unknown")] | @tsv'
+    echo "$EVENT" | jq -r '[(.stop_hook_active // false), (.session_id // "unknown")] | @tsv' | tr -d '\r'
 ) || true
 [[ "$ACTIVE" == "true" ]] && exit 0
 [[ -n "$SESSION_ID" ]] || SESSION_ID=unknown

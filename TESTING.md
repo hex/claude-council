@@ -54,8 +54,8 @@ bats --verbose-run tests/cache.bats
 | `prompts.bats` | 11 tests | template loading, {{VAR}} interpolation, role-injection rendering |
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh as the executable mirror of the agent-analysis schema, kept in sync with it |
 | `check-status.bats` | 27 tests | two-tier CLI availability, remediation strings, HTTP probe branches (401/403/500/000), rejected-key classification (Gemini/xAI answer a bad key with 400, not 401) and its false-positive guards (a typo'd model is not a bad key), transfer-failure exit codes, curl writing nothing, unusable jq, Perplexity's minimum max_tokens, `-X POST` and `--max-time` on every probe, temp-file cleanup, keys off the curl argv, ms clock |
-| `jobs.bats` | 17 tests | job store, --async lifecycle, --result/--jobs/--cancel, self-ignoring cache dir |
-| `stop-gate.bats` | 10 tests | opt-in gating, loop guards, BLOCK verdict, fail-open |
+| `jobs.bats` | 18 tests | job store, --async lifecycle, --result/--jobs/--cancel (incl. the worker tree dying when jq emits CRLF), self-ignoring cache dir |
+| `stop-gate.bats` | 11 tests | opt-in gating, loop guards, BLOCK verdict, fail-open, config/event reads surviving CRLF from a Windows jq |
 | `theme.bats` | 24 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
 | `providers.bats` | 49 tests | API provider payloads (gemini, openai, grok, perplexity, kimi; gemini's multi-part text join, empty-200 diagnostics and the opt-in thinking cap), the default model each one queries and the reasoning-token cap its id earns (the `*-latest` aliases included), response parsing, endpoint routing, secret/payload hygiene, vision image injection (gemini inlineData, openai input_image/image_url, grok/perplexity image_url), model-unavailable exit-3 classification per provider (grok 403 region block, openai/gemini/perplexity 404/400) vs. ordinary errors (401/500) still exiting 1, bare-string `.error` extraction without crashing, the temperature Moonshot's models accept, and a gated real-endpoint acceptance check per provider |
 | `image.bats` | 9 tests | --image validation (missing/bad-type/oversize), vision routing, CLI→sibling routing (only when the sibling can see), non-vision text-only tag, base64 never in the cache |
@@ -66,7 +66,7 @@ bats --verbose-run tests/cache.bats
 | `model_fallback.bats` | 29 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs and the invariant that no provider degrades to the model it already prefers, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (default model or its fallback answers, end to end) |
 | `deadline.bats` | 4 tests | run_with_deadline: the caller's stdin reaches the command, the command's own status passes through, status 143 at the deadline, no watchdog outliving a fast call |
 
-**Total: 548 tests** across 25 `.bats` files.
+**Total: 550 tests** across 25 `.bats` files.
 
 ### Hermetic CLI Fixture
 

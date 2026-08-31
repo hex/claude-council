@@ -55,7 +55,10 @@ job_set() {
     local file tmp
     file=$(job_file "$id")
     tmp=$(mktemp)
-    jq --arg k "$key" --arg v "$value" '.[$k] = $v' "$file" > "$tmp" && mv "$tmp" "$file"
+    # The value reaches jq through the environment: MSYS rewrites argv that
+    # looks like a POSIX path (e.g. an outfile "/some/path.md") into a Windows
+    # path before a native jq sees it, so --arg would store the mangled form.
+    k="$key" v="$value" jq '.[env.k] = env.v' "$file" > "$tmp" && mv "$tmp" "$file"
 }
 
 job_status() {
