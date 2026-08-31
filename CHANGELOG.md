@@ -4,6 +4,65 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.8.10
+
+### Features
+
+- **The test suite runs on Windows.** CI now runs all 556 bats tests on
+  `windows-latest` under Git Bash, alongside Ubuntu and macOS. TESTING.md
+  gains a Windows section: the ~22-minute budget, the CRLF-emitting jq
+  helper that reproduces the Windows build's stdout locally, MSYS's argv and
+  environment path rewriting, and why `@test` names stay ASCII.
+
+### Fixes
+
+- **A hung CLI provider is bounded on Windows.** `perl -e 'alarm shift; exec
+  @ARGV'` never ended the CLI there: perl emulates `exec` by spawning and
+  waiting, so the alarm killed perl and left codex/agy/grok/kimi running until
+  the CLI gave up on its own. `scripts/lib/deadline.sh` `run_with_deadline`
+  replaces it for the four CLI providers and the Rich probe. The watchdog
+  owns the verdict: a CLI that handles SIGTERM by exiting 0 with nothing on
+  stdout (the codex wrapper does) or by exiting 1 with `context canceled`
+  (agy does) is still reported as a timeout, not as an empty answer that
+  skips the API-sibling fallback; one that ignores the signal is killed
+  after five seconds, children first, so nothing it spawned holds the
+  answer pipe open. The watchdog is ended and reaped the moment the command
+  returns, so no sleeper outlives a fast call. A deadline of `0` means none;
+  a non-integer is rejected. The timeout status is 143 (was 142). Not
+  verified: whether ending a native CLI from Git Bash yields 143 on Windows
+  (the suite's fake CLIs are shell scripts), and Git Bash has no `pgrep`,
+  so only the CLI's own process is signalled there.
+- **`--debate` keeps round 2 on Windows.** The rebuttal envelope reached jq on
+  argv, past MSYS's ~32 KB ARG_MAX; jq failed and every debate lost its second
+  round. It goes through stdin now, like the round-1 blobs.
+- **The stop gate and `--cancel` read their own records on Windows.** jq's
+  Windows build CRLF-terminates piped stdout, and a `read < <(jq ... @tsv)`
+  keeps the `\r`: the gate read `max_iterations` as `1\r` (a bash arithmetic
+  error, then invalid JSON for the hook) and `run_cancel` read the pid as
+  `1234\r`, ending the worker but not its query tree. Both strip it.
+- **Background job records keep path values intact on Windows.** MSYS
+  rewrites POSIX-looking paths in argv and in environment values before a
+  native jq sees them, so an outfile of `/some/path.md` was stored as a
+  Windows path. `job_set` hands its value to jq on stdin.
+
+### Docs
+
+- ARCHITECTURE names the Windows runner and lists `deadline.sh`; README's
+  requirements name the supported platforms.
+
+### Other
+
+- 556 tests (was 543): `deadline.bats` pins `run_with_deadline` (stdin
+  passthrough, own status, 143 at the deadline whatever the command did with
+  the signal, SIGKILL escalation, no lingering watchdog or orphaned child,
+  nothing on stderr, `0` and non-integer deadlines);
+  CRLF-jq tests for the stop gate, `--cancel` and format-output. The
+  pane-watcher tests
+  run under `run_with_deadline` too, and eight test names are ASCII so bats
+  on MSYS can find them.
+
+**Full Changelog**: https://github.com/hex/claude-council/compare/v2026.8.9...v2026.8.10
+
 ## 2026.8.9
 
 ### Features
