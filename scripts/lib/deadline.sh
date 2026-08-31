@@ -3,7 +3,8 @@
 # ABOUTME: Portable to macOS and Git Bash; exit 143 means the deadline ended it
 
 # Run the command after the seconds argument, ending it once the deadline
-# passes. Stdout and stderr pass through untouched; the status is the command's
+# passes. Stdin, stdout and stderr pass through untouched (a background job
+# would otherwise read /dev/null on bash 3.2); the status is the command's
 # own, or 143 (128 + SIGTERM) when the watchdog killed it. GNU `timeout` is
 # absent on stock macOS and on Git Bash, and a perl alarm never reaches the
 # child on Windows, where perl emulates exec by spawning and waiting. The
@@ -16,7 +17,7 @@ run_with_deadline() {
     local secs="$1"
     shift
     local pid rc=0
-    "$@" &
+    "$@" <&0 &
     pid=$!
     (
         t="$secs"

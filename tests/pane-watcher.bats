@@ -7,10 +7,12 @@ bats_require_minimum_version 1.5.0
 
 LIB="${LIB_DIR}/display.sh"
 WATCHER="${LIB_DIR}/pane-watcher.sh"
+DEADLINE="${LIB_DIR}/deadline.sh"
 
 # Build a watch dir the watcher consumes in one pass: a perl render.sh plus
 # .done pre-created, so the poll loop breaks after its first iteration.
 setup() {
+    source "$DEADLINE"
     mkdir -p "$TEST_TMP_DIR"
     W=$(mktemp -d "${TEST_TMP_DIR}/watch.XXXXXX")
     mkdir -p "$W/responses"
@@ -70,12 +72,17 @@ await_renders() {
     done
 }
 
-# The perl alarm turns a regression in the .done exit path into a SIGALRM
-# failure (status 142) instead of a hung bats run.
+# The watcher under run_with_deadline, so a regression in the .done exit path
+# fails with status 143 instead of hanging the bats run. A shell function, not
+# a binary, so callers set COUNCIL_AUTO_CLOSE as a prefix assignment on `run`
+# rather than through env. (A perl alarm never reaches the watcher on Windows.)
+bounded_watcher() {
+    PATH="$FAKE_BIN:$PATH" COUNCIL_NO_TTY_QUERY=1 \
+        run_with_deadline "$1" bash "$WATCHER" "$W" "$LIB"
+}
+
 run_watcher() {
-    run --separate-stderr env COUNCIL_AUTO_CLOSE=1 COUNCIL_NO_TTY_QUERY=1 \
-        PATH="$FAKE_BIN:$PATH" \
-        perl -e 'alarm shift; exec @ARGV' 10 bash "$WATCHER" "$W" "$LIB"
+    COUNCIL_AUTO_CLOSE=1 run --separate-stderr bounded_watcher 10
 }
 
 # Everything the watcher printed after its last screen+scrollback clear, i.e.
@@ -242,9 +249,7 @@ blank_lines_before() {
     # would sit on the old width forever. bash 3.2 rejects a fractional read
     # timeout, so the prompt polls once a second and the settle check needs two
     # of those ticks.
-    run --separate-stderr env COUNCIL_AUTO_CLOSE=0 COUNCIL_NO_TTY_QUERY=1 \
-        PATH="$FAKE_BIN:$PATH" \
-        perl -e 'alarm shift; exec @ARGV' 12 bash "$WATCHER" "$W" "$LIB" \
+    COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 12 \
         < <(await_renders 2; printf '\033')
     [ "$status" -eq 0 ]
     [ "$(count_matches GEMINI "$output")" -eq 2 ]
@@ -254,18 +259,14 @@ blank_lines_before() {
     printf 'Hello\n' > "$W/responses/gemini.md"
     # stdin stays open well past the ctrl-d, so only reading the \004 itself
     # can end the wait.
-    run --separate-stderr env COUNCIL_AUTO_CLOSE=0 COUNCIL_NO_TTY_QUERY=1 \
-        PATH="$FAKE_BIN:$PATH" \
-        perl -e 'alarm shift; exec @ARGV' 3 bash "$WATCHER" "$W" "$LIB" \
+    COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 3 \
         < <(printf '\004'; sleep 6)
     [ "$status" -eq 0 ]
 }
 
 @test "watcher: closes when the pane's stdin is gone rather than polling forever" {
     printf 'Hello\n' > "$W/responses/gemini.md"
-    run --separate-stderr env COUNCIL_AUTO_CLOSE=0 COUNCIL_NO_TTY_QUERY=1 \
-        PATH="$FAKE_BIN:$PATH" \
-        perl -e 'alarm shift; exec @ARGV' 8 bash "$WATCHER" "$W" "$LIB" \
+    COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 8 \
         < /dev/null
     [ "$status" -eq 0 ]
 }
@@ -303,9 +304,7 @@ until_watcher_exits() {
     printf 'kimi-cli\terror\t\t\n' >> "$W/status"
     write_offer 5 kimi-cli
     producer_awaits_retry 8 &
-    run --separate-stderr env COUNCIL_AUTO_CLOSE=1 COUNCIL_NO_TTY_QUERY=1 \
-        PATH="$FAKE_BIN:$PATH" \
-        perl -e 'alarm shift; exec @ARGV' 12 bash "$WATCHER" "$W" "$LIB" \
+    COUNCIL_AUTO_CLOSE=1 run --separate-stderr bounded_watcher 12 \
         < <(sleep 1; printf 'r'; until_watcher_exits)
     [ "$status" -eq 0 ]
     [ -z "$stderr" ]
@@ -319,9 +318,7 @@ until_watcher_exits() {
 @test "watcher: esc at the retry offer closes the pane" {
     rm -f "$W/.done"
     write_offer 5 kimi-cli
-    run --separate-stderr env COUNCIL_AUTO_CLOSE=1 COUNCIL_NO_TTY_QUERY=1 \
-        PATH="$FAKE_BIN:$PATH" \
-        perl -e 'alarm shift; exec @ARGV' 8 bash "$WATCHER" "$W" "$LIB" \
+    COUNCIL_AUTO_CLOSE=1 run --separate-stderr bounded_watcher 8 \
         < <(sleep 1; printf '\033'; until_watcher_exits)
     # .done never arrives, so only the close can end the wait — and the watch
     # dir going away is what tells the producer to carry on without a retry.
@@ -336,9 +333,7 @@ until_watcher_exits() {
     # The producer's one-second deadline passes unanswered: it withdraws the
     # offer and finishes.
     producer_awaits_retry 1 &
-    run --separate-stderr env COUNCIL_AUTO_CLOSE=0 COUNCIL_NO_TTY_QUERY=1 \
-        PATH="$FAKE_BIN:$PATH" \
-        perl -e 'alarm shift; exec @ARGV' 12 bash "$WATCHER" "$W" "$LIB" \
+    COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 12 \
         < <(sleep 4; printf '\033'; until_watcher_exits)
     [ "$status" -eq 0 ]
     [[ "$output" == *"[r] retry failed (kimi-cli)"*"[esc/ctrl-d] close"* ]]
@@ -351,9 +346,7 @@ until_watcher_exits() {
     fake_stty 40
     write_offer 5 gemini openai grok perplexity
     producer_awaits_retry 1 &
-    run --separate-stderr env COUNCIL_AUTO_CLOSE=1 COUNCIL_NO_TTY_QUERY=1 \
-        PATH="$FAKE_BIN:$PATH" \
-        perl -e 'alarm shift; exec @ARGV' 8 bash "$WATCHER" "$W" "$LIB"
+    COUNCIL_AUTO_CLOSE=1 run --separate-stderr bounded_watcher 8
     [ "$status" -eq 0 ]
     # Drawn between DECAWM off/on like the waiting line, so a prompt wider
     # than the pane clips instead of leaving a stale wrapped row every tick.
@@ -376,9 +369,7 @@ until_watcher_exits() {
         printf 'kimi-cli\terror\t\t\n' >> "$W/status"
         touch "$W/.done"
     ) &
-    run --separate-stderr env COUNCIL_AUTO_CLOSE=0 COUNCIL_NO_TTY_QUERY=1 \
-        PATH="$FAKE_BIN:$PATH" \
-        perl -e 'alarm shift; exec @ARGV' 16 bash "$WATCHER" "$W" "$LIB" \
+    COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 16 \
         < <(sleep 1; printf 'r'; sleep 3; echo 100 > "$COLS_FILE"; sleep 4; printf '\033'; until_watcher_exits)
     [ "$status" -eq 0 ]
     [[ "$output" == *$'\033[3J'* ]]

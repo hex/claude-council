@@ -64,8 +64,9 @@ bats --verbose-run tests/cache.bats
 | `release.bats` | 5 tests | release.sh version bump/commit/tag, staged-index guard, green-suite gate |
 | `retry.bats` | 11 tests | curl_with_retry backoff + status handling, curl_secret_config off-argv config file, ensure_error_body http_status stamping (object and string `.error`, Gemini's string `.error.status` left alone, synthesised message, 200 passthrough) |
 | `model_fallback.bats` | 29 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs and the invariant that no provider degrades to the model it already prefers, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (default model or its fallback answers, end to end) |
+| `deadline.bats` | 4 tests | run_with_deadline: the caller's stdin reaches the command, the command's own status passes through, status 143 at the deadline, no watchdog outliving a fast call |
 
-**Total: 544 tests** across 24 `.bats` files.
+**Total: 548 tests** across 25 `.bats` files.
 
 ### Hermetic CLI Fixture
 
