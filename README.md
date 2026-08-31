@@ -559,6 +559,7 @@ export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + searc
 export KIMI_MODEL="kimi-k3"                         # default
 export OLLAMA_MODEL="llama3.2"                      # default: whichever model `ollama list` shows first
 export OLLAMA_HOST="http://localhost:11434"         # default
+export GEMINI_THINKING_BUDGET=8192                  # optional: cap Gemini's internal reasoning tokens (unset: the model decides)
 ```
 
 Gemini and Grok default to their vendor's rolling alias, so the council follows

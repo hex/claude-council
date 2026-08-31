@@ -64,29 +64,38 @@ bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'gemini-3*' '*thinking*' 'gemi
 
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
-# Cap on internal "thinking" tokens (override via GEMINI_THINKING_BUDGET). A
-# reasoning model can otherwise burn the entire maxOutputTokens allowance on
-# invisible chain-of-thought and return an empty answer with no error field —
-# capping thinking guarantees room is left for the actual response, and tends
-# to cut the tail latency that causes request timeouts too.
-THINKING_BUDGET="${GEMINI_THINKING_BUDGET:-8192}"
+# Optional cap on the model's internal "thinking" tokens. Unset, the model
+# decides how much to reason (and bump_for_reasoning above keeps the answer
+# budget large). Set, it guarantees room for the visible answer when a reasoning
+# model would otherwise spend the whole maxOutputTokens allowance on invisible
+# chain-of-thought and return an empty 200 — and it cuts the tail latency that
+# causes request timeouts. A deliberate user setting, like COUNCIL_MAX_TOKENS,
+# so no default is imposed. Validated here: an unbound or malformed value must
+# fail loudly, not vanish into a jq error (see tests/test_helper.bash on 3.2).
+THINKING_BUDGET="${GEMINI_THINKING_BUDGET:-}"
+if [[ -n "$THINKING_BUDGET" && ! "$THINKING_BUDGET" =~ ^[0-9]+$ ]]; then
+    echo "Error: GEMINI_THINKING_BUDGET must be a whole number of tokens, got '${THINKING_BUDGET}'" >&2
+    exit 1
+fi
 
 # Build request payload
 if [[ -n "$IMAGE_FILE" ]]; then
     PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" \
-        --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" --argjson thinking "$THINKING_BUDGET" '{
+        --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" --argjson thinking "${THINKING_BUDGET:-null}" '{
         system_instruction: { parts: [{ text: $system }] },
         contents: [{ parts: [
             { text: $prompt },
             { inlineData: { mimeType: $mime, data: $b64 } }
         ]}],
-        generationConfig: { temperature: 0.7, maxOutputTokens: $tokens, thinkingConfig: { thinkingBudget: $thinking } }
+        generationConfig: ({ temperature: 0.7, maxOutputTokens: $tokens }
+            + (if $thinking == null then {} else { thinkingConfig: { thinkingBudget: $thinking } } end))
     }')
 else
-    PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" --argjson thinking "$THINKING_BUDGET" '{
+    PAYLOAD=$(jq -n --arg prompt "$PROMPT" --argjson tokens "$TOKENS" --arg system "$SYSTEM" --argjson thinking "${THINKING_BUDGET:-null}" '{
         system_instruction: { parts: [{ text: $system }] },
         contents: [{ parts: [{ text: $prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: $tokens, thinkingConfig: { thinkingBudget: $thinking } }
+        generationConfig: ({ temperature: 0.7, maxOutputTokens: $tokens }
+            + (if $thinking == null then {} else { thinkingConfig: { thinkingBudget: $thinking } } end))
     }')
 fi
 

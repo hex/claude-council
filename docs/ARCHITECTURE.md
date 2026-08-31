@@ -531,6 +531,7 @@ claude-council/
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GEMINI_API_KEY` | - | Google AI Studio key |
+| `GEMINI_THINKING_BUDGET` | - | Cap on Gemini's internal reasoning tokens (`thinkingConfig.thinkingBudget`); unset, the model decides. Keeps room for the visible answer when reasoning would consume the whole `maxOutputTokens` and return an empty 200 |
 | `OPENAI_API_KEY` | - | OpenAI API key |
 | `XAI_API_KEY` | - | xAI API key (preferred) |
 | `GROK_API_KEY` | - | xAI API key (legacy alias; `XAI_API_KEY` wins if both set) |

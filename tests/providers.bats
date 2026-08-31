@@ -74,6 +74,46 @@ run_provider() {
     [ "$output" = "GEM_OK" ]
 }
 
+@test "gemini: joins every text part and skips thought parts" {
+    # A thinking model can put a thought-signature part before the answer, and
+    # split the answer across parts; parts[0].text alone would drop the answer.
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"thought":true,"thoughtSignature":"sig"},{"text":"GEM_"},{"text":"OK"}]}}]}'
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "GEM_OK" ]
+}
+
+@test "gemini: an empty 200 names the finish reason and the thinking spend" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[]},"finishReason":"MAX_TOKENS"}],"usageMetadata":{"thoughtsTokenCount":8000,"totalTokenCount":8192}}'
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"Error from Gemini: empty response (finishReason: MAX_TOKENS, thoughts tokens: 8000/8192)"* ]]
+}
+
+@test "gemini: sends no thinking cap unless GEMINI_THINKING_BUDGET is set" {
+    # The model's own thinking policy is the default; a cap is a deliberate
+    # user choice, like COUNCIL_MAX_TOKENS.
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}'
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [[ "$(cat "$DATA_FILE")" != *thinkingConfig* ]]
+}
+
+@test "gemini: GEMINI_THINKING_BUDGET caps thinking in the request" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}'
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k GEMINI_THINKING_BUDGET=4096
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.generationConfig.thinkingConfig.thinkingBudget' "$DATA_FILE")" = "4096" ]
+}
+
+@test "gemini: a non-numeric GEMINI_THINKING_BUDGET is refused before the request" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}'
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k GEMINI_THINKING_BUDGET=lots
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"GEMINI_THINKING_BUDGET"* ]]
+    [ ! -s "$DATA_FILE" ]
+}
+
 @test "gemini: surfaces .error.message on a failure body" {
     FAKE_BODY='{"error":{"message":"quota exceeded"}}' FAKE_HTTP=429
     run_provider gemini.sh "hi" GEMINI_API_KEY=k
