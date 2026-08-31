@@ -275,11 +275,13 @@ Lifecycle: queued -> running -> completed | failed | cancelled
 ### Output Contract (`schemas/`, `scripts/validate-analysis.sh`)
 
 ```
-schemas/agent-analysis.schema.json documents the deep-execution
-agent reply shape; validate-analysis.sh enforces it with jq,
-listing every violation. Invalid replies render raw under a
-visible marker - model output is never silently dropped
-(same rule as format-output.sh's render_response).
+schemas/agent-analysis.schema.json is the deep-execution analyst's
+reply contract. The workflow that runs the analysts enforces it as
+their structured output: a reply that does not match is sent back
+to the analyst, and one that never arrives is absent from the
+result, never silently dropped. validate-analysis.sh mirrors the
+schema executably with jq, listing every violation; the bats suite
+keeps the two in sync.
 ```
 
 ### Stop Gate (`hooks/hooks.json`, `scripts/stop-review-gate.sh`)
@@ -441,7 +443,7 @@ claude-council/
 │   ├── format-output.sh         # Terminal formatter
 │   ├── check-status.sh          # Provider health check
 │   ├── stop-review-gate.sh      # Opt-in Stop hook reviewer
-│   ├── validate-analysis.sh     # Enforces the agent-analysis schema
+│   ├── validate-analysis.sh     # Executable mirror of the agent-analysis schema (test suite)
 │   ├── release.sh               # Version bump and tagging
 │   ├── dev/
 │   │   └── demo-pane.sh         # Visual test harness for the streaming pane
