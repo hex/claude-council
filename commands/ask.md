@@ -222,6 +222,8 @@ If the user selects yes, proceed with agent mode.
 
 **Skip NL detection if:**
 - `--agents` was explicitly passed (already enabled)
+- The Workflow tool is not available in this session (agent mode runs on it, so
+  the offer would only lead to "use standard mode instead")
 - Only 1 provider is available (agents add less value with single provider)
 - `--quiet` mode is on (user wants fast results)
 

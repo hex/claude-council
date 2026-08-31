@@ -18,8 +18,18 @@ file — `--prompt-file` keeps a large question (file context, a long brief) off
 the process argv, where the OS rejects it as "argument list too long":
 
 ```bash
-COUNCIL_TIMEOUT=500 bash {PLUGIN_ROOT}/scripts/providers/{PROVIDER}.sh --prompt-file {QUESTION_FILE}
+COUNCIL_TIMEOUT=500 bash "{PLUGIN_ROOT}/scripts/providers/{PROVIDER}.sh" --prompt-file "{QUESTION_FILE}"
 ```
+
+If that command exits non-zero with a status other than 3, the provider did
+not answer (a rejected key, a rate limit, a timeout, a CLI that is signed out).
+Carry the failure through to Round 3 as an analysis, so the orchestrator sees
+why: `quality` "poor", `confidence` "low", `retried` false, `full_response` the
+error text exactly as printed, one `key_recommendations` entry saying that
+{PROVIDER} did not answer and what the error says to do about it, and
+`unique_perspective` and `blind_spots` each stating that no perspective exists
+because the provider returned an error. Do not invent recommendations from an
+error message.
 
 If that command exits with status 3, the requested model is unavailable for
 this key or region. Do not report this as an error. Instead:
@@ -33,9 +43,10 @@ this key or region. Do not report this as an error. Instead:
    the provider's name upper-cased with `_MODEL` appended. For example, for
    provider `grok`:
    ```bash
-   GROK_MODEL=grok-4.20-reasoning COUNCIL_TIMEOUT=500 bash {PLUGIN_ROOT}/scripts/providers/grok.sh --prompt-file {QUESTION_FILE}
+   GROK_MODEL=grok-4.20-reasoning COUNCIL_TIMEOUT=500 bash "{PLUGIN_ROOT}/scripts/providers/grok.sh" --prompt-file "{QUESTION_FILE}"
    ```
-3. If the re-run also fails, report the original error.
+3. If the re-run also fails, carry the original error through to Round 3 as
+   described above.
 4. In `unique_perspective` (Round 3), open with one sentence naming both
    models — the one that was unavailable and the one that answered — so the
    displacement reaches the synthesis. There is no schema field for this, so
@@ -55,14 +66,17 @@ Evaluate the response:
 
 If the response is **off-topic, vague, or missing key aspects**, formulate a
 targeted follow-up that addresses the gaps, write it to its own file and run the
-script again the same way. The quoted heredoc marker means the shell does NOT
-interpret quotes, backticks or `$()` in the follow-up; paste it verbatim:
+script again the same way. The file carries your provider's name: analysts
+without roles share one question file, and a shared follow-up path would let
+another analyst's follow-up reach your provider. The quoted heredoc marker means
+the shell does NOT interpret quotes, backticks or `$()` in the follow-up; paste
+it verbatim:
 
 ```bash
-cat > {QUESTION_FILE}.followup <<'COUNCIL_Q_EOF'
+cat > "{QUESTION_FILE}.{PROVIDER}.followup" <<'COUNCIL_Q_EOF'
 <your follow-up, verbatim>
 COUNCIL_Q_EOF
-COUNCIL_TIMEOUT=500 bash {PLUGIN_ROOT}/scripts/providers/{PROVIDER}.sh --prompt-file {QUESTION_FILE}.followup
+COUNCIL_TIMEOUT=500 bash "{PLUGIN_ROOT}/scripts/providers/{PROVIDER}.sh" --prompt-file "{QUESTION_FILE}.{PROVIDER}.followup"
 ```
 
 If the response is good, skip the follow-up.

@@ -26,11 +26,17 @@ ROLES="<the --roles value, or empty>"
 RUN=$(date +%s)                                  # names this run's files; Step 6 reuses it
 Q="$PWD/.claude/council-cache/.agents-$RUN"
 mkdir -p "$PWD/.claude/council-cache"
+# Self-ignoring, as cache.sh and run-council.sh keep it: these files carry the
+# question and any --file contents, and must never land in a commit.
+[[ -f "$PWD/.claude/council-cache/.gitignore" ]] || printf '*\n' > "$PWD/.claude/council-cache/.gitignore"
 cat > "$Q.txt" <<'COUNCIL_Q_EOF'
 <the question, verbatim>
 COUNCIL_Q_EOF
 # --file / auto-context: append the context to the question file here, e.g.
 #   { printf '\n\nHere is the content of %s:\n\n```\n' "<path>"; cat "<path>"; printf '```\n'; } >> "$Q.txt"
+# An unknown role is refused, as the standard flow refuses it; assigning it
+# would hand that provider the bare question under a role heading.
+[[ -z "$ROLES" ]] || validate_roles "$ROLES" || exit 1
 ASSIGNMENTS=""
 [[ -n "$ROLES" ]] && ASSIGNMENTS=$(assign_roles_to_providers "$ROLES" "${PROVIDERS[@]}")
 echo "run $RUN"
@@ -90,7 +96,8 @@ const results = await parallel(args.providers.map(p => () =>
 const failed = args.providers.filter((_, i) => !results[i]).map(p => p.name)
 if (failed.length) log(`no analysis from: ${failed.join(', ')}`)
 return {
-  analyses: results.map((a, i) => a && { provider: args.providers[i].name, ...a }).filter(Boolean),
+  // The label goes last so an analyst that emits its own "provider" key cannot rename itself.
+  analyses: results.map((a, i) => a && { ...a, provider: args.providers[i].name }).filter(Boolean),
   failed,
 }
 ```
@@ -111,8 +118,9 @@ path of `${CLAUDE_PLUGIN_ROOT}`, `questionFile` the path Step 1 printed):
 The workflow returns `{ analyses, failed }`. Every object in `analyses`
 satisfies the schema; `failed` names the providers whose analyst died or was
 skipped. A provider that returned an error is not in `failed`: its analyst
-reports it as a `quality: poor` analysis whose `full_response` is the error
-text, which the synthesis weights accordingly.
+reports it as a `quality: poor`, `confidence: low` analysis whose
+`full_response` is the error text (the template says so). Step 5 treats both
+as the same thing — a provider that did not answer.
 
 ## Step 3: Read the Result
 
@@ -159,7 +167,10 @@ Provider emojis (ALWAYS use emoji + space):
 
 With pre-analyzed responses, generate a richer synthesis than the standard mode.
 The calibration rules in `${CLAUDE_PLUGIN_ROOT}/prompts/synthesis.md` apply here
-too; the providers in `failed` are its "returned an error" case.
+too. Its "returned an error" case covers the providers in `failed` AND every
+`quality: poor` analysis whose `full_response` is a provider error: name them
+under failures and keep them out of consensus, whatever weight their
+confidence field would give them.
 
 ### Confidence-Weighted Consensus
 Weight agreement by each provider's confidence level. High-confidence agreement
@@ -186,7 +197,12 @@ confidence level.
 
 Save the complete output (all provider analyses + synthesis) to
 `.claude/council-cache/council-agents-{RUN}.md`, where RUN is the run id
-Step 1 printed (the directory exists since Step 1).
+Step 1 printed (the directory exists since Step 1). Then remove the run's
+question files, which nothing prunes:
+
+```bash
+rm -f .claude/council-cache/.agents-{RUN}*
+```
 
 Tell the user:
 > ---
@@ -197,5 +213,5 @@ Tell the user:
 - If a provider's analyst fails (it is listed in `failed`), say so and continue with the others
 - If ALL analysts fail, report clearly and suggest falling back to standard mode
 - If only one provider was selected and its analyst fails, suggest retrying without --agents
-- A killed or interrupted workflow can be resumed: relaunch with the same script and args plus
-  `resumeFromRunId` from the tool result, and the finished analysts return from cache
+- A killed or interrupted workflow can be resumed: relaunch with the same args and the
+  `scriptPath` and `resumeFromRunId` from the tool result; the finished analysts return from cache

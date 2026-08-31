@@ -340,7 +340,7 @@ User -> ask.md detects --agents flag (or NL trigger)
  Analyst: Analyst: Analyst: Analyst:  ...
  Gemini   OpenAI   Grok     Perplexity
     |        |        |        |
-    | Each agent independently:
+    | Each analyst independently:
     | 1. Runs provider curl script
     | 2. Evaluates response quality
     | 3. Retries with reformulated prompt if poor
@@ -439,7 +439,7 @@ claude-council/
 │   ├── stop-review-gate.md      # Stop-gate reviewer contract
 │   └── kimi-cli-agent.md        # No-tools agent definition passed to the kimi CLI
 ├── schemas/
-│   └── agent-analysis.schema.json  # Deep-execution agent reply contract
+│   └── agent-analysis.schema.json  # Deep-execution analyst reply contract
 ├── scripts/
 │   ├── query-council.sh         # Main orchestrator
 │   ├── run-council.sh           # Query + format pipeline, sync and --async
