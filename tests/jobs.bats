@@ -180,19 +180,23 @@ wait_for_job() {
     export COUNCIL_FAKE_SLEEP=30
     local id pid children waited=0
     id=$(bash "$RUN_COUNCIL" --async --providers=codex -- "test question" | head -1)
-    await_any_file "${COUNCIL_JOBS_DIR}/${id}.json"
+    # The fake codex records its call before it starts sleeping, so the file
+    # means the whole worker -> query -> CLI tree is up.
+    await_any_file "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl"
     pid=$(jq -r '.pid // empty' "${COUNCIL_JOBS_DIR}/${id}.json")
     [[ -n "$pid" ]]
-    # The query tree under the worker takes a moment to spawn.
-    while [[ -z "${children:=$(pgrep -P "$pid" || true)}" ]]; do
-        sleep 0.2
-        waited=$((waited + 1))
-        [[ $waited -lt 40 ]]
-    done
+    children=$(pgrep -P "$pid")
+    [[ -n "$children" ]]
     PATH="$CRLF_BIN:$PATH" run bash "$RUN_COUNCIL" --cancel="$id"
     [ "$status" -eq 0 ]
-    sleep 1
-    ! kill -0 "$pid" 2>/dev/null
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 0.1
+        waited=$((waited + 1))
+        if [[ $waited -gt 50 ]]; then
+            echo "worker $pid still alive after cancel" >&2
+            return 1
+        fi
+    done
     local child
     for child in $children; do
         ! kill -0 "$child" 2>/dev/null

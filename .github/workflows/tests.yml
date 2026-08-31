@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          choco install jq -y --no-progress
+          command -v jq >/dev/null || choco install jq -y --no-progress
           npm install -g bats
 
       # macOS runners ship bash 3.2 as /bin/bash — the plugin's compat target.

@@ -75,7 +75,7 @@ await_renders() {
 # The watcher under run_with_deadline, so a regression in the .done exit path
 # fails with status 143 instead of hanging the bats run. A shell function, not
 # a binary, so callers set COUNCIL_AUTO_CLOSE as a prefix assignment on `run`
-# rather than through env. (A perl alarm never reaches the watcher on Windows.)
+# rather than through env.
 bounded_watcher() {
     PATH="$FAKE_BIN:$PATH" COUNCIL_NO_TTY_QUERY=1 \
         run_with_deadline "$1" bash "$WATCHER" "$W" "$LIB"

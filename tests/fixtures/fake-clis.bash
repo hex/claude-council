@@ -10,7 +10,7 @@
 #   auth-failure   - login-required message on stderr, exit 1
 #   slow           - sleep COUNCIL_FAKE_SLEEP (default 5s) then respond
 #   hang           - exec sleep COUNCIL_FAKE_SLEEP (default 300s); replaces the
-#                    process so an inherited SIGALRM (timeout) kills it cleanly
+#                    process so the deadline watchdog's SIGTERM kills it cleanly
 #   error          - generic failure on stderr, exit 1
 #   dirty-stream   - kimi only: an unstructured notice line ahead of the JSONL,
 #                    which a real CLI is free to print (upgrade notices etc.)

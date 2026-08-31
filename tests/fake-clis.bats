@@ -111,10 +111,11 @@ teardown() {
     end=$SECONDS
     [ "$status" -eq 1 ]
     [[ "$stderr" == *"timed out"* ]]
-    # And nothing else: bash reports a signal-killed foreground child on its
-    # own stderr, which the council would store as the provider's error text.
-    [[ "$stderr" != *"Alarm clock"* ]]
-    [[ "$stderr" != *"exec @ARGV"* ]]
+    # And nothing else: bash reports a signal-killed job on its own stderr
+    # when it is waited for, which the council would store as the provider's
+    # error text.
+    [[ "$stderr" != *"Terminated"* ]]
+    [[ "$stderr" != *'0<&0'* ]]
     [ $((end - start)) -lt 10 ]
 }
 
@@ -189,10 +190,11 @@ teardown() {
     end=$SECONDS
     [ "$status" -eq 1 ]
     [[ "$stderr" == *"timed out"* ]]
-    # And nothing else: bash reports a signal-killed foreground child on its
-    # own stderr, which the council would store as the provider's error text.
-    [[ "$stderr" != *"Alarm clock"* ]]
-    [[ "$stderr" != *"exec @ARGV"* ]]
+    # And nothing else: bash reports a signal-killed job on its own stderr
+    # when it is waited for, which the council would store as the provider's
+    # error text.
+    [[ "$stderr" != *"Terminated"* ]]
+    [[ "$stderr" != *'0<&0'* ]]
     [ $((end - start)) -lt 10 ]
 }
 
@@ -270,10 +272,11 @@ teardown() {
     end=$SECONDS
     [ "$status" -eq 1 ]
     [[ "$stderr" == *"timed out"* ]]
-    # And nothing else: bash reports a signal-killed foreground child on its
-    # own stderr, which the council would store as the provider's error text.
-    [[ "$stderr" != *"Alarm clock"* ]]
-    [[ "$stderr" != *"exec @ARGV"* ]]
+    # And nothing else: bash reports a signal-killed job on its own stderr
+    # when it is waited for, which the council would store as the provider's
+    # error text.
+    [[ "$stderr" != *"Terminated"* ]]
+    [[ "$stderr" != *'0<&0'* ]]
     [ $((end - start)) -lt 10 ]
 }
 
@@ -407,12 +410,12 @@ teardown() {
     end=$SECONDS
     [ "$status" -eq 1 ]
     [[ "$stderr" == *"timed out"* ]]
-    # Only that. Bash reports a foreground child killed by a signal on its own
-    # stderr, and the council captures provider stderr verbatim as the error
-    # text, so the report would reach the pane carrying the absolute script
-    # path, a PID and the whole internal command line.
-    [[ "$stderr" != *"Alarm clock"* ]]
-    [[ "$stderr" != *"exec @ARGV"* ]]
+    # Only that. Bash reports a job killed by a signal on its own stderr when
+    # it is waited for, and the council captures provider stderr verbatim as
+    # the error text, so the report would reach the pane carrying the absolute
+    # script path, a PID and the whole internal command line.
+    [[ "$stderr" != *"Terminated"* ]]
+    [[ "$stderr" != *'0<&0'* ]]
     [ $((end - start)) -lt 10 ]
 }
 
