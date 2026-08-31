@@ -374,6 +374,12 @@ until_watcher_exits() {
     [ "$status" -eq 0 ]
     [[ "$output" == *$'\033[3J'* ]]
     replay=$(after_last_redraw "$output")
+    # Shown on failure: how many redraws happened and what the last one
+    # holds, so a slow runner's ordering is visible rather than inferred.
+    echo "redraws: $(count_matches $'\033\[3J' "$output")"
+    echo "second-failure matches in full output: $(count_matches 'second failure' "$output")"
+    echo "replay (plain text):"
+    plain_text "$replay"
     [ "$(count_matches 'first failure' "$replay")" -eq 1 ]
     [ "$(count_matches 'second failure' "$replay")" -eq 1 ]
     [[ "$replay" == *"first failure"*"second failure"* ]]

@@ -74,6 +74,9 @@ wait_for_job() {
     job_write myjob queued
     job_set myjob outfile "/some/path.md"
     run jq -r '.outfile' "${COUNCIL_JOBS_DIR}/myjob.json"
+    # Shown on failure: what was stored, so a platform rewrite of the value
+    # is visible rather than inferred.
+    echo "stored outfile: $output"
     [ "$output" == "/some/path.md" ]
 }
 
