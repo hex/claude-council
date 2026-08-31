@@ -4,6 +4,45 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.8.9
+
+### Features
+
+- **`--agents` mode runs as one Workflow of analyst agents.** One analyst per
+  provider, in parallel, each returning its analysis through schema-enforced
+  structured output, so no reply passes through the orchestrator as text to be
+  pasted and validated. An interrupted run resumes with the finished analysts
+  served from cache. The question is written once to a run-scoped file and sent
+  with `--prompt-file`; role variants are built in shell. Needs a Claude Code
+  with the Workflow tool; a session without it is offered standard mode.
+- **Gemini's reasoning can be capped.** `GEMINI_THINKING_BUDGET` sets
+  `thinkingConfig.thinkingBudget`, keeping room for the visible answer when a
+  thinking model would otherwise spend the whole `maxOutputTokens` and return an
+  empty 200. Unset, the model decides. From #20 by @yp329, made opt-in here.
+
+### Fixes
+
+- **Gemini no longer renders as `null` on Windows.** jq's Windows build
+  CRLF-translates piped output, so the first provider key carried a stray `\r`
+  and `.round1["gemini\r"]` missed. `format-output.sh` strips it. #20, @yp329.
+- **Gemini answers are read whole.** Text split across parts, or preceded by a
+  thought-signature part, is joined instead of taking `parts[0]`; an empty 200
+  reports its `finishReason` and thinking spend instead of "Unknown error". #20.
+
+### Docs
+
+- README, ARCHITECTURE and the deep-execution skill describe the Workflow-based
+  agents mode; `validate-analysis.sh` is documented as the schema's executable
+  mirror for the test suite; the local council's Agent fan-out is recorded as a
+  decision.
+
+### Other
+
+- 543 tests (was 538): gemini's multi-part join, empty-200 diagnostics and the
+  opt-in thinking cap.
+
+**Full Changelog**: https://github.com/hex/claude-council/compare/v2026.8.8...v2026.8.9
+
 ## 2026.8.8
 
 ### Features
