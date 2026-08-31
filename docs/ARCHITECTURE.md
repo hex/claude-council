@@ -329,12 +329,13 @@ User -> Round 1 (parallel queries)
 ```
 User -> ask.md detects --agents flag (or NL trigger)
              |
-        spawn N parallel Claude subagents (background)
+        one Workflow: N analyst agents in parallel
+        (schema-enforced structured output, resumable)
              |
     +--------+--------+--------+--------+
     |        |        |        |        |
     v        v        v        v        v
- Agent:   Agent:   Agent:   Agent:   ...
+ Analyst: Analyst: Analyst: Analyst:  ...
  Gemini   OpenAI   Grok     Perplexity
     |        |        |        |
     | Each agent independently:
@@ -360,8 +361,11 @@ User -> ask.md detects --agents flag (or NL trigger)
         save to council-cache
 ```
 
-Key difference from standard mode: subagents do meaningful analytical
-work beyond the API call, pre-digesting each response before synthesis.
+Key difference from standard mode: the analysts do meaningful analytical
+work beyond the API call, pre-digesting each response before synthesis. The
+Workflow returns validated objects, so no analysis passes through the
+orchestrator's context as text to be pasted and checked; a killed run resumes
+with the finished analysts served from cache.
 
 ### Local Council Mode (--local / no providers)
 
@@ -474,7 +478,7 @@ claude-council/
 │   │   └── SKILL.md             # Standard query execution
 │   ├── deep-execution/
 │   │   ├── SKILL.md             # Agent-enhanced execution (--agents)
-│   │   └── agent-prompt-template.md  # Subagent prompt template
+│   │   └── agent-prompt-template.md  # Analyst prompt: query, judge, follow up, structured analysis
 │   ├── local-council-execution/
 │   │   ├── SKILL.md             # Local Claude-only council (--local / no providers)
 │   │   └── agent-prompt-template.md  # Council-member prompt template

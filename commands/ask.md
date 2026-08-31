@@ -1,7 +1,7 @@
 ---
 description: Query multiple AI agents (Gemini, OpenAI, Grok, Perplexity, Kimi, and a local ollama model) for diverse perspectives on architecture decisions, technology choices, debugging dead-ends, and security tradeoffs. Use this whenever the user names the council directly, whatever the topic — ask the council, council review, full council review, what does the council think, get a second opinion from the council, run this past the council — including reviews of code, documents, plans or artifacts. Also suggest it unprompted when the user is choosing between competing approaches (e.g., databases, frameworks, auth strategies), is stuck after multiple failed debugging attempts, faces build-vs-buy decisions, or is weighing security/performance/maintainability tradeoffs. Do NOT suggest it unprompted for simple implementation tasks, quick fixes, or questions with clear single answers; a direct request for the council overrides that exclusion.
 argument-hint: '[--file=path] [--image=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--local] [--async] [--output=path] [--quiet] [--no-cache] [--no-auto-context] [--no-pane] "question"'
-allowed-tools: Agent, Bash(bash */scripts/query-council.sh *), Bash(bash */scripts/run-council.sh *), Bash(bash */scripts/lib/export.sh *), Bash(head:*), Bash(mkdir -p .claude/council-cache*), Read, Glob, Grep, Write, AskUserQuestion, TaskCreate, TaskUpdate
+allowed-tools: Agent, Workflow, Bash(bash */scripts/query-council.sh *), Bash(bash */scripts/run-council.sh *), Bash(bash */scripts/lib/export.sh *), Bash(head:*), Bash(mkdir -p .claude/council-cache*), Read, Glob, Grep, Write, AskUserQuestion, TaskCreate, TaskUpdate
 ---
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -214,7 +214,7 @@ AskUserQuestion:
   Question: "This looks like a complex decision. Use agent-enhanced analysis for deeper insights?"
   Header: "Analysis Mode"
   Options:
-    - "Yes - deeper analysis with AI subagents (~20s extra)"
+    - "Yes - deeper analysis with one Claude analyst per provider (~20s extra)"
     - "No - standard fast mode"
 ```
 
@@ -238,8 +238,9 @@ Skip Step 3 (synthesis) — the local-council-execution skill generates its own.
 
 ### If Agent Mode is Active
 
-**Invoke the `deep-execution` skill** and follow its instructions. The skill handles
-spawning subagents, collecting results, displaying analyses, and generating synthesis.
+**Invoke the `deep-execution` skill** and follow its instructions. The skill runs one
+Workflow of analyst agents (one per provider), displays their analyses, and generates
+the synthesis. The user's `--agents` (or their yes above) is the opt-in that workflow needs.
 
 Skip Step 3 (synthesis) - the deep-execution skill generates its own enhanced synthesis.
 

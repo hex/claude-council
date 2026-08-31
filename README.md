@@ -155,7 +155,7 @@ claude --plugin-dir /path/to/claude-council    # repo root; loaded for this sess
 | `--image=path` | Attach one image (e.g. a screenshot) for vision-capable providers |
 | `--output=path` | Export response to markdown file |
 | `--quiet` | Show only synthesis, hide individual responses |
-| `--agents` | Agent-enhanced analysis with subagents (slower, deeper) |
+| `--agents` | Agent-enhanced analysis, one Claude analyst per provider (slower, deeper) |
 | `--local` | Local Claude-only council when you have no provider keys (see below) |
 | `--async` | Detach the query as a background job; fetch with `/claude-council:result` |
 | `--no-cache` | Force fresh queries, skip cache |
@@ -218,9 +218,11 @@ Combine with roles for focused debates:
 
 ### Agent-Enhanced Analysis (--agents)
 
-For complex decisions where deeper analysis justifies the extra time and cost, `--agents` spawns
-parallel Claude subagents that each independently query, evaluate, and analyze their provider's
-response before the orchestrator synthesizes everything.
+For complex decisions where deeper analysis justifies the extra time and cost, `--agents` runs
+one Workflow of parallel Claude analyst agents that each independently query, evaluate, and
+analyze their provider's response before the orchestrator synthesizes everything. Each analysis
+is returned as schema-enforced structured output, and an interrupted run can be resumed with the
+finished analysts served from cache. Needs a Claude Code with the Workflow tool.
 
 ```bash
 # Explicit flag
@@ -230,7 +232,7 @@ response before the orchestrator synthesizes everything.
 /claude-council:ask --agents --roles=security,scalability --providers=gemini,openai "Review this auth architecture"
 ```
 
-**What each subagent does (beyond a simple API call):**
+**What each analyst does (beyond a simple API call):**
 1. Queries the provider
 2. Evaluates response quality - did it actually address the question?
 3. If the response is vague or off-topic, reformulates and retries
@@ -246,7 +248,7 @@ response before the orchestrator synthesizes everything.
 If your question contains architecture, security review, tradeoff analysis, or similar
 signals, you'll be asked whether to enable agent mode.
 
-**Cost and performance implications**: Agent mode spawns one Claude subagent per provider.
+**Cost and performance implications**: Agent mode runs one Claude analyst agent per provider.
 This means ~4x more Claude API usage and ~15-25 seconds additional latency compared to
 standard mode. Use it for high-stakes decisions, not quick questions.
 
