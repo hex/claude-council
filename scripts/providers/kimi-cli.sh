@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/deadline.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -55,10 +56,9 @@ ARGS=(-p "$FULL_PROMPT" --output-format stream-json --agent-file "$AGENT_FILE")
 # CLI's own default_model in config.toml (mirrors codex.sh and grok-cli.sh).
 [[ -n "${KIMI_CLI_MODEL:-}" ]] && ARGS+=(-m "$KIMI_CLI_MODEL")
 
-# Bound the CLI the way API providers are bounded by curl --max-time. GNU
-# `timeout` is absent on stock macOS, so use perl's alarm (perl is already a
-# renderer dependency); the pending alarm survives exec and kills the CLI after
-# COUNCIL_TIMEOUT seconds, surfacing as exit 142 (128 + SIGALRM).
+# Bound the CLI the way API providers are bounded by curl --max-time:
+# run_with_deadline ends it after COUNCIL_TIMEOUT seconds, surfacing as exit
+# 143 (128 + SIGTERM).
 # One attempt, where the API providers retry — see COUNCIL_CLI_TIMEOUT in
 # docs/ARCHITECTURE.md for why the two defaults differ.
 COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
@@ -67,13 +67,7 @@ ERR_TMP=$(mktemp)
 OUT_TMP=$(mktemp)
 trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
-# Only the reaping shell's own stderr is silenced, not the CLI's: when the
-# alarm kills the child, bash reports the signal itself ("Alarm clock: 14",
-# with the PID and the whole command line) on this script's stderr, and the
-# council stores provider stderr verbatim as the error text — so that report
-# would reach the pane in place of the timeout message below. The child keeps
-# its own redirections, so its output still lands in the temp files.
-{ if perl -e 'alarm shift; exec @ARGV' "$COUNCIL_TIMEOUT" kimi "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi; } 2>/dev/null
+if run_with_deadline "$COUNCIL_TIMEOUT" kimi "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
 if [[ $rc -eq 0 ]]; then
     # Concatenate every assistant chunk; a long answer may arrive in several.
     # Read line by line (-nR + inputs) rather than slurping: `jq -s` parses the
@@ -102,7 +96,7 @@ if [[ $rc -eq 0 ]]; then
     fi
     echo "$RESPONSE"
 else
-    if [[ $rc -eq 142 ]]; then
+    if [[ $rc -eq 143 ]]; then
         echo "Error from kimi CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
     else
         ERR_MSG=$(tr '\n' ' ' < "$ERR_TMP" | head -c 500)

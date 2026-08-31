@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/deadline.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -120,19 +121,18 @@ fi
 # Flags must precede the prompt (see above), so -p goes on last.
 ARGS+=(-p "$PROMPT_ARG")
 
-# Bound the CLI the way API providers are bounded by curl --max-time. GNU
-# `timeout` is absent on stock macOS, so use perl's alarm (perl is already a
-# renderer dependency); the pending alarm survives exec and kills the CLI after
-# COUNCIL_TIMEOUT seconds, surfacing as exit 142 (128 + SIGALRM).
+# Bound the CLI the way API providers are bounded by curl --max-time:
+# run_with_deadline ends it after COUNCIL_TIMEOUT seconds, surfacing as exit
+# 143 (128 + SIGTERM).
 # One attempt, where the API providers retry — see COUNCIL_CLI_TIMEOUT in
 # docs/ARCHITECTURE.md for why the two defaults differ.
 COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
 
-if RESPONSE=$(perl -e 'alarm shift; exec @ARGV' "$COUNCIL_TIMEOUT" agy "${ARGS[@]}" 2>"$ERR_TMP"); then
+if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" agy "${ARGS[@]}" 2>"$ERR_TMP"); then
     echo "$RESPONSE"
 else
     rc=$?
-    if [[ $rc -eq 142 ]]; then
+    if [[ $rc -eq 143 ]]; then
         echo "Error from antigravity CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
     else
         ERR_MSG=$(tr '\n' ' ' < "$ERR_TMP" | head -c 500)

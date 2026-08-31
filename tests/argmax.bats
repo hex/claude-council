@@ -130,7 +130,13 @@ PROVIDER
     local r1 r2
     r1=$(echo "$output" | jq -r '.round1.antigravity.response')
     r2=$(echo "$output" | jq -r '.round2.antigravity.response')
+    # Shown on failure: the bytes at each end, so a platform difference in how
+    # the marker arrives is visible rather than inferred.
+    echo "r1 head: $(printf '%s' "$r1" | head -c 24 | od -c | head -2)"
+    echo "r2 head: $(printf '%s' "$r2" | head -c 24 | od -c | head -2)"
+    echo "r2 tail: $(printf '%s' "$r2" | tail -c 24 | od -c | head -2)"
     [ "${#r1}" -ge "$BIG_BYTES" ]
+    [[ "$r1" == "$MARK_START"* ]]
     [[ "$r2" == "$MARK_START"* ]]
     [[ "$r2" == *"$MARK_END" ]]
     [ "${#r2}" -ge "$BIG_BYTES" ]

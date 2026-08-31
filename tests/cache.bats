@@ -78,14 +78,15 @@ teardown() {
 @test "sha256_hex: falls back to sha256sum when shasum is absent" {
     local fake="${BATS_TEST_TMPDIR}/hashbin" tools="${BATS_TEST_TMPDIR}/tools"
     mkdir -p "$fake" "$tools"
-    # A sha256sum that needs no shasum on PATH (perl is a hard dependency)
-    cat > "$fake/sha256sum" <<'EOF'
-#!/bin/bash
-perl -MDigest::SHA=sha256_hex -0777 -ne 'print sha256_hex($_)."  -\n"'
-EOF
-    chmod +x "$fake/sha256sum"
-    ln -s "$(command -v cut)" "$tools/cut"
-    ln -s "$(command -v perl)" "$tools/perl"
+    # A sha256sum that needs no shasum on PATH (perl is a hard dependency).
+    # Wrapper scripts rather than symlinked binaries: on Git Bash `ln -s`
+    # copies the file, and a copied perl or cut loses the DLLs beside it.
+    local perl_bin cut_bin
+    perl_bin=$(command -v perl); cut_bin=$(command -v cut)
+    printf '#!/bin/bash\nexec %q -MDigest::SHA=sha256_hex -0777 -ne %q\n' \
+        "$perl_bin" 'print sha256_hex($_)."  -\n"' > "$fake/sha256sum"
+    printf '#!/bin/bash\nexec %q "$@"\n' "$cut_bin" > "$tools/cut"
+    chmod +x "$fake/sha256sum" "$tools/cut"
     # PATH (set inside, so the outer bash is still found) has the fake sha256sum
     # but no shasum, forcing the fallback branch
     run bash -c "export PATH='${fake}:${tools}'; source '${LIB_DIR}/hash.sh'; printf abc | sha256_hex"
