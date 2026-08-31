@@ -77,11 +77,15 @@ setup() {
 @test "run_with_deadline: a command that exits 0 on the deadline signal still reports 143" {
     local started
     started=$(date +%s)
-    run --separate-stderr run_with_deadline 1 bash -c 'trap "exit 0" TERM; sleep 30 & wait'
+    run --separate-stderr run_with_deadline 1 bash -c 'trap "exit 0" TERM; sleep 8 & wait'
     [ "$status" -eq 143 ]
     [ -z "$stderr" ]
     # The command's own sleep must not hold the captured stdout open either.
-    [ $(( $(date +%s) - started )) -lt 15 ]
+    # Without pgrep (Git Bash) signal_tree cannot reach it, so there the
+    # verdict holds and the bound does not.
+    if command -v pgrep >/dev/null 2>&1; then
+        [ $(( $(date +%s) - started )) -lt 6 ]
+    fi
 }
 
 @test "run_with_deadline: a command that ignores the signal is killed after a grace period" {
