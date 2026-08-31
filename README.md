@@ -762,6 +762,7 @@ bash scripts/query-council.sh --list-default
 - `curl` and `jq` for API calls
 - Valid API keys for at least one provider, OR `codex` / `agy` (Antigravity) / `grok` / `kimi` CLI installed, OR `ollama` running locally
 - Optional: a Rich-capable Python (`python3` with a modern `rich`, or `uv`) upgrades the tmux pane's markdown rendering; without it the built-in perl renderer is used
+- macOS, Linux, or Windows via Git Bash; the test suite runs on all three in CI
 
 ## Development
 

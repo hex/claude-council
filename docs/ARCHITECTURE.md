@@ -418,7 +418,7 @@ claude-council/
 │   └── plugin.json              # Plugin manifest
 ├── .github/
 │   └── workflows/
-│       └── tests.yml            # bats on ubuntu + macos; shellcheck blocks a merge
+│       └── tests.yml            # bats on ubuntu, macos and windows; shellcheck blocks a merge
 ├── agents/
 │   └── council-advisor.md       # Proactive suggestions
 ├── commands/
@@ -463,6 +463,7 @@ claude-council/
 │   │   └── ollama.sh            # Local (no key, no sibling)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
+│       ├── deadline.sh          # Wall-clock bound for a command (no GNU timeout on macOS or Git Bash)
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
 │       ├── hash.sh              # Portable SHA-256 helper (shasum / sha256sum)
@@ -500,6 +501,7 @@ claude-council/
 │   ├── cache.bats
 │   ├── check-status.bats
 │   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli)
+│   ├── deadline.bats            # run_with_deadline: stdin passthrough, own status, 143 at the deadline
 │   ├── display.bats
 │   ├── export.bats
 │   ├── fake-clis.bats

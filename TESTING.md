@@ -111,8 +111,26 @@ they stay out of the default suite and out of CI.
 
 1. Create `tests/your_feature.bats`
 2. Load test helper: `load test_helper`
-3. Use bats syntax: `@test "description" { ... }`
+3. Use bats syntax: `@test "description" { ... }` — keep the name ASCII (see Windows below)
 4. Run: `bats tests/your_feature.bats`
+
+### Windows
+
+CI runs the suite on `windows-latest` under Git Bash, alongside Ubuntu and
+macOS. Budget ~22 minutes: MSYS emulates `fork`, so a test that runs
+`query-council.sh` end to end costs 3–4 s there against 0.1–0.3 s on Linux.
+What Windows does that the others do not, and how to test for it without a
+Windows machine:
+
+- jq's Windows build CRLF-terminates piped stdout, and a `read < <(jq ...)`
+  keeps the `\r` (a `$(...)` strips it). `install_crlf_jq` in
+  `test_helper.bash` puts a jq on PATH that does the same; prefix
+  `PATH="$CRLF_BIN:$PATH"` on the one invocation under test.
+- MSYS rewrites POSIX-looking paths in argv and in environment values before a
+  native binary sees them, and its ARG_MAX is ~32 KB. Large or path-shaped
+  values reach jq on stdin.
+- bats on MSYS cannot look up a `@test` whose name has a non-ASCII character;
+  it reports `unknown test name` and the count comes up short.
 
 ---
 
