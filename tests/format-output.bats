@@ -129,3 +129,20 @@ envelope_with_entry() {
     [ "$status" -eq 0 ]
     [[ "$output" != *"unavailable"* ]]
 }
+
+@test "format-output: the first provider key renders when jq emits CRLF" {
+    # jq's Windows build CRLF-translates its stdout when piped, so the first
+    # `keys[]` entry carries a stray \r and `.round1["gemini\r"]` misses,
+    # rendering the slot as `null`. gemini sorts first, so it took the hit.
+    # On other platforms this passes trivially; the Windows CI job is where
+    # it earns its place.
+    local json
+    json=$(jq -n '{metadata: {quiet_mode: false, debate_mode: false},
+        round1: {gemini: {status: "success", model: "g", response: "GEMINI_ANSWER"},
+                 openai: {status: "success", model: "o", response: "OPENAI_ANSWER"}}}')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"GEMINI_ANSWER"* ]]
+    [[ "$output" == *"OPENAI_ANSWER"* ]]
+    [[ "$output" != *"null"* ]]
+}

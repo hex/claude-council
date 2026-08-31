@@ -11,8 +11,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # Git Bash on the Windows runner, so every step below runs the same shell
+    # the plugin runs under there.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +29,15 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install bats-core jq
 
+      # Git for Windows ships bash, curl and perl; jq and bats do not come with it.
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install jq -y --no-progress
+          npm install -g bats
+
       # macOS runners ship bash 3.2 as /bin/bash — the plugin's compat target.
+      # Windows resolves /bin/bash to Git Bash.
       - name: Show bash version
         run: /bin/bash --version | head -1
 
