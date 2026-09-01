@@ -214,7 +214,8 @@ assign_roles_to_providers() {
         # Space-padded set for bash 3.2 (no associative arrays), the same shape
         # prefer_cli_over_api uses; padding makes the match word-bounded so
         # "openrouter-1" cannot match inside "openrouter-10".
-        local roster=" ${providers[*]} "
+        local roster=" ${providers[*]+${providers[*]}} "
+        local seen=" "
         for entry in "${roles[@]}"; do
             [[ -z "$entry" ]] && continue
             local named="${entry%%=*}"
@@ -225,6 +226,14 @@ assign_roles_to_providers() {
                 echo "Error: --roles names '$named', which is not among the providers being queried" >&2
                 return 1
             fi
+            if [[ "$seen" == *" $named "* ]]; then
+                # Only one of the two can be honoured, and honouring the later
+                # one silently leaves the reader believing the provider answered
+                # as the role it was given first.
+                echo "Error: --roles names '$named' twice; a provider takes one role" >&2
+                return 1
+            fi
+            seen="${seen}${named} "
         done
         for provider in "${providers[@]}"; do
             role=""
@@ -245,7 +254,7 @@ assign_roles_to_providers() {
     # an unassigned provider is otherwise invisible — the failure that made the
     # positional bug hard to notice in the first place.
     local unassigned=()
-    for entry in "${assignments[@]}"; do
+    for entry in "${assignments[@]+"${assignments[@]}"}"; do
         [[ "${entry#*:}" == "" ]] && unassigned+=("${entry%%:*}")
     done
     if (( ${#unassigned[@]} )); then

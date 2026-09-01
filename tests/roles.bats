@@ -322,6 +322,33 @@ teardown() {
     [[ "$(get_provider_role gemini "$a")" == "security" ]]
 }
 
+@test "assign_roles_to_providers: naming one provider twice is refused, not resolved" {
+    # Two bindings for one provider: only one can be honoured, and picking the
+    # last silently means the reader believes gemini answered as the security
+    # auditor when it answered as something else. The same reasoning as the
+    # absent-provider guard — a binding that cannot be honoured is refused.
+    run --separate-stderr assign_roles_to_providers "gemini=security,gemini=performance" gemini openai
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"gemini"*"twice"* ]]
+    [ -z "$output" ]
+}
+
+@test "assign_roles_to_providers: an empty roster is refused, not a shell error" {
+    # Reached by any direct caller; the CLI stops earlier on an empty roster.
+    # Run in its own shell under set -u rather than in the bats one: expanding
+    # an empty array under set -u is fatal on bash 3.2 and merely empty from
+    # 4.4 on, so only a 3.2 host can see the failure this guards — which is the
+    # macOS leg, and /bin/bash there.
+    run --separate-stderr /bin/bash -c "
+        set -u
+        source '${LIB_DIR}/roles.sh'
+        assign_roles_to_providers 'gemini=security'
+    "
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"not among the providers"* ]]
+    [[ "$stderr" != *"unbound variable"* ]]
+}
+
 @test "assign_roles_to_providers: a provider left without a role is reported, not dropped silently" {
     # The old behaviour: roles ran out, the tail got nothing, and nobody was told
     # — only non-empty roles are printed, so the omission was invisible.
