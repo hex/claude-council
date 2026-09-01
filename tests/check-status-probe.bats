@@ -3,6 +3,7 @@
 # ABOUTME: Hermetic via fake CLIs and a shadow curl; no real keys or network
 
 load test_helper
+bats_require_minimum_version 1.5.0
 load fixtures/fake-clis
 load fixtures/status-fakes
 
@@ -176,11 +177,11 @@ setup() {
     # Guard against a vacuous pass: curl must have actually run and recorded argv.
     [ -s "$CS_ARGV_FILE" ]
     # None of the five keys may reach the process table (ps-visible for the 10s probe).
-    ! grep -qF "SEKRET_GEM" "$CS_ARGV_FILE"
-    ! grep -qF "SEKRET_OAI" "$CS_ARGV_FILE"
-    ! grep -qF "SEKRET_GROK" "$CS_ARGV_FILE"
-    ! grep -qF "SEKRET_PPX" "$CS_ARGV_FILE"
-    ! grep -qF "SEKRET_ORT" "$CS_ARGV_FILE"
+    run ! grep -qF "SEKRET_GEM" "$CS_ARGV_FILE"
+    run ! grep -qF "SEKRET_OAI" "$CS_ARGV_FILE"
+    run ! grep -qF "SEKRET_GROK" "$CS_ARGV_FILE"
+    run ! grep -qF "SEKRET_PPX" "$CS_ARGV_FILE"
+    run ! grep -qF "SEKRET_ORT" "$CS_ARGV_FILE"
     # They must instead travel via the mode-600 --config file.
     grep -qF "SEKRET_GEM" "$CS_CONFIG_FILE"
     grep -qF "SEKRET_OAI" "$CS_CONFIG_FILE"

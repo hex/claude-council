@@ -199,7 +199,7 @@ wait_for_job() {
     done
     local child
     for child in $children; do
-        ! kill -0 "$child" 2>/dev/null
+        run ! kill -0 "$child"
     done
 }
 
