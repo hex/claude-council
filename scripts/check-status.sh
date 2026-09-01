@@ -24,6 +24,7 @@ RED='\033[31m'
 GREEN='\033[32m'
 MAGENTA='\033[35m'
 CYAN='\033[36m'
+LIGHT_YELLOW='\033[93m'
 DIM='\033[2m'
 RESET='\033[0m'
 
@@ -128,6 +129,17 @@ check_provider() {
                 "https://api.moonshot.ai/v1/models" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
+        openrouter)
+            # Not /api/v1/models: that answers 200 with no key at all and with a
+            # rejected one, so the openai-shaped probe would report a dead seat
+            # as Connected. /api/v1/key is the endpoint that actually authenticates,
+            # answering 401 for both an absent and an invalid key.
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+                --config "$cfg" \
+                "https://openrouter.ai/api/v1/key" 2>/dev/null || true)
+            rm -f "$cfg"
+            ;;
         perplexity)
             # Perplexity has no /models endpoint, so auth can only be probed with
             # a (billable) chat request. The API rejects anything under 16 output
@@ -227,6 +239,7 @@ remediation_for() {
         grok:no_key)          echo "export XAI_API_KEY=<key>" ;;
         perplexity:no_key)    echo "export PERPLEXITY_API_KEY=<key>" ;;
         kimi:no_key)          echo "export KIMI_API_KEY=<key>" ;;
+        openrouter:no_key)    echo "export OPENROUTER_API_KEY=<key>" ;;
         codex:no_binary)      echo "npm install -g @openai/codex" ;;
         codex:unauthed)       echo "codex login" ;;
         antigravity:no_binary) echo "install the Antigravity CLI (agy)" ;;
@@ -254,6 +267,7 @@ openai_status=$(check_provider "openai" "OPENAI_API_KEY" "$(get_model openai)")
 grok_status=$(check_provider "grok" "GROK_API_KEY" "$(get_model grok)")
 perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "$(get_model perplexity)")
 kimi_status=$(check_provider "kimi" "KIMI_API_KEY" "$(get_model kimi)")
+openrouter_status=$(check_provider "openrouter" "OPENROUTER_API_KEY" "$(get_model openrouter)")
 # codex login status exits non-zero when logged out; agy has no
 # equivalent offline auth probe, so it stays a single-tier check. `grok models`
 # prints "You are not authenticated." with exit 0 when logged out, which the
@@ -334,6 +348,7 @@ format_status "OpenAI"     "openai"     "$openai_status"
 format_status "Grok"       "grok"       "$grok_status"
 format_status "Perplexity" "perplexity" "$perplexity_status"
 format_status "Kimi" "kimi" "$kimi_status"
+format_status "OpenRouter" "openrouter" "$openrouter_status"
 format_status "Kimi CLI" "kimi-cli" "$kimicli_status"
 format_status "Ollama" "ollama" "$ollama_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
@@ -350,6 +365,7 @@ available_count=0
 [[ "$grok_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$perplexity_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$kimi_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$openrouter_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$kimicli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$ollama_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))

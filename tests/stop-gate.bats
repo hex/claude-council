@@ -125,6 +125,32 @@ dirty_diff() {
     [[ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]]
 }
 
+# The allowlist fails open on an unknown name, so a seat omitted from it makes
+# the gate exit 0 silently. Only an acceptance case can tell "provider declined
+# to block" from "provider was never allowed to run".
+@test "stop-gate: an API seat on the allowlist actually reviews the diff" {
+    jq -n '{enabled: true, provider: "openrouter", max_iterations: 1}' \
+        > "$REPO/.claude/council-stop-gate.json"
+    dirty_diff
+    local dir="${BATS_TEST_TMPDIR}/orcurl"
+    mkdir -p "$dir"
+    cat > "$dir/curl" <<'CURL'
+#!/bin/bash
+outfile=""; prev=""
+for a in "$@"; do
+    [[ "$prev" == "-o" ]] && outfile="$a"
+    prev="$a"
+done
+[[ -n "$outfile" ]] && printf '%s' '{"choices":[{"message":{"content":"BLOCK: the diff drops a guard"}}]}' > "$outfile"
+printf '200'
+CURL
+    chmod +x "$dir/curl"
+    PATH="$dir:$PATH" OPENROUTER_API_KEY=k run bash "$GATE" <<< "$(stop_event)"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.decision' "block"
+    [[ "$output" == *"openrouter"* ]]
+}
+
 @test "stop-gate: a slow reviewer times out and fails open instead of hanging" {
     enable_gate
     dirty_diff

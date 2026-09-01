@@ -51,7 +51,7 @@ setup() {
     [ "$status" -eq 0 ]
     # antigravity and kimi-cli have no offline auth probe, so both still count;
     # codex and grok-cli both probe auth and report unauthed under auth-failure
-    [[ "$output" == *"2/10 providers available"* ]]
+    [[ "$output" == *"2/11 providers available"* ]]
 }
 
 @test "check-status: missing API key shows exact export remediation" {
@@ -104,6 +104,7 @@ EOF
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
     export GEMINI_API_KEY=k OPENAI_API_KEY=k XAI_API_KEY=k PERPLEXITY_API_KEY=k KIMI_API_KEY=k
+    export OPENROUTER_API_KEY=k
     export COUNCIL_FAKE_BEHAVIOR=valid
 }
 
@@ -113,8 +114,8 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connected"* ]]
-    # 5 API providers + codex + antigravity + grok-cli + kimi-cli + ollama, all healthy
-    [[ "$output" == *"10/10 providers available"* ]]
+    # 6 API providers + codex + antigravity + grok-cli + kimi-cli + ollama, all healthy
+    [[ "$output" == *"11/11 providers available"* ]]
 }
 
 @test "check-status: the footer total equals the number of provider rows printed" {
@@ -141,10 +142,10 @@ EOF
     [[ "$output" == *"Auth failed (HTTP 401)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
     # Every API provider must classify 401, not just whichever one happens to be
-    # first: a substring match alone cannot tell four rows from one.
-    [ "$(auth_failures "$output")" -eq 5 ]
+    # first: a substring match alone cannot tell six rows from one.
+    [ "$(auth_failures "$output")" -eq 6 ]
     # Only the five local providers remain (codex, antigravity, grok-cli, kimi-cli, ollama)
-    [[ "$output" == *"5/10 providers available"* ]]
+    [[ "$output" == *"5/11 providers available"* ]]
 }
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
@@ -156,7 +157,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Auth failed (HTTP 403)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
-    [ "$(auth_failures "$output")" -eq 5 ]
+    [ "$(auth_failures "$output")" -eq 6 ]
 }
 
 @test "check-status: HTTP 500 reports a generic error with the code" {
@@ -167,7 +168,7 @@ EOF
     [[ "$output" == *"Error (HTTP 500)"* ]]
     # A server-side fault is not a credentials problem
     [ "$(auth_failures "$output")" -eq 0 ]
-    [[ "$output" == *"5/10 providers available"* ]]
+    [[ "$output" == *"5/11 providers available"* ]]
 }
 
 @test "check-status: curl failure (000) reports a connection timeout" {
@@ -176,7 +177,7 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]
-    [[ "$output" == *"5/10 providers available"* ]]
+    [[ "$output" == *"5/11 providers available"* ]]
 }
 
 # Gemini and xAI answer a rejected key with 400 rather than a 401, so the status
@@ -200,7 +201,7 @@ auth_failures() {
     # Reported as an auth failure, but keeping the true code so debugging is honest
     [[ "$output" == *"Auth failed (HTTP 400)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
-    # Only Grok matches this shape; the other three 400s stay generic errors
+    # Only Grok matches this shape; the other five 400s stay generic errors
     [ "$(auth_failures "$output")" -eq 1 ]
     [[ "$output" == *"Error (HTTP 400)"* ]]
 }
@@ -214,7 +215,7 @@ auth_failures() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Auth failed (HTTP 400)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
-    # Only Gemini matches this shape; the other three 400s stay generic errors
+    # Only Gemini matches this shape; the other five 400s stay generic errors
     [ "$(auth_failures "$output")" -eq 1 ]
     [[ "$output" == *"Error (HTTP 400)"* ]]
 }
@@ -231,9 +232,9 @@ auth_failures() {
     export COUNCIL_FAKE_HTTP_BODY='{"error":{"code":400,"message":"* GetModelRequest.name: unexpected model name format\n","status":"INVALID_ARGUMENT"}}'
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    # All five API providers show the generic error: proves output was produced,
+    # All six API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 6 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -245,9 +246,9 @@ auth_failures() {
     export COUNCIL_FAKE_HTTP_BODY='{"code":"invalid-argument","error":"Model not found: grok-does-not-exist"}'
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    # All five API providers show the generic error: proves output was produced,
+    # All six API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 6 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -259,9 +260,9 @@ auth_failures() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     # A malformed request is not a credentials problem; do not offer to regenerate
-    # All five API providers show the generic error: proves output was produced,
+    # All six API providers show the generic error: proves output was produced,
     # so the auth-failure count below cannot pass on an empty run.
-    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 5 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 6 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
 }
@@ -289,7 +290,8 @@ EOF
     chmod +x "$dir/curl"
     export PATH="$dir:$PATH"
     export GEMINI_API_KEY=SEKRET_GEM OPENAI_API_KEY=SEKRET_OAI \
-           XAI_API_KEY=SEKRET_GROK PERPLEXITY_API_KEY=SEKRET_PPX
+           XAI_API_KEY=SEKRET_GROK PERPLEXITY_API_KEY=SEKRET_PPX \
+           OPENROUTER_API_KEY=SEKRET_ORT
     export COUNCIL_FAKE_BEHAVIOR=valid
 }
 
@@ -315,12 +317,24 @@ EOF
 }
 
 # Without --max-time a black-holed endpoint hangs /status indefinitely.
+# /api/v1/models answers 200 with no key at all and with a rejected one, so a
+# probe pointed there reports a dead OpenRouter seat as Connected. Only the URL
+# on the argv can tell the two endpoints apart.
+@test "check-status: the OpenRouter probe authenticates rather than listing models" {
+    record_curl
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ -s "$CS_ARGV_FILE" ]
+    grep -qxF 'https://openrouter.ai/api/v1/key' "$CS_ARGV_FILE"
+    ! grep -q 'openrouter.ai/api/v1/models' "$CS_ARGV_FILE"
+}
+
 @test "check-status: every probe is bounded by a request timeout" {
     record_curl
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [ -s "$CS_ARGV_FILE" ]
-    [ "$(grep -cxF -- '--max-time' "$CS_ARGV_FILE" || true)" -eq 4 ]
+    [ "$(grep -cxF -- '--max-time' "$CS_ARGV_FILE" || true)" -eq 5 ]
 }
 
 # rejected_key reads the vendor's key marker with jq. Without a working jq that
@@ -358,8 +372,8 @@ EOF
     [ "$status" -eq 0 ]
     [ -s "$CS_ARGV_FILE" ]
     # OpenAI's error body echoes a redacted key and nothing reads it; Perplexity's
-    # is never read either. Only Gemini and xAI keep a body.
-    [ "$(grep -c '^/dev/null$' "$CS_ARGV_FILE" || true)" -eq 2 ]
+    # and OpenRouter's are never read either. Only Gemini and xAI keep a body.
+    [ "$(grep -c '^/dev/null$' "$CS_ARGV_FILE" || true)" -eq 3 ]
 }
 
 # A probe body and the curl config that carries the key both live in TMPDIR for
@@ -389,11 +403,12 @@ EOF
     [ "$status" -eq 0 ]
     # Guard against a vacuous pass: curl must have actually run and recorded argv.
     [ -s "$CS_ARGV_FILE" ]
-    # None of the four keys may reach the process table (ps-visible for the 10s probe).
+    # None of the five keys may reach the process table (ps-visible for the 10s probe).
     ! grep -qF "SEKRET_GEM" "$CS_ARGV_FILE"
     ! grep -qF "SEKRET_OAI" "$CS_ARGV_FILE"
     ! grep -qF "SEKRET_GROK" "$CS_ARGV_FILE"
     ! grep -qF "SEKRET_PPX" "$CS_ARGV_FILE"
+    ! grep -qF "SEKRET_ORT" "$CS_ARGV_FILE"
     # They must instead travel via the mode-600 --config file.
     grep -qF "SEKRET_GEM" "$CS_CONFIG_FILE"
     grep -qF "SEKRET_OAI" "$CS_CONFIG_FILE"

@@ -389,6 +389,17 @@ model = "gpt-root-wins"'
     [[ "$output" == "YES" ]]
 }
 
+@test "discover_providers: OPENROUTER_API_KEY enlists the seat and nothing shadows it" {
+    # The seat needed no arm in discover_providers: it rides the generic
+    # <NAME>_API_KEY branch. That is only true while the script is named for the
+    # env var and no SHADOW_PAIRS entry claims it, so assert the outcome rather
+    # than the branch.
+    export OPENROUTER_API_KEY=x
+    run source_lib_and_call 'default_provider_set'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"openrouter"* ]]
+}
+
 # ============================================================================
 # coerce_result_json — collection-loop JSON guard (issue #3)
 #

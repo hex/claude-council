@@ -36,11 +36,11 @@
    +--------+ +-----+ +------+ +-----+ +------+ +-----------+ +---------+
    (API)      (API)   (API)    (API)   (API)    (CLI)         (CLI)
 
-                    +----------+ +----------+ +----------+
-                    | grok-cli | | kimi-cli | |  ollama  |
-                    |   .sh    | |   .sh    | |   .sh    |
-                    +----------+ +----------+ +----------+
-                    (CLI)        (CLI)        (local)
+         +------------+ +----------+ +----------+ +----------+
+         | openrouter | | grok-cli | | kimi-cli | |  ollama  |
+         |    .sh     | |   .sh    | |   .sh    | |   .sh    |
+         +------------+ +----------+ +----------+ +----------+
+         (API, router)  (CLI)        (CLI)        (local)
         |               |               |               |
         |    +----------+----------+----------+        |
         +--->|      lib/cache.sh   |<---------+--------+
@@ -139,8 +139,12 @@ EXIT:   0 = success, non-zero = failure (error to stderr)
 
 Two flavors share the interface:
 
-- **API providers** (`gemini`, `openai`, `grok`, `perplexity`, `kimi`), gated on
-  `{PROVIDER}_API_KEY`, talk to vendor APIs over HTTPS, charge per call.
+- **API providers** (`gemini`, `openai`, `grok`, `perplexity`, `kimi`,
+  `openrouter`), gated on `{PROVIDER}_API_KEY`, talk to vendor APIs over HTTPS,
+  charge per call. `openrouter` is a router rather than a vendor: it forwards to
+  whichever upstream serves the id in `OPENROUTER_MODEL`, so its answer travels
+  one hop further than the others' and its vendor is a runtime fact, not a
+  static one.
 - **CLI providers** (`codex`, `antigravity`, `grok-cli`, `kimi-cli`), gated on the
   binary being on `PATH`, use the user's existing CLI subscription auth, no per-call
   cost. When both an API and CLI sibling exist (codex+openai, antigravity+gemini,
@@ -175,6 +179,10 @@ Per-provider disposition when an image is attached:
   vision API sibling, codex→openai, antigravity→gemini, grok-cli→grok, with
   the image. The route is taken only when the sibling is itself vision-capable,
   so **kimi-cli** does not use it: its sibling `kimi` is text-only.
+- **openrouter** accepts an image on its curated default, which is
+  vision-capable. An `OPENROUTER_MODEL` override names one of hundreds of routed
+  models whose modalities are not knowable from here, so it is treated as
+  text-only until `OPENROUTER_VISION=1` says otherwise.
 - **kimi, kimi-cli, ollama** answer text-only, prefixed with
   `(answered without the image)`.
 
@@ -223,8 +231,11 @@ is_model_unavailable_error(body):        # retry.sh
 
 model_fallback_for(provider) -> model    # model_fallback.sh
   - one verified fallback per API provider (openai, grok, gemini, perplexity, kimi)
-  - empty for CLI providers, which degrade to their API sibling instead, and for
-    ollama, whose models are whatever is installed locally
+  - empty for CLI providers, which degrade to their API sibling instead, for
+    ollama, whose models are whatever is installed locally, and for openrouter,
+    whose fallback id is not yet verified against the live API (so its 404 -> exit 3
+    mapping errors loudly rather than degrading; the mapping is in place for the
+    day a verified id lands)
 
 model_unavailable_cached/remember(provider, model, key_hash):
   - TTL-cached "unavailable" verdict, scoped to provider + preferred model + key
@@ -456,6 +467,7 @@ claude-council/
 │   │   ├── grok.sh              # API
 │   │   ├── perplexity.sh        # API
 │   │   ├── kimi.sh              # API (Moonshot)
+│   │   ├── openrouter.sh        # API (router; any model on openrouter.ai)
 │   │   ├── codex.sh             # CLI (subscription auth, shadows openai)
 │   │   ├── antigravity.sh       # CLI (subscription auth, shadows gemini)
 │   │   ├── grok-cli.sh          # CLI (subscription auth, shadows grok)
@@ -538,6 +550,7 @@ claude-council/
 | `XAI_API_KEY` | - | xAI API key (preferred) |
 | `GROK_API_KEY` | - | xAI API key (legacy alias; `XAI_API_KEY` wins if both set) |
 | `PERPLEXITY_API_KEY` | - | Perplexity API key |
+| `OPENROUTER_API_KEY` | - | OpenRouter API key |
 | `KIMI_API_KEY` | - | Moonshot/Kimi API key; the only var that makes `kimi` discoverable |
 | `MOONSHOT_API_KEY` | - | Read as a fallback by `kimi.sh`, but does not satisfy discovery |
 | `{PROVIDER}_MODEL` | varies | Model override (API providers) |
@@ -545,6 +558,8 @@ claude-council/
 | `ANTIGRAVITY_MODEL` | (unset) | Model passed to `agy --model`, only when set (else the model selected in the Antigravity app) |
 | `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
 | `KIMI_CLI_MODEL` | (unset) | Model passed to `kimi -m`, only when set (else the kimi CLI's own configured model) |
+| `OPENROUTER_MODEL` | `anthropic/claude-sonnet-5` | Any id from openrouter.ai/models |
+| `OPENROUTER_VISION` | (unset) | Set to `1` to declare an `OPENROUTER_MODEL` override image-capable |
 | `OLLAMA_MODEL` | (unset) | Local model id; when unset, whichever model `ollama list` shows first |
 | `OLLAMA_HOST` | http://localhost:11434 | Ollama server, following Ollama's own convention |
 | `COUNCIL_PROVIDERS` | (unset) | Comma-separated roster queried by default, ahead of discovery; `--providers` still wins per call |

@@ -29,6 +29,7 @@ Each provider is a shell script in `scripts/providers/` that:
 | Perplexity | `PERPLEXITY_API_KEY` | sonar-reasoning-pro |
 | Kimi | `KIMI_API_KEY` | kimi-k3 |
 | Ollama | none (local) | first model `ollama list` shows |
+| OpenRouter | `OPENROUTER_API_KEY` | anthropic/claude-sonnet-5 |
 
 ## Troubleshooting
 

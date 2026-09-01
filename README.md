@@ -21,7 +21,8 @@ on.
 /plugin install claude-council
 
 # 2. Configure at least one provider — any of these works:
-export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY
+export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY,
+                                    # OPENROUTER_API_KEY
                                     # OR install the codex / antigravity (agy) / grok / kimi CLIs (uses your
                                     # existing subscription — no API key needed)
 
@@ -69,6 +70,8 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 ## Features
 
 - Query Gemini, OpenAI (GPT/Codex), Grok, Perplexity, and Kimi (Moonshot AI) simultaneously
+- Seat any model OpenRouter routes to — Anthropic's Claude by default, so the council
+  hears the one vendor it otherwise has no voice for
 - Use the `codex`, `agy` (Antigravity), `grok`, and `kimi` (Kimi Code) CLIs (subscription auth) when installed — preferred over their API siblings
 - Run a local `ollama` model as a council member — no key, no subscription, no network
 - Side-by-side comparison of responses with vendor-colored headers
@@ -440,7 +443,16 @@ export XAI_API_KEY="your-key"          # GROK_API_KEY also accepted
 export PERPLEXITY_API_KEY="your-key"
 export KIMI_API_KEY="your-key"         # MOONSHOT_API_KEY is read as a fallback,
                                        # but only KIMI_API_KEY makes kimi discoverable
+export OPENROUTER_API_KEY="your-key"   # one key, any model on openrouter.ai/models
 ```
+
+`openrouter` seats whatever model `OPENROUTER_MODEL` names, defaulting to
+`anthropic/claude-sonnet-5` — the one vendor the council has no direct seat for.
+Two things follow from it being a router. Your prompt reaches OpenRouter and then
+the upstream serving that id, so it is two disclosures rather than one. And
+pointing it at a model another seat already runs (`OPENROUTER_MODEL=openai/gpt-5.6`
+alongside `OPENAI_API_KEY`) gives you two headers voicing one model: the synthesis
+is told to read that agreement as possible duplication, not corroboration.
 
 `ollama` needs no key at all: install it, pull a model, and it joins the council
 as a local provider.
@@ -540,8 +552,10 @@ provider, named by its provider id. With `ollama` it never leaves the machine.
 With a CLI provider (`codex`, `antigravity`, `grok-cli`, `kimi-cli`) it stays
 within that tool's own subscription auth; with an API provider (`gemini`,
 `openai`, `grok`, `perplexity`, `kimi`) the diff is transmitted to that
-third-party API — `kimi` sends it to Moonshot. Keep the reviewer on `ollama`,
-or on a CLI provider, if your working tree may contain secrets.
+third-party API — `kimi` sends it to Moonshot. `openrouter` is the one seat that
+discloses twice: to OpenRouter, and onward to whichever upstream serves the model
+id you pinned. Keep the reviewer on `ollama`, or on a CLI provider, if your
+working tree may contain secrets.
 
 ## Reference
 
@@ -557,6 +571,9 @@ export OPENAI_MODEL="gpt-5.6-sol"                   # default
 export GROK_MODEL="grok-latest"                     # default (tracks xAI's current flagship)
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
 export KIMI_MODEL="kimi-k3"                         # default
+export OPENROUTER_MODEL="anthropic/claude-sonnet-5"  # default
+export OPENROUTER_VISION=1                          # only needed when OPENROUTER_MODEL
+                                                    # names a model that accepts images
 export OLLAMA_MODEL="llama3.2"                      # default: whichever model `ollama list` shows first
 export OLLAMA_HOST="http://localhost:11434"         # default
 export GEMINI_THINKING_BUDGET=8192                  # optional: cap Gemini's internal reasoning tokens (unset: the model decides)
@@ -594,6 +611,7 @@ in the response header:
 | perplexity | `sonar-reasoning-pro` | `sonar-pro` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
 | ollama | first local model (`OLLAMA_MODEL` to pin) | — |
+| openrouter | `anthropic/claude-sonnet-5` | — |
 
 The same substitution is also noted on stderr and folded into the synthesis,
 so it's visible even in quiet mode or a headless run. Setting `<PROVIDER>_MODEL`
@@ -619,6 +637,8 @@ The bump applies to:
 - **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`, `grok-build-*`
 - **Perplexity**: `sonar-reasoning*`, `*deep-research*`
 - **Kimi**: `kimi-k*` (so the default model always triggers the bump)
+- **OpenRouter**: `*reasoning*`, `*thinking*` (the seat is retargetable, so the bump
+  keys off the routed id's shape rather than a fixed model list)
 - **Ollama**: `*r1*`, `*reason*`, `*gpt-oss*`, `qwen*`, `gemma*`, `deepseek*`
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |

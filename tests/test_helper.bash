@@ -38,7 +38,10 @@ unset COUNCIL_PROVIDERS
 # exporting these, and a pinned one wins over the default the suite asserts.
 # A test that wants an override sets it on its own invocation.
 unset GEMINI_MODEL OPENAI_MODEL GROK_MODEL PERPLEXITY_MODEL KIMI_MODEL OLLAMA_MODEL
-unset CODEX_MODEL ANTIGRAVITY_MODEL GROK_CLI_MODEL KIMI_CLI_MODEL
+unset CODEX_MODEL ANTIGRAVITY_MODEL GROK_CLI_MODEL KIMI_CLI_MODEL OPENROUTER_MODEL
+# OPENROUTER_VISION is read alongside OPENROUTER_MODEL by provider_vision_capable,
+# so a developer who exported it would flip the vision answer the suite asserts.
+unset OPENROUTER_VISION
 
 # Setup - runs before each test
 setup() {
@@ -59,7 +62,7 @@ command_exists() {
 # Helper: clear every provider API key so discovery sees none of them
 unset_provider_keys() {
     unset GEMINI_API_KEY OPENAI_API_KEY GROK_API_KEY XAI_API_KEY PERPLEXITY_API_KEY
-    unset KIMI_API_KEY MOONSHOT_API_KEY
+    unset KIMI_API_KEY MOONSHOT_API_KEY OPENROUTER_API_KEY
 }
 
 # Helper: block until any of the given files exists. Gives up after ~8s so a

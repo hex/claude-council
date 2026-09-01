@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# ABOUTME: Hermetic coverage for the four API provider scripts — response
+# ABOUTME: Hermetic coverage for the six API provider scripts — response
 # ABOUTME: parsing, endpoint routing, error extraction, and secret/payload hygiene
 
 load test_helper
@@ -15,6 +15,7 @@ E2E_OPENAI_KEY="${OPENAI_API_KEY:-}"
 E2E_GROK_KEY="${XAI_API_KEY:-${GROK_API_KEY:-}}"
 E2E_PERPLEXITY_KEY="${PERPLEXITY_API_KEY:-}"
 E2E_KIMI_KEY="${KIMI_API_KEY:-${MOONSHOT_API_KEY:-}}"
+E2E_OPENROUTER_KEY="${OPENROUTER_API_KEY:-}"
 
 setup() {
     FAKE_DIR="${BATS_TEST_TMPDIR}/fakebin"
@@ -536,6 +537,171 @@ run_provider_with_prompt_file() {
     [ "$status" -eq 1 ]
 }
 
+# ---- openrouter ----
+#
+# OpenRouter is the one seat whose errors can arrive with HTTP 200: the body
+# carries {"error":{"code":N}} and no .choices. ensure_error_body stamps
+# .http_status only on a wire status >= 400 (retry.sh:51), so on that path
+# is_model_unavailable_error is structurally blind — hence this seat classifies
+# on .error.code first, falling back to .http_status.
+
+@test "openrouter: a 404 carried inside an HTTP 200 exits 3" {
+    FAKE_BODY='{"error":{"code":404,"message":"No endpoints found for anthropic/claude-sonnet-4.6."}}'
+    FAKE_HTTP=200 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 3 ]
+    assert_not_blank "$stderr"
+}
+
+@test "openrouter: a wire 404 exits 3, and 401 does not" {
+    FAKE_BODY='{"error":{"message":"No endpoints found for anthropic/claude-sonnet-5."}}'
+    FAKE_HTTP=404 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 3 ]
+
+    # The key, not the model, is the fault; the fallback model shares the key.
+    FAKE_BODY='{"error":{"code":401,"message":"User not found."}}'
+    FAKE_HTTP=401 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+}
+
+@test "openrouter: a non-numeric error code does not shadow the wire status" {
+    # `//` in jq falls through on null, not on a non-empty string, so a passthrough
+    # code like "model_not_found" would hide the 404 that ensure_error_body stamped
+    # and cost the run its one durable wrong-slug signal.
+    FAKE_BODY='{"error":{"code":"model_not_found","message":"anthropic/nope is not a valid model id"}}'
+    FAKE_HTTP=404 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 3 ]
+}
+
+@test "openrouter: a 403 moderation block exits 1, not 3" {
+    # OpenRouter answers 403 for a prompt its moderation flagged — a property of
+    # the input, not the model. is_model_unavailable_error maps a wire 403 to
+    # exit 3 (retry.sh:151), which would spend a fallback call re-sending the
+    # same flagged prompt.
+    FAKE_BODY='{"error":{"code":403,"message":"Input flagged by moderation.","metadata":{"reasons":["harassment"]}}}'
+    FAKE_HTTP=403 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"moderation"* ]]
+}
+
+@test "openrouter: an exhausted balance exits 1 and names where to top up" {
+    # The fallback model draws on the same wallet, so a different model cannot
+    # help; the user has to act, which means the message has to say what to do.
+    FAKE_BODY='{"error":{"code":402,"message":"Insufficient credits."}}'
+    FAKE_HTTP=402 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"openrouter.ai/credits"* ]]
+}
+
+@test "openrouter: transient failures exit 1 so no 24h verdict is recorded" {
+    local code
+    for code in 429 500 502 503 504; do
+        FAKE_BODY="{\"error\":{\"code\":${code},\"message\":\"transient\"}}"
+        FAKE_HTTP=$code run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k COUNCIL_MAX_RETRIES=0
+        [ "$status" -eq 1 ]
+    done
+}
+
+@test "openrouter: a 200 whose content is null is an error, not an answer" {
+    # jq -r on a missing .choices prints the literal "null" and exits 0, so
+    # without the // empty guard this body becomes a fabricated council vote.
+    FAKE_BODY='{"id":"gen-1","choices":[{"message":{"content":null}}]}'
+    FAKE_HTTP=200 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+    [[ "$output" != *"null"* ]]
+    assert_not_blank "$stderr"
+}
+
+@test "openrouter: a bare-string .error does not crash the extractor" {
+    FAKE_BODY='{"error":"upstream is down"}'
+    FAKE_HTTP=502 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k COUNCIL_MAX_RETRIES=0
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"upstream is down"* ]]
+}
+
+@test "openrouter: missing key fails before any request" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"OPENROUTER_API_KEY"* ]]
+    [ ! -s "$ARGV_FILE" ]
+}
+
+@test "openrouter: extracts content and posts the pinned default to the router" {
+    FAKE_BODY='{"choices":[{"message":{"content":"OR_OK"}}],"model":"anthropic/claude-sonnet-5"}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "OR_OK" ]
+    grep -qF "https://openrouter.ai/api/v1/chat/completions" "$ARGV_FILE"
+    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-sonnet-5" ]]
+}
+
+@test "openrouter: sends one model id and never asks the router to switch models" {
+    # models[] or route:"fallback" let OpenRouter answer as a different model
+    # than the one the council labels, caches and synthesizes under.
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 0 ]
+    [[ "$(jq -r '.model | type' "$DATA_FILE")" == "string" ]]
+    [[ "$(jq -r 'has("models")' "$DATA_FILE")" == "false" ]]
+    [[ "$(jq -r 'has("route")' "$DATA_FILE")" == "false" ]]
+}
+
+@test "openrouter: the routed model is logged to stderr only under debug" {
+    # run_provider_script merges provider stderr into stdout and stores the whole
+    # capture as the answer, so anything written here on the success path is
+    # cached and fed to synthesis as if the model had said it.
+    FAKE_BODY='{"choices":[{"message":{"content":"OR_OK"}}],"model":"anthropic/claude-sonnet-5-20260115","provider":"Anthropic"}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "OR_OK" ]
+    assert_blank "$stderr"
+
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k COUNCIL_DEBUG=1
+    [ "$status" -eq 0 ]
+    [ "$output" = "OR_OK" ]
+    [[ "$stderr" == *"anthropic/claude-sonnet-5-20260115"* ]]
+}
+
+@test "openrouter: bearer key never appears in the process argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=SEKRET_ORT
+    ! grep -qF "SEKRET_ORT" "$ARGV_FILE"
+    grep -qF "SEKRET_ORT" "$CONFIG_FILE"
+}
+
+@test "openrouter: injects image_url object when given an image" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    local bf="${BATS_TEST_TMPDIR}/b64"; printf 'QUJD' > "$bf"
+    run --separate-stderr env PATH="${FAKE_DIR}:$PATH" \
+        FAKE_ARGV_FILE="$ARGV_FILE" FAKE_CONFIG_FILE="$CONFIG_FILE" \
+        FAKE_DATA_FILE="$DATA_FILE" FAKE_BODY="$FAKE_BODY" OPENROUTER_API_KEY=k \
+        bash "$PROVIDERS/openrouter.sh" "hi" --image-file "$bf" --image-mime image/png
+    [ "$status" -eq 0 ]
+    grep -qF 'image_url' "$DATA_FILE"
+    grep -qF 'data:image/png;base64,QUJD' "$DATA_FILE"
+}
+
+@test "openrouter: a large prompt never reaches jq's argv, model id intact" {
+    # The id carries a slash and a leading tilde, the two shapes MSYS rewrites in
+    # argv and env, so the Windows CI leg proves the model reaches the payload
+    # unmangled rather than only that the prompt stayed off argv.
+    FAKE_BODY='{"choices":[{"message":{"content":"OR_OK"}}]}'
+    run_provider_with_prompt_file openrouter.sh OPENROUTER_API_KEY=k \
+        'OPENROUTER_MODEL=~anthropic/claude-sonnet-latest'
+    [ "$status" -eq 0 ]
+    [ "$output" = "OR_OK" ]
+    grep -qF "$PROMPT_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$PROMPT_LEAK_MARK" "$JQ_ARGV_FILE"
+    [[ "$(jq -r '.model' "$DATA_FILE")" == '~anthropic/claude-sonnet-latest' ]]
+}
+
+@test "provider_vision_capable: openrouter is capable by default, an override opts in" {
+    source "${LIB_DIR}/providers.sh"
+    provider_vision_capable openrouter
+    ! OPENROUTER_MODEL=deepseek/deepseek-v3 provider_vision_capable openrouter
+    OPENROUTER_MODEL=deepseek/deepseek-v3 OPENROUTER_VISION=1 provider_vision_capable openrouter
+}
+
 @test "kimi: sends the only temperature its models accept" {
     # Every Moonshot model rejects any temperature but 1 with
     # "invalid temperature: only 1 is allowed for this model", so the 0.7 the
@@ -605,6 +771,16 @@ run_e2e() {
 @test "kimi: the live endpoint accepts our payload, temperature included (E2E)" {
     e2e_gate "$E2E_KIMI_KEY"
     run_e2e kimi.sh KIMI_API_KEY "$E2E_KIMI_KEY"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OK"* ]]
+}
+
+# The hermetic tests above assert what this seat sends. Only a real call can
+# assert the router accepts it — and that the pinned default id still resolves,
+# which a catalog listing alone does not prove.
+@test "openrouter: the live endpoint accepts our payload (E2E)" {
+    e2e_gate "$E2E_OPENROUTER_KEY"
+    run_e2e openrouter.sh OPENROUTER_API_KEY "$E2E_OPENROUTER_KEY"
     [ "$status" -eq 0 ]
     [[ "$output" == *"OK"* ]]
 }

@@ -258,6 +258,11 @@ get_model() {
         kimi)       echo "${KIMI_MODEL:-kimi-k3}" ;;
         kimi-cli)   cli_model kimi-cli "${KIMI_CLI_MODEL:-}" ;;
         ollama)     echo "${OLLAMA_MODEL:-local}" ;;
+        # Pinned rather than an alias for the reason stated above, and pinned to
+        # an Anthropic id because that is the one vendor the council otherwise
+        # has no voice for. A router's default is retargetable by design:
+        # OPENROUTER_MODEL takes any id from openrouter.ai/models.
+        openrouter) echo "${OPENROUTER_MODEL:-anthropic/claude-sonnet-5}" ;;
         *)          echo "unknown" ;;
     esac
 }
@@ -267,6 +272,15 @@ get_model() {
 provider_vision_capable() {
     case "$1" in
         gemini|openai|grok|perplexity) return 0 ;;
+        # The curated default accepts images. An override points at any of
+        # hundreds of routed models whose modalities are not knowable from here,
+        # so it opts in explicitly rather than being assumed either way.
+        openrouter)
+            if [[ -z "${OPENROUTER_MODEL:-}" || "${OPENROUTER_VISION:-}" == 1 ]]; then
+                return 0
+            fi
+            return 1
+            ;;
         *) return 1 ;;
     esac
 }
@@ -310,6 +324,7 @@ provider_color() {
         perplexity)        echo -e "${GREEN:-}" ;;
         kimi|kimi-cli)     echo -e "${MAGENTA:-}" ;;
         ollama)            echo -e "${CYAN:-}" ;;
+        openrouter)        echo -e "${LIGHT_YELLOW:-}" ;;
         *)                 echo -e "${CYAN:-}" ;;
     esac
 }
@@ -323,6 +338,7 @@ provider_emoji() {
         perplexity)        echo "🟩" ;;
         kimi|kimi-cli)     echo "🟪" ;;
         ollama)            echo "⬜" ;;
+        openrouter)        echo "🟨" ;;
         *)                 echo "⬛" ;;
     esac
 }

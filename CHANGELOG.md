@@ -4,6 +4,43 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Features
+
+- **An OpenRouter seat.** `OPENROUTER_API_KEY` enlists an eleventh provider that
+  reaches any model on openrouter.ai, defaulting to `anthropic/claude-sonnet-5` —
+  the one vendor the council had no direct voice for. It sends exactly one model
+  id, never `models[]` or `route: "fallback"`: OpenRouter may fail over among
+  upstreams serving that same id, which preserves identity, but the council
+  labels, caches and synthesizes under the id it asked for, so a switch across
+  ids would silently mislabel the answer. `OPENROUTER_MODEL` retargets the seat;
+  `OPENROUTER_VISION=1` declares such an override image-capable, since the
+  curated default is the only routed model whose modalities are known here.
+
+  Three things this seat does not share with its five API siblings. Its errors
+  can arrive **inside an HTTP 200** — a body carrying `{"error":{"code":N}}` and
+  no `.choices`, where `jq -r '.choices[0].message.content'` prints the literal
+  `null` and exits 0, which would become a fabricated council vote — so it
+  classifies on `.error.code` before falling back to the wire status. It does not
+  use `is_model_unavailable_error`: that helper reads only the `.http_status`
+  stamped on a wire status >= 400, and maps 403 to exit 3, while OpenRouter
+  answers 403 for a moderation-flagged *prompt* that a fallback model would
+  refuse just as fast. And `/status` probes `/api/v1/key` rather than
+  `/api/v1/models`, which answers 200 with no key at all and with a rejected one
+  — an openai-shaped probe would have reported a dead seat as Connected.
+
+  Only 404 exits 3. 401 and 402 are key and wallet faults the fallback shares
+  (402 says where to top up), and 429/5xx are transient, so none of them writes
+  a day-long model-unavailable verdict. No fallback model id ships: the repo
+  requires each one be verified against the live API first, so 404 -> exit 3
+  errors loudly today and degrades gracefully the day a verified id lands.
+
+- **The synthesis is told a router seat is not a second opinion.** Pointing
+  `OPENROUTER_MODEL` at a model another seat already runs gives two headers
+  voicing one model, which nothing in the response reveals. `prompts/synthesis.md`
+  now reads such agreement as possible duplication rather than corroboration.
+
 ## 2026.8.10
 
 ### Features
