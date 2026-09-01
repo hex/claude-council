@@ -3,6 +3,7 @@
 # ABOUTME: Validates role loading, presets, validation, and prompt injection
 
 load test_helper
+bats_require_minimum_version 1.5.0
 
 setup() {
     mkdir -p "$TEST_CACHE_DIR"
