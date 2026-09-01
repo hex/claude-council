@@ -572,6 +572,23 @@ run_provider_with_prompt_file() {
     [ "$status" -eq 3 ]
 }
 
+@test "openrouter: the 400 that names an invalid model id exits 3" {
+    # Verified against the live API: an unknown slug comes back 400, not the 404
+    # the design assumed, with .error.code 400 and the wire status agreeing.
+    FAKE_BODY='{"error":{"message":"anthropic/claude-sonnet-does-not-exist-99 is not a valid model ID","code":400},"user_id":"user_x"}'
+    FAKE_HTTP=400 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 3 ]
+}
+
+@test "openrouter: an ordinary 400 is not a model verdict" {
+    # 400 also covers plain bad parameters. Treating the whole class as
+    # model-unavailable would spend a fallback call on a request that is
+    # malformed whichever model receives it.
+    FAKE_BODY='{"error":{"message":"max_tokens must be at least 1","code":400}}'
+    FAKE_HTTP=400 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+}
+
 @test "openrouter: a 403 moderation block exits 1, not 3" {
     # OpenRouter answers 403 for a prompt its moderation flagged — a property of
     # the input, not the model. is_model_unavailable_error maps a wire 403 to

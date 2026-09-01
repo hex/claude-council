@@ -233,9 +233,9 @@ model_fallback_for(provider) -> model    # model_fallback.sh
   - one verified fallback per API provider (openai, grok, gemini, perplexity, kimi)
   - empty for CLI providers, which degrade to their API sibling instead, for
     ollama, whose models are whatever is installed locally, and for openrouter,
-    whose fallback id is not yet verified against the live API (so its 404 -> exit 3
-    mapping errors loudly rather than degrading; the mapping is in place for the
-    day a verified id lands)
+    whose fallback id is not yet verified against the live API (so its
+    wrong-model-id -> exit 3 mapping errors loudly rather than degrading; the
+    mapping is in place for the day a verified id lands)
 
 model_unavailable_cached/remember(provider, model, key_hash):
   - TTL-cached "unavailable" verdict, scoped to provider + preferred model + key

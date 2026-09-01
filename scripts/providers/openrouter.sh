@@ -171,10 +171,20 @@ if [[ -z "$TEXT" ]]; then
     fi
 
     # exit 3 means "a different model would help, and it is safe to remember
-    # that for 24 hours". Only 404 qualifies: 401 and 402 are key and wallet
-    # faults a fallback shares, and 429/5xx are transient.
+    # that for 24 hours". 401 and 402 are key and wallet faults a fallback
+    # shares, and 429/5xx are transient, so none of those qualify.
     case "$CODE" in
+        # "No endpoints found for <id>" — the id is real but nothing serves it.
         404) exit 3 ;;
+        # An unknown slug comes back 400, not 404 (verified against the live
+        # API). 400 also covers ordinary bad parameters, which are malformed
+        # whichever model receives them, so only a message saying the model id
+        # itself is invalid is a model verdict.
+        400)
+            case "$(printf '%s' "$ERROR" | tr '[:upper:]' '[:lower:]')" in
+                *"not a valid model"*|*"model not found"*|*"invalid model"*) exit 3 ;;
+            esac
+            ;;
     esac
     exit 1
 fi

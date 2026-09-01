@@ -30,11 +30,17 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   `/api/v1/models`, which answers 200 with no key at all and with a rejected one
   — an openai-shaped probe would have reported a dead seat as Connected.
 
-  Only 404 exits 3. 401 and 402 are key and wallet faults the fallback shares
-  (402 says where to top up), and 429/5xx are transient, so none of them writes
-  a day-long model-unavailable verdict. No fallback model id ships: the repo
-  requires each one be verified against the live API first, so 404 -> exit 3
-  errors loudly today and degrades gracefully the day a verified id lands.
+  Exit 3 — "a different model would help, and it is safe to remember that for 24
+  hours" — is reserved for a wrong model id. Verified against the live API rather
+  than assumed: an unknown slug comes back **400**, not 404, with the message
+  `<id> is not a valid model ID`, so the 400 class is admitted only when its
+  message names the model as invalid; an ordinary bad-parameter 400 is malformed
+  whichever model receives it and exits 1. 404 stays mapped for "No endpoints
+  found for <id>". 401 and 402 are key and wallet faults the fallback shares (402
+  says where to top up), and 429/5xx are transient, so none writes a day-long
+  verdict. No fallback model id ships: the repo requires each be verified against
+  the live API first, so the seat errors loudly today and degrades the day a
+  verified id lands.
 
 - **The synthesis is told a router seat is not a second opinion.** Pointing
   `OPENROUTER_MODEL` at a model another seat already runs gives two headers
