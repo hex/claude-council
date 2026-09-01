@@ -151,7 +151,9 @@ Two flavors share the interface:
   seat that varies. There is no `openrouter-N.sh`: `provider_script_path` routes
   every numbered seat back to the one script, and the orchestrator exports
   `COUNCIL_SEAT` so that script can resolve its own model instead of the
-  default. Without that the three seats would post one model behind three
+  default. `--list-default-models` reports the default set with each name paired
+  to its model, which is the only way a caller outside the library can label a
+  numbered seat — the name alone does not say which model it carries. Without that the three seats would post one model behind three
   headers each claiming a different one.
 - **CLI providers** (`codex`, `antigravity`, `grok-cli`, `kimi-cli`), gated on the
   binary being on `PATH`, use the user's existing CLI subscription auth, no per-call

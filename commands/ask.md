@@ -70,7 +70,8 @@ any provider questions:
      ```
      - "Run local council" → local mode (Step 2).
      - "How to add a provider" → show the setup hint (set an API key, or install
-       the `codex` / `agy` (Antigravity) / `grok` CLI; `/claude-council:status`
+       the `codex` / `agy` (Antigravity) / `grok` / `kimi` CLI, or run `ollama`;
+       `/claude-council:status`
        shows what's available) and stop.
      - "Cancel" → stop.
 
@@ -84,32 +85,76 @@ Before querying, use AskUserQuestion in these scenarios:
 
 ### 1. Provider Selection + Verbosity (if --providers and --verbosity not specified)
 
-First, discover the providers that would be queried by default (post CLI-prefers-API policy — `--list-default` is the right flag here, NOT `--list-available`, which includes shadowed API siblings that won't run by default):
+First, discover the providers that would be queried by default, each paired with
+the model it would actually send (post CLI-prefers-API policy — `--list-default`
+is the right set here, NOT `--list-available`, which includes shadowed API
+siblings that won't run):
+
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default 2>&1 | head -1
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default-models
 ```
 
-**Only show default-queried providers in the question.** If only 1 provider is available, skip the provider question and use it directly. If the user wants a shadowed API provider (e.g., `openai` when codex is installed), they can pass `--providers=openai` explicitly.
+One `<provider>\t<model>` per line. Build every option label from this output —
+never from a list written down here. A hardcoded provider table in this file has
+gone stale three times (it predated kimi, ollama and the OpenRouter seats), and
+the model is what makes an option meaningful: router seats are named
+`openrouter-1`, `openrouter-2`, … and carry no model in the name at all, so
+without the pairing the picker shows several identical-looking rows.
 
-**The first option of the providers question must be "All providers" (Recommended)** — this is the most common choice and saves the user from clicking each provider individually. If the user picks it, treat it as selecting every available provider.
+**Only show default-queried providers.** If only one is listed, skip the provider
+question and use it. A user who wants a shadowed API provider (e.g. `openai` when
+codex is installed) passes `--providers=openai` explicitly.
 
-**Combine providers + verbosity into a single AskUserQuestion call** (it supports multiple questions per call) so the user resolves both decisions in one screen instead of two:
+### Shape the question to the roster size
+
+AskUserQuestion allows at most **4 options per question** and at most **4
+questions per call**. A council of three seats plus "All" fits in one question; a
+larger roster does not, and rosters are routinely larger now that one
+`OPENROUTER_MODELS` entry becomes one seat.
+
+**Three or fewer providers** — one question, "All" first:
 
 ```
-<!-- The model names below are the current defaults; the single source of truth
-     is get_model() in scripts/lib/providers.sh. When those defaults change,
-     update them here, in the SKILL.md provider tables, and in the README Model
-     Selection section together. -->
 Question 1: "Which AI providers should I consult?"
 Header: "Providers"
 multiSelect: true
 Options:
   - All providers (Recommended) - query every configured provider in parallel
-  - Gemini (gemini-pro-latest) - Google's reasoning model
-  - OpenAI (gpt-5.6-sol) - OpenAI's reasoning model
-  - Grok (grok-latest) - xAI's reasoning model
-  - Perplexity (sonar-reasoning-pro) - search-augmented reasoning
+  - <provider> (<model>) - one option per line of --list-default-models
+```
 
+**Four or more providers** — the individual list cannot fit, so group it:
+
+```
+Question 1: "Which AI providers should I consult?"   (N from --list-default-models)
+Header: "Providers"
+multiSelect: false
+Options:
+  - All N providers (Recommended) - query every configured provider in parallel
+  - Direct seats only - every provider except the openrouter-N router seats
+  - Routed models only - just the openrouter-N seats, one per OPENROUTER_MODELS entry
+  - Let me pick individually - choose exact providers
+```
+
+Offer "Routed models only" only when the output contains `openrouter-` names, and
+"Direct seats only" only when it contains something else; with one group present
+the split is meaningless, so drop the absent option rather than showing an empty
+one.
+
+On "Let me pick individually", make a **second** AskUserQuestion call splitting
+the providers across up to 4 multiSelect questions of at most 4 options each
+(12 providers' worth, more than any real roster), labelling each option
+`<provider> (<model>)` as above. Union the selections.
+
+Whatever the shape, resolve the answer to a concrete `--providers=` value; "All"
+means omitting the flag entirely, which lets discovery run as normal.
+
+### Verbosity
+
+Ask it in the same call as the provider question whenever both are needed, so the
+user resolves both on one screen:
+
+```
 Question 2: "How verbose should the responses be?"
 Header: "Verbosity"
 multiSelect: false
@@ -119,13 +164,10 @@ Options:
   - Detailed - thorough analysis with code examples and trade-offs
 ```
 
-The model names above are illustrative defaults, duplicated here by hand — treat
-them as potentially stale. The authoritative source for each provider's model is
-`get_model()` in `scripts/lib/providers.sh` (overridable per provider via the
-`*_MODEL` env vars). `--list-default` reports provider names only, not models, so
-it can't confirm these labels; when in doubt, read `get_model()`.
-
-When the providers list exceeds 4 options ("All" + N providers), AskUserQuestion's 4-option limit forces a different shape — collapse to "All / Fast subset / Custom" presets.
+Map the selection to the flag passed to query-council.sh:
+- "Standard" → omit the flag (default)
+- "Brief" → `--verbosity=brief`
+- "Detailed" → `--verbosity=detailed`
 
 **Skip the verbosity question if `--verbosity` was passed** explicitly. Skip the providers question if `--providers` was passed. Resolve both via flags when both are present.
 

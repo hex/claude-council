@@ -50,6 +50,7 @@ Note: Flags accept both --flag=value and --flag value formats.
   --no-pane           Disable streaming tmux pane (default: on inside tmux)
   --list-available    List configured providers (human-readable, with policy info)
   --list-default      List providers that would be queried by default (machine-readable)
+  --list-default-models  Same set, one "<provider>\t<model>" per line (machine-readable)
 
 Output: JSON with metadata and provider responses
 EOF
@@ -61,6 +62,7 @@ FILTER_PROVIDERS=""
 PROMPT=""
 LIST_AVAILABLE=false
 LIST_DEFAULT=false
+LIST_DEFAULT_MODELS=false
 USE_CACHE=true
 ROLES=""
 DEBATE_MODE=false
@@ -150,6 +152,10 @@ while [[ $# -gt 0 ]]; do
             LIST_DEFAULT=true
             shift
             ;;
+        --list-default-models)
+            LIST_DEFAULT_MODELS=true
+            shift
+            ;;
         --prompt=*)
             PROMPT="${1#*=}"
             shift
@@ -187,6 +193,20 @@ done
 # would actually run (post CLI-prefers-API filter). For tooling.
 if [[ "$LIST_DEFAULT" == true ]]; then
     default_provider_set
+    exit 0
+fi
+
+# --list-default-models: the same set, each name paired with the model it would
+# actually query, tab-separated. The /ask picker labels an option by its model —
+# that is what distinguishes one from another, and router seats (openrouter-1..N)
+# carry no model in their name at all. Derived from default_provider_set and
+# get_model rather than restated, so it cannot name a provider --list-default
+# would not, or a model the query would not send.
+if [[ "$LIST_DEFAULT_MODELS" == true ]]; then
+    read -ra LDM_SET <<< "$(default_provider_set)"
+    for p in "${LDM_SET[@]+"${LDM_SET[@]}"}"; do
+        printf '%s\t%s\n' "$p" "$(get_model "$p")"
+    done
     exit 0
 fi
 

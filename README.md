@@ -776,6 +776,11 @@ bash scripts/query-council.sh --list-available
 
 # List the providers that would be queried by default (machine-readable)
 bash scripts/query-council.sh --list-default
+
+# Same set, each paired with the model it would send: "<provider>\t<model>" per
+# line. Router seats carry no model in their name, so this is what a picker or
+# any other tool needs to label them.
+bash scripts/query-council.sh --list-default-models
 ```
 
 **JSON output structure:**

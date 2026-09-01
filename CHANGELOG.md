@@ -71,6 +71,27 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   to do without widening every healthy row to make room for it. A test asserts
   every row's status begins at the same column; it fails against the old tab.
 
+- **`--list-default-models`, and an `/ask` picker that fits the roster.** The
+  provider picker built its options from a table written down in
+  `commands/ask.md`. That table had gone stale three times — it predated kimi,
+  ollama and the OpenRouter seats — and the shape it specified could not be
+  rendered anyway: AskUserQuestion allows four options per question, and a
+  roster of three routed models plus the usual seats needs nine. The one-line
+  note acknowledging the overflow named a fallback ("All / Fast subset /
+  Custom") that was never specified.
+
+  The new flag reports the default set as `<provider>\t<model>` per line, derived
+  from `default_provider_set` and `get_model` so it cannot name a provider a
+  query would not run or a model it would not send. `ask.md` now builds every
+  label from it rather than from a list, which removes the staleness as a class
+  rather than refreshing one instance, and specifies both shapes concretely: one
+  question when three or fewer providers are configured, grouped presets plus a
+  second multi-question call when more are. The model matters most for router
+  seats, which are named `openrouter-1`, `openrouter-2`, … and carry no model in
+  the name — without the pairing the picker shows identical-looking rows. The
+  command layer cannot resolve them itself: `ask.md`'s allowed-tools admits the
+  council's own scripts, not a shell that could source `providers.sh`.
+
 - **A whitespace-only answer is a failure, not an answer.** Every provider
   guarded with `[[ -z "$TEXT" ]]`, which catches only a truly empty string, so a
   model replying with a single space passed as a successful answer and reached
