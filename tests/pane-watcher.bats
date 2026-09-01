@@ -26,20 +26,42 @@ setup() {
 
 # Shadow stty on PATH so a test can move the pane width while the watcher runs.
 # The watcher reads live width from `stty size`; under bats there is no tty, so
-# the real stty always fails and the width would never change. COLS_FILE holds
-# the current width — write to it to simulate a resize.
+# the real stty always fails and the width would never change.
+#
+# COLS_FILE is one width per reading, the last line answering every reading
+# after it. A single line is therefore a fixed width, which is what most tests
+# want, and a resize is still just a write. A drag writes the whole sequence up
+# front and gets it back tick by tick — the widths the watcher reads, rather
+# than widths written on a clock that has to keep pace with its poll.
+#
+# COLS_READS records what was served, so it doubles as the reading count.
+# Fork-free on purpose: this runs on every one of the watcher's polls.
 fake_stty() {
     FAKE_BIN="$W/fake-bin"
     COLS_FILE="$W/cols"
+    COLS_READS="$W/cols-reads"
     mkdir -p "$FAKE_BIN"
     echo "$1" > "$COLS_FILE"
+    : > "$COLS_READS"
     cat > "$FAKE_BIN/stty" <<EOF
 #!/bin/bash
-[[ "\$1" == "size" ]] && { echo "24 \$(cat "$COLS_FILE")"; exit 0; }
+if [[ "\$1" == "size" ]]; then
+    n=1
+    while read -r _; do n=\$((n + 1)); done < "$COLS_READS"
+    i=0
+    cols=""
+    while read -r line; do
+        i=\$((i + 1)); cols="\$line"
+        [[ \$i -eq \$n ]] && break
+    done < "$COLS_FILE"
+    echo "24 \$cols"
+    echo "\$cols" >> "$COLS_READS"
+    exit 0
+fi
 exec /bin/stty "\$@"
 EOF
     chmod +x "$FAKE_BIN/stty"
-    export FAKE_BIN COLS_FILE
+    export FAKE_BIN COLS_FILE COLS_READS
 }
 
 # Count every render the watcher performs. render.sh runs once per displayed
@@ -94,6 +116,22 @@ await_file() {
     done
 }
 
+# Block until the watcher has read pane width $1 for the $2nd time. COLS_READS
+# records every reading the fake stty served, so a test can wait on the
+# watcher's own polls rather than on a clock running beside them. Same
+# errexit-safe `if` as the helpers above.
+await_width_reads() {
+    local want_cols="$1" want="$2" waited=0
+    while [[ $(grep -cxF "$want_cols" "$COLS_READS") -lt $want ]]; do
+        sleep 0.05
+        waited=$((waited + 1))
+        if [[ $waited -gt 400 ]]; then
+            echo "timed out waiting for $want readings of width $want_cols" >&2
+            return 1
+        fi
+    done
+}
+
 # Block until a file contains a string. Same errexit-safe shape as the two above.
 await_content() {
     local f="$1" want="$2" waited=0
@@ -122,8 +160,13 @@ bounded_watcher() {
         run_with_deadline "$1" bash "$WATCHER" "$W" "$LIB"
 }
 
+# The deadline is a hang detector, not a bound on the run: every test here ends
+# because something it wrote told the watcher to stop, so a watcher still alive
+# at the deadline is a regression whenever it is set. Generous, then — a drag
+# takes the watcher a couple of dozen of its own polls, and on a loaded runner
+# each of those costs more than the 0.12s it sleeps.
 run_watcher() {
-    COUNCIL_AUTO_CLOSE=1 run --separate-stderr bounded_watcher 10
+    COUNCIL_AUTO_CLOSE=1 run --separate-stderr bounded_watcher 30
 }
 
 # Everything the watcher printed after its last screen+scrollback clear, i.e.
@@ -231,24 +274,24 @@ blank_lines_before() {
 
 @test "watcher: a width that keeps moving does not redraw until it settles" {
     rm -f "$W/.done"
-    fake_stty 40
     count_renders
     printf 'Hello from gemini\n' > "$W/responses/gemini.md"
     printf 'gemini\tcomplete\t1234\t\n' >> "$W/status"
-    (
-        await_renders 1
-        # A drag: a new width every tick, none of them held. tmux moves in
-        # whole-cell steps, so consecutive polls can repeat a width the drag
-        # is about to abandon — settling on the first repeat would redraw at
-        # a width nobody chose, at ~1s and a scrollback wipe each time.
-        for w in 44 44 52 52 61 61 70 70 78 78; do
-            echo "$w" > "$COLS_FILE"
-            sleep 0.13
-        done
-        echo 100 > "$COLS_FILE"
-        await_renders 2
-        touch "$W/.done"
-    ) &
+    # A drag, spelled out as the widths the watcher will read: it starts at 44
+    # and holds each width for three readings — one short of
+    # WIDTH_SETTLE_TICKS, so the drag comes as close to settling as a drag can
+    # without doing so. tmux moves in whole-cell steps, so consecutive polls do
+    # repeat a width the drag is about to abandon, and settling on a repeat
+    # would redraw at a width nobody chose, at ~1s and a scrollback wipe each
+    # time. Writing the widths on a 0.13s clock instead only held while the
+    # machine was idle: stretch that sleep and one width is read four times,
+    # the drag settles mid-drag, and the redraw count goes up.
+    printf '%s\n' 44 44 44 52 52 52 61 61 61 100 > "$COLS_FILE"
+    # The run has to outlast the whole drag, or a redraw the drag should never
+    # have triggered ends it and passes for the redraw under test. Six readings
+    # of the resting width is two past the settle, so the one redraw that is
+    # supposed to happen has happened and any earlier one is on screen too.
+    ( await_width_reads 100 6; await_renders 2; touch "$W/.done" ) &
     run_watcher
     [ "$status" -eq 0 ]
     # Exactly one redraw, at the width the drag came to rest on.
@@ -360,8 +403,11 @@ producer_awaits_retry_once_drawn() {
     printf 'kimi-cli\terror\t\t\n' >> "$W/status"
     write_offer 5 kimi-cli
     producer_awaits_retry 8 &
+    # No wait before the key: it sits in the pipe until something reads it, and
+    # the only read of the watcher's stdin is the offer prompt's — which prints
+    # the prompt before it. A wait here ordered nothing and read as though it did.
     COUNCIL_AUTO_CLOSE=1 run --separate-stderr bounded_watcher 12 \
-        < <(sleep 1; printf 'r'; until_watcher_exits)
+        < <(printf 'r'; until_watcher_exits)
     [ "$status" -eq 0 ]
     [ -z "$stderr" ]
     [[ "$output" == *"[r] retry failed (kimi-cli)"* ]]
@@ -374,8 +420,9 @@ producer_awaits_retry_once_drawn() {
 @test "watcher: esc at the retry offer closes the pane" {
     rm -f "$W/.done"
     write_offer 5 kimi-cli
+    # The esc waits in the pipe for the offer prompt's read, as in the test above.
     COUNCIL_AUTO_CLOSE=1 run --separate-stderr bounded_watcher 8 \
-        < <(sleep 1; printf '\033'; until_watcher_exits)
+        < <(printf '\033'; until_watcher_exits)
     # .done never arrives, so only the close can end the wait — and the watch
     # dir going away is what tells the producer to carry on without a retry.
     [ "$status" -eq 0 ]
