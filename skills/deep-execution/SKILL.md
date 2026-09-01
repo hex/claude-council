@@ -37,6 +37,18 @@ COUNCIL_Q_EOF
 # An unknown role is refused, as the standard flow refuses it; assigning it
 # would hand that provider the bare question under a role heading.
 [[ -z "$ROLES" ]] || validate_roles "$ROLES" || exit 1
+# The model the ANALYST agents run on — distinct from the provider models below,
+# which are what actually answer the question. Pinned rather than inherited: an
+# omitted model makes every analyst run on whatever model the user's session
+# happens to use, so the cost of a mode that already fans out one agent per
+# provider varies by a factor of several for no stated reason. Sonnet handles
+# the analyst's work — run a query, judge the answer, emit a structured object.
+ANALYST_MODEL="${COUNCIL_AGENT_MODEL:-sonnet}"
+case "$ANALYST_MODEL" in
+    sonnet|opus|haiku|fable) ;;
+    *) echo "COUNCIL_AGENT_MODEL must be one of: sonnet, opus, haiku, fable (got '$ANALYST_MODEL')" >&2; exit 1 ;;
+esac
+echo "analyst model $ANALYST_MODEL"
 ASSIGNMENTS=""
 [[ -n "$ROLES" ]] && ASSIGNMENTS=$(assign_roles_to_providers "$ROLES" "${PROVIDERS[@]}")
 echo "run $RUN"
@@ -52,8 +64,10 @@ for p in "${PROVIDERS[@]}"; do
 done
 ```
 
-It prints the run id, then one line per provider: name, model (shown in the
-Step 4 header), and the absolute path of that provider's question file.
+It prints the run id, then the analyst model, then one line per provider: name,
+model (shown in the Step 4 header), and the absolute path of that provider's
+question file. Pass the analyst model to the workflow as `analystModel`; the
+workflow script cannot read the environment itself.
 
 ## Step 2: Run the Analyst Workflow
 
@@ -91,7 +105,8 @@ const results = await parallel(args.providers.map(p => () =>
     `- {PLUGIN_ROOT} = ${args.pluginRoot}\n` +
     `- {QUESTION_FILE} = ${p.questionFile}\n` +
     `Your final answer is the Round 3 analysis object, returned through the structured output tool.`,
-    { label: p.name, phase: 'Analyze', schema, agentType: 'general-purpose' })))
+    { label: p.name, phase: 'Analyze', schema, agentType: 'general-purpose',
+      model: args.analystModel })))
 // parallel() keeps a dead or skipped analyst's slot as null, index-aligned with args.providers.
 const failed = args.providers.filter((_, i) => !results[i]).map(p => p.name)
 if (failed.length) log(`no analysis from: ${failed.join(', ')}`)
@@ -108,6 +123,7 @@ path of `${CLAUDE_PLUGIN_ROOT}`, `questionFile` the path Step 1 printed):
 ```json
 {
   "pluginRoot": "<CLAUDE_PLUGIN_ROOT>",
+  "analystModel": "<the model Step 1 printed>",
   "schema": { "...the parsed schema file..." },
   "providers": [
     { "name": "gemini", "questionFile": "<absolute path from Step 1>" }

@@ -71,6 +71,17 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   to do without widening every healthy row to make room for it. A test asserts
   every row's status begins at the same column; it fails against the old tab.
 
+- **Agent-mode analysts run on a pinned model, not whatever the session uses.**
+  `--agents` spawns one Claude analyst per provider, and the workflow set no
+  model on those `agent()` calls — so they inherited the session's model, and the
+  cost of a mode that already fans out per provider swung by a factor of several
+  depending on what the user happened to be running. A measured eight-seat run on
+  Opus came to ~456k analyst tokens. The analyst's work is to run one query, judge
+  the reply and emit a structured object, so it now pins `sonnet`, overridable
+  with `COUNCIL_AGENT_MODEL` (`sonnet`/`opus`/`haiku`/`fable`, validated before
+  the run). Note this is the one `*_MODEL`-shaped variable that does not name a
+  model answering the question.
+
 - **`--list-default-models`, and an `/ask` picker that fits the roster.** The
   provider picker built its options from a table written down in
   `commands/ask.md`. That table had gone stale three times — it predated kimi,

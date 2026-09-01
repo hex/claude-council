@@ -577,6 +577,7 @@ claude-council/
 | `COUNCIL_SEAT` | (set by the orchestrator) | Which seat a provider script is running as; only the router reads it |
 | `OPENROUTER_VISION` | (unset) | Set to `1` to declare an `OPENROUTER_MODEL` override image-capable |
 | `KIMI_VISION` | (unset) | Set to `1` to declare a `KIMI_MODEL` override image-capable |
+| `COUNCIL_AGENT_MODEL` | `sonnet` | Model the `--agents` ANALYSTS run on (`sonnet`/`opus`/`haiku`/`fable`); not a provider model |
 | `OLLAMA_MODEL` | (unset) | Local model id; when unset, whichever model `ollama list` shows first |
 | `OLLAMA_HOST` | http://localhost:11434 | Ollama server, following Ollama's own convention |
 | `COUNCIL_PROVIDERS` | (unset) | Comma-separated roster queried by default, ahead of discovery; `--providers` still wins per call |

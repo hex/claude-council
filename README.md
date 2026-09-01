@@ -588,6 +588,9 @@ export KIMI_MODEL="kimi-k3"                         # default (reads images)
 export KIMI_VISION=1                                # only needed when KIMI_MODEL
                                                     # names an image-capable model
                                                     # other than the default
+export COUNCIL_AGENT_MODEL="sonnet"                 # default: the model the --agents
+                                                    # ANALYSTS run on (sonnet/opus/haiku/fable).
+                                                    # Not a provider model — see below.
 export OPENROUTER_MODEL="anthropic/claude-sonnet-5"  # default (single seat)
 export OPENROUTER_MODELS="a/b,c/d,e/f"              # or: one seat per entry
 export OPENROUTER_VISION=1                          # only needed when OPENROUTER_MODEL
@@ -597,6 +600,14 @@ export OLLAMA_MODEL="llama3.2"                      # default: whichever model `
 export OLLAMA_HOST="http://localhost:11434"         # default
 export GEMINI_THINKING_BUDGET=8192                  # optional: cap Gemini's internal reasoning tokens (unset: the model decides)
 ```
+
+`COUNCIL_AGENT_MODEL` is the odd one out: every other variable here names a model
+that *answers* the question, while this one names the Claude analyst that wraps a
+provider in `--agents` mode — it runs the query, judges the reply and returns a
+structured analysis. It is pinned rather than inherited from your session, so the
+cost of a mode that already spawns one agent per provider does not swing by a
+factor of several depending on which model you happen to be running. One measured
+run of eight seats came to ~456k analyst tokens.
 
 Gemini and Grok default to their vendor's rolling alias, so the council follows
 a new flagship without a release. Pin an explicit id when you need a fixed model
