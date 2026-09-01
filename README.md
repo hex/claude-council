@@ -152,7 +152,7 @@ claude --plugin-dir /path/to/claude-council    # repo root; loaded for this sess
 | Flag | Description |
 |------|-------------|
 | `--providers=list` | Query specific providers (e.g., `gemini,openai,codex`) |
-| `--roles=list` | Assign roles (e.g., `security,performance` or preset like `balanced`) |
+| `--roles=list` | Assign roles (e.g., `security,performance`, a preset like `balanced`, or `provider=role` pairs) |
 | `--debate` | Enable two-round debate mode |
 | `--file=path` | Include specific file in context |
 | `--image=path` | Attach one image (e.g. a screenshot) for vision-capable providers |
@@ -176,6 +176,9 @@ Assign different perspectives to each provider for more comprehensive reviews:
 
 # Use a preset
 /claude-council:ask --roles=balanced "Review this implementation"
+
+# Bind a role to a named provider instead of a position
+/claude-council:ask --roles=openrouter-2=security,perplexity=devil "Review this design"
 ```
 
 **Available roles:**
@@ -217,6 +220,24 @@ Debate mode surfaces blind spots and stress-tests recommendations. The synthesis
 Combine with roles for focused debates:
 ```bash
 /claude-council:ask --debate --roles=security,performance,simplicity "Review this architecture"
+
+A bare list is **positional**: the first role goes to the first provider
+discovery returns, the second to the second, and so on. That is fine for a fixed
+roster and fragile for a growing one — adding a provider script shifts every
+later provider's role by one, and reordering `OPENROUTER_MODELS` reassigns which
+router seat plays which part. Both happen silently, because only non-empty roles
+are printed.
+
+`provider=role` pairs bind the two explicitly and survive both. The two forms
+cannot be mixed in one `--roles` (a bare entry alongside a keyed one is
+ambiguous), a pair naming a provider that is not being queried is refused rather
+than ignored, and any provider left without a role is now named on stderr:
+
+```
+Note: no role for openai grok
+```
+
+
 ```
 
 ### Agent-Enhanced Analysis (--agents)

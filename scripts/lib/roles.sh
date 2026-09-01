@@ -81,6 +81,11 @@ validate_roles() {
 
     IFS=',' read -ra role_list <<< "$roles_str"
     for role in "${role_list[@]}"; do
+        # An entry may bind a role to a provider by name (provider=role). Only
+        # the role half is a role, and it is validated exactly as a bare one is;
+        # whether the provider exists is assign_roles_to_providers' business,
+        # since only it knows which providers are being queried.
+        role="${role#*=}"
         local prompt
         prompt=$(get_role_prompt "$role")
         if [[ -z "$prompt" ]]; then
@@ -184,12 +189,68 @@ assign_roles_to_providers() {
 
     IFS=',' read -ra roles <<< "$roles_str"
 
-    local assignments=()
-    for i in "${!providers[@]}"; do
-        local provider="${providers[$i]}"
-        local role="${roles[$i]:-}"  # Empty if no role for this provider
-        assignments+=("${provider}:${role}")
+    # Two forms, never mixed. A bare list is positional: role[i] goes to
+    # provider[i]. A list of name=role pairs binds each role to the provider it
+    # names, whatever order discovery returns them in.
+    #
+    # Positional assignment is what made adding a provider script shift every
+    # downstream provider's role by one, and what makes reordering
+    # OPENROUTER_MODELS reassign which router seat plays which part — silently
+    # both times, since only non-empty roles are ever printed. The keyed form
+    # exists so a roster can say what it means; the positional form stays
+    # because it is what --roles has always accepted.
+    local keyed=0 bare=0 entry
+    for entry in "${roles[@]+"${roles[@]}"}"; do
+        [[ -z "$entry" ]] && continue
+        if [[ "$entry" == *=* ]]; then keyed=1; else bare=1; fi
     done
+    if (( keyed && bare )); then
+        echo "Error: --roles mixes name=role pairs with bare roles; use one form or the other" >&2
+        return 1
+    fi
+
+    local assignments=() provider role i
+    if (( keyed )); then
+        # Space-padded set for bash 3.2 (no associative arrays), the same shape
+        # prefer_cli_over_api uses; padding makes the match word-bounded so
+        # "openrouter-1" cannot match inside "openrouter-10".
+        local roster=" ${providers[*]} "
+        for entry in "${roles[@]}"; do
+            [[ -z "$entry" ]] && continue
+            local named="${entry%%=*}"
+            if [[ "$roster" != *" $named "* ]]; then
+                # Refused rather than ignored: a stale or typo'd binding would
+                # otherwise read as "nobody was given that role", which is
+                # indistinguishable from having meant it.
+                echo "Error: --roles names '$named', which is not among the providers being queried" >&2
+                return 1
+            fi
+        done
+        for provider in "${providers[@]}"; do
+            role=""
+            for entry in "${roles[@]}"; do
+                [[ "${entry%%=*}" == "$provider" ]] && role="${entry#*=}"
+            done
+            assignments+=("${provider}:${role}")
+        done
+    else
+        for i in "${!providers[@]}"; do
+            provider="${providers[$i]}"
+            role="${roles[$i]:-}"
+            assignments+=("${provider}:${role}")
+        done
+    fi
+
+    # Say who ended up without one. The caller prints only non-empty roles, so
+    # an unassigned provider is otherwise invisible — the failure that made the
+    # positional bug hard to notice in the first place.
+    local unassigned=()
+    for entry in "${assignments[@]}"; do
+        [[ "${entry#*:}" == "" ]] && unassigned+=("${entry%%:*}")
+    done
+    if (( ${#unassigned[@]} )); then
+        echo "Note: no role for ${unassigned[*]}" >&2
+    fi
 
     echo "${assignments[*]}"
 }

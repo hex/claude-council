@@ -44,7 +44,7 @@ bats --verbose-run tests/cache.bats
 | `cli-providers.bats` | 68 tests | codex/antigravity/grok-cli/kimi-cli/ollama discovery, CLI-prefers-API policy, shadow_origin↔api_sibling single source, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, CLI→API fallback (dedup, cache reuse, missing-script, round 2), a new API seat riding the generic `<NAME>_API_KEY` branch into the default set, `--list-default-models` pairing each default provider with the model it would send and naming exactly what `--list-default` names, gated E2E |
 | `display.bats` | 44 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, retry-await window floor, waiting-line truncation + autowrap guard, renderer selection (Rich feature probe, uv route + timeout, perl fallback, COUNCIL_RENDERER=perl, runtime fallback + stdout forwarding, think-block styling incl. unclosed tags, code-theme direction, link style, COLUMNS=0) |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
-| `roles.bats` | 47 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
+| `roles.bats` | 54 tests | presets, validation, prompt injection, assignment, local-council role resolution + member count |
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
 | `verbosity.bats` | 9 tests | brief/standard/detailed directives, fallback to standard |
 | `query-council.bats` | 33 tests | argument parsing, error cases, flags, local-council fallback hint, hyphenated provider names (env-var prefix derivation), model-fallback wrapper (preferred-then-fallback retry, cached-verdict skip, explicit `<PROVIDER>_MODEL` opt-out, no verdict remembered when the fallback also fails), round 2 and CLI-sibling fallback carrying `model_fallback`, the pane's retry offer (offer file contents, r re-queries only the failed providers and clears the error list, expiry, pane closed at the offer, `COUNCIL_RETRY_WAIT=0`, no pane, a leaked non-watch-dir `COUNCIL_PANE_DIR` ignored) |
@@ -68,7 +68,7 @@ bats --verbose-run tests/cache.bats
 | `model_fallback.bats` | 29 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs and the invariant that no provider degrades to the model it already prefers, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (default model or its fallback answers, end to end) |
 | `deadline.bats` | 9 tests | run_with_deadline: the caller's stdin reaches the command, the command's own status passes through, status 143 at the deadline whatever the command did with the signal (a CLI that exits 0 on SIGTERM), SIGKILL after the grace period for one that ignores it, the command's own children not holding the captured stdout, no watchdog outliving a fast call, nothing on stderr for a signal-ended job, 0 = unbounded, a non-integer deadline rejected |
 
-**Total: 614 tests** across 27 `.bats` files.
+**Total: 621 tests** across 27 `.bats` files.
 
 ### Hermetic CLI Fixture
 

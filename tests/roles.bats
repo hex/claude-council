@@ -272,6 +272,22 @@ teardown() {
 }
 
 # ============================================================================
+# validate_roles runs before assignment, so it has to admit the keyed form or the
+# feature is unreachable from the CLI — the flag would be refused before the
+# assigner ever sees it. It still validates the ROLE half: a keyed entry naming
+# a role that does not exist is as wrong as a bare one.
+
+@test "validate_roles: accepts name=role pairs, validating the role half" {
+    run validate_roles "gemini=security,openai=performance"
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_roles: rejects a name=role pair whose role is unknown" {
+    run validate_roles "gemini=nosuchrole"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"nosuchrole"* ]]
+}
+
 # assign_roles_to_providers tests
 # ============================================================================
 
@@ -280,6 +296,56 @@ teardown() {
     [[ "$result" == *"gemini:security"* ]]
     [[ "$result" == *"openai:performance"* ]]
     [[ "$result" == *"grok:"* ]]  # Empty role for third provider
+}
+
+# Positional assignment is why adding a provider script silently moved every
+# downstream provider's role by one, and why reordering OPENROUTER_MODELS
+# reassigns which router seat plays which part. A name=role pair binds the two
+# explicitly, so neither discovery order nor roster edits can drift them.
+
+@test "assign_roles_to_providers: name=role pairs bind to the provider, not the position" {
+    local result
+    result=$(assign_roles_to_providers "openrouter-2=security,gemini=performance" gemini openai openrouter-2)
+    [[ "$(get_provider_role gemini "$result")" == "performance" ]]
+    [[ "$(get_provider_role openrouter-2 "$result")" == "security" ]]
+    # Named but unlisted providers still appear, with no role.
+    [[ "$(get_provider_role openai "$result")" == "" ]]
+}
+
+@test "assign_roles_to_providers: a keyed roster is immune to provider order" {
+    local a b
+    a=$(assign_roles_to_providers "gemini=security,openai=performance" gemini openai grok)
+    b=$(assign_roles_to_providers "gemini=security,openai=performance" grok openai gemini)
+    [[ "$(get_provider_role gemini "$a")" == "$(get_provider_role gemini "$b")" ]]
+    [[ "$(get_provider_role openai "$a")" == "$(get_provider_role openai "$b")" ]]
+    [[ "$(get_provider_role gemini "$a")" == "security" ]]
+}
+
+@test "assign_roles_to_providers: a provider left without a role is reported, not dropped silently" {
+    # The old behaviour: roles ran out, the tail got nothing, and nobody was told
+    # — only non-empty roles are printed, so the omission was invisible.
+    run --separate-stderr assign_roles_to_providers "security" gemini openai grok
+    [ "$status" -eq 0 ]
+    # The assignments themselves are unchanged; the notice is additive.
+    [[ "$(get_provider_role gemini "$output")" == "security" ]]
+    [[ "$(get_provider_role openai "$output")" == "" ]]
+    # Named on stderr so the omission is visible without polluting stdout, which
+    # the caller parses as the assignments string.
+    [[ "$stderr" == *"no role"* ]]
+    [[ "$stderr" == *"openai"* ]]
+    [[ "$stderr" == *"grok"* ]]
+}
+
+@test "assign_roles_to_providers: a name=role naming an absent provider is refused" {
+    # A typo'd or stale binding must not pass silently as "nobody got that role".
+    run assign_roles_to_providers "nosuchprovider=security" gemini openai
+    [ "$status" -ne 0 ]
+}
+
+@test "assign_roles_to_providers: mixing keyed and positional entries is refused" {
+    # Ambiguous: does the bare entry take slot 1, or the first unbound provider?
+    run assign_roles_to_providers "gemini=security,performance" gemini openai
+    [ "$status" -ne 0 ]
 }
 
 @test "assign_roles_to_providers: expands preset before assigning" {

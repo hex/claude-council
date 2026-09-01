@@ -71,6 +71,24 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   to do without widening every healthy row to make room for it. A test asserts
   every row's status begins at the same column; it fails against the old tab.
 
+- **Roles can bind to a provider by name, not just by position.** `--roles` took
+  a bare list and zipped it against discovery order: role[i] to provider[i]. That
+  made adding a provider script shift every later provider's role by one, and
+  reordering `OPENROUTER_MODELS` reassign which router seat plays which part —
+  silently both times, because only non-empty roles are ever printed.
+  `--roles=openrouter-2=security,perplexity=devil` binds each role to the
+  provider it names and is immune to both. The bare form still works and is
+  still positional; the two cannot be mixed in one flag, since a bare entry
+  beside a keyed one has no unambiguous meaning. A pair naming a provider that
+  is not being queried is refused rather than ignored — a stale binding would
+  otherwise read as "nobody was given that role". And any provider left without
+  a role is now named on stderr instead of vanishing.
+
+  `validate_roles` had to admit the new shape or the flag would be refused
+  before the assigner ever saw it; it validates the role half of a pair exactly
+  as it validates a bare role, and leaves whether the provider exists to the
+  assigner, which is the only part that knows the roster.
+
 - **Agent-mode analysts run on a pinned model, not whatever the session uses.**
   `--agents` spawns one Claude analyst per provider, and the workflow set no
   model on those `agent()` calls — so they inherited the session's model, and the
