@@ -21,8 +21,10 @@ IMAGE_FILE=""
 IMAGE_MIME=""
 # A large prompt (e.g. a big --file) arrives via a temp file to stay off the
 # process argv, where the OS would reject it as "argument list too long".
+PROMPT_FILE=""
 if [[ "$PROMPT" == "--prompt-file" ]]; then
-    PROMPT=$(cat "${2:?--prompt-file requires a path}")
+    PROMPT_FILE="${2:?--prompt-file requires a path}"
+    PROMPT=$(cat "$PROMPT_FILE")
     shift 2
 elif [[ $# -gt 0 ]]; then
     shift
@@ -52,13 +54,23 @@ fi
 # the payload via a temp file, populated per endpoint below.
 CURL_CFG=$(curl_secret_config "Authorization: Bearer ${API_KEY}")
 PAYLOAD_FILE=$(mktemp)
-trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE"' EXIT
+trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE"' EXIT
 
 # Model selection (override via OPENAI_MODEL env var)
 MODEL="$(get_model openai)"
 
 # Token limit (override via COUNCIL_MAX_TOKENS env var)
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
+
+# A prompt given literally as $1 is staged into a file of our own, so the
+# --rawfile read below has a path either way. OWNED_PROMPT_FILE is what the trap
+# removes: the orchestrator's file is not ours to delete.
+OWNED_PROMPT_FILE=""
+if [[ -z "$PROMPT_FILE" ]]; then
+    OWNED_PROMPT_FILE=$(mktemp)
+    PROMPT_FILE="$OWNED_PROMPT_FILE"
+    printf '%s' "$PROMPT" > "$PROMPT_FILE"
+fi
 
 # Determine which API to use based on model
 # Models requiring v1/responses: codex-*, *-codex, o3-*, o4-*, gpt-5.[4-9]*
@@ -77,7 +89,7 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
     SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
     if [[ -n "$IMAGE_FILE" ]]; then
-        PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" \
+        PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" \
             --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '{
             model: $model,
             instructions: $system,
@@ -89,7 +101,7 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
             reasoning: { effort: $effort }
         }')
     else
-        PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" '{
+        PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" '{
             model: $model,
             instructions: $system,
             input: $prompt,
@@ -140,7 +152,7 @@ else
     SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
     if [[ -n "$IMAGE_FILE" ]]; then
-        PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" \
+        PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" \
             --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '{
             model: $model,
             messages: [
@@ -154,7 +166,7 @@ else
             max_completion_tokens: $tokens
         }')
     else
-        PAYLOAD=$(jq -n --arg prompt "$PROMPT" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
+        PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
             model: $model,
             messages: [{
                 role: "system",

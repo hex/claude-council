@@ -127,6 +127,26 @@ EOF
     export CRLF_BIN
 }
 
+# Helper: put a jq on PATH that records every argument it is given, then execs
+# the real one. Sets JQ_BIN (prefix it onto PATH) and JQ_ARGV_FILE. Used to
+# prove a large prompt is never passed to jq on the command line, where MSYS's
+# ~32KB ARG_MAX would reject it.
+install_recording_jq() {
+    local real_jq
+    real_jq=$(command -v jq)
+    JQ_BIN="${BATS_TEST_TMPDIR}/jq-bin"
+    JQ_ARGV_FILE="${BATS_TEST_TMPDIR}/jq-argv"
+    mkdir -p "$JQ_BIN"
+    : > "$JQ_ARGV_FILE"
+    cat > "$JQ_BIN/jq" <<EOF
+#!/bin/bash
+printf '%s\n' "\$@" >> "$JQ_ARGV_FILE"
+exec "$real_jq" "\$@"
+EOF
+    chmod +x "$JQ_BIN/jq"
+    export JQ_BIN JQ_ARGV_FILE
+}
+
 # Helper: assert JSON field equals value
 # Usage: assert_json_eq "$json" ".field" "expected"
 assert_json_eq() {

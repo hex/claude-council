@@ -7,7 +7,9 @@ Many providers use OpenAI-compatible endpoints (Grok, Together, etc.):
 ```bash
 ENDPOINT="https://api.{provider}.com/v1/chat/completions"
 
-PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{
+# --rawfile, not --arg: the prompt is read from the file the orchestrator wrote
+# so it never rides jq's argv, which MSYS caps near 32KB just like execve's.
+PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" '{
     model: "model-name",
     messages: [{role: "user", content: $prompt}],
     temperature: 0.7,
@@ -27,7 +29,7 @@ TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
 ```bash
 ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:generateContent"
 
-PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{
+PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" '{
     contents: [{parts: [{text: $prompt}]}],
     generationConfig: {temperature: 0.7, maxOutputTokens: 1024}
 }')
@@ -44,7 +46,7 @@ TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 ```bash
 ENDPOINT="https://api.anthropic.com/v1/messages"
 
-PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{
+PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" '{
     model: "claude-sonnet-4-20250514",
     max_tokens: 1024,
     messages: [{role: "user", content: $prompt}]
@@ -69,6 +71,14 @@ TEXT=$(echo "$RESPONSE" | jq -r '.content[0].text // empty')
 set -euo pipefail
 
 PROMPT="${1:-}"
+# The orchestrator passes --prompt-file so a large prompt stays off argv; keep
+# the path, because jq reads it with --rawfile for the same reason.
+PROMPT_FILE=""
+if [[ "$PROMPT" == "--prompt-file" ]]; then
+    PROMPT_FILE="${2:?--prompt-file requires a path}"
+    PROMPT=$(cat "$PROMPT_FILE")
+    shift 2
+fi
 
 if [[ -z "$PROMPT" ]]; then
     echo "Error: No prompt provided" >&2
@@ -85,7 +95,7 @@ fi
 RESPONSE=$(curl -s -X POST "https://api.provider.com/v1/completions" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer ${API_KEY}" \
-    -d "$(jq -n --arg prompt "$PROMPT" '{
+    -d "$(jq -n --rawfile prompt "$PROMPT_FILE" '{
         model: "model-name",
         messages: [{role: "user", content: $prompt}]
     }')")

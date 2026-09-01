@@ -20,9 +20,13 @@ PROMPT="${1:-}"
 IMAGE_FILE=""
 IMAGE_MIME=""
 # A large prompt (e.g. a big --file) arrives via a temp file to stay off
-# the process argv, where the OS would reject it as "argument list too long".
+# the process argv, where the OS would reject it as "argument list too long". The
+# path is kept, not just the text: jq reads the prompt with --rawfile, so it
+# stays off jq\'s argv too — bounded by the same limit.
+PROMPT_FILE=""
 if [[ "$PROMPT" == "--prompt-file" ]]; then
-    PROMPT=$(cat "${2:?--prompt-file requires a path}")
+    PROMPT_FILE="${2:?--prompt-file requires a path}"
+    PROMPT=$(cat "$PROMPT_FILE")
     shift 2
 elif [[ $# -gt 0 ]]; then
     shift
@@ -70,6 +74,20 @@ bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'kimi-k*'
 # System instruction
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
+# A prompt given literally as $1 is staged into a file of our own, so the
+# --rawfile read below has a path either way. OWNED_PROMPT_FILE is what the trap
+# removes: the orchestrator's file is not ours to delete.
+OWNED_PROMPT_FILE=""
+if [[ -z "$PROMPT_FILE" ]]; then
+    OWNED_PROMPT_FILE=$(mktemp)
+    PROMPT_FILE="$OWNED_PROMPT_FILE"
+    printf '%s' "$PROMPT" > "$PROMPT_FILE"
+fi
+
+# The user-message content embeds the prompt, so it reaches the payload build
+# through a file as well: --argjson would put the whole prompt back on argv.
+CONTENT_FILE=$(mktemp)
+
 # The user message content is either a bare prompt string or, when an image is
 # supplied, an OpenAI-shaped [text, image_url] array. Kimi documents multimodal
 # content in the same shape, but provider_vision_capable deliberately leaves
@@ -77,12 +95,12 @@ SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 # models, and that was never verified against the live API here. The branch is
 # kept so enabling vision is a one-line change in providers.sh once confirmed.
 if [[ -n "$IMAGE_FILE" ]]; then
-    USER_CONTENT=$(jq -n --arg prompt "$PROMPT" --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '[
+    jq -n --rawfile prompt "$PROMPT_FILE" --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '[
         { type: "text",      text: $prompt },
         { type: "image_url", image_url: { url: ("data:" + $mime + ";base64," + $b64) } }
-    ]')
+    ]' > "$CONTENT_FILE"
 else
-    USER_CONTENT=$(jq -n --arg prompt "$PROMPT" '$prompt')
+    jq -n --rawfile prompt "$PROMPT_FILE" '$prompt' > "$CONTENT_FILE"
 fi
 
 # max_tokens is still accepted alongside the newer max_completion_tokens, and is
@@ -91,7 +109,7 @@ PAYLOAD=$(jq -n \
     --arg model "$MODEL" \
     --argjson tokens "$TOKENS" \
     --arg system "$SYSTEM" \
-    --argjson content "$USER_CONTENT" \
+    --slurpfile content "$CONTENT_FILE" \
     '{
         model: $model,
         messages: [{
@@ -99,7 +117,7 @@ PAYLOAD=$(jq -n \
             content: $system
         }, {
             role: "user",
-            content: $content
+            content: $content[0]
         }],
         # Moonshot rejects every value but 1 across its whole model line, with
         # "invalid temperature: only 1 is allowed for this model". The 0.7 the
@@ -121,7 +139,7 @@ fi
 # the payload via a temp file.
 CURL_CFG=$(curl_secret_config "Authorization: Bearer ${API_KEY}")
 PAYLOAD_FILE=$(mktemp)
-trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE"' EXIT
+trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE" "$CONTENT_FILE"' EXIT
 printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
 
 # Make API call

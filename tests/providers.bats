@@ -65,6 +65,100 @@ run_provider() {
         bash "$PROVIDERS/$script" "$prompt"
 }
 
+# ---- large prompts stay off jq's argv ----
+
+# The orchestrator hands every provider its prompt in a file precisely so a
+# large one never rides the process argv (MSYS caps it near 32KB). A provider
+# that then passes that prompt to jq with --arg puts it straight back. These
+# assert the invariant, not a failure: on a machine with a roomy ARG_MAX the
+# call succeeds either way, so only the recorded argv can tell the two apart.
+PROMPT_LEAK_MARK="ARGVLEAK_5b3d"
+
+# Write a prompt file far larger than MSYS's limit and echo its path.
+big_prompt_file() {
+    local f="${BATS_TEST_TMPDIR}/big-prompt"
+    { printf '%s ' "$PROMPT_LEAK_MARK"; head -c 40000 /dev/zero | tr '\0' 'z'; } > "$f"
+    printf '%s' "$f"
+}
+
+# Run a provider the way the orchestrator does — via --prompt-file — with jq
+# recording its argv. Usage: run_provider_with_prompt_file <script> [ENV=v ...]
+run_provider_with_prompt_file() {
+    local script="$1"; shift
+    local pfile; pfile=$(big_prompt_file)
+    install_recording_jq
+    run --separate-stderr env \
+        PATH="${JQ_BIN}:${FAKE_DIR}:$PATH" \
+        FAKE_ARGV_FILE="$ARGV_FILE" \
+        FAKE_CONFIG_FILE="$CONFIG_FILE" \
+        FAKE_DATA_FILE="$DATA_FILE" \
+        FAKE_BODY="$FAKE_BODY" \
+        FAKE_HTTP="${FAKE_HTTP:-200}" \
+        COUNCIL_RETRY_DELAY=0 \
+        "$@" \
+        bash "$PROVIDERS/$script" --prompt-file "$pfile"
+}
+
+@test "gemini: a large prompt never reaches jq's argv" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"GEM_OK"}]}}]}'
+    run_provider_with_prompt_file gemini.sh GEMINI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "GEM_OK" ]
+    # The prompt reached the request body...
+    grep -qF "$PROMPT_LEAK_MARK" "$DATA_FILE"
+    # ...without ever being an argument to jq.
+    ! grep -qF "$PROMPT_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "grok: a large prompt never reaches jq's argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"GROK_OK"}}]}'
+    run_provider_with_prompt_file grok.sh GROK_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "GROK_OK" ]
+    grep -qF "$PROMPT_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$PROMPT_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "openai: a large prompt never reaches jq's argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"OAI_OK"}}]}'
+    run_provider_with_prompt_file openai.sh OPENAI_API_KEY=k OPENAI_MODEL=gpt-4o
+    [ "$status" -eq 0 ]
+    [ "$output" = "OAI_OK" ]
+    grep -qF "$PROMPT_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$PROMPT_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "perplexity: a large prompt never reaches jq's argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"PPLX_OK"}}]}'
+    run_provider_with_prompt_file perplexity.sh PERPLEXITY_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "PPLX_OK" ]
+    grep -qF "$PROMPT_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$PROMPT_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "kimi: a large prompt never reaches jq's argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"KIMI_OK"}}]}'
+    run_provider_with_prompt_file kimi.sh KIMI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "KIMI_OK" ]
+    grep -qF "$PROMPT_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$PROMPT_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "ollama: a large prompt never reaches jq's argv" {
+    # ollama gates on its binary rather than a key, and OLLAMA_MODEL skips the
+    # `ollama list` lookup, so a bare stub on PATH is enough to reach the payload.
+    printf '#!/bin/bash\nexit 0\n' > "$FAKE_DIR/ollama"
+    chmod +x "$FAKE_DIR/ollama"
+    FAKE_BODY='{"choices":[{"message":{"content":"OLL_OK"}}]}'
+    run_provider_with_prompt_file ollama.sh OLLAMA_MODEL=llama3
+    [ "$status" -eq 0 ]
+    [ "$output" = "OLL_OK" ]
+    grep -qF "$PROMPT_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$PROMPT_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
 # ---- response parsing (characterization) ----
 
 @test "gemini: extracts text from candidates path" {
