@@ -54,6 +54,10 @@ fi
 # the payload via a temp file, populated per endpoint below.
 CURL_CFG=$(curl_secret_config "Authorization: Bearer ${API_KEY}")
 PAYLOAD_FILE=$(mktemp)
+# Every name the trap expands has to exist before the trap does: under set -u an
+# exit before the assignment expands an unset variable, which ends the trap body
+# where it stands and leaves the config holding the bearer token behind.
+OWNED_PROMPT_FILE=""
 trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE"' EXIT
 
 # Model selection (override via OPENAI_MODEL env var)
@@ -65,7 +69,6 @@ BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 # A prompt given literally as $1 is staged into a file of our own, so the
 # --rawfile read below has a path either way. OWNED_PROMPT_FILE is what the trap
 # removes: the orchestrator's file is not ours to delete.
-OWNED_PROMPT_FILE=""
 if [[ -z "$PROMPT_FILE" ]]; then
     OWNED_PROMPT_FILE=$(mktemp)
     PROMPT_FILE="$OWNED_PROMPT_FILE"

@@ -85,10 +85,17 @@ bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*r1*' '*reason*' '*gpt-oss*' 
 
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
+# One trap for every temp file this script owns, installed before the first of
+# them exists and naming them all: a failure between here and the request —
+# a jq that cannot read the image file, say — would otherwise leave the prompt
+# and content files behind, and an EXIT trap that expands a name not yet
+# assigned ends where it stands under set -u without removing anything.
+PAYLOAD_FILE="" OWNED_PROMPT_FILE="" CONTENT_FILE=""
+trap 'rm -f "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE" "$CONTENT_FILE"' EXIT
+
 # A prompt given literally as $1 is staged into a file of our own, so the
 # --rawfile read below has a path either way. OWNED_PROMPT_FILE is what the trap
 # removes: the orchestrator's file is not ours to delete.
-OWNED_PROMPT_FILE=""
 if [[ -z "$PROMPT_FILE" ]]; then
     OWNED_PROMPT_FILE=$(mktemp)
     PROMPT_FILE="$OWNED_PROMPT_FILE"
@@ -134,7 +141,6 @@ if [[ -n "$DEBUG" ]]; then
 fi
 
 PAYLOAD_FILE=$(mktemp)
-trap 'rm -f "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE" "$CONTENT_FILE"' EXIT
 printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
 
 # No Authorization header: a local daemon has no key. A remote OLLAMA_HOST
