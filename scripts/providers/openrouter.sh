@@ -60,7 +60,13 @@ fi
 # retarget a direct invocation.
 SEAT="openrouter"
 case "${COUNCIL_SEAT:-}" in
-    openrouter|openrouter-[0-9]*) SEAT="$COUNCIL_SEAT" ;;
+    openrouter) SEAT="$COUNCIL_SEAT" ;;
+    openrouter-*)
+        # Only a plain positive roster position: the seat number reaches array
+        # arithmetic in get_model, where a zero reads as the last entry and a
+        # leading zero is not a number bash will read as one.
+        [[ "${COUNCIL_SEAT#openrouter-}" =~ ^[1-9][0-9]*$ ]] && SEAT="$COUNCIL_SEAT"
+        ;;
 esac
 
 # Model selection (override via OPENROUTER_MODEL, or <SEAT>_MODEL for a roster

@@ -411,7 +411,7 @@ run_provider_with_image() {
     FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}'
     run_provider gemini.sh "hi" GEMINI_API_KEY=SEKRET_GEMINI
     [ "$status" -eq 0 ]
-    ! grep -qF "SEKRET_GEMINI" "$ARGV_FILE"
+    run ! grep -qF "SEKRET_GEMINI" "$ARGV_FILE"
     grep -qF "SEKRET_GEMINI" "$CONFIG_FILE"
 }
 
@@ -419,7 +419,7 @@ run_provider_with_image() {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider openai.sh "hi" OPENAI_API_KEY=SEKRET_OAI OPENAI_MODEL=gpt-5.1
     [ "$status" -eq 0 ]
-    ! grep -qF "SEKRET_OAI" "$ARGV_FILE"
+    run ! grep -qF "SEKRET_OAI" "$ARGV_FILE"
     grep -qF "SEKRET_OAI" "$CONFIG_FILE"
 }
 
@@ -427,7 +427,7 @@ run_provider_with_image() {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider grok.sh "hi" XAI_API_KEY=SEKRET_GROK
     [ "$status" -eq 0 ]
-    ! grep -qF "SEKRET_GROK" "$ARGV_FILE"
+    run ! grep -qF "SEKRET_GROK" "$ARGV_FILE"
     grep -qF "SEKRET_GROK" "$CONFIG_FILE"
 }
 
@@ -435,7 +435,7 @@ run_provider_with_image() {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=SEKRET_PPX
     [ "$status" -eq 0 ]
-    ! grep -qF "SEKRET_PPX" "$ARGV_FILE"
+    run ! grep -qF "SEKRET_PPX" "$ARGV_FILE"
     grep -qF "SEKRET_PPX" "$CONFIG_FILE"
 }
 
@@ -443,7 +443,7 @@ run_provider_with_image() {
     FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}'
     run_provider gemini.sh "UNIQUE_PROMPT_MARKER_42" GEMINI_API_KEY=k
     [ "$status" -eq 0 ]
-    ! grep -qF "UNIQUE_PROMPT_MARKER_42" "$ARGV_FILE"
+    run ! grep -qF "UNIQUE_PROMPT_MARKER_42" "$ARGV_FILE"
     grep -qF "UNIQUE_PROMPT_MARKER_42" "$DATA_FILE"
 }
 
@@ -539,8 +539,8 @@ run_provider_with_image() {
     # kimi-cli is a CLI: it cannot take an image, and reaches one only by
     # routing to kimi. Claiming otherwise hands the base64 to a binary that
     # has no argument for it.
-    ! provider_vision_capable kimi-cli
-    ! KIMI_MODEL=kimi-k2 provider_vision_capable kimi
+    run ! provider_vision_capable kimi-cli
+    KIMI_MODEL=kimi-k2 run ! provider_vision_capable kimi
     KIMI_MODEL=kimi-k2 KIMI_VISION=1 provider_vision_capable kimi
 }
 
@@ -550,7 +550,7 @@ run_provider_with_image() {
     provider_vision_capable openai
     provider_vision_capable grok
     provider_vision_capable perplexity
-    ! provider_vision_capable codex
+    run ! provider_vision_capable codex
     ! provider_vision_capable antigravity
 }
 
@@ -646,7 +646,7 @@ run_provider_with_image() {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider kimi.sh "hi" KIMI_API_KEY=SEKRET_KIMI
     [ "$status" -eq 0 ]
-    ! grep -qF "SEKRET_KIMI" "$ARGV_FILE"
+    run ! grep -qF "SEKRET_KIMI" "$ARGV_FILE"
     grep -qF "SEKRET_KIMI" "$CONFIG_FILE"
 }
 
@@ -654,7 +654,7 @@ run_provider_with_image() {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider kimi.sh "UNIQUE_KIMI_MARKER_77" KIMI_API_KEY=k
     [ "$status" -eq 0 ]
-    ! grep -qF "UNIQUE_KIMI_MARKER_77" "$ARGV_FILE"
+    run ! grep -qF "UNIQUE_KIMI_MARKER_77" "$ARGV_FILE"
     grep -qF "UNIQUE_KIMI_MARKER_77" "$DATA_FILE"
 }
 
@@ -834,8 +834,28 @@ run_provider_with_image() {
 @test "openrouter: bearer key never appears in the process argv" {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider openrouter.sh "hi" OPENROUTER_API_KEY=SEKRET_ORT
-    ! grep -qF "SEKRET_ORT" "$ARGV_FILE"
+    run ! grep -qF "SEKRET_ORT" "$ARGV_FILE"
     grep -qF "SEKRET_ORT" "$CONFIG_FILE"
+}
+
+@test "openrouter: a stale COUNCIL_SEAT the roster cannot have leaves the default model" {
+    # COUNCIL_SEAT is orchestrator state. A value left in a user's shell that is
+    # not a seat this script can be must not reach the model lookup: openrouter-0
+    # asks the roster for position -1, and a leading zero is not a number bash
+    # will read as one.
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    local seat
+    for seat in openrouter-0 openrouter-08 openrouter-1x; do
+        # The fake curl appends, so each seat needs the payload file to itself.
+        : > "$DATA_FILE"
+        run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k \
+            "OPENROUTER_MODELS=vendor/one,vendor/two,vendor/three" \
+            "COUNCIL_SEAT=$seat"
+        [ "$status" -eq 0 ]
+        assert_blank "$stderr"
+        echo "seat=$seat sent model=$(jq -r '.model' "$DATA_FILE")"
+        [[ "$(jq -r '.model' "$DATA_FILE")" == 'anthropic/claude-sonnet-5' ]]
+    done
 }
 
 @test "openrouter: injects image_url object when given an image" {
@@ -860,14 +880,14 @@ run_provider_with_image() {
     [ "$status" -eq 0 ]
     [ "$output" = "OR_OK" ]
     grep -qF "$PROMPT_LEAK_MARK" "$DATA_FILE"
-    ! grep -qF "$PROMPT_LEAK_MARK" "$JQ_ARGV_FILE"
+    run ! grep -qF "$PROMPT_LEAK_MARK" "$JQ_ARGV_FILE"
     [[ "$(jq -r '.model' "$DATA_FILE")" == '~anthropic/claude-sonnet-latest' ]]
 }
 
 @test "provider_vision_capable: openrouter is capable by default, an override opts in" {
     source "${LIB_DIR}/providers.sh"
     provider_vision_capable openrouter
-    ! OPENROUTER_MODEL=deepseek/deepseek-v3 provider_vision_capable openrouter
+    OPENROUTER_MODEL=deepseek/deepseek-v3 run ! provider_vision_capable openrouter
     OPENROUTER_MODEL=deepseek/deepseek-v3 OPENROUTER_VISION=1 provider_vision_capable openrouter
 }
 

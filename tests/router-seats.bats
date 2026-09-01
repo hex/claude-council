@@ -62,6 +62,22 @@ lib() {
     [ "$output" = "unknown" ]
 }
 
+@test "get_model: a seat number the roster cannot have is unknown, not arithmetic" {
+    # --providers and COUNCIL_PROVIDERS are taken verbatim, so these reach
+    # get_model from the command line. The suffix is a roster position, and
+    # anything that is not one must answer like a seat past the end rather than
+    # index the array: openrouter-0 asks for position -1, which is the LAST
+    # entry on bash 4.3+, and a leading zero or a stray letter is not a number
+    # at all — bash reads 08 as octal and aborts the run with empty output.
+    export OPENROUTER_MODELS="deepseek/deepseek-v3.2,z-ai/glm-5.3,qwen/qwen3-max"
+    local seat
+    for seat in openrouter-0 openrouter-00 openrouter-08 openrouter-1x; do
+        run lib "get_model $seat"
+        [ "$status" -eq 0 ]
+        [ "$output" = "unknown" ]
+    done
+}
+
 # ---- discovery synthesises one seat per roster entry ----
 
 @test "discover_providers: the roster becomes one seat per entry, replacing the single seat" {

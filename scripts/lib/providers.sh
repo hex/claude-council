@@ -308,7 +308,17 @@ get_model() {
             # An explicit <PREFIX>_MODEL wins, exactly as it does for every other
             # provider: the exit-3 degrade path forces a fallback that way, and a
             # roster entry must not send the model that just failed.
-            local __ovr __models
+            local __ovr __models __seat
+            # The suffix is a roster position, and the glob above admits things
+            # that are not one. Anything but a plain positive number answers
+            # like a seat past the end rather than reaching the arithmetic:
+            # position 0 indexes -1, which is the LAST entry on bash 4.3+, and
+            # bash reads a leading zero as octal and aborts the run outright.
+            __seat="${1#openrouter-}"
+            if [[ ! "$__seat" =~ ^[1-9][0-9]*$ ]]; then
+                echo "unknown"
+                return
+            fi
             __ovr="$(provider_env_prefix "$1")_MODEL"
             if [[ -n "${!__ovr:-}" ]]; then
                 echo "${!__ovr}"
@@ -317,7 +327,7 @@ get_model() {
                 read -ra __models <<< "$(parse_provider_list "${OPENROUTER_MODELS:-}")"
                 # A seat past the end of the roster reports "unknown" rather than
                 # a neighbour's id, so a mislabelled answer is impossible.
-                echo "${__models[$(( ${1#openrouter-} - 1 ))]:-unknown}"
+                echo "${__models[$(( __seat - 1 ))]:-unknown}"
             fi
             ;;
         *)          echo "unknown" ;;
