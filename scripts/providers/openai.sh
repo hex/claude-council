@@ -190,7 +190,10 @@ else
     TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
 fi
 
-if [[ -z "$TEXT" ]]; then
+    # Whitespace-stripped, not just empty: a model that answers with a single
+    # space passes a bare -z test, and the council would store that as a
+    # successful answer and weigh it in the synthesis like any other.
+if [[ -z "${TEXT//[[:space:]]/}" ]]; then
     # Try multiple error paths
     ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // .error.code // "") elif (.error | type) == "string" then .error else "" end) | select(. != "")')
     if [[ -z "$ERROR" ]]; then

@@ -71,6 +71,15 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   to do without widening every healthy row to make room for it. A test asserts
   every row's status begins at the same column; it fails against the old tab.
 
+- **A whitespace-only answer is a failure, not an answer.** Every provider
+  guarded with `[[ -z "$TEXT" ]]`, which catches only a truly empty string, so a
+  model replying with a single space passed as a successful answer and reached
+  the synthesis weighted like any other vote. Found in a live debate round, where
+  one seat's rebuttal came back as one character and was recorded `success`. All
+  seven providers now use the whitespace-stripped test the suite's own
+  `assert_not_blank` has always used, and still say why on stderr so the council
+  stores a cause rather than an empty slot.
+
 - **Kimi reads images.** `kimi.sh` has built the OpenAI-shaped `image_url`
   payload since it landed; only `provider_vision_capable` said otherwise, so the
   council routed images away from a provider that could read them and `kimi-cli`,

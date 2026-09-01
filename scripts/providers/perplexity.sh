@@ -174,7 +174,10 @@ fi
 # Extract text from response (OpenAI-compatible format)
 TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
 
-if [[ -z "$TEXT" ]]; then
+    # Whitespace-stripped, not just empty: a model that answers with a single
+    # space passes a bare -z test, and the council would store that as a
+    # successful answer and weigh it in the synthesis like any other.
+if [[ -z "${TEXT//[[:space:]]/}" ]]; then
     ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // "") elif (.error | type) == "string" then .error else "" end) | select(. != "") // "Unknown error"')
     echo "Error from Perplexity: $ERROR" >&2
     is_model_unavailable_error "$RESPONSE" && exit 3

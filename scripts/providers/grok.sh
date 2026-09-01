@@ -127,7 +127,10 @@ RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
 # Extract text from response
 TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
 
-if [[ -z "$TEXT" ]]; then
+    # Whitespace-stripped, not just empty: a model that answers with a single
+    # space passes a bare -z test, and the council would store that as a
+    # successful answer and weigh it in the synthesis like any other.
+if [[ -z "${TEXT//[[:space:]]/}" ]]; then
     ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // "") elif (.error | type) == "string" then .error else "" end) | select(. != "") // "Unknown error"')
     echo "Error from Grok: $ERROR" >&2
     # Exit 3 tells query-council.sh this model is unavailable for this key or

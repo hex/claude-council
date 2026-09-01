@@ -160,7 +160,10 @@ fi
 # Extract text from response (OpenAI-compatible format)
 TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
 
-if [[ -z "$TEXT" ]]; then
+    # Whitespace-stripped, not just empty: a model that answers with a single
+    # space passes a bare -z test, and the council would store that as a
+    # successful answer and weigh it in the synthesis like any other.
+if [[ -z "${TEXT//[[:space:]]/}" ]]; then
     # .error is an object here and a bare string for some vendors; indexing a
     # string raises in jq rather than yielding null, and `//` does not catch a
     # raise, so both reads below branch on the type first.

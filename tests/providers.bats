@@ -162,6 +162,32 @@ run_provider_with_prompt_file() {
 
 # ---- response parsing (characterization) ----
 
+# ---- a blank answer is a failure, not an answer ----
+#
+# Found in a live debate round: deepseek returned a single space for its
+# rebuttal, the provider's `[[ -z "$TEXT" ]]` guard let it through, and the
+# council recorded status "success" with a one-character response — a silent
+# empty vote that synthesis weighs like any other. The suite's own
+# assert_not_blank has always used the whitespace-stripped test; the providers
+# did not.
+
+@test "every API provider treats a whitespace-only answer as a failure" {
+    local spec
+    for spec in "gemini.sh:GEMINI_API_KEY:{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"   \"}]}}]}" \
+                "openai.sh:OPENAI_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}" \
+                "grok.sh:GROK_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}" \
+                "perplexity.sh:PERPLEXITY_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}" \
+                "kimi.sh:KIMI_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}" \
+                "openrouter.sh:OPENROUTER_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}"; do
+        local script="${spec%%:*}" rest="${spec#*:}"
+        local keyvar="${rest%%:*}" body="${rest#*:}"
+        FAKE_BODY="$body" run_provider "$script" "hi" "${keyvar}=k" OPENAI_MODEL=gpt-4o
+        [ "$status" -eq 1 ] || { echo "$script exited $status on a blank answer"; return 1; }
+        # And it must say why, or the council stores an empty slot with no cause.
+        assert_not_blank "$stderr"
+    done
+}
+
 # ---- image base64 stays off jq's argv ----
 #
 # The prompt-leak tests above cover the prompt. The image is a second, larger
