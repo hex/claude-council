@@ -298,10 +298,13 @@ blank_lines_before() {
 
 @test "watcher: closes on ctrl-d at the close prompt" {
     printf 'Hello\n' > "$W/responses/gemini.md"
-    # stdin stays open well past the ctrl-d, so only reading the \004 itself
-    # can end the wait.
-    COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 3 \
-        < <(printf '\004'; sleep 6)
+    # stdin stays open for exactly as long as the watcher lives, so only reading
+    # the \004 itself can end the wait — and no feeder outlives the test. The
+    # deadline is a hang detector, not a bound on the close: a watcher that
+    # ignored the \004 is killed at it and fails on status, so it can be as
+    # generous as the slowest machine needs.
+    COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 10 \
+        < <(printf '\004'; until_watcher_exits)
     [ "$status" -eq 0 ]
 }
 
