@@ -98,10 +98,17 @@ bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" \
 # System instruction
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
+# One trap for every temp file this script owns, installed before the first of
+# them exists and naming them all: a failure between here and the request —
+# a jq that cannot read the image file, say — would otherwise leave the prompt
+# file behind, and an EXIT trap that expands a name not yet assigned ends where
+# it stands under set -u without removing anything.
+CURL_CFG="" PAYLOAD_FILE="" OWNED_PROMPT_FILE=""
+trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE"' EXIT
+
 # A prompt given literally as $1 is staged into a file of our own, so the
 # --rawfile read below has a path either way. OWNED_PROMPT_FILE is what the trap
 # removes: the orchestrator's file is not ours to delete.
-OWNED_PROMPT_FILE=""
 if [[ -z "$PROMPT_FILE" ]]; then
     OWNED_PROMPT_FILE=$(mktemp)
     PROMPT_FILE="$OWNED_PROMPT_FILE"
@@ -149,7 +156,6 @@ fi
 # the payload via a temp file.
 CURL_CFG=$(curl_secret_config "Authorization: Bearer ${API_KEY}")
 PAYLOAD_FILE=$(mktemp)
-trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE"' EXIT
 printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
 
 # Make API call
