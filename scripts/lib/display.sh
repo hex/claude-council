@@ -11,6 +11,10 @@
 COUNCIL_DISPLAY_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=deadline.sh
 source "$COUNCIL_DISPLAY_DIR/deadline.sh"
+# provider_color_rgb lives with the rest of the provider identity tables. Sourced
+# here rather than assumed from the caller so this lib stays usable on its own.
+# shellcheck source=providers.sh
+source "$COUNCIL_DISPLAY_DIR/providers.sh"
 COUNCIL_RENDER_PL="$COUNCIL_DISPLAY_DIR/render.pl"
 COUNCIL_RENDER_PY="$COUNCIL_DISPLAY_DIR/render.py"
 COUNCIL_PANE_WATCHER="$COUNCIL_DISPLAY_DIR/pane-watcher.sh"
@@ -337,21 +341,6 @@ council_pane_env_args() {
     fi
 }
 
-# Provider vendor RGB triplet for 24-bit foreground text over the user's unknown
-# terminal background — each a mid-tone shade readable on light and dark themes.
-# Writes the triplet into the variable named by $1 (printf -v avoids a subshell).
-provider_color_rgb() {
-    local __out="$1"
-    case "$2" in
-        gemini|antigravity) printf -v "$__out" '59;130;246'   ;;  # blue-500
-        openai|codex)      printf -v "$__out" '100;116;139'  ;;  # slate-500
-        grok|grok-cli)     printf -v "$__out" '239;68;68'    ;;  # red-500
-        perplexity)        printf -v "$__out" '22;163;74'    ;;  # green-600
-        kimi)              printf -v "$__out" '168;85;247'   ;;  # purple-500
-        openrouter|openrouter-[0-9]*) printf -v "$__out" '217;119;6' ;;  # amber-600
-        *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
-    esac
-}
 
 # SGR parameter for muted/faint text (separators, the "waiting on" label).
 # ANSI 2 (faint) washes out on a light background, so light uses a dark-gray

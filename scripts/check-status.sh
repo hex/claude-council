@@ -23,8 +23,8 @@ WHITE='\033[37m'
 RED='\033[31m'
 GREEN='\033[32m'
 MAGENTA='\033[35m'
+BRIGHT_BLACK='\033[90m'
 CYAN='\033[36m'
-LIGHT_YELLOW='\033[93m'
 DIM='\033[2m'
 RESET='\033[0m'
 
@@ -287,6 +287,16 @@ ollama_status=$(check_cli_provider "ollama" "ollama" list)
 
 # Format output
 # Usage: format_status <display_name> <provider_id> <status>
+# Column widths, measured in display cells. A literal tab was used here once and
+# could not work: a tab stop lands at a different place depending on how long the
+# preceding name is, so "Grok" and "Perplexity" pushed their status to different
+# columns. Padding is computed from the PLAIN text instead — the coloured strings
+# carry SGR escape bytes that occupy no width, so measuring them would pad every
+# row by a different wrong amount.
+STATUS_NAME_W=14    # fits "OpenRouter 10" and "Antigravity"
+STATUS_STATE_W=24   # fits every state but "Installed, not authenticated", which
+                    # overflows to a single space rather than widening every row
+
 format_status() {
     local name="$1"
     local provider_id="$2"
@@ -299,54 +309,68 @@ format_status() {
     # not ((n++)): under set -e a post-increment returning 0 aborts the script.
     provider_total=$((provider_total + 1))
 
-    local emoji color
-    emoji=$(provider_emoji "$provider_id")
+    local swatch color
+    swatch=$(provider_swatch "$provider_id")
     color=$(provider_color "$provider_id")
-    local status_icon status_text model_text=""
     local state="$status"
     [[ "$status" == auth_error:* ]] && state="auth_error"
     local fix
     fix=$(remediation_for "$provider_id" "$state")
-    [[ -n "$fix" ]] && fix="  ${DIM}fix: ${fix}${RESET}"
 
+    # Each column is built as a (plain, painted) pair: the plain form sets the
+    # width, the painted form is what prints. The icon is its own two-cell field
+    # so a one-glyph tick and a two-character dash still align.
+    local icon plain_state painted_state plain_detail painted_detail
     case "$status" in
         no_key)
-            status_icon="${DIM}--${RESET}"
-            status_text="${DIM}API key not set${RESET}${fix}"
+            icon="${DIM}--${RESET}"
+            plain_state="API key not set";     painted_state="${DIM}${plain_state}${RESET}"
             ;;
         no_binary)
-            status_icon="${DIM}--${RESET}"
-            status_text="${DIM}CLI not installed${RESET}${fix}"
+            icon="${DIM}--${RESET}"
+            plain_state="CLI not installed";   painted_state="${DIM}${plain_state}${RESET}"
             ;;
         unauthed)
-            status_icon="${RED}x${RESET}"
-            status_text="${RED}Installed, not authenticated${RESET}${fix}"
+            icon="${RED}✗ ${RESET}"
+            plain_state="Installed, not authenticated"; painted_state="${RED}${plain_state}${RESET}"
             ;;
         timeout)
-            status_icon="${RED}x${RESET}"
-            status_text="${RED}Connection timeout${RESET}"
+            icon="${RED}✗ ${RESET}"
+            plain_state="Connection timeout";  painted_state="${RED}${plain_state}${RESET}"
             ;;
         auth_error:*)
-            local code="${status#auth_error:}"
-            status_icon="${RED}x${RESET}"
-            status_text="${RED}Auth failed (HTTP ${code})${RESET}${fix}"
+            icon="${RED}✗ ${RESET}"
+            plain_state="Auth failed (HTTP ${status#auth_error:})"
+            painted_state="${RED}${plain_state}${RESET}"
             ;;
         error:*)
-            local code="${status#error:}"
-            status_icon="${RED}x${RESET}"
-            status_text="${RED}Error (HTTP ${code})${RESET}"
+            icon="${RED}✗ ${RESET}"
+            plain_state="Error (HTTP ${status#error:})"
+            painted_state="${RED}${plain_state}${RESET}"
             ;;
         ok:*)
             local rest="${status#ok:}"
             local duration="${rest%%:*}"
             local model="${rest#*:}"
-            status_icon="${GREEN}✓${RESET}"
-            status_text="${GREEN}Connected${RESET} ${DIM}(${duration}ms)${RESET}"
-            model_text="${DIM}${model}${RESET}"
+            icon="${GREEN}✓ ${RESET}"
+            plain_state="Connected (${duration}ms)"
+            painted_state="${GREEN}Connected${RESET} ${DIM}(${duration}ms)${RESET}"
+            plain_detail="$model"; painted_detail="${DIM}${model}${RESET}"
             ;;
     esac
 
-    echo -e "  ${emoji} ${color}${name}${RESET}\t${status_icon} ${status_text}  ${model_text}"
+    # The last column carries the model when there is one and the remediation
+    # otherwise, so a failing row still says what to do without widening every
+    # healthy row to make room for it.
+    if [[ -z "${plain_detail:-}" && -n "$fix" ]]; then
+        plain_detail="fix: ${fix}"; painted_detail="${DIM}fix: ${fix}${RESET}"
+    fi
+
+    local name_gap state_gap
+    printf -v name_gap  '%*s' "$(( STATUS_NAME_W  > ${#name}        ? STATUS_NAME_W  - ${#name}        : 1 ))" ''
+    printf -v state_gap '%*s' "$(( STATUS_STATE_W > ${#plain_state} ? STATUS_STATE_W - ${#plain_state} : 1 ))" ''
+
+    echo -e "  ${swatch}  ${color}${name}${RESET}${name_gap}${icon} ${painted_state}${state_gap}${painted_detail:-}"
 }
 
 # Both counters are initialised before the rows so the router roster, which

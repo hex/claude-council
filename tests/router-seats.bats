@@ -95,13 +95,34 @@ lib() {
 # ---- the seats keep their own identity in every lookup table ----
 
 @test "provider tables: a numbered seat is not rendered as an unknown provider" {
-    # provider_color and provider_emoji both have catch-all defaults, so a seat
-    # missing from them renders in ollama's cyan with the fallback glyph rather
-    # than failing — visibly wrong, but only if something asserts it.
-    run lib 'BLUE= WHITE= RED= GREEN= MAGENTA= CYAN= LIGHT_YELLOW=SENTINEL; provider_color openrouter-2; provider_emoji openrouter-2'
+    # provider_color and provider_color_rgb both have catch-all defaults, so a
+    # seat missing from them renders in the unknown-provider grey rather than
+    # failing — visibly wrong, but only if something asserts it.
+    run lib 'BLUE= WHITE= RED= GREEN= CYAN= LIGHT_YELLOW= MAGENTA=SENTINEL; provider_color openrouter-2'
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "SENTINEL" ]
-    [ "${lines[1]}" = "$(lib 'provider_emoji openrouter')" ]
+    [ "$output" = "SENTINEL" ]
+    # Same swatch as the unnumbered seat, and not the default one.
+    [ "$(lib 'provider_swatch openrouter-2')" = "$(lib 'provider_swatch openrouter')" ]
+    [ "$(lib 'provider_swatch openrouter-2')" != "$(lib 'provider_swatch no-such-provider')" ]
+}
+
+@test "provider_swatch: every provider draws the same glyph, differing only in colour" {
+    # The whole reason the swatch is drawn rather than looked up: emoji squares
+    # differ in rendered width between codepoint blocks, which knocks the
+    # provider column out of alignment. Assert the shared shape rather than a
+    # literal glyph, so changing the shape does not mean rewriting the guard —
+    # only one provider ever needs updating if it does.
+    local reference
+    reference=$(lib 'provider_swatch gemini' | sed $'s/\033\[[0-9;]*m//g')
+    [ -n "$reference" ]
+    local p drawn
+    for p in openai grok perplexity kimi kimi-cli ollama codex antigravity \
+             grok-cli openrouter openrouter-1 openrouter-7 no-such-provider; do
+        drawn=$(lib "provider_swatch $p" | sed $'s/\033\[[0-9;]*m//g')
+        [ "$drawn" = "$reference" ] || { echo "$p drew '$drawn', gemini drew '$reference'"; return 1; }
+    done
+    # Colour must still differ, or the swatch carries no information at all.
+    [ "$(lib 'provider_swatch grok')" != "$(lib 'provider_swatch perplexity')" ]
 }
 
 @test "provider_script_path: numbered seats all run the one router script" {
@@ -122,6 +143,25 @@ lib() {
     [ "$output" = "YES" ]
     run lib 'OPENROUTER_2_VISION=1; provider_vision_capable openrouter-1 && echo YES || echo NO'
     [ "$output" = "NO" ]
+}
+
+@test "provider_color: every palette name a provider asks for is defined by its callers" {
+    # provider_color expands ${NAME:-}, so a colour the caller never defined
+    # degrades to no escape at all rather than failing: kimi rendered uncoloured
+    # in query-council.sh for as long as it had no MAGENTA. Assert the two
+    # rendering callers define every name the table can ask for.
+    # Read the names out of provider_color itself. Restating them here is what
+    # let MAGENTA go missing in the first place: the table grew, the list did not.
+    local names name
+    names=$(sed -n '/^provider_color()/,/^}/p' "${LIB_DIR}/providers.sh" \
+        | grep -o '\${[A-Z_]*:-}' | sed 's/^\${//; s/:-}$//' | sort -u)
+    [ -n "$names" ]
+    for name in $names; do
+        grep -qE "^${name}='" "${SCRIPTS_DIR}/query-council.sh" \
+            || { echo "query-council.sh does not define $name"; return 1; }
+        grep -qE "^${name}='" "${SCRIPTS_DIR}/check-status.sh" \
+            || { echo "check-status.sh does not define $name"; return 1; }
+    done
 }
 
 # ---- end to end: the orchestrator runs N seats off the one script ----

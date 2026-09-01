@@ -107,6 +107,8 @@ print_banner() {
         openai|codex)      bg='229;231;235'; fg='31;41;55';    accent='100;116;139' ;;  # gray-200/slate-500
         grok|grok-cli)     bg='185;28;28';   fg='255;255;255'; accent='252;165;165' ;;  # red-700/300
         perplexity)        bg='21;128;61';   fg='255;255;255'; accent='134;239;172' ;;  # green-700/300
+        openrouter|openrouter-[0-9]*) bg='109;40;217'; fg='255;255;255'; accent='196;181;253' ;;  # violet-700/300
+        kimi|kimi-cli)     bg='55;65;81';    fg='255;255;255'; accent='156;163;175' ;;  # gray-700/400
         *)                 bg='55;65;81';    fg='255;255;255'; accent='156;163;175' ;;  # gray-700/400
     esac
     local upper

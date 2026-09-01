@@ -676,25 +676,27 @@ WHITE='\033[37m'
 RED='\033[31m'
 GREEN='\033[32m'
 CYAN='\033[36m'
+MAGENTA='\033[35m'
+BRIGHT_BLACK='\033[90m'
 LIGHT_YELLOW='\033[93m'
 ITALIC='\033[3m'
 DIM='\033[2m'
 RESET='\033[0m'
 
-# provider_color and provider_emoji are defined in lib/providers.sh
+# provider_color and provider_swatch are defined in lib/providers.sh
 # (sourced near the top of this file).
 
 # Get model name for provider (mirrors logic in provider scripts)
 # get_model is defined in lib/providers.sh (sourced near the top of this file).
 
-# Format provider list with colors and emojis
+# Format provider list with colour swatches and names
 format_providers() {
     local formatted=""
-    local color emoji
+    local color swatch
     for p in "$@"; do
         color=$(provider_color "$p")
-        emoji=$(provider_emoji "$p")
-        formatted+="${emoji} ${color}${p}${RESET} "
+        swatch=$(provider_swatch "$p")
+        formatted+="${swatch} ${color}${p}${RESET} "
     done
     echo "$formatted"
 }

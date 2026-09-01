@@ -61,6 +61,46 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   number (`OPENROUTER_2_VISION=1`): a roster can hold any model, and nothing in
   an id says whether it reads images.
 
+- **`/status` prints real columns.** The layout used a literal tab, and a tab
+  stop lands at a different place depending on how long the preceding name is —
+  so `Grok` and `Perplexity` pushed their status to different columns. Each field
+  is now padded to a fixed width computed from the PLAIN text, since the painted
+  strings carry SGR escape bytes that occupy no width and would pad every row by
+  a different wrong amount. The last column carries the model when a provider is
+  connected and the remediation hint otherwise, so a failing row still says what
+  to do without widening every healthy row to make room for it. A test asserts
+  every row's status begins at the same column; it fails against the old tab.
+
+- **Provider swatches are drawn, not looked up.** Every listing prefixed each
+  provider with an emoji square, and that could never line up: the U+1F7Ex family
+  holds seven colours and no black, and the two codepoints that fill the gaps —
+  U+2B1B and U+2B1C — render at text width in many terminal fonts, so they sat
+  narrower than their neighbours and knocked the provider column out of
+  alignment. `provider_emoji` is replaced by `provider_swatch`, which prints two
+  a circle in the provider's 24-bit colour. A circle is drawn to shape by the
+  font rather than inheriting the cell's roughly 1:2 aspect the way a block does,
+  so it stays round and occupies exactly one column for every provider, and its
+  palette is the RGB table rather than whichever squares Unicode happens to ship.
+
+  `provider_color_rgb` moves from `display.sh` to `providers.sh`, joining the
+  other provider-identity tables, so the header, the status listing and the
+  streaming pane read one definition instead of three that could drift.
+  `display.sh` sources it directly rather than assuming its caller did, keeping
+  the lib usable on its own. Ollama gains the arm it never had.
+
+  OpenRouter takes violet and Kimi the black it brands with, which is what
+  surfaced all of the above: the two had collided on purple. Kimi's name colour
+  is ANSI 90 rather than 30 — 30 is unreadable on a dark terminal, 90 is the grey
+  that renders a black brand on either background.
+
+  This uncovered a live defect: `provider_color` expands `${NAME:-}`, so a colour
+  its caller never defined degrades to no escape at all rather than failing —
+  and `query-council.sh` had never defined `MAGENTA`, so **Kimi had been
+  rendering uncoloured in every council run**. `MAGENTA` is now defined there,
+  and a test derives the required names from `provider_color` itself and asserts
+  both rendering callers define each one. Restating the list is what let it go
+  stale; the test reads the table instead.
+
 - **The synthesis is told a router seat is not a second opinion.** Pointing
   `OPENROUTER_MODEL` at a model another seat already runs gives two headers
   voicing one model, which nothing in the response reveals. `prompts/synthesis.md`

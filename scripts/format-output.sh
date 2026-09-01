@@ -19,16 +19,16 @@ else
 fi
 
 # Provider styling
-# provider_color and provider_emoji are defined in lib/providers.sh
+# provider_color and provider_swatch are defined in lib/providers.sh
 source "${SCRIPT_DIR}/lib/providers.sh"
 
 # Draw header bar (markdown compatible)
-# Args: emoji provider_name model [role] [header_type] [fallback] [model_fallback]
+# Args: swatch provider_name model [role] [header_type] [fallback] [model_fallback]
 # header_type: normal, rebuttal
 # fallback: a sibling PROVIDER answered instead (CLI→API swap)
 # model_fallback: the preferred MODEL was unavailable and a fallback model answered
 draw_header() {
-    local emoji="$1"
+    local swatch="$1"
     local provider="$2"
     local model="${3:-}"
     local role="${4:-}"
@@ -41,9 +41,9 @@ draw_header() {
     provider_cap="$(echo "${provider:0:1}" | tr '[:lower:]' '[:upper:]')${provider:1}"
 
     # Build header text
-    local header_text="${emoji} ${provider_cap}"
+    local header_text="${swatch} ${provider_cap}"
     if [[ "$header_type" == "rebuttal" ]]; then
-        header_text="${emoji} ${provider_cap} REBUTTAL"
+        header_text="${swatch} ${provider_cap} REBUTTAL"
     fi
     if [[ -n "$role" ]] && [[ "$role" != "null" ]] && [[ "$header_type" != "rebuttal" ]]; then
         header_text="${header_text} (${role})"
@@ -140,8 +140,8 @@ format_output() {
 
         # Display each provider's round 1 response
         for provider in $providers; do
-            local emoji
-            emoji=$(provider_emoji "$provider")
+            local swatch
+            swatch=$(provider_swatch "$provider")
             local model
             model=$(echo "$json" | jq -r ".round1[\"${provider}\"].model // \"unknown\"")
             local role
@@ -153,7 +153,7 @@ format_output() {
             local entry
             entry=$(echo "$json" | jq -c ".round1[\"${provider}\"]")
 
-            draw_header "$emoji" "$provider" "$model" "$role" "normal" "$fallback" "$model_fallback"
+            draw_header "$swatch" "$provider" "$model" "$role" "normal" "$fallback" "$model_fallback"
             render_response "$entry"
             echo ""
         done
@@ -170,8 +170,8 @@ format_output() {
                 echo ""
 
                 for provider in $providers; do
-                    local emoji
-                    emoji=$(provider_emoji "$provider")
+                    local swatch
+                    swatch=$(provider_swatch "$provider")
                     local model
                     model=$(echo "$json" | jq -r ".round2[\"${provider}\"].model // \"unknown\"")
                     local fallback
@@ -182,7 +182,7 @@ format_output() {
                     # A provider absent from round2 renders as an error entry
                     entry=$(echo "$json" | jq -c ".round2[\"${provider}\"] // {\"status\": \"error\"}")
 
-                    draw_header "$emoji" "$provider" "$model" "" "rebuttal" "$fallback" "$model_fallback"
+                    draw_header "$swatch" "$provider" "$model" "" "rebuttal" "$fallback" "$model_fallback"
                     render_response "$entry"
                     echo ""
                 done

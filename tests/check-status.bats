@@ -122,13 +122,15 @@ EOF
     # The denominator used to be a literal, hand-bumped 3 -> 4 -> 6 -> 7 -> 10 as
     # the roster grew. Pin it to what the user can actually count on screen so a
     # future provider cannot add a row and leave the total behind. Provider rows
-    # are the only tab-separated lines check-status emits.
+    # are the indented lines; the heading and the footer both start at column 0.
+    # Identified by the indent rather than by the swatch glyph, which has already
+    # changed shape twice, or by a tab, which the column layout removed.
     shadow_curl
     export COUNCIL_FAKE_HTTP_CODE=200
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local rows total
-    rows=$(printf '%s\n' "$output" | grep -c "$(printf '\t')")
+    rows=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g' | grep -c '^  [^ ]')
     total=$(printf '%s\n' "$output" | sed -n 's|.*[0-9][0-9]*/\([0-9][0-9]*\) providers available.*|\1|p')
     [ "$rows" -gt 0 ]
     [ "$total" = "$rows" ]
@@ -320,6 +322,27 @@ EOF
 # /api/v1/models answers 200 with no key at all and with a rejected one, so a
 # probe pointed there reports a dead OpenRouter seat as Connected. Only the URL
 # on the argv can tell the two endpoints apart.
+# A literal tab was used for this once, and a tab stop lands at a different place
+# depending on how long the preceding name is — so "Grok" and "Perplexity" pushed
+# their status to different columns. Eyeballing catches that only when someone
+# happens to have the right mix of providers configured.
+@test "check-status: every row's status begins at the same column" {
+    shadow_curl
+    export OPENROUTER_MODELS="deepseek/deepseek-v3.2,z-ai/glm-5.3,qwen/qwen3-max"
+    export COUNCIL_FAKE_HTTP_CODE=200
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    # Padding is invisible once painted, so measure the plain text.
+    local plain offsets rows
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    rows=$(printf '%s\n' "$plain" | grep -c '^  ●' || true)
+    [ "$rows" -ge 10 ]
+    offsets=$(printf '%s\n' "$plain" | grep '^  ●' \
+        | awk '{ if (match($0, /(Connected|API key not set|CLI not installed|Auth failed|Error \(HTTP|Connection timeout|Installed,)/)) print RSTART }' \
+        | sort -u | wc -l)
+    [ "$offsets" -eq 1 ]
+}
+
 # A roster turns the one router script into several seats. /status has to show
 # each of them, or a user reading 11/11 cannot tell that two of their three
 # configured models are absent from the council.

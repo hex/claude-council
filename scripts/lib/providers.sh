@@ -380,7 +380,7 @@ coerce_result_json() {
 # Vendor color for a provider name. CLI variants share their vendor's color
 # (codex with openai, antigravity with gemini, grok-cli with grok) since they
 # speak for the same vendor.
-# Callers define BLUE/WHITE/RED/GREEN/MAGENTA/CYAN; the expansions below
+# Callers define BLUE/WHITE/RED/GREEN/MAGENTA/CYAN/BRIGHT_BLACK; the expansions below
 # default to empty so a provider that no arm names cannot abort the caller
 # under `set -u` (check-status.sh defines no CYAN, so the default arm used to
 # kill the whole status run the moment any new provider was added).
@@ -390,23 +390,45 @@ provider_color() {
         openai|codex)      echo -e "${WHITE:-}" ;;
         grok|grok-cli)     echo -e "${RED:-}" ;;
         perplexity)        echo -e "${GREEN:-}" ;;
-        kimi|kimi-cli)     echo -e "${MAGENTA:-}" ;;
+        kimi|kimi-cli)     echo -e "${BRIGHT_BLACK:-}" ;;
         ollama)            echo -e "${CYAN:-}" ;;
-        openrouter|openrouter-[0-9]*) echo -e "${LIGHT_YELLOW:-}" ;;
+        openrouter|openrouter-[0-9]*) echo -e "${MAGENTA:-}" ;;
         *)                 echo -e "${CYAN:-}" ;;
     esac
 }
 
-# Vendor emoji for a provider name. Same grouping as provider_color.
-provider_emoji() {
-    case "$1" in
-        gemini|antigravity) echo "🟦" ;;
-        openai|codex)      echo "🔳" ;;
-        grok|grok-cli)     echo "🟥" ;;
-        perplexity)        echo "🟩" ;;
-        kimi|kimi-cli)     echo "🟪" ;;
-        ollama)            echo "⬜" ;;
-        openrouter|openrouter-[0-9]*) echo "🟨" ;;
-        *)                 echo "⬛" ;;
+# Vendor RGB triplet for a provider name, as a 24-bit foreground colour over the
+# user's unknown terminal background — mid-tone shades readable on light and
+# dark themes. Writes the triplet into the variable named by $1 (printf -v avoids
+# a subshell). Same grouping as provider_color: CLI variants speak for the same
+# vendor as their API sibling.
+provider_color_rgb() {
+    local __out="$1"
+    case "$2" in
+        gemini|antigravity) printf -v "$__out" '59;130;246'   ;;  # blue-500
+        openai|codex)      printf -v "$__out" '100;116;139'  ;;  # slate-500
+        grok|grok-cli)     printf -v "$__out" '239;68;68'    ;;  # red-500
+        perplexity)        printf -v "$__out" '22;163;74'    ;;  # green-600
+        kimi|kimi-cli)     printf -v "$__out" '63;63;70'     ;;  # zinc-700
+        ollama)            printf -v "$__out" '8;145;178'    ;;  # cyan-600
+        openrouter|openrouter-[0-9]*) printf -v "$__out" '124;58;237' ;;  # violet-600
+        *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
     esac
+}
+
+# The provider's colour swatch that precedes its name in every listing: one
+# circle in the provider's own colour.
+#
+# Two earlier shapes did not survive contact with real terminals. Emoji squares
+# come in seven colours with no black, and the two codepoints that fill the gaps
+# (U+2B1B, U+2B1C) render at text width in many fonts, so they sat narrower than
+# their neighbours and broke the column. Drawn blocks fixed the width but
+# inherited the cell's roughly 1:2 aspect, reading as a tall bar rather than a
+# chip. A circle is drawn to shape by the font, so it is round at any cell
+# aspect, occupies exactly one column for every provider, and takes its colour
+# from the RGB table above rather than from whichever squares Unicode ships.
+provider_swatch() {
+    local __rgb
+    provider_color_rgb __rgb "$1"
+    printf '\033[38;2;%sm●\033[0m' "$__rgb"
 }
