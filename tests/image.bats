@@ -98,15 +98,34 @@ PROV
     [[ "$resp" == *"MIME=image/png"* ]]
 }
 
+@test "image: kimi-cli routes the image to kimi, whose default model reads it" {
+    local fd="${BATS_TEST_TMPDIR}/fp"; mkdir -p "$fd"
+    write_echo_provider "$fd/kimi-cli.sh"
+    write_echo_provider "$fd/kimi.sh"
+    # The mirror of the test below: kimi.sh has always built the image payload,
+    # so once the capability table stopped denying it, kimi-cli gained the same
+    # route codex and antigravity have had all along.
+    run --separate-stderr env PROVIDERS_DIR="$fd" KIMI_API_KEY=k \
+        bash "$SCRIPT" --no-cache --no-pane --no-auto-context \
+        --image="$IMG" --providers=kimi-cli "look"
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.round1."kimi-cli".fallback // empty')" = "kimi" ]
+    local resp; resp=$(echo "$output" | jq -r '.round1."kimi-cli".response')
+    [[ "$resp" != *"(answered without the image)"* ]]
+    [[ "$resp" != *"IMG=|"* ]]   # the base64 actually reached the sibling
+}
+
 @test "image: a CLI whose sibling is also blind answers text-only rather than paying the sibling" {
     local fd="${BATS_TEST_TMPDIR}/fp"; mkdir -p "$fd"
     write_echo_provider "$fd/kimi-cli.sh"   # healthy CLI: must be the one that answers
-    write_echo_provider "$fd/kimi.sh"       # sibling exists, but is not vision-capable
-    # Routing to a sibling is only worth it when the sibling gains vision. kimi
-    # is the first sibling that cannot see, so handing it the query would spend
-    # a paid API call to get an answer that is just as blind — and, because the
-    # sibling path skips the tag, one the synthesis would weigh as sighted.
-    run --separate-stderr env PROVIDERS_DIR="$fd" KIMI_API_KEY=k \
+    write_echo_provider "$fd/kimi.sh"       # sibling exists, but is pinned blind
+    # Routing to a sibling is only worth it when the sibling gains vision:
+    # handing the query to a blind sibling spends a paid API call for an answer
+    # just as blind — and, because the sibling path skips the tag, one the
+    # synthesis would weigh as sighted. kimi reads images on its default model,
+    # so the blind sibling here is a real text-only Moonshot id rather than the
+    # provider itself.
+    run --separate-stderr env PROVIDERS_DIR="$fd" KIMI_API_KEY=k KIMI_MODEL=kimi-k2 \
         bash "$SCRIPT" --no-cache --no-pane --no-auto-context \
         --image="$IMG" --providers=kimi-cli "look"
     [ "$status" -eq 0 ]

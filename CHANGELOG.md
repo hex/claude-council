@@ -71,6 +71,18 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   to do without widening every healthy row to make room for it. A test asserts
   every row's status begins at the same column; it fails against the old tab.
 
+- **Kimi reads images.** `kimi.sh` has built the OpenAI-shaped `image_url`
+  payload since it landed; only `provider_vision_capable` said otherwise, so the
+  council routed images away from a provider that could read them and `kimi-cli`,
+  whose only route to an image is through that sibling, answered text-only as a
+  consequence. Verified against the live model rather than the docs:
+  `moonshotai/kimi-k3` — the default — is text+image+video and correctly answers
+  a question posed only inside an image. `kimi-k2` and its variants really are
+  text-only while `k2.5` and later are not, so a `KIMI_MODEL` override opts in
+  with `KIMI_VISION=1`, mirroring the router's seat. `kimi-cli` stays out of the
+  capability table like every other CLI: a CLI cannot take an image, it reaches
+  one only by routing.
+
 - **Provider swatches are drawn, not looked up.** Every listing prefixed each
   provider with an emoji square, and that could never line up: the U+1F7Ex family
   holds seven colours and no black, and the two codepoints that fill the gaps —

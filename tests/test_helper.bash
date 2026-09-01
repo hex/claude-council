@@ -41,7 +41,7 @@ unset GEMINI_MODEL OPENAI_MODEL GROK_MODEL PERPLEXITY_MODEL KIMI_MODEL OLLAMA_MO
 unset CODEX_MODEL ANTIGRAVITY_MODEL GROK_CLI_MODEL KIMI_CLI_MODEL OPENROUTER_MODEL
 # OPENROUTER_VISION is read alongside OPENROUTER_MODEL by provider_vision_capable,
 # so a developer who exported it would flip the vision answer the suite asserts.
-unset OPENROUTER_VISION
+unset OPENROUTER_VISION KIMI_VISION
 # OPENROUTER_MODELS splits the router into numbered seats and COUNCIL_SEAT tells
 # the script which one it is running as: either left set would change the roster
 # the suite asserts.

@@ -183,16 +183,20 @@ Per-provider disposition when an image is attached:
   gemini as an `inlineData` part, openai as `input_image` (Responses API) or
   `image_url` (Chat Completions), grok and perplexity as an OpenAI-compatible
   `image_url` data-URI on their `/chat/completions` endpoint.
-- **codex, antigravity, grok-cli** (CLI, cannot accept an image) route to their
-  vision API sibling, codex→openai, antigravity→gemini, grok-cli→grok, with
-  the image. The route is taken only when the sibling is itself vision-capable,
-  so **kimi-cli** does not use it: its sibling `kimi` is text-only.
+- **codex, antigravity, grok-cli, kimi-cli** (CLI, cannot accept an image) route
+  to their vision API sibling — codex→openai, antigravity→gemini, grok-cli→grok,
+  kimi-cli→kimi — with the image. The route is taken only when the sibling is
+  itself vision-capable and its key is set.
 - **openrouter** accepts an image on its curated default, which is
   vision-capable. An `OPENROUTER_MODEL` override names one of hundreds of routed
   models whose modalities are not knowable from here, so it is treated as
   text-only until `OPENROUTER_VISION=1` says otherwise.
-- **kimi, kimi-cli, ollama** answer text-only, prefixed with
-  `(answered without the image)`.
+- **kimi** reads images on its default model. `kimi.sh` has always built the
+  OpenAI-shaped `image_url` payload; only the capability table said otherwise,
+  which routed images away from a provider that could read them. `kimi-k2` and
+  its variants are text-only while `k2.5` and later are not, so a `KIMI_MODEL`
+  override opts in with `KIMI_VISION=1`.
+- **ollama** answers text-only, prefixed with `(answered without the image)`.
 
 Privacy invariant: only the image's SHA-256 keys the cache. The base64 lives
 solely in a temp file passed to providers; it is never written to cache entries
@@ -570,6 +574,7 @@ claude-council/
 | `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
 | `COUNCIL_SEAT` | (set by the orchestrator) | Which seat a provider script is running as; only the router reads it |
 | `OPENROUTER_VISION` | (unset) | Set to `1` to declare an `OPENROUTER_MODEL` override image-capable |
+| `KIMI_VISION` | (unset) | Set to `1` to declare a `KIMI_MODEL` override image-capable |
 | `OLLAMA_MODEL` | (unset) | Local model id; when unset, whichever model `ollama list` shows first |
 | `OLLAMA_HOST` | http://localhost:11434 | Ollama server, following Ollama's own convention |
 | `COUNCIL_PROVIDERS` | (unset) | Comma-separated roster queried by default, ahead of discovery; `--providers` still wins per call |

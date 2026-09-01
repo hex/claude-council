@@ -501,6 +501,23 @@ run_provider_with_image() {
     grep -qF 'search_recency_filter' "$DATA_FILE"
 }
 
+@test "provider_vision_capable: kimi reads images on its default model" {
+    # kimi.sh has built the OpenAI-shaped image_url payload all along; only this
+    # table said otherwise, so the council routed images away from a provider
+    # that could read them — and kimi-cli, whose only route is through kimi,
+    # answered text-only as a consequence. Verified against the live model:
+    # moonshotai/kimi-k3 is text+image+video and answers questions posed in an
+    # image. kimi-k2 and its variants are text-only, hence the opt-in on override.
+    source "${LIB_DIR}/providers.sh"
+    provider_vision_capable kimi
+    # kimi-cli is a CLI: it cannot take an image, and reaches one only by
+    # routing to kimi. Claiming otherwise hands the base64 to a binary that
+    # has no argument for it.
+    ! provider_vision_capable kimi-cli
+    ! KIMI_MODEL=kimi-k2 provider_vision_capable kimi
+    KIMI_MODEL=kimi-k2 KIMI_VISION=1 provider_vision_capable kimi
+}
+
 @test "provider_vision_capable: true for gemini/openai/grok/perplexity, false for the rest" {
     source "${LIB_DIR}/providers.sh"
     provider_vision_capable gemini

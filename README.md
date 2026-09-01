@@ -358,7 +358,7 @@ Attach one image (e.g. a UI screenshot) so vision-capable providers can critique
 
 - Single image per query, raw size up to 10 MB, extensions: png / jpg / jpeg / webp / gif.
 - `gemini`, `openai`, `grok`, and `perplexity` receive the image alongside the prompt.
-- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok` (the slot is marked as a fallback). `kimi-cli`'s sibling `kimi` is text-only, so an image is never routed there. If the sibling is unusable (no API key), not vision-capable, or already answering in its own slot, the CLI provider answers text-only instead and its answer is prefixed with `(answered without the image)`. Selecting `kimi` or `ollama` directly is likewise text-only.
+- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok`, `kimi-cli` via `kimi` (the slot is marked as a fallback). If the sibling is unusable (no API key), not vision-capable, or already answering in its own slot, the CLI provider answers text-only instead and its answer is prefixed with `(answered without the image)`. Selecting `ollama` directly is text-only.
 
 Privacy: the image is sent to the providers that can see it, but its bytes are **not** written to cache entries or the saved `council-*.md` transcripts — only a hash of the image keys the cache.
 
@@ -584,7 +584,10 @@ export GEMINI_MODEL="gemini-pro-latest"             # default (tracks Google's c
 export OPENAI_MODEL="gpt-5.6-sol"                   # default
 export GROK_MODEL="grok-latest"                     # default (tracks xAI's current flagship)
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
-export KIMI_MODEL="kimi-k3"                         # default
+export KIMI_MODEL="kimi-k3"                         # default (reads images)
+export KIMI_VISION=1                                # only needed when KIMI_MODEL
+                                                    # names an image-capable model
+                                                    # other than the default
 export OPENROUTER_MODEL="anthropic/claude-sonnet-5"  # default (single seat)
 export OPENROUTER_MODELS="a/b,c/d,e/f"              # or: one seat per entry
 export OPENROUTER_VISION=1                          # only needed when OPENROUTER_MODEL

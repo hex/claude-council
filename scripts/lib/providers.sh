@@ -329,6 +329,17 @@ get_model() {
 provider_vision_capable() {
     case "$1" in
         gemini|openai|grok|perplexity) return 0 ;;
+        # kimi.sh builds the image payload already; the default model reads it.
+        # An override may not — kimi-k2 and its variants are text-only while
+        # k2.5 and later are not — so an override opts in the same way the
+        # router's does. kimi-cli is deliberately absent, like every other CLI:
+        # a CLI cannot take an image, it reaches one only by routing here.
+        kimi)
+            if [[ -z "${KIMI_MODEL:-}" || "${KIMI_VISION:-}" == 1 ]]; then
+                return 0
+            fi
+            return 1
+            ;;
         # The curated default accepts images. An override points at any of
         # hundreds of routed models whose modalities are not knowable from here,
         # so it opts in explicitly rather than being assumed either way.
