@@ -162,6 +162,94 @@ run_provider_with_prompt_file() {
 
 # ---- response parsing (characterization) ----
 
+# ---- image base64 stays off jq's argv ----
+#
+# The prompt-leak tests above cover the prompt. The image is a second, larger
+# payload on the same path: query-council.sh base64-encodes it and hands the
+# provider a file, and a provider that then interpolates that file's contents
+# into a jq argument puts a megabyte on the command line. perplexity did exactly
+# that until this branch — it built the user-content array with --rawfile, then
+# passed the result on to the payload build with --argjson, which put the base64
+# back on argv one hop later. The image-injection tests could not see it: their
+# payload is four bytes.
+IMAGE_LEAK_MARK="B64LEAK_9f2a"
+
+# Write a base64 payload carrying the marker and echo its path. Size is
+# irrelevant to the assertion — the recorded argv answers the question on any
+# platform, whatever its ARG_MAX.
+big_image_file() {
+    local f="${BATS_TEST_TMPDIR}/big-b64"
+    { printf '%s' "$IMAGE_LEAK_MARK"; head -c 20000 /dev/zero | tr '\0' 'A'; } > "$f"
+    printf '%s' "$f"
+}
+
+# Usage: run_provider_with_image <script> [ENV=v ...]
+run_provider_with_image() {
+    local script="$1"; shift
+    local bf; bf=$(big_image_file)
+    install_recording_jq
+    run --separate-stderr env \
+        PATH="${JQ_BIN}:${FAKE_DIR}:$PATH" \
+        FAKE_ARGV_FILE="$ARGV_FILE" \
+        FAKE_CONFIG_FILE="$CONFIG_FILE" \
+        FAKE_DATA_FILE="$DATA_FILE" \
+        FAKE_BODY="$FAKE_BODY" \
+        FAKE_HTTP="${FAKE_HTTP:-200}" \
+        COUNCIL_RETRY_DELAY=0 \
+        "$@" \
+        bash "$PROVIDERS/$script" "describe this" --image-file "$bf" --image-mime image/png
+}
+
+@test "gemini: the image base64 never reaches jq's argv" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"GEM_OK"}]}}]}'
+    run_provider_with_image gemini.sh GEMINI_API_KEY=k
+    [ "$status" -eq 0 ]
+    grep -qF "$IMAGE_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$IMAGE_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "openai: the image base64 never reaches jq's argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"OAI_OK"}}]}'
+    run_provider_with_image openai.sh OPENAI_API_KEY=k OPENAI_MODEL=gpt-4o
+    [ "$status" -eq 0 ]
+    grep -qF "$IMAGE_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$IMAGE_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "grok: the image base64 never reaches jq's argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"GROK_OK"}}]}'
+    run_provider_with_image grok.sh GROK_API_KEY=k
+    [ "$status" -eq 0 ]
+    grep -qF "$IMAGE_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$IMAGE_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "perplexity: the image base64 never reaches jq's argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"PPX_OK"}}]}'
+    run_provider_with_image perplexity.sh PERPLEXITY_API_KEY=k
+    [ "$status" -eq 0 ]
+    grep -qF "$IMAGE_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$IMAGE_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "perplexity: the image base64 stays off argv with a recency filter set" {
+    # The recency branch builds a second, separate payload; the two-hop leak was
+    # in the shared content build, but only one branch was ever exercised.
+    FAKE_BODY='{"choices":[{"message":{"content":"PPX_OK"}}]}'
+    run_provider_with_image perplexity.sh PERPLEXITY_API_KEY=k PERPLEXITY_RECENCY=week
+    [ "$status" -eq 0 ]
+    grep -qF "$IMAGE_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$IMAGE_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
+@test "openrouter: the image base64 never reaches jq's argv" {
+    FAKE_BODY='{"choices":[{"message":{"content":"OR_OK"}}]}'
+    run_provider_with_image openrouter.sh OPENROUTER_API_KEY=k
+    [ "$status" -eq 0 ]
+    grep -qF "$IMAGE_LEAK_MARK" "$DATA_FILE"
+    ! grep -qF "$IMAGE_LEAK_MARK" "$JQ_ARGV_FILE"
+}
+
 @test "gemini: extracts text from candidates path" {
     FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"GEM_OK"}]}}]}'
     run_provider gemini.sh "hi" GEMINI_API_KEY=k
