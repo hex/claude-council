@@ -682,7 +682,7 @@ EOF
     [ "$(echo $plain)" = "$(echo $paired)" ]
 }
 
-@test "query-council: --list-default returns post-policy set, machine-readable" {@test "query-council: --list-default returns post-policy set, machine-readable" {
+@test "query-council: --list-default returns post-policy set, machine-readable" {
     # Single space-separated line; CLI siblings drop their API counterparts.
     if ! command_exists codex; then skip "codex CLI not installed"; fi
     export OPENAI_API_KEY="test-key"

@@ -62,6 +62,19 @@ setup() {
     [[ "$output" == *"export PERPLEXITY_API_KEY="* ]]
 }
 
+@test "check-status: a roster seat without a key shows the same export remediation" {
+    # The hint must not disappear precisely when the feature is configured: a
+    # roster makes every row an openrouter-N, and the remediation table only
+    # knew the bare name.
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    export OPENROUTER_MODELS="vendor/one,vendor/two"
+    unset OPENROUTER_API_KEY
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OpenRouter 1"* ]]
+    [[ "$output" == *"export OPENROUTER_API_KEY="* ]]
+}
+
 @test "check-status: missing CLI binary shows install remediation" {
     # Drop the fakes (and any real CLIs) from PATH
     export PATH="/usr/bin:/bin"
