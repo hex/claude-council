@@ -46,13 +46,20 @@ EOF
 # response, so the marker lets a test sequence its writes against what is
 # actually on screen instead of guessing at sleeps — the watcher's first tick
 # can be a second late on a loaded machine.
+#
+# The marker is written after the render body, not before it: the perl renderer
+# costs a third of a second cold, and a marker ahead of it says "about to
+# render" — a caller that then races a one-second window against the renderer
+# loses it on a loaded machine.
 count_renders() {
     : > "$W/renders"
     mv "$W/render.sh" "$W/render-body.sh"
     cat > "$W/render.sh" <<EOF
 #!/bin/bash
+"$W/render-body.sh"
+status=\$?
 echo rendered >> "$W/renders"
-exec "$W/render-body.sh"
+exit \$status
 EOF
     chmod +x "$W/render.sh"
 }
@@ -98,6 +105,12 @@ await_content() {
             return 1
         fi
     done
+}
+
+# Keep the watcher's stdin open exactly as long as the watcher lives (its EXIT
+# trap removes the watch dir), so no feeder outlives the test.
+until_watcher_exits() {
+    while [[ -d "$W" ]]; do sleep 0.1; done
 }
 
 # The watcher under run_with_deadline, so a regression in the .done exit path
@@ -320,10 +333,22 @@ producer_awaits_retry() {
     touch "$W/.done" 2>/dev/null || true
 }
 
-# Keep the watcher's stdin open exactly as long as the watcher lives (its EXIT
-# trap removes the watch dir), so no feeder outlives the test.
-until_watcher_exits() {
-    while [[ -d "$W" ]]; do sleep 0.1; done
+
+# Give the watcher a response to draw, so a test can tell when it has reached
+# the pane. Runs before the watcher starts; pairs with the helper below.
+seed_a_render() {
+    count_renders
+    printf 'Hello\n' > "$W/responses/gemini.md"
+}
+
+# The producer's offer window, opened only once the watcher has drawn the pane.
+# The render lands in the same tick that ends in retry_offer_prompt, so a render
+# seen here means the prompt is up within milliseconds. Counting the window from
+# the test's own start instead put two clocks in a race: on a loaded machine the
+# watcher's startup outlasted the window, and the offer was withdrawn before it
+# was ever shown. Background this.
+producer_awaits_retry_once_drawn() {
+    await_renders 1 && producer_awaits_retry "$1"
 }
 
 @test "watcher: offers a retry naming the failed providers, and r asks the producer for one" {
@@ -357,12 +382,17 @@ until_watcher_exits() {
 
 @test "watcher: a withdrawn offer falls back to the plain close prompt" {
     rm -f "$W/.done"
+    seed_a_render
     write_offer 5 kimi-cli
-    # The producer's one-second deadline passes unanswered: it withdraws the
+    # The producer's one-second window passes unanswered: it withdraws the
     # offer and finishes.
-    producer_awaits_retry 1 &
+    producer_awaits_retry_once_drawn 1 &
+    # The esc has to reach the close prompt, not the retry prompt, which would
+    # close the pane before the fallback under test was ever drawn. The retry
+    # loop rechecks .done between reads bounded by read_key's `read -t 1`, so it
+    # is gone within a second of the .done the producer touches on its way out.
     COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 12 \
-        < <(sleep 4; printf '\033'; until_watcher_exits)
+        < <(await_file "$W/.done"; sleep 2; printf '\033'; until_watcher_exits)
     [ "$status" -eq 0 ]
     [[ "$output" == *"[r] retry failed (kimi-cli)"*"[esc/ctrl-d] close"* ]]
     # The close prompt must not keep advertising a retry nobody can take.
@@ -372,8 +402,9 @@ until_watcher_exits() {
 @test "watcher: the retry prompt fits the pane width with autowrap off" {
     rm -f "$W/.done"
     fake_stty 40
+    seed_a_render
     write_offer 5 gemini openai grok perplexity
-    producer_awaits_retry 1 &
+    producer_awaits_retry_once_drawn 1 &
     COUNCIL_AUTO_CLOSE=1 run --separate-stderr bounded_watcher 8
     [ "$status" -eq 0 ]
     # Drawn between DECAWM off/on like the waiting line, so a prompt wider
