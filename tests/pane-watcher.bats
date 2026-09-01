@@ -72,6 +72,34 @@ await_renders() {
     done
 }
 
+# Block until a file appears. Same errexit-safe `if` as await_renders, and for
+# the same reason: `[[ ... ]] && return 1` yields status 1 on every ordinary
+# iteration, which kills the caller under bats.
+await_file() {
+    local f="$1" waited=0
+    while [[ ! -e "$f" ]]; do
+        sleep 0.05
+        waited=$((waited + 1))
+        if [[ $waited -gt 200 ]]; then
+            echo "timed out waiting for $f" >&2
+            return 1
+        fi
+    done
+}
+
+# Block until a file contains a string. Same errexit-safe shape as the two above.
+await_content() {
+    local f="$1" want="$2" waited=0
+    while ! grep -qF "$want" "$f" 2>/dev/null; do
+        sleep 0.05
+        waited=$((waited + 1))
+        if [[ $waited -gt 200 ]]; then
+            echo "timed out waiting for '$want' in $f" >&2
+            return 1
+        fi
+    done
+}
+
 # The watcher under run_with_deadline, so a regression in the .done exit path
 # fails with status 143 instead of hanging the bats run. A shell function, not
 # a binary, so callers set COUNCIL_AUTO_CLOSE as a prefix assignment on `run`
@@ -367,10 +395,27 @@ until_watcher_exits() {
         printf 'kimi-cli\tquerying\t\t\n' >> "$W/status"
         (source "$LIB" && pane_error_write "$W" kimi-cli "second failure")
         printf 'kimi-cli\terror\t\t\n' >> "$W/status"
+        # The redraw under test has to happen while the watcher is still
+        # polling, and .done ends that. Waiting for the feeder to confirm the
+        # width change makes that ordering explicit; previously both sides
+        # timed it independently and only agreed when the machine was idle.
+        await_file "$W/.redrawn"
         touch "$W/.done"
     ) &
     COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 16 \
-        < <(sleep 1; printf 'r'; sleep 3; echo 100 > "$COLS_FILE"; sleep 4; printf '\033'; until_watcher_exits)
+        < <(sleep 1; printf 'r'
+            # The replay must contain both failures, so the redraw comes after
+            # the second one is recorded. pane_error_write overwrites the
+            # provider's error file, so its content is the signal.
+            await_content "$W/errors/kimi-cli.txt" "second failure"
+            echo 100 > "$COLS_FILE"
+            # The redraw itself lands on the watcher's stdout, which this feeder
+            # cannot observe, so this one wait stays a sleep — bounded and
+            # generous rather than tuned. Everything downstream of it is now
+            # ordered by the .redrawn handshake rather than by the clock.
+            sleep 2
+            touch "$W/.redrawn"
+            printf '\033'; until_watcher_exits)
     [ "$status" -eq 0 ]
     [[ "$output" == *$'\033[3J'* ]]
     replay=$(after_last_redraw "$output")
