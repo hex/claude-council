@@ -30,6 +30,23 @@ discover_providers() {
             ollama)
                 command -v ollama >/dev/null 2>&1 && is_available=true
                 ;;
+            openrouter)
+                # The one script that can seat more than once. With a roster set,
+                # it enlists as openrouter-1..N instead of itself, so each model
+                # gets its own header, cache key and role; without one it behaves
+                # like any other API seat.
+                if api_key_present openrouter; then
+                    local seats=() i
+                    read -ra seats <<< "$(openrouter_seat_models | tr '\n' ' ')"
+                    if (( ${#seats[@]} > 0 )); then
+                        for ((i = 1; i <= ${#seats[@]}; i++)); do
+                            available+=("openrouter-$i")
+                        done
+                        continue
+                    fi
+                    is_available=true
+                fi
+                ;;
             *)
                 # API providers gate on <NAME>_API_KEY — the same check
                 # api_key_present makes, so there's one definition of it.
@@ -141,6 +158,30 @@ parse_provider_list() {
     local parsed
     read -ra parsed <<< "${1//,/ }"
     echo "${parsed[*]+"${parsed[*]}"}"
+}
+
+# The model ids a router seat roster holds, one per line, in list order.
+# Empty when OPENROUTER_MODELS is unset — which leaves the single `openrouter`
+# seat in place, unchanged.
+#
+# A router can front many models at once, but the council's unit of identity is
+# the seat: one header, one model label, one cache key, one role. So a roster of
+# N models is N seats rather than one seat that varies, and `openrouter-N` names
+# the Nth. There is no openrouter-N.sh — provider_script_path routes them all
+# back to the one script, which reads COUNCIL_SEAT to learn which it is.
+openrouter_seat_models() {
+    local models=()
+    read -ra models <<< "$(parse_provider_list "${OPENROUTER_MODELS:-}")"
+    printf '%s\n' "${models[@]+"${models[@]}"}"
+}
+
+# The script that answers for a provider name. Every name is its own filename
+# except the router's numbered seats, which share openrouter.sh.
+provider_script_path() {
+    case "$1" in
+        openrouter-[0-9]*) echo "${PROVIDERS_DIR}/openrouter.sh" ;;
+        *)                 echo "${PROVIDERS_DIR}/$1.sh" ;;
+    esac
 }
 
 # Reads one bare key from a TOML file — the root table when $2 is empty, the
@@ -263,6 +304,22 @@ get_model() {
         # has no voice for. A router's default is retargetable by design:
         # OPENROUTER_MODEL takes any id from openrouter.ai/models.
         openrouter) echo "${OPENROUTER_MODEL:-anthropic/claude-sonnet-5}" ;;
+        openrouter-[0-9]*)
+            # An explicit <PREFIX>_MODEL wins, exactly as it does for every other
+            # provider: the exit-3 degrade path forces a fallback that way, and a
+            # roster entry must not send the model that just failed.
+            local __ovr __models
+            __ovr="$(provider_env_prefix "$1")_MODEL"
+            if [[ -n "${!__ovr:-}" ]]; then
+                echo "${!__ovr}"
+            else
+                __models=()
+                read -ra __models <<< "$(parse_provider_list "${OPENROUTER_MODELS:-}")"
+                # A seat past the end of the roster reports "unknown" rather than
+                # a neighbour's id, so a mislabelled answer is impossible.
+                echo "${__models[$(( ${1#openrouter-} - 1 ))]:-unknown}"
+            fi
+            ;;
         *)          echo "unknown" ;;
     esac
 }
@@ -277,6 +334,17 @@ provider_vision_capable() {
         # so it opts in explicitly rather than being assumed either way.
         openrouter)
             if [[ -z "${OPENROUTER_MODEL:-}" || "${OPENROUTER_VISION:-}" == 1 ]]; then
+                return 0
+            fi
+            return 1
+            ;;
+        openrouter-[0-9]*)
+            # A roster entry is whichever id the user listed, so nothing here can
+            # know its modalities. Each seat opts in on its own — collectively
+            # would route an image to the two seats that cannot read it.
+            local __vis
+            __vis="$(provider_env_prefix "$1")_VISION"
+            if [[ "${!__vis:-}" == 1 ]]; then
                 return 0
             fi
             return 1
@@ -324,7 +392,7 @@ provider_color() {
         perplexity)        echo -e "${GREEN:-}" ;;
         kimi|kimi-cli)     echo -e "${MAGENTA:-}" ;;
         ollama)            echo -e "${CYAN:-}" ;;
-        openrouter)        echo -e "${LIGHT_YELLOW:-}" ;;
+        openrouter|openrouter-[0-9]*) echo -e "${LIGHT_YELLOW:-}" ;;
         *)                 echo -e "${CYAN:-}" ;;
     esac
 }
@@ -338,7 +406,7 @@ provider_emoji() {
         perplexity)        echo "🟩" ;;
         kimi|kimi-cli)     echo "🟪" ;;
         ollama)            echo "⬜" ;;
-        openrouter)        echo "🟨" ;;
+        openrouter|openrouter-[0-9]*) echo "🟨" ;;
         *)                 echo "⬛" ;;
     esac
 }

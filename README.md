@@ -448,6 +448,20 @@ export OPENROUTER_API_KEY="your-key"   # one key, any model on openrouter.ai/mod
 
 `openrouter` seats whatever model `OPENROUTER_MODEL` names, defaulting to
 `anthropic/claude-sonnet-5` — the one vendor the council has no direct seat for.
+To seat several routed models at once, list them instead:
+
+```bash
+export OPENROUTER_MODELS="deepseek/deepseek-v3.2,z-ai/glm-5.3,qwen/qwen3-max"
+```
+
+Each entry becomes its own council member — `openrouter-1`, `openrouter-2`,
+`openrouter-3` — with its own header, model label, cache entry and role, all
+sharing the one key. `--providers=openrouter-2` picks one out. The list replaces
+the single `openrouter` seat rather than adding to it, so the same model never
+answers twice under two headers. Reordering the list reassigns the numbers, which
+matters only if you pin roles positionally. A seat that should accept images opts
+in by number (`OPENROUTER_2_VISION=1`): the roster can hold any model, and nothing
+in the id says whether it reads images.
 Two things follow from it being a router. Your prompt reaches OpenRouter and then
 the upstream serving that id, so it is two disclosures rather than one. And
 pointing it at a model another seat already runs (`OPENROUTER_MODEL=openai/gpt-5.6`
@@ -571,9 +585,11 @@ export OPENAI_MODEL="gpt-5.6-sol"                   # default
 export GROK_MODEL="grok-latest"                     # default (tracks xAI's current flagship)
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
 export KIMI_MODEL="kimi-k3"                         # default
-export OPENROUTER_MODEL="anthropic/claude-sonnet-5"  # default
+export OPENROUTER_MODEL="anthropic/claude-sonnet-5"  # default (single seat)
+export OPENROUTER_MODELS="a/b,c/d,e/f"              # or: one seat per entry
 export OPENROUTER_VISION=1                          # only needed when OPENROUTER_MODEL
                                                     # names a model that accepts images
+export OPENROUTER_2_VISION=1                        # same, for roster seat 2
 export OLLAMA_MODEL="llama3.2"                      # default: whichever model `ollama list` shows first
 export OLLAMA_HOST="http://localhost:11434"         # default
 export GEMINI_THINKING_BUDGET=8192                  # optional: cap Gemini's internal reasoning tokens (unset: the model decides)

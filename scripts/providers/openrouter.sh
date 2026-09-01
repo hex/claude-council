@@ -51,11 +51,24 @@ if [[ -z "$API_KEY" ]]; then
     exit 1
 fi
 
-# Model selection (override via OPENROUTER_MODEL env var). Exactly one id is
-# sent: OpenRouter may fail over among upstreams serving that same id, which
-# preserves identity, but `models[]` or `route: "fallback"` would let it answer
-# as a different model than the one the council labels, caches and synthesizes.
-MODEL="$(get_model openrouter)"
+# Which seat this run is. A roster (OPENROUTER_MODELS) turns this one script
+# into openrouter-1..N, and the orchestrator names the seat it is running so the
+# model comes from the seat rather than the script — otherwise every seat would
+# post the same default while its header claimed the roster entry.
+# Only a name this script can actually be is honoured: COUNCIL_SEAT is
+# orchestrator state, and a stale value in a user's shell must not silently
+# retarget a direct invocation.
+SEAT="openrouter"
+case "${COUNCIL_SEAT:-}" in
+    openrouter|openrouter-[0-9]*) SEAT="$COUNCIL_SEAT" ;;
+esac
+
+# Model selection (override via OPENROUTER_MODEL, or <SEAT>_MODEL for a roster
+# seat). Exactly one id is sent: OpenRouter may fail over among upstreams serving
+# that same id, which preserves identity, but `models[]` or `route: "fallback"`
+# would let it answer as a different model than the one the council labels,
+# caches and synthesizes.
+MODEL="$(get_model "$SEAT")"
 
 # OpenRouter API endpoint (OpenAI-compatible)
 ENDPOINT="https://openrouter.ai/api/v1/chat/completions"

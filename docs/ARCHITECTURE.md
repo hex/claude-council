@@ -144,7 +144,15 @@ Two flavors share the interface:
   charge per call. `openrouter` is a router rather than a vendor: it forwards to
   whichever upstream serves the id in `OPENROUTER_MODEL`, so its answer travels
   one hop further than the others' and its vendor is a runtime fact, not a
-  static one.
+  static one. It is also the one script that can seat more than once: with
+  `OPENROUTER_MODELS` set it is discovered as `openrouter-1..N`, one seat per
+  listed model. The council's unit of identity is the seat — one header, one
+  model label, one cache key, one role — so N models is N seats rather than one
+  seat that varies. There is no `openrouter-N.sh`: `provider_script_path` routes
+  every numbered seat back to the one script, and the orchestrator exports
+  `COUNCIL_SEAT` so that script can resolve its own model instead of the
+  default. Without that the three seats would post one model behind three
+  headers each claiming a different one.
 - **CLI providers** (`codex`, `antigravity`, `grok-cli`, `kimi-cli`), gated on the
   binary being on `PATH`, use the user's existing CLI subscription auth, no per-call
   cost. When both an API and CLI sibling exist (codex+openai, antigravity+gemini,
@@ -558,7 +566,9 @@ claude-council/
 | `ANTIGRAVITY_MODEL` | (unset) | Model passed to `agy --model`, only when set (else the model selected in the Antigravity app) |
 | `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
 | `KIMI_CLI_MODEL` | (unset) | Model passed to `kimi -m`, only when set (else the kimi CLI's own configured model) |
-| `OPENROUTER_MODEL` | `anthropic/claude-sonnet-5` | Any id from openrouter.ai/models |
+| `OPENROUTER_MODEL` | `anthropic/claude-sonnet-5` | Any id from openrouter.ai/models (single seat) |
+| `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
+| `COUNCIL_SEAT` | (set by the orchestrator) | Which seat a provider script is running as; only the router reads it |
 | `OPENROUTER_VISION` | (unset) | Set to `1` to declare an `OPENROUTER_MODEL` override image-capable |
 | `OLLAMA_MODEL` | (unset) | Local model id; when unset, whichever model `ollama list` shows first |
 | `OLLAMA_HOST` | http://localhost:11434 | Ollama server, following Ollama's own convention |

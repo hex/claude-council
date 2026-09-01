@@ -42,6 +42,25 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   the live API first, so the seat errors loudly today and degrades the day a
   verified id lands.
 
+- **One router key can seat several models at once.** `OPENROUTER_MODELS` takes a
+  comma-separated list and each entry becomes its own council member —
+  `openrouter-1`, `openrouter-2`, `openrouter-3` — with its own header, model
+  label, cache entry, colour and role, all sharing the single key.
+  `--providers=openrouter-2` picks one out. The list replaces the single
+  `openrouter` seat rather than adding to it, so the same model never answers
+  twice under two headers.
+
+  The council's unit of identity is the seat, not the script, and this is the
+  first script that answers for more than one. Two pieces follow from that.
+  `provider_script_path` becomes the single definition of name -> script, since
+  there is no `openrouter-N.sh` for the numbered seats to resolve to. And the
+  orchestrator exports `COUNCIL_SEAT` so the script can resolve its own model
+  rather than the script default — without it every seat would post one model
+  while three headers each claimed a different one, with every hermetic test
+  green and `/status` reporting all three connected. A seat opts into images by
+  number (`OPENROUTER_2_VISION=1`): a roster can hold any model, and nothing in
+  an id says whether it reads images.
+
 - **The synthesis is told a router seat is not a second opinion.** Pointing
   `OPENROUTER_MODEL` at a model another seat already runs gives two headers
   voicing one model, which nothing in the response reveals. `prompts/synthesis.md`

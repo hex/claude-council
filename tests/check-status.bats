@@ -320,6 +320,33 @@ EOF
 # /api/v1/models answers 200 with no key at all and with a rejected one, so a
 # probe pointed there reports a dead OpenRouter seat as Connected. Only the URL
 # on the argv can tell the two endpoints apart.
+# A roster turns the one router script into several seats. /status has to show
+# each of them, or a user reading 11/11 cannot tell that two of their three
+# configured models are absent from the council.
+@test "check-status: a router roster gets a row per seat, each naming its model" {
+    shadow_curl
+    export OPENROUTER_MODELS="deepseek/deepseek-v3.2,z-ai/glm-5.3,qwen/qwen3-max"
+    export COUNCIL_FAKE_HTTP_CODE=200
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"deepseek/deepseek-v3.2"* ]]
+    [[ "$output" == *"z-ai/glm-5.3"* ]]
+    [[ "$output" == *"qwen/qwen3-max"* ]]
+    # The single unnumbered row must be gone, not joined by three more.
+    [[ "$output" != *"anthropic/claude-sonnet-5"* ]]
+    [[ "$output" == *"13/13 providers available"* ]]
+}
+
+# The key is what the probe tests, and every seat shares it, so a roster must not
+# multiply the network calls it makes.
+@test "check-status: a router roster is probed once, not once per seat" {
+    record_curl
+    export OPENROUTER_MODELS="deepseek/deepseek-v3.2,z-ai/glm-5.3,qwen/qwen3-max"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ "$(grep -cxF 'https://openrouter.ai/api/v1/key' "$CS_ARGV_FILE")" -eq 1 ]
+}
+
 @test "check-status: the OpenRouter probe authenticates rather than listing models" {
     record_curl
     run bash "$SCRIPT"

@@ -268,6 +268,13 @@ grok_status=$(check_provider "grok" "GROK_API_KEY" "$(get_model grok)")
 perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "$(get_model perplexity)")
 kimi_status=$(check_provider "kimi" "KIMI_API_KEY" "$(get_model kimi)")
 openrouter_status=$(check_provider "openrouter" "OPENROUTER_API_KEY" "$(get_model openrouter)")
+# The measured round-trip, kept so a roster can stamp it onto every seat's row
+# without probing again. Empty unless the probe succeeded.
+openrouter_probe_ms=""
+if [[ "$openrouter_status" == ok:* ]]; then
+    openrouter_probe_ms="${openrouter_status#ok:}"
+    openrouter_probe_ms="${openrouter_probe_ms%%:*}"
+fi
 # codex login status exits non-zero when logged out; agy has no
 # equivalent offline auth probe, so it stays a single-tier check. `grok models`
 # prints "You are not authenticated." with exit 0 when logged out, which the
@@ -342,13 +349,40 @@ format_status() {
     echo -e "  ${emoji} ${color}${name}${RESET}\t${status_icon} ${status_text}  ${model_text}"
 }
 
+# Both counters are initialised before the rows so the router roster, which
+# renders a variable number of rows in a loop, can count as it prints rather
+# than needing a second pass over names that are not known until runtime.
 provider_total=0
+available_count=0
 format_status "Gemini"     "gemini"     "$gemini_status"
 format_status "OpenAI"     "openai"     "$openai_status"
 format_status "Grok"       "grok"       "$grok_status"
 format_status "Perplexity" "perplexity" "$perplexity_status"
 format_status "Kimi" "kimi" "$kimi_status"
-format_status "OpenRouter" "openrouter" "$openrouter_status"
+
+# A roster (OPENROUTER_MODELS) turns the one router script into several seats.
+# They share a key, and the key is what the probe tests, so one probe result is
+# reused for every row; only the model column differs. Without a roster this
+# loop does not run and the single row below is printed instead.
+openrouter_seats=()
+read -ra openrouter_seats <<< "$(openrouter_seat_models | tr '\n' ' ')"
+if (( ${#openrouter_seats[@]} > 0 )); then
+    seat_index=1
+    for seat_model in "${openrouter_seats[@]}"; do
+        # check_provider stamps the model onto an ok: result, so the shared probe
+        # is re-stamped per seat rather than re-run.
+        seat_status="$openrouter_status"
+        if [[ "$openrouter_status" == ok:* ]]; then
+            seat_status="ok:${openrouter_probe_ms}:${seat_model}"
+            available_count=$((available_count + 1))
+        fi
+        format_status "OpenRouter ${seat_index}" "openrouter-${seat_index}" "$seat_status"
+        seat_index=$((seat_index + 1))
+    done
+else
+    format_status "OpenRouter" "openrouter" "$openrouter_status"
+    [[ "$openrouter_status" == ok:* ]] && available_count=$((available_count + 1))
+fi
 format_status "Kimi CLI" "kimi-cli" "$kimicli_status"
 format_status "Ollama" "ollama" "$ollama_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
@@ -359,13 +393,12 @@ echo ""
 
 # Summary. available_count=$((...)) rather than ((available_count++)): under
 # set -e a post-increment returning 0 would abort the script on the first hit.
-available_count=0
+# The router seats already counted themselves above, where their number is known.
 [[ "$gemini_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$openai_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$grok_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$perplexity_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$kimi_status" == ok:* ]] && available_count=$((available_count + 1))
-[[ "$openrouter_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$kimicli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$ollama_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))

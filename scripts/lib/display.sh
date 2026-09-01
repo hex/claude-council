@@ -348,7 +348,7 @@ provider_color_rgb() {
         grok|grok-cli)     printf -v "$__out" '239;68;68'    ;;  # red-500
         perplexity)        printf -v "$__out" '22;163;74'    ;;  # green-600
         kimi)              printf -v "$__out" '168;85;247'   ;;  # purple-500
-        openrouter)        printf -v "$__out" '217;119;6'    ;;  # amber-600
+        openrouter|openrouter-[0-9]*) printf -v "$__out" '217;119;6' ;;  # amber-600
         *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
     esac
 }

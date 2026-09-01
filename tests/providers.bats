@@ -652,6 +652,27 @@ run_provider_with_prompt_file() {
     [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-sonnet-5" ]]
 }
 
+@test "openrouter: a numbered seat posts its own roster model, not the default" {
+    # The orchestrator resolves openrouter-2 to this same script, so without
+    # COUNCIL_SEAT every seat would post the default while three headers claimed
+    # three different models — every hermetic test green, every label a lie.
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k \
+        OPENROUTER_MODELS=deepseek/deepseek-v3.2,z-ai/glm-5.3,qwen/qwen3-max \
+        COUNCIL_SEAT=openrouter-2
+    [ "$status" -eq 0 ]
+    [[ "$(jq -r '.model' "$DATA_FILE")" == "z-ai/glm-5.3" ]]
+}
+
+@test "openrouter: a COUNCIL_SEAT naming another provider cannot retarget this one" {
+    # COUNCIL_SEAT is orchestrator state. A stale value left in a user's shell
+    # must not decide which model the single seat queries.
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k COUNCIL_SEAT=gemini
+    [ "$status" -eq 0 ]
+    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-sonnet-5" ]]
+}
+
 @test "openrouter: sends one model id and never asks the router to switch models" {
     # models[] or route:"fallback" let OpenRouter answer as a different model
     # than the one the council labels, caches and synthesizes under.

@@ -42,6 +42,10 @@ unset CODEX_MODEL ANTIGRAVITY_MODEL GROK_CLI_MODEL KIMI_CLI_MODEL OPENROUTER_MOD
 # OPENROUTER_VISION is read alongside OPENROUTER_MODEL by provider_vision_capable,
 # so a developer who exported it would flip the vision answer the suite asserts.
 unset OPENROUTER_VISION
+# OPENROUTER_MODELS splits the router into numbered seats and COUNCIL_SEAT tells
+# the script which one it is running as: either left set would change the roster
+# the suite asserts.
+unset OPENROUTER_MODELS COUNCIL_SEAT
 
 # Setup - runs before each test
 setup() {

@@ -381,6 +381,12 @@ run_provider_with_model_fallback() {
     local provider="$1" script="$2" prompt="$3" img="${4:-}" mime="${5:-}"
     local override_var preferred fallback keyhash resp rc=0
 
+    # Several seats can share one script (the router's roster), so the script
+    # cannot infer its own identity from its filename. Naming the seat here is
+    # what lets it resolve its own model instead of the script's default. Each
+    # provider runs in its own subshell, so this cannot leak between seats.
+    export COUNCIL_SEAT="$provider"
+
     override_var="$(provider_env_prefix "$provider")_MODEL"
     preferred=$(get_model "$provider")
     fallback=$(model_fallback_for "$provider")
@@ -474,7 +480,7 @@ attempt_api_fallback() {
         [[ -n "$cached" ]] && resp="$cached"
     fi
     if [[ -z "${resp:-}" ]]; then
-        sibling_script="${PROVIDERS_DIR}/${sibling}.sh"
+        sibling_script="$(provider_script_path "$sibling")"
         local sib_img="" sib_mime=""
         if [[ -n "${IMAGE_B64_FILE:-}" ]] && provider_vision_capable "$sibling"; then
             sib_img="$IMAGE_B64_FILE"; sib_mime="$IMAGE_MIME"
@@ -538,7 +544,8 @@ query_provider() {
     local prompt="$2"
     local output_file="$3"
     local role="${4:-}"
-    local script="${PROVIDERS_DIR}/${provider}.sh"
+    local script
+    script="$(provider_script_path "$provider")"
     local preferred fallback keyhash override_var
     local model model_fallback=""
     preferred=$(get_model "$provider")
@@ -899,7 +906,7 @@ if [[ "$DEBATE_MODE" == true ]]; then
     for provider in "${PROVIDERS[@]}"; do
         # Round 2: no role, skip cache (rebuttals depend on round 1 content)
         (
-            script="${PROVIDERS_DIR}/${provider}.sh"
+            script="$(provider_script_path "$provider")"
             model=$(get_model "$provider")
             output_file="${TEMP_DIR}/${provider}_r2.json"
 
