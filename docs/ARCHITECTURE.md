@@ -181,7 +181,7 @@ temp file, and folds only its SHA-256 into the cache key (`COUNCIL_IMAGE_HASH`) 
 the bytes never enter the prompt string.
 
 Per-provider disposition when an image is attached:
-- **gemini, openai, grok, perplexity** (vision-capable) receive the image —
+- **gemini, openai, grok, perplexity, kimi** (vision-capable) receive the image —
   gemini as an `inlineData` part, openai as `input_image` (Responses API) or
   `image_url` (Chat Completions), grok and perplexity as an OpenAI-compatible
   `image_url` data-URI on their `/chat/completions` endpoint.
@@ -271,6 +271,10 @@ config/roles.json defines:
 
 Role injection prepends instructions to prompt:
   "As a [ROLE], focus on [CONCERNS]..."
+
+Assignment: a bare --roles list is positional (role[i] -> provider[i] in
+discovery order); provider=role pairs bind by name. The two forms cannot mix,
+and a pair naming an absent provider, or one provider twice, is refused.
 ```
 
 ### Prompt Templates (`scripts/lib/prompts.sh`, `prompts/*.md`)
@@ -521,12 +525,14 @@ claude-council/
 │   ├── run_tests.sh             # Test runner
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── fixtures/
-│   │   └── fake-clis.bash       # Fake codex/agy/grok/kimi/ollama binaries on PATH
+│   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/ollama binaries on PATH
+│   │   └── status-fakes.bash    # Recording curl + jq for the check-status tests
 │   ├── agent-analysis.bats
 │   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
 │   ├── cache.bats
 │   ├── check-status.bats
-│   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli)
+│   ├── check-status-probe.bats  # The probes themselves: endpoints, --max-time, keys off the argv
+│   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli, kimi-cli, ollama)
 │   ├── deadline.bats            # run_with_deadline: stdin passthrough, own status, 143 at the deadline
 │   ├── display.bats
 │   ├── export.bats
@@ -542,6 +548,7 @@ claude-council/
 │   ├── release.bats
 │   ├── retry.bats
 │   ├── roles.bats
+│   ├── router-seats.bats        # OPENROUTER_MODELS -> openrouter-1..N, one script, many seats
 │   ├── stop-gate.bats
 │   ├── theme.bats
 │   ├── tokens.bats
@@ -574,6 +581,7 @@ claude-council/
 | `KIMI_CLI_MODEL` | (unset) | Model passed to `kimi -m`, only when set (else the kimi CLI's own configured model) |
 | `OPENROUTER_MODEL` | `anthropic/claude-sonnet-5` | Any id from openrouter.ai/models (single seat) |
 | `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
+| `OPENROUTER_<N>_MODEL` | (unset) | Overrides roster seat N's entry, as `<PROVIDER>_MODEL` does for any provider; the exit-3 degrade path sets it so a roster entry never resends the model that just failed |
 | `COUNCIL_SEAT` | (set by the orchestrator) | Which seat a provider script is running as; only the router reads it |
 | `OPENROUTER_VISION` | (unset) | Set to `1` to declare an `OPENROUTER_MODEL` override image-capable |
 | `KIMI_VISION` | (unset) | Set to `1` to declare a `KIMI_MODEL` override image-capable |

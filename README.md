@@ -197,7 +197,22 @@ Assign different perspectives to each provider for more comprehensive reviews:
 - `architecture` - scalability, maintainability, simplicity
 - `review` - security, maintainability, dx
 
-Roles are assigned to providers in order, ensuring each provider approaches the question from a different angle.
+A bare list is **positional**: the first role goes to the first provider
+discovery returns, the second to the second, and so on. That is fine for a fixed
+roster and fragile for a growing one — adding a provider script shifts every
+later provider's role by one, and reordering `OPENROUTER_MODELS` reassigns which
+router seat plays which part. Both happen silently, because only non-empty roles
+are printed.
+
+`provider=role` pairs bind the two explicitly and survive both. The two forms
+cannot be mixed in one `--roles` (a bare entry alongside a keyed one is
+ambiguous); a pair naming a provider that is not being queried, or naming one
+provider twice, is refused rather than resolved; and any provider left without a
+role is named on stderr:
+
+```
+Note: no role for openai grok
+```
 
 ### Debate Mode
 
@@ -220,24 +235,6 @@ Debate mode surfaces blind spots and stress-tests recommendations. The synthesis
 Combine with roles for focused debates:
 ```bash
 /claude-council:ask --debate --roles=security,performance,simplicity "Review this architecture"
-
-A bare list is **positional**: the first role goes to the first provider
-discovery returns, the second to the second, and so on. That is fine for a fixed
-roster and fragile for a growing one — adding a provider script shifts every
-later provider's role by one, and reordering `OPENROUTER_MODELS` reassigns which
-router seat plays which part. Both happen silently, because only non-empty roles
-are printed.
-
-`provider=role` pairs bind the two explicitly and survive both. The two forms
-cannot be mixed in one `--roles` (a bare entry alongside a keyed one is
-ambiguous), a pair naming a provider that is not being queried is refused rather
-than ignored, and any provider left without a role is now named on stderr:
-
-```
-Note: no role for openai grok
-```
-
-
 ```
 
 ### Agent-Enhanced Analysis (--agents)
@@ -378,7 +375,7 @@ Attach one image (e.g. a UI screenshot) so vision-capable providers can critique
 ```
 
 - Single image per query, raw size up to 10 MB, extensions: png / jpg / jpeg / webp / gif.
-- `gemini`, `openai`, `grok`, and `perplexity` receive the image alongside the prompt.
+- `gemini`, `openai`, `grok`, `perplexity`, `kimi` and `openrouter` (on its default model) receive the image alongside the prompt.
 - CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok`, `kimi-cli` via `kimi` (the slot is marked as a fallback). If the sibling is unusable (no API key), not vision-capable, or already answering in its own slot, the CLI provider answers text-only instead and its answer is prefixed with `(answered without the image)`. Selecting `ollama` directly is text-only.
 
 Privacy: the image is sent to the providers that can see it, but its bytes are **not** written to cache entries or the saved `council-*.md` transcripts — only a hash of the image keys the cache.
@@ -614,6 +611,8 @@ export COUNCIL_AGENT_MODEL="sonnet"                 # default: the model the --a
                                                     # Not a provider model — see below.
 export OPENROUTER_MODEL="anthropic/claude-sonnet-5"  # default (single seat)
 export OPENROUTER_MODELS="a/b,c/d,e/f"              # or: one seat per entry
+export OPENROUTER_2_MODEL="c/d-pinned"              # overrides roster seat 2's entry;
+                                                    # what the exit-3 degrade path sets
 export OPENROUTER_VISION=1                          # only needed when OPENROUTER_MODEL
                                                     # names a model that accepts images
 export OPENROUTER_2_VISION=1                        # same, for roster seat 2
@@ -684,12 +683,16 @@ For reasoning models from any provider, the token limit is automatically increas
 The bump applies to:
 
 - **OpenAI**: `codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*`
-- **Gemini**: `gemini-3*`, `*thinking*`
-- **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`, `grok-build-*`
+- **Gemini**: `gemini-3*`, `*thinking*`, `gemini-*-latest`
+- **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`, `grok-build-*`, `grok-latest`
 - **Perplexity**: `sonar-reasoning*`, `*deep-research*`
 - **Kimi**: `kimi-k*` (so the default model always triggers the bump)
-- **OpenRouter**: `*reasoning*`, `*thinking*` (the seat is retargetable, so the bump
-  keys off the routed id's shape rather than a fixed model list)
+- **OpenRouter**: `*reasoning*`, `*thinking*`, `*r1*`, `*deepseek*`, `*qwen*`,
+  `*gpt-oss*`, and the o-series anchored to the vendor slash (`*/o1*`, `*/o3*`,
+  `*/o4*`) so an unrelated id merely containing `o3` is not swept in. The seat
+  is retargetable, so the bump keys off the routed id's shape rather than a
+  fixed model list, and it errs toward bumping: `max_tokens` is a ceiling, not a
+  spend, while too low a ceiling truncates the answer mid-sentence
 - **Ollama**: `*r1*`, `*reason*`, `*gpt-oss*`, `qwen*`, `gemma*`, `deepseek*`
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
