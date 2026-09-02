@@ -613,6 +613,7 @@ export OPENROUTER_MODEL="anthropic/claude-sonnet-5"  # default (single seat)
 export OPENROUTER_MODELS="a/b,c/d,e/f"              # or: one seat per entry
 export OPENROUTER_2_MODEL="c/d-pinned"              # overrides roster seat 2's entry;
                                                     # what the exit-3 degrade path sets
+export OPENROUTER_REASONING_TOKENS=8000             # thinking budget per request (default 8000; 0 lets the model decide)
 export OPENROUTER_VISION=1                          # only needed when OPENROUTER_MODEL
                                                     # names a model that accepts images
 export OPENROUTER_2_VISION=1                        # same, for roster seat 2

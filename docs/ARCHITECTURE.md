@@ -623,6 +623,7 @@ claude-council/
 | `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
 | `OPENROUTER_<N>_MODEL` | (unset) | Overrides roster seat N's entry, as `<PROVIDER>_MODEL` does for any provider; the exit-3 degrade path sets it so a roster entry never resends the model that just failed |
 | `COUNCIL_SEAT` | (set by the orchestrator) | Which seat a provider script is running as; only the router reads it |
+| `OPENROUTER_REASONING_TOKENS` | 8000 | Thinking budget sent as `reasoning.max_tokens` on every routed request; `0` sends none and the model decides. Bounds the thinking alone, where `max_tokens` bounds thinking plus answer: a routed model that would think for 20k tokens on a long prompt otherwise outlasts `COUNCIL_TIMEOUT`. Effort-only upstreams map the number to an effort level; adaptive models ignore it |
 | `OPENROUTER_VISION` | (unset) | Set to `1` to declare an `OPENROUTER_MODEL` override image-capable |
 | `KIMI_VISION` | (unset) | Set to `1` to declare a `KIMI_MODEL` override image-capable |
 | `COUNCIL_AGENT_MODEL` | `sonnet` | Model the `--agents` ANALYSTS run on (`sonnet`/`opus`/`haiku`/`fable`); not a provider model |

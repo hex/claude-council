@@ -82,6 +82,21 @@ ENDPOINT="https://openrouter.ai/api/v1/chat/completions"
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*'
 
+# Reasoning budget (override via OPENROUTER_REASONING_TOKENS; 0 sends none).
+# max_tokens above caps thinking and answer together, so it cannot stop a model
+# from thinking the whole budget away. reasoning.max_tokens caps the thinking
+# alone: a routed model that would spend twenty thousand tokens on a long prompt
+# (z-ai/glm-5.3-flash did, and ran to the 900 s mark) still has room to answer
+# inside COUNCIL_TIMEOUT. Sent by default because the router seat is aimed at
+# models whose own thinking policy is unknown; the gemini seat leaves its cap
+# opt-in because that model's policy is known to fit. Upstreams without direct
+# allocation map the number to an effort level, and some ignore it outright.
+REASONING_TOKENS="${OPENROUTER_REASONING_TOKENS:-8000}"
+if [[ ! "$REASONING_TOKENS" =~ ^[0-9]+$ ]]; then
+    echo "Error: OPENROUTER_REASONING_TOKENS must be a whole number of tokens, got '${REASONING_TOKENS}'" >&2
+    exit 1
+fi
+
 # System instruction
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
 
@@ -98,7 +113,7 @@ stage_prompt_file
 # Build request payload
 if [[ -n "$IMAGE_FILE" ]]; then
     PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" \
-        --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '{
+        --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" --argjson reasoning "$REASONING_TOKENS" '{
         model: $model,
         messages: [
             { role: "system", content: $system },
@@ -109,9 +124,9 @@ if [[ -n "$IMAGE_FILE" ]]; then
         ],
         temperature: 0.7,
         max_tokens: $tokens
-    }')
+    } + (if $reasoning > 0 then { reasoning: { max_tokens: $reasoning } } else {} end)')
 else
-    PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
+    PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" --argjson reasoning "$REASONING_TOKENS" '{
         model: $model,
         messages: [{
             role: "system",
@@ -122,7 +137,7 @@ else
         }],
         temperature: 0.7,
         max_tokens: $tokens
-    }')
+    } + (if $reasoning > 0 then { reasoning: { max_tokens: $reasoning } } else {} end)')
 fi
 
 if [[ -n "$DEBUG" ]]; then

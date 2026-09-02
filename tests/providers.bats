@@ -876,6 +876,43 @@ run_provider_with_image() {
     [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-sonnet-5" ]]
 }
 
+@test "openrouter: sends a reasoning budget by default" {
+    # max_tokens caps thinking plus answer together, which is why a starved
+    # model answers with nothing. reasoning.max_tokens caps the thinking alone,
+    # so a model that would think for 20k tokens on a long prompt (glm-5.3-flash
+    # did, and ran to the 900 s mark) still has room to answer inside the
+    # council's timeout.
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.reasoning.max_tokens' "$DATA_FILE")" -eq 8000 ]
+}
+
+@test "openrouter: OPENROUTER_REASONING_TOKENS overrides the budget" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k OPENROUTER_REASONING_TOKENS=4000
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.reasoning.max_tokens' "$DATA_FILE")" -eq 4000 ]
+}
+
+@test "openrouter: OPENROUTER_REASONING_TOKENS=0 sends no budget at all" {
+    # Zero means "the model decides", the same policy the gemini seat defaults
+    # to; the field is absent rather than sent as 0, which some upstreams would
+    # read as "no reasoning".
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k OPENROUTER_REASONING_TOKENS=0
+    [ "$status" -eq 0 ]
+    [[ "$(jq -r 'has("reasoning")' "$DATA_FILE")" == "false" ]]
+}
+
+@test "openrouter: a non-numeric OPENROUTER_REASONING_TOKENS fails before any request" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k OPENROUTER_REASONING_TOKENS=lots
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"OPENROUTER_REASONING_TOKENS"* ]]
+    [ ! -s "$DATA_FILE" ]
+}
+
 @test "openrouter: sends one model id and never asks the router to switch models" {
     # models[] or route:"fallback" let OpenRouter answer as a different model
     # than the one the council labels, caches and synthesizes under.
