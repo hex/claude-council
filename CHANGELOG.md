@@ -4,6 +4,25 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.9.3
+
+### Fixes
+
+- **Every OpenRouter seat gets the reasoning token cap.** The first live run of
+  v2026.9.2's diagnostic showed what the empty answers were: `z-ai/glm-5.3-flash`
+  and `xiaomi/mimo-v2.5` spent all 2048 tokens thinking and returned no content.
+  Neither name matched the reasoning pattern list, and on a seat that can point
+  at any id the router serves, a pattern list is the wrong tool. The router now
+  bumps unconditionally. `max_tokens` caps spend rather than causing it, and
+  OpenRouter clamps a value above an upstream's own limit instead of rejecting
+  it (checked against two models capped at 2048). `COUNCIL_MAX_TOKENS` still
+  scales the result.
+
+### Other
+
+- Dropped the test that asserted the old pattern list; the ids it covered take
+  the same path as every other now.
+
 ## 2026.9.2
 
 ### Fixes
