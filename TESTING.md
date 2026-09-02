@@ -140,12 +140,23 @@ Windows machine:
 The macOS runner parses the suite with `/bin/bash` 3.2, where one construct
 behaves differently from bash 5 on the other two legs:
 
-- **No apostrophes in comments inside a process substitution.** 3.2 tokenizes
-  quotes before stripping comments there, so an odd number of `'` across the
-  comment lines inside `< <( ... )` swallows the closing paren and the file
-  fails to parse: ``bad substitution: no closing `)' ``. Write "the prompt
-  reads it", never "the prompt's read". Ubuntu and Windows run bash 5 and
-  accept it, so only the macOS leg catches this.
+- **3.2 scans comment text inside a process substitution instead of stripping
+  it.** It reads the comment lines inside `< <( ... )` looking for quotes and
+  parens before it strips comments, so two shapes break the run:
+
+  - an odd number of `'` across those comment lines leaves the parser holding an
+    open quote, which swallows the closing paren:
+    ``bad substitution: no closing `)' ``
+  - a stray `)` ends the substitution early:
+    `/dev/fd/62 ...: No such file or directory`
+
+  Write "the prompt reads it", never "the prompt's read", and keep parens out of
+  those comments. Both failures happen when bash expands the word, not when it
+  parses the file, so no static check finds them: `bash -n` reports the same
+  thing before and after the fix, and on a `.bats` file it means nothing anyway
+  (`@test NAME {` is not bash). Verify by running the test itself under
+  `/bin/bash`. Ubuntu and Windows run bash 5 and accept both shapes, so only the
+  macOS leg catches this.
 
 ---
 

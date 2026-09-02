@@ -299,6 +299,16 @@ run_provider_with_image() {
     [[ "$stderr" == *"Error from Gemini: empty response (finishReason: MAX_TOKENS, thoughts tokens: 8000/8192)"* ]]
 }
 
+@test "gemini: a bare-string .error does not crash the extractor" {
+    # ensure_error_body passes a >=400 body with a usable message through
+    # untouched, so a bare-string .error reaches this jq as-is; indexing it
+    # with .message raises and kills the seat before it names anything.
+    FAKE_BODY='{"error":"upstream is down"}'
+    FAKE_HTTP=502 run_provider gemini.sh "hi" GEMINI_API_KEY=k COUNCIL_MAX_RETRIES=0
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"upstream is down"* ]]
+}
+
 @test "gemini: sends no thinking cap unless GEMINI_THINKING_BUDGET is set" {
     # The model's own thinking policy is the default; a cap is a deliberate
     # user choice, like COUNCIL_MAX_TOKENS.
@@ -816,6 +826,16 @@ run_provider_with_image() {
     [ "$status" -eq 1 ]
     [[ "$stderr" == *"finish_reason: stop"* ]]
     [[ "$stderr" == *"reasoning chars: 10"* ]]
+}
+
+@test "openrouter: a scalar choices[0] does not crash the extractor" {
+    # Indexing a string raises in jq and kills the seat under pipefail before
+    # any error line is printed, which is the failure this branch exists to
+    # prevent. No known producer sends this shape; the guard is robustness.
+    FAKE_BODY='{"choices":["hi"]}'
+    FAKE_HTTP=200 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+    assert_not_blank "$stderr"
 }
 
 @test "openrouter: missing key fails before any request" {

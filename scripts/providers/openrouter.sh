@@ -163,8 +163,12 @@ if [[ -n "$DEBUG" ]]; then
     }' >&2 2>/dev/null || true
 fi
 
-# Extract text from response (OpenAI-compatible format)
-TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+# Extract text from response (OpenAI-compatible format). Parenthesised and
+# error-suppressed: a scalar .choices[0] makes .message raise, jq exits 5, and
+# under set -eo pipefail the assignment kills the seat here -- before the branch
+# below that exists to name what went wrong. Suppressed, it reads as no text and
+# that branch gets to run.
+TEXT=$(echo "$RESPONSE" | jq -r '(.choices[0].message.content)? // empty')
 
     # Whitespace-stripped, not just empty: a model that answers with a single
     # space passes a bare -z test, and the council would store that as a
@@ -193,7 +197,11 @@ if [[ -z "${TEXT//[[:space:]]/}" ]]; then
         # `?` for a .choices that is not an array, `// null` because a
         # suppressed raise yields empty rather than null and would leave the
         # whole expression — and so the error line — blank.
-        | (.choices[0]? // null) as $c
+        # A scalar .choices[0] is treated as no choice at all: reading .error
+        # off a string raises, and the raise would kill the seat under pipefail
+        # before it printed anything. The raw body under COUNCIL_DEBUG covers
+        # the shape this discards.
+        | ((.choices[0]? // null) | if type == "object" then . else null end) as $c
         | ($c.error | err_fields) as $mid
         | if $top.msg != "" then $top.msg
           elif $mid.msg != "" then

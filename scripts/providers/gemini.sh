@@ -139,8 +139,16 @@ if [[ -z "${TEXT//[[:space:]]/}" ]]; then
     # reasoning, or a safety block) carries neither .error nor .candidates —
     # surface finishReason/blockReason/token usage instead of a bare
     # "Unknown error" so the real cause is visible in logs.
+    # .error is an object here and a bare string for some upstreams, and
+    # ensure_error_body passes a >=400 body that already carries a usable
+    # message through untouched -- so the string shape reaches this jq as-is.
+    # Indexing a string raises rather than yielding null, and `//` does not
+    # catch a raise, so the read branches on the type first.
     ERROR=$(echo "$RESPONSE" | jq -r '
-        if (.error.message // "") != "" then .error.message
+        (if (.error | type) == "object" then (.error.message // "")
+         elif (.error | type) == "string" then .error
+         else "" end | tostring) as $top
+        | if $top != "" then $top
         elif (.promptFeedback.blockReason // "") != "" then
             "prompt blocked (" + .promptFeedback.blockReason + ")"
         elif (.candidates[0].finishReason // "") != "" then

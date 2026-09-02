@@ -100,10 +100,20 @@ RESPONSE=$(curl -s -X POST "https://api.provider.com/v1/completions" \
         messages: [{role: "user", content: $prompt}]
     }')")
 
-TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+TEXT=$(echo "$RESPONSE" | jq -r '(.choices[0].message.content)? // empty')
 
-if [[ -z "$TEXT" ]]; then
-    ERROR=$(echo "$RESPONSE" | jq -r '.error.message // "Unknown error"')
+# Whitespace-stripped, not a bare -z: a model that answers with a single space
+# would otherwise be cached and weighed in the synthesis as a real vote.
+if [[ -z "${TEXT//[[:space:]]/}" ]]; then
+    # Branch on the type before indexing. .error is an object for most vendors
+    # and a bare string for some; indexing a string raises in jq rather than
+    # yielding null, `//` does not catch a raise, and under set -eo pipefail
+    # that raise kills the seat before it prints any error line at all.
+    ERROR=$(echo "$RESPONSE" | jq -r '
+        (if (.error | type) == "object" then (.error.message // "")
+         elif (.error | type) == "string" then .error
+         else "" end | tostring) as $top
+        | if $top != "" then $top else "Unknown error" end')
     echo "Error: $ERROR" >&2
     exit 1
 fi
