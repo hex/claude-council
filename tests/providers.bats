@@ -938,6 +938,9 @@ run_provider_with_image() {
     [ "$status" -eq 0 ]
     [ "$output" = "OR_OK" ]
     [[ "$stderr" == *"anthropic/claude-sonnet-5-20260115"* ]]
+    # The budget is the knob a timed-out seat is debugged against, so the
+    # header names it the way openai.sh names its effort.
+    [[ "$stderr" == *"Reasoning budget: 8000"* ]]
 }
 
 @test "openrouter: every routed model earns the token bump, whatever its id" {

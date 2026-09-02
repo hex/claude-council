@@ -292,7 +292,8 @@ openrouter.sh:  .choices[0].error            -> "provider error (502): ..."
 
 `reasoning chars` counts an answer the upstream left in `.message.reasoning`
 instead of `.content`; `finish_reason: length` with reasoning tokens near the
-completion total means the budget went to thinking. Under `COUNCIL_DEBUG`,
+completion total means the model spent `max_tokens` thinking, which the
+separate `reasoning.max_tokens` budget exists to prevent. Under `COUNCIL_DEBUG`,
 `openrouter.sh` also dumps the raw body on this branch as the catch-all for a
 shape not listed here.
 

@@ -144,6 +144,7 @@ if [[ -n "$DEBUG" ]]; then
     echo "=== DEBUG: OpenRouter ===" >&2
     echo "Model: $MODEL" >&2
     echo "Max tokens: $TOKENS" >&2
+    echo "Reasoning budget: $REASONING_TOKENS" >&2
 fi
 
 # Keep the API key and request body off the process argv (ps-visible / OS
