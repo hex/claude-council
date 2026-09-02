@@ -262,6 +262,46 @@ script: a preferred-model exit 3 (see Provider Scripts below), or a cached
 verdict, retries once with the fallback. The substitution is reported on the
 response header, on stderr, and folded into the synthesis prompt.
 
+### The Empty Answer (every API provider)
+
+A provider that returns no visible text is an error even when HTTP says the
+call succeeded, so every API seat guards on whitespace-stripped emptiness
+rather than `-z`: the council would otherwise cache a model that answers with
+a single space and weigh it in the synthesis like any other vote.
+
+This case never reaches the machinery above. `ensure_error_body` stamps a message
+and `.http_status` onto every body of 400 or worse, and `retry_error_body`
+covers timeout and network, so an empty answer that reaches the error branch
+with no top-level `.error` arrived as a 2xx. Three unrelated failures look
+identical there, and each seat names them from its own response shape rather
+than printing one word for all three:
+
+```
+gemini.sh:      .promptFeedback.blockReason  -> "prompt blocked (X)"
+                .candidates[0].finishReason  -> "empty response (finishReason: X,
+                                                 thoughts tokens: N/M)"
+
+openrouter.sh:  .choices[0].error            -> "provider error (502): ..."
+                                                (a mid-generation upstream
+                                                failure; OpenRouter answers 200
+                                                and puts the error on the choice)
+                .choices[0].finish_reason    -> "empty response (finish_reason: X,
+                                                 native: Y, reasoning tokens: N/M,
+                                                 reasoning chars: K)"
+```
+
+`reasoning chars` counts an answer the upstream left in `.message.reasoning`
+instead of `.content`; `finish_reason: length` with reasoning tokens near the
+completion total means the budget went to thinking. Under `COUNCIL_DEBUG`,
+`openrouter.sh` also dumps the raw body on this branch as the catch-all for a
+shape not listed here.
+
+Every `.error` read branches on `(.error | type)` before indexing. A bare-string
+`.error` (xAI at the top level, some upstreams on the choice) raises in jq
+rather than yielding null, `//` does not catch a raise, and jq's postfix `?`
+binds only to the term before it, so `.error?.message` still raises. Under
+`set -eo pipefail` that kills the script before it prints anything at all.
+
 ### Role System (`scripts/lib/roles.sh`)
 
 ```
