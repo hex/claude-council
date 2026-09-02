@@ -179,31 +179,27 @@ if [[ -z "${TEXT//[[:space:]]/}" ]]; then
     # is the whole diagnostic value: "Unknown error" is the same word for all
     # three and points at none of them.
     #
-    # .error is an object here and a bare string for some vendors; indexing a
-    # string raises in jq rather than yielding null, and `//` does not catch a
-    # raise, so the read branches on the type first.
+    # An .error is an object here and a bare string for some vendors, at the top
+    # level and on the choice alike; indexing a string raises in jq rather than
+    # yielding null, and `//` does not catch a raise, so err_fields branches on
+    # the type before it reads anything. One definition for both sites: the two
+    # reads differ only in which value they start from.
     ERROR=$(echo "$RESPONSE" | jq -r '
-        (if (.error | type) == "object" then (.error.message // "")
-         elif (.error | type) == "string" then .error
-         else "" end) as $top
+        def err_fields:
+            if type == "object" then {msg: ((.message // "") | tostring), code: (.code // null)}
+            elif type == "string" then {msg: ., code: null}
+            else {msg: "", code: null} end;
+        (.error | err_fields) as $top
         # `?` for a .choices that is not an array, `// null` because a
         # suppressed raise yields empty rather than null and would leave the
         # whole expression — and so the error line — blank.
         | (.choices[0]? // null) as $c
-        # Branched on the type for the same reason the top-level read is: a
-        # bare-string .error indexed with .message raises rather than yielding
-        # null, and under pipefail that raise kills the script before it can
-        # print any error line at all.
-        | (if ($c.error | type) == "object" then ($c.error.message // "")
-           elif ($c.error | type) == "string" then $c.error
-           else "" end | tostring) as $mid
-        | (if ($c.error | type) == "object" then ($c.error.code // null)
-           else null end) as $mid_code
-        | if $top != "" then $top
-          elif $mid != "" then
+        | ($c.error | err_fields) as $mid
+        | if $top.msg != "" then $top.msg
+          elif $mid.msg != "" then
               "provider error"
-              + (if $mid_code != null then " (" + ($mid_code | tostring) + ")" else "" end)
-              + ": " + $mid
+              + (if $mid.code != null then " (" + ($mid.code | tostring) + ")" else "" end)
+              + ": " + $mid.msg
           elif $c != null then
               "empty response (finish_reason: " + (($c.finish_reason // "none") | tostring)
               + ", native: " + (($c.native_finish_reason // "none") | tostring)
