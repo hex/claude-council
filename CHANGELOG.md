@@ -4,7 +4,7 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.9.1
 
 ### Features
 
@@ -176,6 +176,52 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
   `OPENROUTER_MODEL` at a model another seat already runs gives two headers
   voicing one model, which nothing in the response reveals. `prompts/synthesis.md`
   now reads such agreement as possible duplication rather than corroboration.
+
+### Fixes
+
+- **The prompt reaches jq off the process argv.** Every API provider staged the
+  prompt into a file and then handed it to jq with `--arg`, which puts it back on
+  the argv; Windows caps that near 32 KB. All six read it with `--rawfile` from
+  the file instead, so a `--file`-sized prompt never rides a command line.
+- **An unknown OpenRouter slug is a 400, not a 404.** Verified against the live
+  API. The wrong-model classifier admits the 400 class only when the message
+  names the model as invalid, so an ordinary bad-parameter 400 still exits 1.
+- **A whitespace-only answer is a failure.** A single space passed a bare `-z`
+  test and reached the synthesis as a real vote; all seven providers now strip
+  whitespace before the check and record a cause on stderr.
+- **Kimi reads images.** `kimi.sh` had always built the image payload; only the
+  capability table said otherwise, routing images away from a provider that
+  could read them, and taking `kimi-cli` with it.
+- **A malformed router seat name is refused.** `openrouter-0` aliased the last
+  roster model on newer bash and `openrouter-08` aborted the run outright; a seat
+  suffix that is not a plain positive number now answers `unknown`, and one
+  definition of "is this a seat" is shared by discovery, routing and the script.
+- **The reasoning-token bump covers what the router serves.** The OpenRouter
+  seat bumped only on `reasoning`/`thinking`; it now also covers `r1`, `deepseek`,
+  `qwen`, `gpt-oss` and the o-series, so a routed reasoning model no longer
+  truncates mid-answer and caches the fragment as a success.
+- **Naming a provider twice in `--roles` is refused**, the same as naming an
+  absent one, instead of silently taking the last binding.
+- **Each provider's cleanup trap precedes the temp files it removes.** A failure
+  mid-request no longer leaves the mode-600 curl config holding the bearer token,
+  or the prompt and content files, behind.
+- **A roster seat row keeps the remediation hint.** A missing key on an
+  `openrouter-N` row now shows `export OPENROUTER_API_KEY`, as the single-seat
+  row already did.
+
+### Internal
+
+- **Negated test assertions can fail.** Nineteen `! grep` checks sat mid-test,
+  where bash's errexit exemption means they can never fail the test; the
+  argv-secrecy checks that keep API keys off the process table were among them.
+  All are now `run !`.
+- **Six pane-watcher tests order against observable state, not a clock.** The
+  retry-offer, width-drag and close-prompt tests synchronised on hardcoded
+  sleeps; they now wait on renders, width readings and file markers.
+- **A simplify pass** gives "is this a router seat", the roster parse and the
+  model-unavailable wording one definition each, stages the prompt through one
+  shared helper in place of seven copies, and builds three providers' request
+  content on stdin rather than a temp file.
 
 ## 2026.8.10
 
