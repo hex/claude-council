@@ -484,7 +484,9 @@ producer_awaits_retry_once_drawn() {
         touch "$W/.done"
     ) &
     COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 16 \
-        < <(sleep 1; printf 'r'
+        < <(printf 'r'
+            # No wait before the key: it sits in the pipe until the offer
+            # prompt's read consumes it, the same as the two tests above.
             # The replay must contain both failures, so the redraw comes after
             # the second one is recorded. pane_error_write overwrites the
             # provider's error file, so its content is the signal.

@@ -75,6 +75,21 @@ setup() {
     [[ "$output" == *"export OPENROUTER_API_KEY="* ]]
 }
 
+@test "check-status: a connected roster seat names the model the query would send" {
+    # OPENROUTER_<N>_MODEL overrides a roster entry, and the exit-3 degrade path
+    # sets it; a connected row that still showed the roster entry would report a
+    # model the council would not send. shadow_curl sets the keys and a 200, so
+    # each seat connects and its last column carries the model rather than a hint.
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=200
+    export OPENROUTER_MODELS="vendor/one,vendor/two"
+    export OPENROUTER_2_MODEL="vendor/two-pinned"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OpenRouter 1"*"vendor/one"* ]]
+    [[ "$output" == *"OpenRouter 2"*"vendor/two-pinned"* ]]
+}
+
 @test "check-status: missing CLI binary shows install remediation" {
     # Drop the fakes (and any real CLIs) from PATH
     export PATH="/usr/bin:/bin"

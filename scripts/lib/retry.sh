@@ -159,20 +159,40 @@ is_model_unavailable_error() {
     msg=$(jq -r '
         (if (.error | type) == "object" then (.error.message // "")
          elif (.error | type) == "string" then .error
-         else "" end) | ascii_downcase' <<<"$body" 2>/dev/null) || return 1
+         else "" end)' <<<"$body" 2>/dev/null) || return 1
+    model_unavailable_message "$msg"
+}
 
-    # A model-unavailable 400 always names the model; a bad-parameter or
-    # missing-resource 400 does not.
+# True (exit 0) if an error message, whatever its wire status, says the model
+# itself is the problem. The one list of vendor phrasings, shared with the
+# router seat, which classifies on .error.code before the wire status and so
+# cannot use is_model_unavailable_error whole.
+model_unavailable_message() {
+    local msg
+    msg=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+    # A model-unavailable message always names the model; a bad-parameter or
+    # missing-resource one does not.
     case "$msg" in
         *model*) ;;
         *) return 1 ;;
     esac
-
     # Deliberately not matching "not supported": OpenAI's 400 for an unsupported
     # reasoning effort reads "'low' is not supported with the 'gpt-5.5-pro' model".
+    # "not a valid model" is OpenRouter's wording for an unknown slug.
     case "$msg" in
         *"model not found"*|*"model_not_found"*|*"invalid model"*|\
-        *"does not exist"*|*"no access to model"*) return 0 ;;
+        *"not a valid model"*|*"does not exist"*|*"no access to model"*) return 0 ;;
         *) return 1 ;;
     esac
+}
+
+# Stage a prompt given literally as $1 into a file of our own, so the --rawfile
+# read has a path either way; the orchestrator's --prompt-file is left alone.
+# Sets PROMPT_FILE, and OWNED_PROMPT_FILE for the caller's EXIT trap to remove:
+# the orchestrator's file is not ours to delete. Reads the caller's PROMPT.
+stage_prompt_file() {
+    [[ -z "$PROMPT_FILE" ]] || return 0
+    OWNED_PROMPT_FILE=$(mktemp)
+    PROMPT_FILE="$OWNED_PROMPT_FILE"
+    printf '%s' "$PROMPT" > "$PROMPT_FILE"
 }

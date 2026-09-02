@@ -37,7 +37,7 @@ discover_providers() {
                 # like any other API seat.
                 if api_key_present openrouter; then
                     local seats=() i
-                    read -ra seats <<< "$(openrouter_seat_models | tr '\n' ' ')"
+                    openrouter_seat_models seats
                     if (( ${#seats[@]} > 0 )); then
                         for ((i = 1; i <= ${#seats[@]}; i++)); do
                             available+=("openrouter-$i")
@@ -160,7 +160,9 @@ parse_provider_list() {
     echo "${parsed[*]+"${parsed[*]}"}"
 }
 
-# The model ids a router seat roster holds, one per line, in list order.
+# Fills the array named by $1 with the roster's model ids, in list order — the
+# entries of OPENROUTER_MODELS split the way parse_provider_list splits, without
+# a fork. An unset or empty roster fills nothing.
 # Empty when OPENROUTER_MODELS is unset — which leaves the single `openrouter`
 # seat in place, unchanged.
 #
@@ -170,18 +172,29 @@ parse_provider_list() {
 # the Nth. There is no openrouter-N.sh — provider_script_path routes them all
 # back to the one script, which reads COUNCIL_SEAT to learn which it is.
 openrouter_seat_models() {
-    local models=()
-    read -ra models <<< "$(parse_provider_list "${OPENROUTER_MODELS:-}")"
-    printf '%s\n' "${models[@]+"${models[@]}"}"
+    local __roster="${OPENROUTER_MODELS:-}"
+    read -ra "$1" <<< "${__roster//,/ }"
+}
+
+# The roster position a router seat name carries: prints N and returns 0 for
+# openrouter-N with N a plain positive number, returns 1 for any other name.
+# The one definition, because the number reaches array arithmetic and a glob
+# alone admits shapes that are not positions: openrouter-0 would index -1,
+# which is the LAST entry on bash 4.3+, and bash reads a leading zero as octal
+# and aborts the run outright.
+router_seat_index() {
+    [[ "$1" =~ ^openrouter-([1-9][0-9]*)$ ]] || return 1
+    echo "${BASH_REMATCH[1]}"
 }
 
 # The script that answers for a provider name. Every name is its own filename
 # except the router's numbered seats, which share openrouter.sh.
 provider_script_path() {
-    case "$1" in
-        openrouter-[0-9]*) echo "${PROVIDERS_DIR}/openrouter.sh" ;;
-        *)                 echo "${PROVIDERS_DIR}/$1.sh" ;;
-    esac
+    if router_seat_index "$1" >/dev/null; then
+        echo "${PROVIDERS_DIR}/openrouter.sh"
+    else
+        echo "${PROVIDERS_DIR}/$1.sh"
+    fi
 }
 
 # Reads one bare key from a TOML file — the root table when $2 is empty, the
@@ -309,22 +322,15 @@ get_model() {
             # provider: the exit-3 degrade path forces a fallback that way, and a
             # roster entry must not send the model that just failed.
             local __ovr __models __seat
-            # The suffix is a roster position, and the glob above admits things
-            # that are not one. Anything but a plain positive number answers
-            # like a seat past the end rather than reaching the arithmetic:
-            # position 0 indexes -1, which is the LAST entry on bash 4.3+, and
-            # bash reads a leading zero as octal and aborts the run outright.
-            __seat="${1#openrouter-}"
-            if [[ ! "$__seat" =~ ^[1-9][0-9]*$ ]]; then
-                echo "unknown"
-                return
-            fi
+            # A name that is not a roster position answers like a seat past the
+            # end rather than reaching the arithmetic.
+            __seat=$(router_seat_index "$1") || { echo "unknown"; return; }
             __ovr="$(provider_env_prefix "$1")_MODEL"
             if [[ -n "${!__ovr:-}" ]]; then
                 echo "${!__ovr}"
             else
                 __models=()
-                read -ra __models <<< "$(parse_provider_list "${OPENROUTER_MODELS:-}")"
+                openrouter_seat_models __models
                 # A seat past the end of the roster reports "unknown" rather than
                 # a neighbour's id, so a mislabelled answer is impossible.
                 echo "${__models[$(( __seat - 1 ))]:-unknown}"
@@ -344,20 +350,14 @@ provider_vision_capable() {
         # k2.5 and later are not — so an override opts in the same way the
         # router's does. kimi-cli is deliberately absent, like every other CLI:
         # a CLI cannot take an image, it reaches one only by routing here.
-        kimi)
-            if [[ -z "${KIMI_MODEL:-}" || "${KIMI_VISION:-}" == 1 ]]; then
-                return 0
-            fi
-            return 1
-            ;;
-        # The curated default accepts images. An override points at any of
-        # hundreds of routed models whose modalities are not knowable from here,
-        # so it opts in explicitly rather than being assumed either way.
-        openrouter)
-            if [[ -z "${OPENROUTER_MODEL:-}" || "${OPENROUTER_VISION:-}" == 1 ]]; then
-                return 0
-            fi
-            return 1
+        # The router's curated default accepts images too, and an override
+        # points at any of hundreds of routed models whose modalities are not
+        # knowable from here, so both opt in the same way: the default is
+        # capable, an override says so with <PREFIX>_VISION=1.
+        kimi|openrouter)
+            local __p __m __v
+            __p="$(provider_env_prefix "$1")"; __m="${__p}_MODEL"; __v="${__p}_VISION"
+            [[ -z "${!__m:-}" || "${!__v:-}" == 1 ]]
             ;;
         openrouter-[0-9]*)
             # A roster entry is whichever id the user listed, so nothing here can
@@ -365,10 +365,7 @@ provider_vision_capable() {
             # would route an image to the two seats that cannot read it.
             local __vis
             __vis="$(provider_env_prefix "$1")_VISION"
-            if [[ "${!__vis:-}" == 1 ]]; then
-                return 0
-            fi
-            return 1
+            [[ "${!__vis:-}" == 1 ]]
             ;;
         *) return 1 ;;
     esac

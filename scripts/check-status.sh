@@ -391,19 +391,19 @@ format_status "Kimi" "kimi" "$kimi_status"
 # reused for every row; only the model column differs. Without a roster this
 # loop does not run and the single row below is printed instead.
 openrouter_seats=()
-read -ra openrouter_seats <<< "$(openrouter_seat_models | tr '\n' ' ')"
+openrouter_seat_models openrouter_seats
 if (( ${#openrouter_seats[@]} > 0 )); then
-    seat_index=1
-    for seat_model in "${openrouter_seats[@]}"; do
+    for (( seat_index = 1; seat_index <= ${#openrouter_seats[@]}; seat_index++ )); do
         # check_provider stamps the model onto an ok: result, so the shared probe
-        # is re-stamped per seat rather than re-run.
+        # is re-stamped per seat rather than re-run. get_model, not the roster
+        # entry: an OPENROUTER_<N>_MODEL override is what the query would send,
+        # and the status check must not report a model the council would not.
         seat_status="$openrouter_status"
         if [[ "$openrouter_status" == ok:* ]]; then
-            seat_status="ok:${openrouter_probe_ms}:${seat_model}"
+            seat_status="ok:${openrouter_probe_ms}:$(get_model "openrouter-${seat_index}")"
             available_count=$((available_count + 1))
         fi
         format_status "OpenRouter ${seat_index}" "openrouter-${seat_index}" "$seat_status"
-        seat_index=$((seat_index + 1))
     done
 else
     format_status "OpenRouter" "openrouter" "$openrouter_status"

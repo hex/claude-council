@@ -34,6 +34,11 @@ classify() {
     [ "$status" -eq 0 ]
 }
 
+@test "classifier: OpenRouter 400 not-a-valid-model is model-unavailable" {
+    classify 400 '{"error":{"message":"anthropic/claude-nope is not a valid model ID","code":400}}'
+    [ "$status" -eq 0 ]
+}
+
 @test "classifier: Perplexity 400 invalid model is model-unavailable" {
     classify 400 '{"error":{"message":"Invalid model \"sonar-does-not-exist-9\". Permitted models can be found in the documentation.","type":"invalid_model","code":400}}'
     [ "$status" -eq 0 ]

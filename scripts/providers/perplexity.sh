@@ -26,7 +26,7 @@ IMAGE_MIME=""
 PROMPT_FILE=""
 if [[ "$PROMPT" == "--prompt-file" ]]; then
     PROMPT_FILE="${2:?--prompt-file requires a path}"
-    PROMPT=$(cat "$PROMPT_FILE")
+    PROMPT=""
     shift 2
 elif [[ $# -gt 0 ]]; then
     shift
@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$PROMPT" ]]; then
+if [[ -z "$PROMPT" && ! -s "$PROMPT_FILE" ]]; then
     echo "Error: No prompt provided" >&2
     exit 1
 fi
@@ -74,44 +74,35 @@ SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT When citing s
 # One trap for every temp file this script owns, installed before the first of
 # them exists and naming them all: a failure between here and the request —
 # a jq that cannot read the image file, say — would otherwise leave the prompt
-# and content files behind, and an EXIT trap that expands a name not yet
-# assigned ends where it stands under set -u without removing anything.
-CURL_CFG="" PAYLOAD_FILE="" OWNED_PROMPT_FILE="" CONTENT_FILE=""
-trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE" "$CONTENT_FILE"' EXIT
+# file behind, and an EXIT trap that expands a name not yet assigned ends where
+# it stands under set -u without removing anything.
+CURL_CFG="" PAYLOAD_FILE="" OWNED_PROMPT_FILE=""
+trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE"' EXIT
 
-# A prompt given literally as $1 is staged into a file of our own, so the
-# --rawfile read below has a path either way. OWNED_PROMPT_FILE is what the trap
-# removes: the orchestrator's file is not ours to delete.
-if [[ -z "$PROMPT_FILE" ]]; then
-    OWNED_PROMPT_FILE=$(mktemp)
-    PROMPT_FILE="$OWNED_PROMPT_FILE"
-    printf '%s' "$PROMPT" > "$PROMPT_FILE"
-fi
+stage_prompt_file
 
 # The user-message content embeds the prompt, so it reaches the payload build
-# through a file as well: --argjson would put the whole prompt back on argv.
-CONTENT_FILE=$(mktemp)
-
+# on stdin: printf is a builtin, so neither the argv limit nor a temp file is
+# involved, where --argjson would put the whole prompt back on argv.
 # Build request payload
 # Perplexity extends OpenAI format with search-specific parameters.
 # The user message content is either a bare prompt string or, when an image is
 # supplied, an OpenAI-shaped [text, image_url] array. Building it once here keeps
 # the image variant orthogonal to the recency branch below (no 2x2 duplication).
 if [[ -n "$IMAGE_FILE" ]]; then
-    jq -n --rawfile prompt "$PROMPT_FILE" --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '[
+    USER_CONTENT=$(jq -n --rawfile prompt "$PROMPT_FILE" --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '[
         { type: "text",      text: $prompt },
         { type: "image_url", image_url: { url: ("data:" + $mime + ";base64," + $b64) } }
-    ]' > "$CONTENT_FILE"
+    ]')
 else
-    jq -n --rawfile prompt "$PROMPT_FILE" '$prompt' > "$CONTENT_FILE"
+    USER_CONTENT=$(jq -n --rawfile prompt "$PROMPT_FILE" '$prompt')
 fi
 
 if [[ -n "$RECENCY" ]]; then
-    PAYLOAD=$(jq -n \
+    PAYLOAD=$(printf '%s' "$USER_CONTENT" | jq \
         --arg model "$MODEL" \
         --argjson tokens "$TOKENS" \
         --arg system "$SYSTEM" \
-        --slurpfile content "$CONTENT_FILE" \
         --arg recency "$RECENCY" \
         '{
             model: $model,
@@ -120,7 +111,7 @@ if [[ -n "$RECENCY" ]]; then
                 content: $system
             }, {
                 role: "user",
-                content: $content[0]
+                content: .
             }],
             temperature: 0.7,
             max_tokens: $tokens,
@@ -128,11 +119,10 @@ if [[ -n "$RECENCY" ]]; then
             search_recency_filter: $recency
         }')
 else
-    PAYLOAD=$(jq -n \
+    PAYLOAD=$(printf '%s' "$USER_CONTENT" | jq \
         --arg model "$MODEL" \
         --argjson tokens "$TOKENS" \
         --arg system "$SYSTEM" \
-        --slurpfile content "$CONTENT_FILE" \
         '{
             model: $model,
             messages: [{
@@ -140,7 +130,7 @@ else
                 content: $system
             }, {
                 role: "user",
-                content: $content[0]
+                content: .
             }],
             temperature: 0.7,
             max_tokens: $tokens,

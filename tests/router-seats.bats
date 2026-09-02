@@ -142,11 +142,16 @@ lib() {
 }
 
 @test "provider_script_path: numbered seats all run the one router script" {
-    run lib 'provider_script_path openrouter-3; provider_script_path openrouter; provider_script_path gemini'
+    run lib 'provider_script_path openrouter-3; provider_script_path openrouter; provider_script_path gemini; provider_script_path openrouter-0'
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" == */providers/openrouter.sh ]]
     [[ "${lines[1]}" == */providers/openrouter.sh ]]
     [[ "${lines[2]}" == */providers/gemini.sh ]]
+    # A name that is not a seat is not the router either: the one definition of
+    # "is this a seat" answers here as it does in get_model, so a malformed
+    # number fails as an unknown provider instead of running the default model
+    # under an "unknown" label.
+    [[ "${lines[3]}" == */providers/openrouter-0.sh ]]
 }
 
 @test "provider_vision_capable: a numbered seat opts in per seat, not collectively" {

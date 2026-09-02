@@ -26,7 +26,7 @@ IMAGE_MIME=""
 PROMPT_FILE=""
 if [[ "$PROMPT" == "--prompt-file" ]]; then
     PROMPT_FILE="${2:?--prompt-file requires a path}"
-    PROMPT=$(cat "$PROMPT_FILE")
+    PROMPT=""
     shift 2
 elif [[ $# -gt 0 ]]; then
     shift
@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$PROMPT" ]]; then
+if [[ -z "$PROMPT" && ! -s "$PROMPT_FILE" ]]; then
     echo "Error: No prompt provided" >&2
     exit 1
 fi
@@ -90,14 +90,7 @@ fi
 CURL_CFG="" PAYLOAD_FILE="" OWNED_PROMPT_FILE=""
 trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE"' EXIT
 
-# A prompt given literally as $1 is staged into a file of our own, so the
-# --rawfile read below has a path in either case. OWNED_PROMPT_FILE is what the
-# trap removes: the orchestrator's file is not ours to delete.
-if [[ -z "$PROMPT_FILE" ]]; then
-    OWNED_PROMPT_FILE=$(mktemp)
-    PROMPT_FILE="$OWNED_PROMPT_FILE"
-    printf '%s' "$PROMPT" > "$PROMPT_FILE"
-fi
+stage_prompt_file
 
 # Build request payload
 if [[ -n "$IMAGE_FILE" ]]; then

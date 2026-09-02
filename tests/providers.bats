@@ -703,6 +703,15 @@ run_provider_with_image() {
     [ "$status" -eq 3 ]
 }
 
+@test "openrouter: an upstream's own wrong-model wording exits 3 like the router's" {
+    # The router passes some upstream 400s through in the vendor's words, and
+    # the phrasing list is the one is_model_unavailable_error uses, so a wording
+    # that earns exit 3 on a direct seat earns it here.
+    FAKE_BODY='{"error":{"message":"The model `openai/gpt-nope` does not exist or you do not have access to it.","code":400}}'
+    FAKE_HTTP=400 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 3 ]
+}
+
 @test "openrouter: the 400 that names an invalid model id exits 3" {
     # Verified against the live API: an unknown slug comes back 400, not the 404
     # the design assumed, with .error.code 400 and the wire status agreeing.
