@@ -775,6 +775,49 @@ run_provider_with_image() {
     [[ "$stderr" == *"upstream is down"* ]]
 }
 
+@test "openrouter: a mid-generation provider error on the choice is named" {
+    # Documented shape: an error after the model has begun producing output
+    # comes back HTTP 200 with the error on the choice, not at the top level,
+    # so the top-level read alone sees an empty answer and no error.
+    FAKE_BODY='{"choices":[{"message":{"role":"assistant","content":""},"finish_reason":"error","error":{"code":502,"message":"Provider disconnected mid-stream"}}]}'
+    FAKE_HTTP=200 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"Provider disconnected mid-stream"* ]]
+    [[ "$stderr" != *"Unknown error"* ]]
+}
+
+@test "openrouter: a bare-string error on the choice does not crash the extractor" {
+    # The documented choice-level error is an object, but the top-level one is
+    # a bare string for some upstreams; indexing a string raises in jq, which
+    # under pipefail would kill the script before it printed anything at all.
+    FAKE_BODY='{"choices":[{"message":{"content":""},"error":"upstream disconnected"}]}'
+    FAKE_HTTP=200 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"upstream disconnected"* ]]
+}
+
+@test "openrouter: an empty 200 names the finish reason and the reasoning spend" {
+    # A routed reasoning model that spends its whole budget thinking answers
+    # 200 with empty content and no error at all; "Unknown error" hides which
+    # of the three empty-answer causes it was.
+    FAKE_BODY='{"choices":[{"message":{"role":"assistant","content":""},"finish_reason":"length"}],"usage":{"completion_tokens":2048,"completion_tokens_details":{"reasoning_tokens":2048}}}'
+    FAKE_HTTP=200 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"finish_reason: length"* ]]
+    [[ "$stderr" == *"reasoning tokens: 2048/2048"* ]]
+}
+
+@test "openrouter: an answer left in the reasoning field is reported by its size" {
+    # An upstream that returns the answer only as reasoning stops cleanly with
+    # empty content — indistinguishable from a truncation unless the reasoning
+    # length is reported.
+    FAKE_BODY='{"choices":[{"message":{"role":"assistant","content":"","reasoning":"the answer"},"finish_reason":"stop"}]}'
+    FAKE_HTTP=200 run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"finish_reason: stop"* ]]
+    [[ "$stderr" == *"reasoning chars: 10"* ]]
+}
+
 @test "openrouter: missing key fails before any request" {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider openrouter.sh "hi"

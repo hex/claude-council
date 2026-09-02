@@ -170,11 +170,56 @@ TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
     # space passes a bare -z test, and the council would store that as a
     # successful answer and weigh it in the synthesis like any other.
 if [[ -z "${TEXT//[[:space:]]/}" ]]; then
+    # Three different failures all arrive here as "no text", and only the first
+    # carries a top-level .error: a wire error (>=400, given a message by
+    # ensure_error_body); a mid-generation upstream failure, which OpenRouter
+    # documents as an HTTP 200 whose error sits on the choice; and a clean 200
+    # whose content is simply empty — a reasoning model that spent its budget
+    # thinking, or an upstream that left the answer in .reasoning. Naming which
+    # is the whole diagnostic value: "Unknown error" is the same word for all
+    # three and points at none of them.
+    #
     # .error is an object here and a bare string for some vendors; indexing a
     # string raises in jq rather than yielding null, and `//` does not catch a
-    # raise, so both reads below branch on the type first.
-    ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // "") elif (.error | type) == "string" then .error else "" end) | select(. != "") // "Unknown error"')
+    # raise, so the read branches on the type first.
+    ERROR=$(echo "$RESPONSE" | jq -r '
+        (if (.error | type) == "object" then (.error.message // "")
+         elif (.error | type) == "string" then .error
+         else "" end) as $top
+        # `?` for a .choices that is not an array, `// null` because a
+        # suppressed raise yields empty rather than null and would leave the
+        # whole expression — and so the error line — blank.
+        | (.choices[0]? // null) as $c
+        # Branched on the type for the same reason the top-level read is: a
+        # bare-string .error indexed with .message raises rather than yielding
+        # null, and under pipefail that raise kills the script before it can
+        # print any error line at all.
+        | (if ($c.error | type) == "object" then ($c.error.message // "")
+           elif ($c.error | type) == "string" then $c.error
+           else "" end | tostring) as $mid
+        | (if ($c.error | type) == "object" then ($c.error.code // null)
+           else null end) as $mid_code
+        | if $top != "" then $top
+          elif $mid != "" then
+              "provider error"
+              + (if $mid_code != null then " (" + ($mid_code | tostring) + ")" else "" end)
+              + ": " + $mid
+          elif $c != null then
+              "empty response (finish_reason: " + (($c.finish_reason // "none") | tostring)
+              + ", native: " + (($c.native_finish_reason // "none") | tostring)
+              + ", reasoning tokens: " + ((.usage.completion_tokens_details.reasoning_tokens // 0) | tostring)
+              + "/" + ((.usage.completion_tokens // 0) | tostring)
+              + ", reasoning chars: " + (($c.message.reasoning // "") | tostring | length | tostring) + ")"
+          else "Unknown error" end')
     echo "Error from OpenRouter: $ERROR" >&2
+
+    # The classified line above covers the shapes we know; the raw body is the
+    # catch-all for one we do not. Debug-gated because run_provider_script
+    # merges this stream into the text the council stores as the seat's error.
+    if [[ -n "$DEBUG" ]]; then
+        echo "=== DEBUG: Raw response ===" >&2
+        echo "$RESPONSE" >&2
+    fi
 
     # OpenRouter can answer HTTP 200 with an error object and no .choices, so
     # .error.code is the effective status and the wire code stamped by
