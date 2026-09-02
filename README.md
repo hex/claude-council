@@ -696,6 +696,16 @@ The bump applies to:
   it, so the bump is free
 - **Ollama**: `*r1*`, `*reason*`, `*gpt-oss*`, `qwen*`, `gemma*`, `deepseek*`
 
+The OpenRouter seat also sends a thinking budget, `reasoning.max_tokens`, on
+every request (default 8000; `OPENROUTER_REASONING_TOKENS` overrides it, `0`
+sends none). The two caps do different jobs. `max_tokens` bounds thinking and
+answer together, so a model can spend the whole cap thinking and answer with
+nothing. The budget bounds the thinking alone, leaving room for the answer: a
+routed model that would otherwise think for twenty thousand tokens on a long
+prompt, and outlast `COUNCIL_TIMEOUT`, answers inside two minutes. Upstreams
+without direct allocation map the number to an effort level, and adaptive
+models ignore it.
+
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
 | Standard (gpt-5.1) | 2048 (default) | 2048 |
