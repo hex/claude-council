@@ -486,7 +486,9 @@ producer_awaits_retry_once_drawn() {
     COUNCIL_AUTO_CLOSE=0 run --separate-stderr bounded_watcher 16 \
         < <(printf 'r'
             # No wait before the key: it sits in the pipe until the offer
-            # prompt's read consumes it, the same as the two tests above.
+            # prompt reads it, as in the two tests above. Apostrophes are
+            # avoided in here: bash 3.2 tokenizes quotes inside comments within
+            # a process substitution, and an odd count eats the closing paren.
             # The replay must contain both failures, so the redraw comes after
             # the second one is recorded. pane_error_write overwrites the
             # provider's error file, so its content is the signal.

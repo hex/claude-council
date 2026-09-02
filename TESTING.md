@@ -135,6 +135,18 @@ Windows machine:
 - bats on MSYS cannot look up a `@test` whose name has a non-ASCII character;
   it reports `unknown test name` and the count comes up short.
 
+### macOS (bash 3.2)
+
+The macOS runner parses the suite with `/bin/bash` 3.2, where one construct
+behaves differently from bash 5 on the other two legs:
+
+- **No apostrophes in comments inside a process substitution.** 3.2 tokenizes
+  quotes before stripping comments there, so an odd number of `'` across the
+  comment lines inside `< <( ... )` swallows the closing paren and the file
+  fails to parse: ``bad substitution: no closing `)' ``. Write "the prompt
+  reads it", never "the prompt's read". Ubuntu and Windows run bash 5 and
+  accept it, so only the macOS leg catches this.
+
 ---
 
 ## Lint (shellcheck)
