@@ -903,25 +903,6 @@ run_provider_with_image() {
     [[ "$stderr" == *"anthropic/claude-sonnet-5-20260115"* ]]
 }
 
-@test "openrouter: a routed reasoning model earns the token bump" {
-    # The router is the one provider designed to be retargeted at an arbitrary
-    # id, so the bump keys off the id's shape. A reasoning model shares the cap
-    # between hidden thinking and the visible answer, and nothing here reads
-    # finish_reason: at the 2048 base the answer truncates mid-sentence and the
-    # fragment is cached and synthesized as a normal success.
-    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
-    local model
-    for model in deepseek/deepseek-r1 openai/o3-mini qwen/qwen3-max \
-                 google/gemini-3-thinking x-ai/grok-4-reasoning; do
-        # The fake curl appends, so each model needs the payload file to itself.
-        : > "$DATA_FILE"
-        run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k "OPENROUTER_MODEL=$model"
-        [ "$status" -eq 0 ]
-        echo "model=$model max_tokens=$(jq -r '.max_tokens' "$DATA_FILE")"
-        [ "$(jq -r '.max_tokens' "$DATA_FILE")" -ge 32768 ]
-    done
-}
-
 @test "openrouter: every routed model earns the token bump, whatever its id" {
     # A name-pattern list on a router that seats arbitrary ids is whack-a-mole:
     # z-ai/glm-5.3-flash and xiaomi/mimo-v2.5 are reasoning models that matched
@@ -930,7 +911,7 @@ run_provider_with_image() {
     # than rejecting it), so the router bumps unconditionally.
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     local model
-    for model in z-ai/glm-5.3-flash xiaomi/mimo-v2.5 anthropic/claude-sonnet-5; do
+    for model in z-ai/glm-5.3-flash xiaomi/mimo-v2.5 deepseek/deepseek-r1 anthropic/claude-sonnet-5; do
         : > "$DATA_FILE"
         run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k "OPENROUTER_MODEL=$model"
         [ "$status" -eq 0 ]
@@ -940,6 +921,8 @@ run_provider_with_image() {
 }
 
 @test "openrouter: COUNCIL_MAX_TOKENS still scales the bumped cap" {
+    # The 8x arithmetic is tokens.bats' job; this proves the override reaches
+    # the router's request now that no pattern sits between the two.
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k COUNCIL_MAX_TOKENS=8192
     [ "$status" -eq 0 ]
