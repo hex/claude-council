@@ -4,6 +4,30 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.9.4
+
+### Features
+
+- **The OpenRouter seat sends a thinking budget.** Raising the token cap in
+  v2026.9.3 stopped the roster starving, and the next run showed the failure it
+  had been hiding: all three seats timed out at 300 seconds. Left to its own
+  policy, `z-ai/glm-5.3-flash` thought for 20,861 tokens on a 17 KB prompt and
+  ran to the 900-second mark before answering. `max_tokens` caps thinking and
+  answer together, so it cannot stop that; `reasoning.max_tokens` caps the
+  thinking alone and leaves room for the answer. Every routed request now
+  carries one, default 8000. `OPENROUTER_REASONING_TOKENS` overrides it and `0`
+  sends none. On the same prompt, all three seats now answer in under two
+  minutes. Upstreams without direct allocation map the number to an effort
+  level, and adaptive models ignore it.
+
+- `COUNCIL_DEBUG` names the budget in the seat's header, next to the model and
+  the token cap.
+
+### Docs
+
+- The Reasoning Models section explains the two caps and why one cannot do the
+  other's job.
+
 ## 2026.9.3
 
 ### Fixes
