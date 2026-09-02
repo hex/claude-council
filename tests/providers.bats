@@ -922,12 +922,28 @@ run_provider_with_image() {
     done
 }
 
-@test "openrouter: an ordinary model keeps the plain cap" {
+@test "openrouter: every routed model earns the token bump, whatever its id" {
+    # A name-pattern list on a router that seats arbitrary ids is whack-a-mole:
+    # z-ai/glm-5.3-flash and xiaomi/mimo-v2.5 are reasoning models that matched
+    # nothing, spent all 2048 tokens thinking, and answered with empty content.
+    # The ceiling is cheap (the live API clamps an oversized max_tokens rather
+    # than rejecting it), so the router bumps unconditionally.
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
-    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k \
-        OPENROUTER_MODEL=anthropic/claude-sonnet-5
+    local model
+    for model in z-ai/glm-5.3-flash xiaomi/mimo-v2.5 anthropic/claude-sonnet-5; do
+        : > "$DATA_FILE"
+        run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k "OPENROUTER_MODEL=$model"
+        [ "$status" -eq 0 ]
+        echo "model=$model max_tokens=$(jq -r '.max_tokens' "$DATA_FILE")"
+        [ "$(jq -r '.max_tokens' "$DATA_FILE")" -ge 32768 ]
+    done
+}
+
+@test "openrouter: COUNCIL_MAX_TOKENS still scales the bumped cap" {
+    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k COUNCIL_MAX_TOKENS=8192
     [ "$status" -eq 0 ]
-    [ "$(jq -r '.max_tokens' "$DATA_FILE")" -eq 2048 ]
+    [ "$(jq -r '.max_tokens' "$DATA_FILE")" -eq 65536 ]
 }
 
 @test "openrouter: bearer key never appears in the process argv" {

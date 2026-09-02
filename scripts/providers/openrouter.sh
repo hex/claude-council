@@ -71,21 +71,16 @@ MODEL="$(get_model "$SEAT")"
 # OpenRouter API endpoint (OpenAI-compatible)
 ENDPOINT="https://openrouter.ai/api/v1/chat/completions"
 
-# Token limit (override via COUNCIL_MAX_TOKENS env var). The seat is
-# retargetable, so the reasoning bump keys off the id's shape rather than a
-# fixed model list: a routed reasoning model shares its budget between hidden
-# thinking and visible output and would otherwise truncate mid-answer.
+# Token limit (override via COUNCIL_MAX_TOKENS env var). Every routed model
+# gets the reasoning bump: the seat can be pointed at any id the router serves,
+# and a pattern list keyed off the id's shape misses reasoning models whose
+# names carry no tell (z-ai/glm-5.3-flash, xiaomi/mimo-v2.5), which then spend
+# the whole 2048 base thinking and answer with empty content. The ceiling is the
+# cheap direction: max_tokens caps spend rather than causing it, and the live
+# API clamps a value above an upstream's own limit instead of rejecting it
+# (verified against models capped at 2048).
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
-# The shapes the router actually serves reasoning models under, not just the two
-# words: r1 and deepseek's line, the qwen line, gpt-oss, and the o-series, whose
-# ids are bare enough that the pattern is anchored to the vendor slash so an
-# unrelated id merely containing "o3" is not swept in. Erring toward the bump is
-# the cheap direction — max_tokens is a ceiling, not a spend, while too low a
-# ceiling truncates the answer mid-sentence and nothing downstream reads
-# finish_reason, so the fragment caches and synthesizes as a normal success.
-bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" \
-    '*reasoning*' '*thinking*' '*r1*' '*deepseek*' '*qwen*' '*gpt-oss*' \
-    '*/o1*' '*/o3*' '*/o4*'
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" '*'
 
 # System instruction
 SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"

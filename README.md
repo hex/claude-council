@@ -687,12 +687,12 @@ The bump applies to:
 - **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`, `grok-build-*`, `grok-latest`
 - **Perplexity**: `sonar-reasoning*`, `*deep-research*`
 - **Kimi**: `kimi-k*` (so the default model always triggers the bump)
-- **OpenRouter**: `*reasoning*`, `*thinking*`, `*r1*`, `*deepseek*`, `*qwen*`,
-  `*gpt-oss*`, and the o-series anchored to the vendor slash (`*/o1*`, `*/o3*`,
-  `*/o4*`) so an unrelated id merely containing `o3` is not swept in. The seat
-  is retargetable, so the bump keys off the routed id's shape rather than a
-  fixed model list, and it errs toward bumping: `max_tokens` is a ceiling, not a
-  spend, while too low a ceiling truncates the answer mid-sentence
+- **OpenRouter**: every routed model. The seat can be pointed at any id, and a
+  pattern list misses reasoning models whose names carry no tell
+  (`z-ai/glm-5.3-flash`, `xiaomi/mimo-v2.5`), which then spend the whole base
+  thinking and answer with nothing. `max_tokens` is a ceiling, not a spend, and
+  OpenRouter clamps a value above an upstream's own limit rather than rejecting
+  it, so the bump is free
 - **Ollama**: `*r1*`, `*reason*`, `*gpt-oss*`, `qwen*`, `gemma*`, `deepseek*`
 
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
