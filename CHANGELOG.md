@@ -4,6 +4,47 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.9.2
+
+### Fixes
+
+- **A failing OpenRouter seat says why.** Three unrelated failures reached the
+  same branch and all printed "Unknown error": a wire error, a mid-generation
+  upstream failure, and a clean 200 whose content is empty. Only the first
+  carries a top-level `.error`. The seat now reads the choice-level error
+  OpenRouter documents for the second (an HTTP 200 with the error on the choice),
+  and for the third reports `finish_reason`, the upstream native reason, the
+  reasoning token spend and the size of any answer the upstream left in
+  `.reasoning`. `COUNCIL_DEBUG` dumps the raw body for a shape none of those
+  cover.
+- **Two `.error` reads could kill a seat without printing anything.** `gemini.sh`
+  indexed `.error.message` unguarded, so a body of 400 or worse carrying a
+  bare-string `.error` made jq raise, and under `set -eo pipefail` the seat
+  exited 5 with no error line at all. `openrouter.sh` had the same shape one
+  level down, where a scalar `.choices[0]` made the content read raise before the
+  branch that names the failure could run.
+- **The macOS CI leg is green again.** bash 3.2 scans comment text inside a
+  process substitution instead of stripping it, so an apostrophe added to a
+  comment in v2026.9.1 swallowed the closing paren in `tests/pane-watcher.bats`.
+  Only that leg could catch it, and the `not ok` line read like a flaky watcher
+  test.
+
+### Docs
+
+- `docs/ARCHITECTURE.md` gains the empty-answer path. It covered the machinery for a
+  response of 400 or worse and stopped there, so the 2xx that carries no text
+  had no home.
+- The bash 3.2 rule in `TESTING.md` was wrong twice over: stray parens break that
+  construct as well as stray quotes, and neither shape shows up at parse time,
+  so `bash -n` hands you a false all-clear.
+- The new-seat template in the provider-integration skill taught the bare `-z`
+  test and the unguarded `.error` read that no seat has any more.
+
+### Other
+
+- One jq helper serves both error reads in `openrouter.sh` instead of the
+  object-vs-string branch written out twice.
+
 ## 2026.9.1
 
 ### Features
