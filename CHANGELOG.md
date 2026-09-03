@@ -4,6 +4,17 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.9.5
+
+### Other
+
+- **The gemini seat defaults to `gemini-flash-latest`.** Both aliases track
+  whatever Google currently serves in their tier and both earn the reasoning
+  bump, so this is a tier choice rather than a capability one. `GEMINI_MODEL`
+  still overrides it. The fallback comment moved with it: `gemini-3.5-flash` no
+  longer degrades across a tier, it degrades from an alias to a pinned id, which
+  is still the failure a fallback can answer.
+
 ## 2026.9.4
 
 ### Features
