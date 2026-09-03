@@ -302,7 +302,7 @@ cli_model() {
 
 get_model() {
     case "$1" in
-        gemini)     echo "${GEMINI_MODEL:-gemini-pro-latest}" ;;
+        gemini)     echo "${GEMINI_MODEL:-gemini-flash-latest}" ;;
         openai)     echo "${OPENAI_MODEL:-gpt-5.6-sol}" ;;
         grok)       echo "${GROK_MODEL:-grok-latest}" ;;
         grok-cli)   cli_model grok-cli "${GROK_CLI_MODEL:-}" ;;

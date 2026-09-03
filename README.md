@@ -598,7 +598,7 @@ Detail-heavy knobs you'll only need occasionally. The defaults are sensible for 
 Override default models via environment variables:
 
 ```bash
-export GEMINI_MODEL="gemini-pro-latest"             # default (tracks Google's current Pro)
+export GEMINI_MODEL="gemini-flash-latest"           # default (tracks Google's current Flash)
 export OPENAI_MODEL="gpt-5.6-sol"                   # default
 export GROK_MODEL="grok-latest"                     # default (tracks xAI's current flagship)
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
@@ -658,7 +658,7 @@ in the response header:
 |---|---|---|
 | openai | `gpt-5.6-sol` | `gpt-5.5-pro` |
 | grok | `grok-latest` | `grok-4.20-reasoning` |
-| gemini | `gemini-pro-latest` | `gemini-3.5-flash` |
+| gemini | `gemini-flash-latest` | `gemini-3.5-flash` |
 | perplexity | `sonar-reasoning-pro` | `sonar-pro` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
 | ollama | first local model (`OLLAMA_MODEL` to pin) | — |

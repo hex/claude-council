@@ -470,7 +470,7 @@ EOF
     [[ "$(echo "$slot" | jq -r '.status')" == "success" ]]
     [[ "$(echo "$slot" | jq -r '.response')" == *"FALLBACK-GEMINI-ANSWER"* ]]
     [[ "$(echo "$slot" | jq -r '.fallback')" == "gemini" ]]
-    [[ "$(echo "$slot" | jq -r '.model')" == "gemini-pro-latest" ]]
+    [[ "$(echo "$slot" | jq -r '.model')" == "gemini-flash-latest" ]]
 }
 
 @test "query-council: antigravity failure with no gemini key stays an error" {
@@ -514,7 +514,7 @@ EOF
     [[ "$(echo "$r2" | jq -r '.status')" == "success" ]]
     [[ "$(echo "$r2" | jq -r '.response')" == *"FALLBACK-GEMINI-ANSWER"* ]]
     [[ "$(echo "$r2" | jq -r '.fallback')" == "gemini" ]]
-    [[ "$(echo "$r2" | jq -r '.model')" == "gemini-pro-latest" ]]
+    [[ "$(echo "$r2" | jq -r '.model')" == "gemini-flash-latest" ]]
     # Round-2 fallback slot carries the same shape as round 1 (role + cached),
     # so the success shape can't silently drift between rounds.
     [[ "$(echo "$r2" | jq -r '.cached')" == "false" ]]
@@ -586,7 +586,7 @@ EOF
         bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
     [ "$status" -eq 0 ]
     # The success status line on stderr must name the model that answered.
-    [[ "$stderr" == *"gemini-pro-latest"* ]]
+    [[ "$stderr" == *"gemini-flash-latest"* ]]
     [[ "$stderr" != *"Gemini 3.5 Flash (High)"* ]]
 }
 

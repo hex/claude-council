@@ -27,7 +27,7 @@ TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
 ## Google Gemini Pattern
 
 ```bash
-ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:generateContent"
+ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
 
 PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" '{
     contents: [{parts: [{text: $prompt}]}],

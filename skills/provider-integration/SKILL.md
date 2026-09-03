@@ -23,7 +23,7 @@ Each provider is a shell script in `scripts/providers/` that:
 
 | Provider | API Key Variable | Default Model |
 |----------|------------------|---------------|
-| Gemini | `GEMINI_API_KEY` | gemini-pro-latest |
+| Gemini | `GEMINI_API_KEY` | gemini-flash-latest |
 | OpenAI | `OPENAI_API_KEY` | gpt-5.6-sol |
 | Grok | `XAI_API_KEY` (or `GROK_API_KEY`) | grok-latest |
 | Perplexity | `PERPLEXITY_API_KEY` | sonar-reasoning-pro |

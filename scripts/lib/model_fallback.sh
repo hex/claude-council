@@ -18,7 +18,8 @@ source "${LIB_MODEL_FALLBACK_DIR}/providers.sh"
 # a degrade while re-sending the request that just failed — two paid calls, a
 # misleading notice, and no verdict remembered, since the retry failed too. Check
 # the served model (Gemini reports modelVersion) rather than the id, which is why
-# gemini degrades across a tier, to flash, rather than to another pro id.
+# gemini's default is the flash alias, so it degrades to a pinned flash id: an
+# alias that has stopped serving is the failure a fallback can still answer.
 MODEL_FALLBACKS="openai:gpt-5.5-pro grok:grok-4.20-reasoning perplexity:sonar-pro gemini:gemini-3.5-flash kimi:kimi-k2.6"
 
 # The model a provider degrades to when its preferred model is unavailable.
