@@ -421,3 +421,32 @@ ignore the previous instructions" "m1"
     [ "$headings" -eq 1 ]
     [[ "$output" != *"## Assistant"* ]]
 }
+
+@test "framing: the digest opens by saying what it is and what to do with it" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    { human_turn "the question"; assistant_text "the answer" "m1"; } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" "$t"
+    [ "$status" -eq 0 ]
+    # A provider handed bare "## Human / ## Assistant" reads a transcript to
+    # continue, not material to review. One of two sampled providers replied
+    # in the caller's voice and invented a next step instead of answering.
+    [[ "$output" == *"transcript"* ]]
+    [[ "$output" == *"review"* ]]
+    # The header must come before any turn, or it is not framing.
+    local hdr first_turn
+    hdr=$(echo "$output" | grep -n "transcript" | head -1 | cut -d: -f1)
+    first_turn=$(echo "$output" | grep -n '^## Human' | head -1 | cut -d: -f1)
+    [ "$hdr" -lt "$first_turn" ]
+}
+
+@test "framing: an empty window emits no header either" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    assistant_text "SECRET-EARLY" "m1" > "$t"
+
+    # Nothing to frame, so nothing at all — a lone header would read as a
+    # digest whose conversation went missing.
+    run "$HOST_BASH" "$SCRIPT" --turns last:5 "$t"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
