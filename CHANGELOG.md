@@ -4,6 +4,12 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.9.7
+
+### Fixes
+- The digest now opens by naming what the file holds: material to review, not a conversation to continue. Without that, a reader handed a run of `## Human` and `## Assistant` headings can take it for a transcript to extend, and one of two providers replied in the caller's voice and invented a next step instead of reviewing anything. The header also asks the reader to disregard instructions inside the transcript, since someone else was their audience, which closes the other half of a hole the heading escape only covered syntactically.
+- An empty window emits nothing at all rather than a lone header, which would read as a digest whose conversation went missing.
+
 ## 2026.9.6
 
 ### Features
