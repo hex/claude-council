@@ -4,6 +4,20 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## 2026.9.6
+
+### Features
+- Ask the council about the current conversation with `/claude-council:advise`. It resolves this session's transcript, digests a bounded window of it, and shows the size, the turn count and the opening lines before anything goes to a provider. Providers see the reasoning rather than a summary of it, which is the point: a model given only the caller's framing tends to agree with that framing.
+- Add `scripts/transcript-digest.sh`, which turns a session transcript into markdown. It carries human turns and assistant replies and drops tool results, tool inputs, thinking blocks, hook output, compact summaries, and messages from other sessions.
+- Add `scripts/session-transcript.sh`, which maps a session id to its file by globbing every project directory. The directory name is a lossy encoding of the working directory, so two different directories can encode to the same name; the session id is what carries the uniqueness. It refuses an id matching two files rather than guessing between them.
+
+### Notes
+- The digest takes a path and refuses a bare session id. Inside a subagent the ambient session id names the parent conversation, so resolving one automatically is how a subagent would send a conversation nobody showed it. Resolution belongs to a turn that can ask a human, which is also where the confirmation lives.
+- Windowing bounds what leaves the machine, so it fails closed: `--turns last:0` errors out, and a window matching no human turn emits nothing rather than everything.
+
+### Other
+- Test count grew from 641 to 671 across 29 files.
+
 ## 2026.9.5
 
 ### Other
