@@ -80,6 +80,12 @@ if [[ ! -f "$TRANSCRIPT" ]]; then
     exit 1
 fi
 
+# wc -l counts newlines, so this is the number of COMPLETE records: reading a
+# session Claude Code is still writing otherwise ends mid-record, and jq then
+# streams the valid prefix to stdout before dying — a plausible-looking digest
+# whose truncation shows up only in the exit status.
+COMPLETE_LINES=$(wc -l < "$TRANSCRIPT" | tr -d ' ')
+
 # A user line is a human turn only when origin says so. Tool results arrive as
 # type "user" too and outnumber real turns roughly 34 to 1, so all four clauses
 # carry weight: drop meta lines, drop anything holding a toolUseResult, and
@@ -103,17 +109,20 @@ EXTRACT="
           else ([.[]? | select(.type == \"text\") | .text] | join(\"\n\"))
           end
         | select(length > 0)
+        | gsub(\"(?<p>^|\n)#\"; \"\\(.p)\\\\#\")
         | \"## Human\n\n\" + .
       else
           .message.content
         | [.[]? | select(.type == \"text\") | .text]
         | join(\"\n\")
         | select(length > 0)
+        | gsub(\"(?<p>^|\n)#\"; \"\\(.p)\\\\#\")
         | \"## Assistant\n\n\" + .
       end
 "
 
 START_LINE=""
+WINDOWED=0
 case "$TURNS" in
     all)
         ;;
@@ -125,9 +134,18 @@ case "$TURNS" in
                 exit 1
                 ;;
         esac
+        # Base-10, so a padded 00 is not read as octal and not accepted as a
+        # window. Zero is refused rather than clamped: a caller computing a turn
+        # budget can reach 0, and the old code turned that into the whole file.
+        if [ "$((10#$n))" -eq 0 ]; then
+            echo "Error: --turns last:N needs N of 1 or more." >&2
+            exit 1
+        fi
+        WINDOWED=1
         # tail reads its whole input, so jq is never killed by an early-exiting
         # consumer the way `| head -1` would kill it on a large transcript.
-        human_lines=$(jq -r "select($HUMAN_FILTER) | input_line_number" "$TRANSCRIPT" \
+        human_lines=$(head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" \
+            | jq -r "select($HUMAN_FILTER) | input_line_number" \
             | tr -d '\r' | tail -n "$n")
         if [[ -n "$human_lines" ]]; then
             START_LINE="${human_lines%%$'\n'*}"
@@ -139,8 +157,15 @@ case "$TURNS" in
         ;;
 esac
 
+# "No window computed" and "no window requested" are different states, and
+# conflating them made the narrowest request emit the whole transcript. A
+# requested window that matched nothing emits nothing; only --turns all is
+# allowed to stream an unwindowed file.
 if [[ -n "$START_LINE" ]]; then
-    tail -n "+${START_LINE}" "$TRANSCRIPT" | jq -r "$EXTRACT" | tr -d '\r'
+    head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | tail -n "+${START_LINE}" \
+        | jq -r "$EXTRACT" | tr -d '\r'
+elif [[ "$WINDOWED" -eq 1 ]]; then
+    exit 0
 else
-    jq -r "$EXTRACT" "$TRANSCRIPT" | tr -d '\r'
+    head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | jq -r "$EXTRACT" | tr -d '\r'
 fi
