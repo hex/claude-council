@@ -24,7 +24,7 @@ conversation it was never shown. Resolving it belongs to a caller that can ask.
 
 Output: markdown on stdout.
 EOF
-    exit 1
+    exit "${1:-1}"
 }
 
 TRANSCRIPT=""
@@ -37,15 +37,23 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --turns)
-            TURNS="${2:-}"
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --turns needs a value (last:N or all)." >&2
+                usage
+            fi
+            TURNS="$2"
             shift 2
             ;;
         --help|-h)
-            usage
+            usage 0
             ;;
         --)
             shift
-            TRANSCRIPT="${1:-}"
+            if [[ -n "$TRANSCRIPT" && $# -gt 0 ]]; then
+                echo "Error: give one transcript, got a second: $1" >&2
+                usage
+            fi
+            TRANSCRIPT="${1:-$TRANSCRIPT}"
             if [[ $# -gt 0 ]]; then shift; fi
             ;;
         -*)
@@ -53,6 +61,10 @@ while [[ $# -gt 0 ]]; do
             usage
             ;;
         *)
+            if [[ -n "$TRANSCRIPT" ]]; then
+                echo "Error: give one transcript, got a second: $1" >&2
+                usage
+            fi
             TRANSCRIPT="$1"
             shift
             ;;
@@ -100,26 +112,46 @@ HUMAN_FILTER='.type == "user"
 # Emitted in file order. Walking the parentUuid chain back from the last prompt
 # is the intuitive traversal and it silently begins at the most recent compact
 # summary, recovering roughly a quarter of a compacted session.
+# Each block is emitted as a sentinel header line (role and message id) followed
+# by its text. Assistant messages arrive FRAGMENTED, one content-block per line
+# sharing a message.id, so the id is what lets the formatter give one logical
+# reply one heading instead of one per fragment.
 EXTRACT="
     select(.type == \"user\" or .type == \"assistant\")
     | if .type == \"user\" then
           select($HUMAN_FILTER)
-        | .message.content
-        | if type == \"string\" then .
-          else ([.[]? | select(.type == \"text\") | .text] | join(\"\n\"))
-          end
-        | select(length > 0)
-        | gsub(\"(?<p>^|\n)#\"; \"\\(.p)\\\\#\")
-        | \"## Human\n\n\" + .
+        | { role: \"Human\", id: (.uuid // \"-\"), body: .message.content }
       else
-          .message.content
-        | [.[]? | select(.type == \"text\") | .text]
-        | join(\"\n\")
-        | select(length > 0)
-        | gsub(\"(?<p>^|\n)#\"; \"\\(.p)\\\\#\")
-        | \"## Assistant\n\n\" + .
+          { role: \"Assistant\", id: (.message.id // .uuid // \"-\"), body: .message.content }
       end
+    | .body |= (if type == \"string\" then .
+                else ([.[]? | select(.type == \"text\") | .text] | join(\"\n\"))
+                end)
+    | select(.body | length > 0)
+    | .body |= gsub(\"\\u0001\"; \"\")
+    | .body |= gsub(\"(?<p>^|\n)#\"; \"\\(.p)\\\\#\")
+    | \"\u0001\" + .role + \"\u0001\" + .id + \"\n\" + .body
 "
+
+# Groups consecutive blocks under one heading when role and message id match.
+# The $0 and f[] references below are awk's, so the program must NOT be
+# expanded by the shell before awk sees it.
+# shellcheck disable=SC2016
+FORMAT_AWK='
+/^\001/ {
+    split($0, f, "\001")
+    key = f[2] "|" f[3]
+    if (key != last) {
+        if (seen) print ""
+        print "## " f[2]
+        print ""
+        last = key
+        seen = 1
+    }
+    next
+}
+{ print }
+'
 
 START_LINE=""
 WINDOWED=0
@@ -163,9 +195,10 @@ esac
 # allowed to stream an unwindowed file.
 if [[ -n "$START_LINE" ]]; then
     head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | tail -n "+${START_LINE}" \
-        | jq -r "$EXTRACT" | tr -d '\r'
+        | jq -r "$EXTRACT" | sed 's/\r$//' | awk "$FORMAT_AWK"
 elif [[ "$WINDOWED" -eq 1 ]]; then
     exit 0
 else
-    head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | jq -r "$EXTRACT" | tr -d '\r'
+    head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | jq -r "$EXTRACT" \
+        | sed 's/\r$//' | awk "$FORMAT_AWK"
 fi
