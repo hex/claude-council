@@ -68,8 +68,9 @@ bats --verbose-run tests/cache.bats
 | `model_fallback.bats` | 29 tests | is_model_unavailable_error classifier (positive/negative fixtures from real vendor bodies), model_fallback_for pairs and the invariant that no provider degrades to the model it already prefers, verdict cache (TTL, provider+model+key scoping, corrupt/fractional-timestamp guards), model_fallback_key_hash, gated real-API test (default model or its fallback answers, end to end) |
 | `deadline.bats` | 9 tests | run_with_deadline: the caller's stdin reaches the command, the command's own status passes through, status 143 at the deadline whatever the command did with the signal (a CLI that exits 0 on SIGTERM), SIGKILL after the grace period for one that ignores it, the command's own children not holding the captured stdout, no watchdog outliving a fast call, nothing on stderr for a signal-ended job, 0 = unbounded, a non-integer deadline rejected |
 | `transcript-digest.bats` | 26 tests | session JSONL to markdown: the four-clause human-turn filter (a tool result, a cross-session peer message carrying another Claude's prose, and a compact summary all excluded), assistant replies interleaved in file order, thinking blocks and their signatures dropped, `--turns last:N` windowing, and a bare session id refused with the lookup named rather than performed |
+| `session-transcript.bats` | 4 tests | session id to transcript path: resolution by glob across project directories, a loud failure for an unknown id, a refusal when one id matches two files, and a non-uuid rejected before it reaches a path |
 
-**Total: 667 tests** across 28 `.bats` files.
+**Total: 671 tests** across 29 `.bats` files.
 
 ### Hermetic CLI Fixture
 
