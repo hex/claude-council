@@ -80,6 +80,7 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 - Background jobs (`--async`) for long-running queries, with `/claude-council:result` to fetch, list, and cancel
 - Opt-in stop-gate: a second model reviews your uncommitted diff before Claude ends its turn
 - Extensible provider system — add new AI agents easily
+- Put the conversation itself to the council with `/claude-council:advise`, which shows you what would leave the machine before it goes
 - Proactive agent that suggests consulting the council on architecture / debugging dead ends
 
 ## Installation
@@ -448,6 +449,30 @@ The `council-advisor` agent will suggest consulting the council when:
 - Discussing architecture or design decisions
 - Stuck debugging after multiple failed attempts
 
+### Asking about the conversation itself
+
+`/claude-council:ask` sends a question you typed. `/claude-council:advise` sends
+a bounded slice of the current conversation, so providers see the reasoning
+rather than your summary of it. A model given only your framing tends to agree
+with your framing.
+
+```bash
+# Ask the council about the approach taken so far
+/claude-council:advise "are we solving the right problem here?"
+
+# Narrow the window
+/claude-council:advise --turns=last:10 "what did we miss?"
+```
+
+Every run resolves this session's transcript, digests it, and shows the byte
+size, the turn count and the opening lines before asking whether to send. The
+digest carries human turns and assistant replies; it excludes tool results, tool
+inputs, thinking blocks, hook output, and messages from other sessions.
+
+The confirmation is the privacy control, and deliberately so: a script cannot
+tell whose conversation it holds, because inside a subagent the ambient session
+id names the parent conversation.
+
 ## Configuration
 
 ### API Keys
@@ -809,6 +834,10 @@ bash scripts/query-council.sh -- "What is dependency injection?"
 
 # With flags
 bash scripts/query-council.sh --providers=gemini,openai --roles=balanced -- "Review this pattern"
+
+# Resolve this session's transcript, then digest a window of it
+bash scripts/session-transcript.sh <session-id>
+bash scripts/transcript-digest.sh --turns last:25 <path/to/transcript.jsonl>
 
 # Pipe to formatter for terminal display
 bash scripts/query-council.sh --providers=gemini -- "Question" 2>/dev/null | bash scripts/format-output.sh
