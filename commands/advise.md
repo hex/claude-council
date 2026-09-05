@@ -34,17 +34,30 @@ available but say plainly that it sends the whole conversation.
 
 ```bash
 DIGEST=$(mktemp -t council-digest)
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/transcript-digest.sh --turns last:25 "<path>" > "$DIGEST"
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/transcript-digest.sh --turns last:25 "<path>" > "$DIGEST" \
+  || { echo "digest failed"; rm -f "$DIGEST"; }
 wc -c "$DIGEST"
 ```
+
+Stop if the script exited non-zero or the file is empty: there is nothing to
+show and nothing to send. The script fails loudly on a record it cannot read
+rather than emitting a digest with a hole in it, and a windowed run that matched
+no turn writes nothing at all.
 
 Use a plain temporary name. The file path is interpolated into the prompt the
 providers receive, so a name carrying the session or directory tells them things
 the digest itself does not.
 
-The digest carries human turns and assistant replies. It excludes tool results,
-tool inputs, thinking blocks, hook output, teammate and peer messages, and
-compact summaries.
+The digest carries human turns, assistant replies, and the questions the
+assistant put to the user through AskUserQuestion together with what they
+picked, since those are decisions and the reason to ask for a review. It
+excludes every other tool result and tool input, thinking blocks, hook output,
+teammate and peer messages, and compact summaries.
+
+A line near the top reading `> N malformed record(s) skipped: this digest is
+incomplete.` means the transcript held records the script could not parse. It
+is part of the payload, so it reaches the user in Step 3 and the providers
+after.
 
 ## Step 3: Show the payload, then ask
 
