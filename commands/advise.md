@@ -33,7 +33,7 @@ Default to the last 25 turns. `--turns=last:N` overrides it; `--turns=all` is
 available but say plainly that it sends the whole conversation.
 
 ```bash
-DIGEST=$(mktemp -t council-digest)
+DIGEST=$(mktemp "${TMPDIR:-/tmp}/council-digest.XXXXXX")
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/transcript-digest.sh --turns last:25 "<path>" > "$DIGEST" \
   || { echo "digest failed"; rm -f "$DIGEST"; }
 wc -c "$DIGEST"

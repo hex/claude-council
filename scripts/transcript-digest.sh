@@ -117,7 +117,9 @@ fi
 # exits 0, so a record of an unexpected shape would otherwise yield a digest
 # with a hole in it and an error nobody reads on stderr. Every extraction pass
 # writes stderr here and anything in it fails the run.
-JQ_ERR=$(mktemp -t council-digest-err)
+# A full template, not -t with a bare prefix: GNU mktemp demands the X's and
+# BSD accepts either, so this is the one form both platforms run.
+JQ_ERR=$(mktemp "${TMPDIR:-/tmp}/council-digest-err.XXXXXX")
 trap 'rm -f -- "$JQ_ERR"' EXIT
 refuse_on_jq_error() {
     if [[ -s "$JQ_ERR" ]]; then
