@@ -11,7 +11,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - A damaged record inside the transcript no longer aborts the digest. The script skips it, counts it, and writes the count into the digest itself as `> N malformed record(s) skipped: this digest is incomplete.` so the user and the providers both see it. A file with no readable record at all fails loudly.
 - jq keeps going after a runtime error on any record but the last and exits 0, so a record of an unexpected shape used to leave a digest with a hole in it and an error only on stderr. Every extraction pass now captures jq's stderr and any content there fails the run.
 - `/claude-council:advise` stops on a non-zero exit or an empty digest instead of carrying a 0-byte file into the confirmation step.
-- Both digest temp files are created with a full template (`name.XXXXXX`) rather than `mktemp -t prefix`, which BSD accepts and GNU rejects for lacking the X's. The digest script and `/claude-council:advise` had been failing on every Linux and Windows run since 2026.9.6; CI caught it on this release's content commit.
+- Both digest temp files now come from a full `mktemp` template (`name.XXXXXX`) rather than `-t prefix`, which BSD accepts and GNU rejects for lacking the X's. The digest script and `/claude-council:advise` had been failing on every Linux and Windows run since 2026.9.6; CI caught it on this release's content commit.
 
 ### Docs
 - The architecture tree lists `session-transcript.sh` and `transcript-digest.sh`, which arrived in 2026.9.6 without it.
