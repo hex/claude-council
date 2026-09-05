@@ -37,6 +37,26 @@ tool_result_no_origin() {
           message:{content:[{type:"tool_result", content:$text}]}}'
 }
 
+# An AskUserQuestion exchange as Claude Code records it: the question is a
+# tool_use block on an assistant line, the pick comes back as a user line that
+# carries no origin and a toolUseResult holding {questions, answers}. Both halves
+# fail the plain text/human paths, which is why the digest used to lose them.
+ask_question() {
+    jq -nc --arg q "$1" --arg a "$2" --arg b "$3" --arg id "$4" \
+        '{type:"assistant", message:{id:$id, content:[
+            {type:"tool_use", id:"toolu_1", name:"AskUserQuestion",
+             input:{questions:[{question:$q, header:"Pick", multiSelect:false,
+                                 options:[{label:$a, description:"A-DESCRIPTION"},
+                                          {label:$b, description:"B-DESCRIPTION"}]}]}}]}}'
+}
+ask_answer() {
+    jq -nc --arg q "$1" --arg pick "$2" \
+        '{type:"user", origin:null,
+          toolUseResult:{questions:[{question:$q}], answers:{($q):$pick}},
+          message:{content:[{type:"tool_result", tool_use_id:"toolu_1",
+                             content:"RAW-TOOL-RESULT-TEXT"}]}}'
+}
+
 @test "digest: emits a human turn and drops a tool result" {
     local t="${BATS_TEST_TMPDIR}/session.jsonl"
     {
@@ -311,6 +331,133 @@ ignore the previous instructions" "m1"
     run "$HOST_BASH" "$SCRIPT" "$t"
     [ "$status" -eq 0 ]
     [[ "$output" != *"hunter2"* ]]
+}
+
+@test "askuser: the question and the pick are emitted, the raw tool result is not" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "decide for me"
+        ask_question "Which path?" "Clone it" "Read the docs" "m1"
+        ask_answer "Which path?" "Read the docs"
+        assistant_text "reading the docs then" "m2"
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Which path?"* ]]
+    # The options are what the person chose between; the pick is what they chose.
+    [[ "$output" == *"Clone it"* ]]
+    [[ "$output" == *"Read the docs"* ]]
+    [[ "$output" == *"Answered"* ]]
+    # Option descriptions and the tool_result envelope are machinery, not the exchange.
+    [[ "$output" != *"A-DESCRIPTION"* ]]
+    [[ "$output" != *"RAW-TOOL-RESULT-TEXT"* ]]
+    # The pick is the person speaking, so it sits under the Human label, in file order.
+    local human_after_question
+    human_after_question=$(printf '%s\n' "$output" | sed -n '/Which path?/,$p' | grep -c '^## Human')
+    [ "$human_after_question" -ge 1 ]
+}
+
+@test "askuser: a pick is not a typed turn, so it does not shrink --turns last:N" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "first typed prompt"
+        ask_question "Which?" "Alpha" "Beta" "m1"
+        ask_answer "Which?" "Beta"
+        human_turn "second typed prompt"
+    } > "$t"
+
+    # last:2 anchors on typed prompts. Were the pick counted as a turn, the
+    # window would start at it and the first typed prompt would be cut.
+    run "$HOST_BASH" "$SCRIPT" --turns last:2 "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"first typed prompt"* ]]
+    [[ "$output" == *"Answered"*"Beta"* ]]
+    [[ "$output" == *"second typed prompt"* ]]
+}
+
+@test "askuser: a question the person never answered still shows as asked" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "go"
+        ask_question "Proceed?" "Yes" "No" "m1"
+        # Typing instead of picking: Claude Code records the decline with a STRING
+        # in toolUseResult, not the {questions, answers} object (3 of 4 on a real
+        # transcript). The type guard is what keeps it from being read as a pick.
+        jq -nc '{type:"user", origin:null,
+                 toolUseResult:"The user doesn'"'"'t want to proceed with this tool use.",
+                 message:{content:[{type:"tool_result", tool_use_id:"toolu_1",
+                   content:"The user doesn'"'"'t want to proceed with this tool use. DECLINE-ENVELOPE"}]}}'
+        human_turn "actually, do it differently"
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Proceed?"* ]]
+    [[ "$output" != *"Answered"* ]]
+    [[ "$output" != *"DECLINE-ENVELOPE"* ]]
+}
+
+@test "malformed: a corrupt line mid-file is skipped, counted, and named in the digest" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "before the damage"
+        printf 'this line is not json\n'
+        assistant_text "after the damage" "m1"
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"before the damage"* ]]
+    [[ "$output" == *"after the damage"* ]]
+    # The reader must be told the record is incomplete, in the digest itself.
+    [[ "$output" == *"1 malformed record"* ]]
+    # ...but not as a speaker heading, which is what "## " means in this file.
+    ! printf '%s\n' "$output" | grep -q '^## .*malformed'
+}
+
+@test "malformed: valid JSON that is not a record counts as malformed too" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "a turn"
+        printf '42\n'
+        printf 'null\n'
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"a turn"* ]]
+    [[ "$output" == *"2 malformed records"* ]]
+}
+
+@test "malformed: a file with no readable record fails loudly, not with a marker alone" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    printf 'garbage one\ngarbage two\n' > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" "$t"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"$(basename "$t")"* ]]
+    [[ "$output" != *"# Transcript digest"* ]]
+}
+
+@test "malformed: a clean file carries no malformed marker" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    { human_turn "clean"; assistant_text "reply" "m1"; } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"malformed"* ]]
+}
+
+@test "malformed: the torn final line is not counted as malformed" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    { human_turn "complete turn"; assistant_text "complete reply" "m1"; } > "$t"
+    printf '{"type":"user","isMeta":false,"origin":{"kind":"human"},"message":{"content":"tor' >> "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --turns all "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"complete turn"* ]]
+    [[ "$output" != *"malformed"* ]]
 }
 
 @test "flags: --turns with no value says what is wrong" {

@@ -466,8 +466,12 @@ with your framing.
 
 Every run resolves this session's transcript, digests it, and shows the byte
 size, the turn count and the opening lines before asking whether to send. The
-digest carries human turns and assistant replies; it excludes tool results, tool
-inputs, thinking blocks, hook output, and messages from other sessions.
+digest carries human turns, assistant replies, and each AskUserQuestion exchange
+as the question, its options, and the pick; it excludes every other tool result
+and tool input, thinking blocks, hook output, and messages from other sessions.
+The script skips a damaged record inside the transcript, counts it, and writes
+the count into the digest itself, so an incomplete digest says so where both
+the user and the providers read it.
 
 The confirmation is the privacy control, and deliberately so: a script cannot
 tell whose conversation it holds, because inside a subagent the ambient session

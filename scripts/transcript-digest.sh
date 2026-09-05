@@ -93,10 +93,39 @@ if [[ ! -f "$TRANSCRIPT" ]]; then
 fi
 
 # wc -l counts newlines, so this is the number of COMPLETE records: reading a
-# session Claude Code is still writing otherwise ends mid-record, and jq then
-# streams the valid prefix to stdout before dying — a plausible-looking digest
-# whose truncation shows up only in the exit status.
+# session Claude Code is still writing otherwise ends mid-record. The torn tail
+# is trimmed here and is not a malformed record; damage INSIDE the complete
+# prefix is handled below, by skipping and counting.
 COMPLETE_LINES=$(wc -l < "$TRANSCRIPT" | tr -d ' ')
+
+# Every jq pass reads raw lines and parses each one itself. A line that is not a
+# JSON object is skipped and COUNTED, never fatal: one damaged record mid-file
+# used to abort the whole digest, and the caller then carried a 0-byte file
+# forward. The count is written into the digest so the reader knows the record
+# is incomplete. Blank lines are not records and are not counted.
+RECORDS='select(length > 0) | fromjson? // empty | select(type == "object")'
+MALFORMED=$(head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" \
+    | jq -R 'select(length > 0) | fromjson? // "" | select(type != "object")' \
+    | wc -l | tr -d ' ')
+READABLE=$(head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | jq -R "$RECORDS | 1" | wc -l | tr -d ' ')
+if [[ "$COMPLETE_LINES" -gt 0 && "$READABLE" -eq 0 ]]; then
+    echo "Error: $(basename -- "$TRANSCRIPT") holds no readable record ($MALFORMED malformed of $COMPLETE_LINES lines)." >&2
+    exit 1
+fi
+
+# jq keeps going after a runtime error on a record that is not the last one and
+# exits 0, so a record of an unexpected shape would otherwise yield a digest
+# with a hole in it and an error nobody reads on stderr. Every extraction pass
+# writes stderr here and anything in it fails the run.
+JQ_ERR=$(mktemp -t council-digest-err)
+trap 'rm -f -- "$JQ_ERR"' EXIT
+refuse_on_jq_error() {
+    if [[ -s "$JQ_ERR" ]]; then
+        cat -- "$JQ_ERR" >&2
+        echo "Error: $(basename -- "$TRANSCRIPT"): a record could not be read; refusing to emit a partial digest." >&2
+        exit 1
+    fi
+}
 
 # A user line is a human turn only when origin says so. Tool results arrive as
 # type "user" too and outnumber real turns roughly 34 to 1, so all four clauses
@@ -116,16 +145,39 @@ HUMAN_FILTER='.type == "user"
 # by its text. Assistant messages arrive FRAGMENTED, one content-block per line
 # sharing a message.id, so the id is what lets the formatter give one logical
 # reply one heading instead of one per fragment.
+# An AskUserQuestion exchange is the one tool round-trip that IS the
+# conversation: the question is a tool_use block on an assistant line and the
+# pick comes back as a user line with no origin and a toolUseResult holding
+# {questions, answers}. Both halves fail the paths above, so without these two
+# branches every decision the person made at a prompt vanished from the digest
+# (0 of 4 on a sampled real transcript). The pick is rendered from
+# toolUseResult.answers, never from the tool_result envelope, and the question
+# from the option LABELS only: descriptions and the rest of the tool input stay
+# out, like every other tool input.
+ANSWER_FILTER='.type == "user"
+    and (.toolUseResult | type == "object")
+    and (.toolUseResult.answers | type == "object")'
+
 EXTRACT="
     select(.type == \"user\" or .type == \"assistant\")
     | if .type == \"user\" then
-          select($HUMAN_FILTER)
-        | { role: \"Human\", id: (.uuid // \"-\"), body: .message.content }
+          if ($ANSWER_FILTER) then
+              { role: \"Human\", id: (.uuid // \"-\"),
+                body: ([.toolUseResult.answers | to_entries[]
+                        | \"Answered \\\"\\(.key)\\\": \\(.value)\"] | join(\"\n\")) }
+          else
+              select($HUMAN_FILTER)
+            | { role: \"Human\", id: (.uuid // \"-\"), body: .message.content }
+          end
       else
           { role: \"Assistant\", id: (.message.id // .uuid // \"-\"), body: .message.content }
       end
     | .body |= (if type == \"string\" then .
-                else ([.[]? | select(.type == \"text\") | .text] | join(\"\n\"))
+                else ([.[]? | select(.type == \"text\") | .text]
+                      + [.[]? | select(.type == \"tool_use\" and .name == \"AskUserQuestion\")
+                         | .input.questions[]?
+                         | \"Asked \\\"\\(.question)\\\" (options: \\([.options[]?.label] | join(\" | \")))\"]
+                      | join(\"\n\"))
                 end)
     | select(.body | length > 0)
     | .body |= gsub(\"\\u0001\"; \"\")
@@ -177,8 +229,9 @@ case "$TURNS" in
         # tail reads its whole input, so jq is never killed by an early-exiting
         # consumer the way `| head -1` would kill it on a large transcript.
         human_lines=$(head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" \
-            | jq -r "select($HUMAN_FILTER) | input_line_number" \
+            | jq -R -r "$RECORDS | select($HUMAN_FILTER) | input_line_number" 2>"$JQ_ERR" \
             | tr -d '\r' | tail -n "$n")
+        refuse_on_jq_error
         if [[ -n "$human_lines" ]]; then
             START_LINE="${human_lines%%$'\n'*}"
         fi
@@ -218,14 +271,27 @@ voice. Disagreeing with what the transcript concludes is the point.
 HEADER
 }
 
+# A blockquote, not a heading: "## " is a speaker label in this file.
+emit_malformed_note() {
+    [[ "$MALFORMED" -gt 0 ]] || return 0
+    local plural=s
+    [[ "$MALFORMED" -eq 1 ]] && plural=
+    printf '> %s malformed record%s skipped: this digest is incomplete.\n\n' "$MALFORMED" "$plural"
+}
+
+extract_body() {
+    head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | tail -n "+${1:-1}" \
+        | jq -R -r "$RECORDS | $EXTRACT" 2>"$JQ_ERR" | sed 's/\r$//' | awk "$FORMAT_AWK"
+}
+
 if [[ -n "$START_LINE" ]]; then
-    _body=$(head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | tail -n "+${START_LINE}" \
-        | jq -r "$EXTRACT" | sed 's/\r$//' | awk "$FORMAT_AWK")
-    if [[ -n "$_body" ]]; then emit_header; printf '%s\n' "$_body"; fi
+    _body=$(extract_body "$START_LINE") || true
+    refuse_on_jq_error
+    if [[ -n "$_body" ]]; then emit_header; emit_malformed_note; printf '%s\n' "$_body"; fi
 elif [[ "$WINDOWED" -eq 1 ]]; then
     exit 0
 else
-    _body=$(head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | jq -r "$EXTRACT" \
-        | sed 's/\r$//' | awk "$FORMAT_AWK")
-    if [[ -n "$_body" ]]; then emit_header; printf '%s\n' "$_body"; fi
+    _body=$(extract_body) || true
+    refuse_on_jq_error
+    if [[ -n "$_body" ]]; then emit_header; emit_malformed_note; printf '%s\n' "$_body"; fi
 fi
