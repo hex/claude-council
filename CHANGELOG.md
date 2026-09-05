@@ -4,13 +4,16 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.9.8
 
 ### Fixes
 - The digest now carries AskUserQuestion exchanges: the question with its option labels under the assistant, the pick under the human. Both halves had been falling through, the question inside a tool_use block the extractor skips and the pick inside a tool result the human filter rejects, so every decision the person made at a prompt was missing from what the council saw (0 of 4 on a sampled transcript). A declined question stays a question. A pick does not count as a turn for `--turns last:N`, which keeps anchoring on typed prompts.
 - A damaged record inside the transcript no longer aborts the digest. The script skips it, counts it, and writes the count into the digest itself as `> N malformed record(s) skipped: this digest is incomplete.` so the user and the providers both see it. A file with no readable record at all fails loudly.
 - jq keeps going after a runtime error on any record but the last and exits 0, so a record of an unexpected shape used to leave a digest with a hole in it and an error only on stderr. Every extraction pass now captures jq's stderr and any content there fails the run.
 - `/claude-council:advise` stops on a non-zero exit or an empty digest instead of carrying a 0-byte file into the confirmation step.
+
+### Docs
+- The architecture tree lists `session-transcript.sh` and `transcript-digest.sh`, which arrived in 2026.9.6 without it.
 
 ## 2026.9.7
 
