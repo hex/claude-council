@@ -516,6 +516,8 @@ claude-council/
 │   ├── format-output.sh         # Terminal formatter
 │   ├── check-status.sh          # Provider health check
 │   ├── stop-review-gate.sh      # Opt-in Stop hook reviewer
+│   ├── session-transcript.sh    # Conversation id to transcript path, refusing ambiguity
+│   ├── transcript-digest.sh     # Session JSONL to a markdown digest for /advise
 │   ├── validate-analysis.sh     # Executable mirror of the agent-analysis schema (test suite)
 │   ├── release.sh               # Version bump and tagging
 │   ├── dev/
