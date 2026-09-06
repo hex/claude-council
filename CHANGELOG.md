@@ -4,6 +4,12 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Security
+- `SECURITY.md` points vulnerability reports at GitHub's private advisory form, which is now enabled on the repo.
+- The tests workflow declares `permissions: contents: read`, and its two `actions/checkout` steps are pinned to the v4.2.2 commit. Dependabot watches the actions ecosystem weekly and bumps the pins.
+
 ## 2026.9.8
 
 ### Fixes
