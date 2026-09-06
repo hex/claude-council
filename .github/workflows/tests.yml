@@ -13,10 +13,8 @@ jobs:
     name: bats (${{ matrix.os }}${{ matrix.shard && format(' shard {0}', matrix.shard) || '' }})
     strategy:
       fail-fast: false
-      # Windows spends about a second per test on process creation alone, so
-      # the whole suite there takes ten times its Linux wall time. The lists in
-      # tests/shards/ split it across four runners; tests/shards.bats keeps the
-      # lists complete.
+      # Windows runs as four shards (see TESTING.md, "Windows"); the lists in
+      # tests/shards/ say which files each one runs.
       matrix:
         include:
           - os: ubuntu-latest
@@ -66,12 +64,10 @@ jobs:
         env:
           BATS_TEST_TIMEOUT: 120
           SHARD: ${{ matrix.shard }}
+        # An empty argument makes run_tests.sh fall back to the whole suite.
         run: |
-          if [[ -n "$SHARD" ]]; then
-            bash tests/run_tests.sh "$(sed 's|^|tests/|' "tests/shards/$SHARD.txt" | xargs)"
-          else
-            bash tests/run_tests.sh
-          fi
+          [[ -n "$SHARD" ]] && files=$(sed 's|^|tests/|' "tests/shards/$SHARD.txt")
+          bash tests/run_tests.sh "${files:-}"
 
   shellcheck:
     name: shellcheck
