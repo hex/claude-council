@@ -1,0 +1,8 @@
+check-status-probe.bats
+export.bats
+fake-clis.bats
+image.bats
+keys.bats
+release.bats
+theme.bats
+transcript-digest.bats
