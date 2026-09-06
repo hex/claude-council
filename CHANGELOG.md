@@ -10,6 +10,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - `SECURITY.md` points vulnerability reports at GitHub's private advisory form, which is now enabled on the repo.
 - The tests workflow declares `permissions: contents: read`, and its two `actions/checkout` steps are pinned to the v4.2.2 commit. Dependabot watches the actions ecosystem weekly and bumps the pins.
 
+### CI
+- The Windows bats job runs as four shards listed under `tests/shards/`, about 8 minutes instead of 25. Every test spends about a second in process creation there, so no single file was the cost. `tests/shards.bats` fails when a bats file is missing from the lists.
+
 ## 2026.9.8
 
 ### Fixes

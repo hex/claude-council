@@ -488,7 +488,7 @@ claude-council/
 │   └── plugin.json              # Plugin manifest
 ├── .github/
 │   └── workflows/
-│       └── tests.yml            # bats on ubuntu, macos and windows; shellcheck blocks a merge
+│       └── tests.yml            # bats on ubuntu, macos and 4 windows shards; shellcheck blocks a merge
 ├── agents/
 │   └── council-advisor.md       # Proactive suggestions
 ├── commands/
@@ -566,6 +566,7 @@ claude-council/
 │       └── api-patterns.md      # API integration patterns
 ├── tests/
 │   ├── run_tests.sh             # Test runner
+│   ├── shards/                  # Which bats files each Windows CI shard runs
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── fixtures/
 │   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/ollama binaries on PATH
