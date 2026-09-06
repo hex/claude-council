@@ -4,14 +4,17 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.9.9
 
-### Security
-- `SECURITY.md` points vulnerability reports at GitHub's private advisory form, which is now enabled on the repo.
-- The tests workflow declares `permissions: contents: read`, and its two `actions/checkout` steps are pinned to the v4.2.2 commit. Dependabot watches the actions ecosystem weekly and bumps the pins.
+### Fixes
+- The Windows bats job runs as four shards listed under `tests/shards/`, about 8 minutes instead of 25. Every test there pays about a second in process creation, so no single file was the cost. `tests/shards.bats` fails when a bats file is missing from the lists or listed twice.
 
-### CI
-- The Windows bats job runs as four shards listed under `tests/shards/`, about 8 minutes instead of 25. Every test spends about a second in process creation there, so no single file was the cost. `tests/shards.bats` fails when a bats file is missing from the lists.
+### Other
+- The tests workflow declares `permissions: contents: read`, and both `actions/checkout` steps are pinned to the v4.2.2 commit. Dependabot watches the actions ecosystem weekly and bumps the pins.
+- `SECURITY.md` points vulnerability reports at GitHub's private advisory form, now enabled on the repo.
+
+### Docs
+- TESTING.md carries the shard budget and the shard-list step for a new test file; ARCHITECTURE.md lists dependabot.yml, stale.yml and tests/shards/.
 
 ## 2026.9.8
 
