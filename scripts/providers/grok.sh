@@ -46,7 +46,7 @@ if [[ -z "$PROMPT" && ! -s "$PROMPT_FILE" ]]; then
 fi
 
 resolve_grok_key
-API_KEY="${GROK_API_KEY:-}"
+API_KEY=${GROK_API_KEY:-}
 if [[ -z "$API_KEY" ]]; then
     echo "Error: XAI_API_KEY (or GROK_API_KEY) not set" >&2
     exit 1

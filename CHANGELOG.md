@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Other
+- Every `*_API_KEY` assignment reads its value unquoted. A quoted one reads as a hardcoded secret to the HOL plugin scanner, which the awesome-ai-plugins catalog gates a listing on, and an assignment's right-hand side is never word-split. Test fixtures use `example-` key values for the same reason.
+
 ## 2026.9.9
 
 ### Fixes

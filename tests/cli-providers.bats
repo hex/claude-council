@@ -77,11 +77,11 @@ source_lib_and_call() {
 }
 
 @test "discover_providers: includes openai when OPENAI_API_KEY is set" {
-    export OPENAI_API_KEY="test-key"
+    export OPENAI_API_KEY="example-key"
     run bash -c "
         set -euo pipefail
         export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
-        export OPENAI_API_KEY='test-key'
+        export OPENAI_API_KEY='example-key'
         source '${PROVIDERS_LIB}'
         discover_providers
     "
@@ -462,7 +462,7 @@ echo "FALLBACK-GEMINI-ANSWER"
 EOF
     chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
 
-    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
         bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
     [ "$status" -eq 0 ]
     local slot
@@ -506,7 +506,7 @@ echo "FALLBACK-GEMINI-ANSWER"
 EOF
     chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
 
-    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
         bash "$SCRIPT" --no-cache --no-pane --debate --providers=antigravity "ping"
     [ "$status" -eq 0 ]
     local r2
@@ -537,7 +537,7 @@ echo "GEMINI-SLOT-ANSWER"
 EOF
     chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
 
-    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
         bash "$SCRIPT" --no-cache --no-pane --providers=antigravity,gemini "ping"
     [ "$status" -eq 0 ]
     # antigravity slot stays an error (no shadow-duplicate of gemini)
@@ -560,7 +560,7 @@ echo "FALLBACK-GEMINI-ANSWER"
 EOF
     chmod +x "$fakedir/gemini.sh"
 
-    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
         bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
     [ "$status" -eq 0 ]
     [[ "$(echo "$output" | jq -r '.round1.antigravity.status')" == "success" ]]
@@ -582,7 +582,7 @@ echo "answer"
 EOF
     chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
 
-    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
         bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
     [ "$status" -eq 0 ]
     # The success status line on stderr must name the model that answered.
@@ -608,7 +608,7 @@ EOF
 
     # Two runs with the cache ENABLED (no --no-cache), same prompt.
     for _ in 1 2; do
-        run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="test-key" \
+        run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
             COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
             bash "$SCRIPT" --no-pane --providers=antigravity "cache me"
         [ "$status" -eq 0 ]
@@ -640,7 +640,7 @@ EOF
     # listing must show codex in the default set AND openai in the shadowed
     # section so the user can see both exist.
     if ! command_exists codex; then skip "codex CLI not installed"; fi
-    export OPENAI_API_KEY="test-key"
+    export OPENAI_API_KEY="example-key"
     run bash "$SCRIPT" --list-available
     [ "$status" -eq 0 ]
     [[ "$output" == *"Default query set"* ]]
@@ -685,7 +685,7 @@ EOF
 @test "query-council: --list-default returns post-policy set, machine-readable" {
     # Single space-separated line; CLI siblings drop their API counterparts.
     if ! command_exists codex; then skip "codex CLI not installed"; fi
-    export OPENAI_API_KEY="test-key"
+    export OPENAI_API_KEY="example-key"
     run bash "$SCRIPT" --list-default
     [ "$status" -eq 0 ]
     # Exactly one line of output

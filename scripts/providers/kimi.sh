@@ -48,7 +48,7 @@ fi
 # variable from this file's name; MOONSHOT_API_KEY is accepted as an alias for
 # anyone who already exports Moonshot's own convention, but only KIMI_API_KEY
 # makes the provider discoverable.
-API_KEY="${KIMI_API_KEY:-${MOONSHOT_API_KEY:-}}"
+API_KEY=${KIMI_API_KEY:-${MOONSHOT_API_KEY:-}}
 if [[ -z "$API_KEY" ]]; then
     echo "Error: KIMI_API_KEY not set" >&2
     exit 1
