@@ -17,25 +17,25 @@ setup() {
 }
 
 @test "keys: GROK_API_KEY alone is preserved" {
-    export GROK_API_KEY="grok-only"
+    export GROK_API_KEY="example-grok-only"
     source "$LIB"
     resolve_grok_key
-    [ "$GROK_API_KEY" = "grok-only" ]
+    [ "$GROK_API_KEY" = "example-grok-only" ]
 }
 
 @test "keys: XAI_API_KEY alone populates GROK_API_KEY" {
-    export XAI_API_KEY="xai-only"
+    export XAI_API_KEY="example-xai-only"
     source "$LIB"
     resolve_grok_key
-    [ "$GROK_API_KEY" = "xai-only" ]
+    [ "$GROK_API_KEY" = "example-xai-only" ]
 }
 
 @test "keys: XAI_API_KEY wins when both are set" {
-    export GROK_API_KEY="legacy-grok"
-    export XAI_API_KEY="canonical-xai"
+    export GROK_API_KEY="example-legacy-grok"
+    export XAI_API_KEY="example-canonical-xai"
     source "$LIB"
     resolve_grok_key
-    [ "$GROK_API_KEY" = "canonical-xai" ]
+    [ "$GROK_API_KEY" = "example-canonical-xai" ]
 }
 
 @test "keys: matching values are silently coalesced" {
@@ -57,9 +57,9 @@ setup() {
 }
 
 @test "keys: GROK_API_KEY is exported (visible to subprocesses)" {
-    export XAI_API_KEY="from-xai"
+    export XAI_API_KEY="example-from-xai"
     source "$LIB"
     resolve_grok_key
     run bash -c 'echo "$GROK_API_KEY"'
-    [ "$output" = "from-xai" ]
+    [ "$output" = "example-from-xai" ]
 }

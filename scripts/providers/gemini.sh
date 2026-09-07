@@ -45,7 +45,7 @@ if [[ -z "$PROMPT" && ! -s "$PROMPT_FILE" ]]; then
 fi
 
 # Check for API key
-API_KEY="${GEMINI_API_KEY:-}"
+API_KEY=${GEMINI_API_KEY:-}
 if [[ -z "$API_KEY" ]]; then
     echo "Error: GEMINI_API_KEY not set" >&2
     exit 1

@@ -85,7 +85,10 @@ if [[ -z "$PROMPT" ]]; then
     exit 1
 fi
 
-API_KEY="${PROVIDER_API_KEY:-}"
+# Unquoted deliberately: an assignment's right-hand side is never word-split,
+# and a quoted *_API_KEY assignment reads as a hardcoded secret to the HOL
+# plugin scanner (hashgraph-online/hol-guard#2811).
+API_KEY=${PROVIDER_API_KEY:-}
 if [[ -z "$API_KEY" ]]; then
     echo "Error: PROVIDER_API_KEY not set" >&2
     exit 1

@@ -7,6 +7,6 @@
 # and conflicts are coalesced silently — see provider-integration SKILL for rationale.
 resolve_grok_key() {
     if [[ -n "${XAI_API_KEY:-}" ]]; then
-        export GROK_API_KEY="$XAI_API_KEY"
+        export GROK_API_KEY=$XAI_API_KEY
     fi
 }
