@@ -53,7 +53,7 @@ fi
 # argument-size limits): the key travels via a mode-600 curl config file and
 # the payload via a temp file, populated per endpoint below.
 CURL_CFG=$(curl_secret_config "Authorization: Bearer ${API_KEY}")
-PAYLOAD_FILE=$(mktemp)
+PAYLOAD_FILE=$(mktemp "${TMPDIR:-/tmp}/council-openai-payload.XXXXXX")
 # Every name the trap expands has to exist before the trap does: under set -u an
 # exit before the assignment expands an unset variable, which ends the trap body
 # where it stands and leaves the config holding the bearer token behind.

@@ -63,8 +63,8 @@ ARGS=(-p "$FULL_PROMPT" --output-format stream-json --agent-file "$AGENT_FILE")
 # docs/ARCHITECTURE.md for why the two defaults differ.
 COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
 
-ERR_TMP=$(mktemp)
-OUT_TMP=$(mktemp)
+ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-kimi-cli-err.XXXXXX")
+OUT_TMP=$(mktemp "${TMPDIR:-/tmp}/council-kimi-cli-out.XXXXXX")
 trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
 if run_with_deadline "$COUNCIL_TIMEOUT" kimi "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi

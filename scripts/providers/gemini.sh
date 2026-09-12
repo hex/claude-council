@@ -117,7 +117,7 @@ fi
 # key would otherwise sit in the URL query string): the key travels via a
 # mode-600 curl config file (x-goog-api-key header) and the payload via a file.
 CURL_CFG=$(curl_secret_config "x-goog-api-key: ${API_KEY}")
-PAYLOAD_FILE=$(mktemp)
+PAYLOAD_FILE=$(mktemp "${TMPDIR:-/tmp}/council-gemini-payload.XXXXXX")
 printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
 
 # Make API call

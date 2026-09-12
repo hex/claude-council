@@ -131,7 +131,7 @@ if [[ -n "$DEBUG" ]]; then
     echo "Max tokens: $TOKENS" >&2
 fi
 
-PAYLOAD_FILE=$(mktemp)
+PAYLOAD_FILE=$(mktemp "${TMPDIR:-/tmp}/council-ollama-payload.XXXXXX")
 printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
 
 # No Authorization header: a local daemon has no key. A remote OLLAMA_HOST

@@ -327,7 +327,7 @@ if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
 fi
 
 # Create temp directory for parallel results
-TEMP_DIR=$(mktemp -d)
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/council-query.XXXXXX")
 # Single-quoted so $TEMP_DIR/$COUNCIL_PANE_DIR are expanded (and quoted) at trap
 # time, not trap-definition time: this both avoids word-splitting a TMPDIR that
 # contains spaces and lets the trap close the streaming pane on ANY exit

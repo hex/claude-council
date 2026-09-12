@@ -114,7 +114,7 @@ fi
 # argument-size limits): the key travels via a mode-600 curl config file and
 # the payload via a temp file.
 CURL_CFG=$(curl_secret_config "Authorization: Bearer ${API_KEY}")
-PAYLOAD_FILE=$(mktemp)
+PAYLOAD_FILE=$(mktemp "${TMPDIR:-/tmp}/council-grok-payload.XXXXXX")
 printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
 
 # Make API call

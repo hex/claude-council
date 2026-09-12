@@ -41,7 +41,7 @@ job_write() {
     local file now tmp
     file=$(job_file "$id")
     now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    tmp=$(mktemp)
+    tmp=$(mktemp "${TMPDIR:-/tmp}/council-job.XXXXXX")
     [[ -f "$file" ]] || echo '{}' > "$file"
     jq --arg id "$id" --arg status "$status" --arg now "$now" '
         . + {id: $id, status: $status, updated_at: $now}
@@ -55,7 +55,7 @@ job_set() {
     local id="$1" key="$2" value="$3"
     local file tmp
     file=$(job_file "$id")
-    tmp=$(mktemp)
+    tmp=$(mktemp "${TMPDIR:-/tmp}/council-job.XXXXXX")
     # The value reaches jq on stdin: MSYS rewrites a POSIX-looking path (an
     # outfile "/some/path.md") into a Windows one in argv and in the
     # environment before a native jq sees it, so --arg and env would both
