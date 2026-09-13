@@ -1,6 +1,1 @@
----
-type: regex
-target: last_message
-match: not_contains
----
-claude-council
+../../_shared/negative/no-suggestion.md

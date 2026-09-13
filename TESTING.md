@@ -200,7 +200,11 @@ stuck debugging thread, or a build-vs-buy call should earn a named
 `/claude-council:ask` suggestion alongside a real answer, and two where it must
 not. Every case runs twice, with the plugin and without, so the headline number
 is the delta between the two arms, not a pass rate. The graders read the final
-message only.
+message only. The grader text lives once, in `evals/_shared/`; each case's
+`graders/` holds per-file symlinks to it, because the runner rejects a
+symlinked `graders/` directory but follows links to individual files. Edit the
+shared file, not a case copy. The only per-case grader is the negatives'
+`answers-directly.md`.
 
 ```bash
 env -u ANTHROPIC_API_KEY claude plugin eval . --ablation with-without --judge-model sonnet
