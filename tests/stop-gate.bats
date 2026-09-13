@@ -175,3 +175,14 @@ CURL
     [ "$status" -eq 0 ]
     [[ "$output" != *'"decision"'* ]]
 }
+
+@test "stop-gate: cursor-cli is on the allowlist and reviews the diff" {
+    jq -n '{enabled: true, provider: "cursor-cli", max_iterations: 1}' \
+        > "$REPO/.claude/council-stop-gate.json"
+    dirty_diff
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run bash "$GATE" <<< "$(stop_event)"
+    [ "$status" -eq 0 ]
+    [ -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r .bin)" = "cursor-agent" ]
+}
