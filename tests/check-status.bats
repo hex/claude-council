@@ -264,6 +264,8 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Cursor CLI"* ]]
+    # The real CLI prints "Not logged in" and exits 0, so the probe must
+    # classify the state from stdout, as it does for grok.
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]

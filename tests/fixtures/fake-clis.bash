@@ -124,6 +124,16 @@ if [[ " \$* " == *" --output-format json "* ]]; then
 fi
 EOF
     fi
+    if [[ "$bin" == "cursor-agent" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<EOF
+# The real Cursor CLI answers a logged-out "cursor-agent status" with
+# "Not logged in" on stdout and exit 0, never a non-zero exit
+if [[ "\${1:-}" == "status" && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then
+    echo "Not logged in"
+    exit 0
+fi
+EOF
+    fi
     if [[ "$bin" == "grok" ]]; then
         cat >> "$FAKE_BIN_DIR/$bin" <<EOF
 # The real grok CLI answers a logged-out "grok models" with "You are not

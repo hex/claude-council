@@ -211,15 +211,16 @@ check_cli_provider() {
     fi
 
     # A probe can signal a logged-out state two ways: a non-zero exit (codex
-    # login status) or a "not authenticated" message with exit 0 (grok models),
-    # so both the exit code and the output classify auth.
+    # login status) or a message with exit 0 ("You are not authenticated." from
+    # grok models, "Not logged in" from cursor-agent status), so both the exit
+    # code and the output classify auth.
     local probe_out
     if [[ $# -gt 0 ]]; then
         if ! probe_out=$("$binary" "$@" 2>/dev/null); then
             echo "unauthed"
             return
         fi
-        if echo "$probe_out" | grep -qi "not authenticated"; then
+        if echo "$probe_out" | grep -qiE "not authenticated|not logged in"; then
             echo "unauthed"
             return
         fi
