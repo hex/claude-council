@@ -887,8 +887,20 @@ teardown() {
     [ "$(echo "$call" | jq -r '.args | index("--mode") as $i | .[$i+1]')" = "ask" ]
     [ "$(echo "$call" | jq -r '.args | index("--trust") != null')" = "true" ]
     [ "$(echo "$call" | jq -r '.args | index("--force") == null and index("--yolo") == null')" = "true" ]
-    # The council's system prompt rides inside the -p value
-    [[ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"test prompt"* ]]
+    # The prompt, system prompt included, arrives on stdin: -p is bare and
+    # the next argument is a flag, so nothing of the prompt rides argv.
+    [ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" = "--output-format" ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"test prompt"* ]]
+}
+
+@test "cursor-cli.sh: a prompt past the argument limit still reaches the CLI whole" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    big_prompt 300000 > "$pf"
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [ "$(wc -c < "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" -gt 300000 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -c)" -lt 1000 ]
 }
 
 @test "cursor-cli.sh: passes --model only when CURSOR_CLI_MODEL is set" {
@@ -931,5 +943,5 @@ teardown() {
     printf 'prompt from file' > "$pf"
     run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" --prompt-file "$pf"
     [ "$status" -eq 0 ]
-    [[ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"prompt from file"* ]]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"prompt from file"* ]]
 }

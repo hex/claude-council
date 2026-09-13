@@ -105,6 +105,11 @@ EOF
 # .result carries the whole answer. A failure emits no JSON at all: the
 # message goes to stderr and the exit is non-zero.
 if [[ " \$* " == *" --output-format json "* ]]; then
+    # A bare -p reads the prompt from stdin; keep a copy so a test can assert
+    # what reached the CLI and that it never rode argv.
+    if [[ " \$* " == *" -p --"* ]]; then
+        cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
+    fi
     case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
         valid)
             echo '{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"$marker: deterministic answer","session_id":"fake"}'

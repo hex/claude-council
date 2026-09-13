@@ -42,7 +42,11 @@ ${PROMPT}"
 # --file contents or another provider's answer. Same intent as codex's
 # -s read-only and kimi-cli's no-tools agent file. --force is never passed.
 # --trust: headless runs otherwise stop to ask whether the workspace is trusted.
-ARGS=(-p "$FULL_PROMPT" --output-format json --mode ask --trust)
+# A bare -p reads the prompt from stdin, which keeps the whole prompt off argv:
+# a big --file would otherwise be handed to the orchestrator's --prompt-file
+# only to land back on the command line, past the OS limit on Linux at about
+# 128 KiB per argument. Verified against the real CLI with a 300 KB prompt.
+ARGS=(-p --output-format json --mode ask --trust)
 # --model only on an explicit override, so an unset CURSOR_CLI_MODEL defers to
 # the model picked in the CLI (mirrors codex.sh and kimi-cli.sh). A free plan
 # rejects every named model, and the CLI's own message says so.
@@ -59,7 +63,7 @@ ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-cursor-cli-err.XXXXXX")
 OUT_TMP=$(mktemp "${TMPDIR:-/tmp}/council-cursor-cli-out.XXXXXX")
 trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
-if run_with_deadline "$COUNCIL_TIMEOUT" cursor-agent "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
+if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" cursor-agent "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
 if [[ $rc -eq 0 ]]; then
     # Line by line rather than slurped, so an upgrade notice beside the
     # envelope cannot abort the parse and discard a complete answer.
