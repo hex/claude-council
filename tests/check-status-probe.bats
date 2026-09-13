@@ -67,7 +67,7 @@ setup() {
 }
 
 # A roster turns the one router script into several seats. /status has to show
-# each of them, or a user reading 11/11 cannot tell that two of their three
+# each of them, or a user reading 12/12 cannot tell that two of their three
 # configured models are absent from the council.
 @test "check-status: a router roster gets a row per seat, each naming its model" {
     shadow_curl
@@ -80,7 +80,7 @@ setup() {
     [[ "$output" == *"qwen/qwen3-max"* ]]
     # The single unnumbered row must be gone, not joined by three more.
     [[ "$output" != *"anthropic/claude-sonnet-5"* ]]
-    [[ "$output" == *"13/13 providers available"* ]]
+    [[ "$output" == *"14/14 providers available"* ]]
 }
 
 # The key is what the probe tests, and every seat shares it, so a roster must not
