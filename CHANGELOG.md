@@ -4,10 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.9.10
 
 ### Added
-- **Cursor CLI as a council member.** `cursor-cli` seats Cursor's `cursor-agent` when it is on `PATH`, on the Cursor login, no key. It runs headless in `--mode ask`, the read-only mode, and is never passed `--force`; the answer is read from the `--output-format json` envelope. The model is whatever the CLI has picked unless `CURSOR_CLI_MODEL` is set; a free plan runs `auto` only and rejects a named model with the CLI's own message. Discovery keys on `cursor-agent`, not the `agent` name the installer also links, because the grok CLI ships an `agent` too. No API sibling, so no shadow and no fallback. `/status` probes it with `cursor-agent status`, and the stop-review gate accepts it. Closes #33.
+- **Cursor CLI as a council member.** `cursor-cli` seats Cursor's `cursor-agent` when it is on `PATH`, on the Cursor login, no key. It runs headless in `--mode ask`, the read-only mode, and is never passed `--force`; the prompt goes in on stdin so a big `--file` stays off argv, and the answer is read from the `--output-format json` envelope. The model is whatever the CLI has picked unless `CURSOR_CLI_MODEL` is set; a free plan runs `auto` only and rejects a named model with the CLI's own message. Discovery keys on `cursor-agent`, not the `agent` name the installer also links, because the grok CLI ships an `agent` too. No API sibling, so no shadow and no fallback. `/status` probes it with `cursor-agent status` and reads its "Not logged in"; the stop-review gate accepts it. Closes #33.
+- An eval suite under `evals/` for the unprompted `/claude-council:ask` suggestion, run with `claude plugin eval`: five decision or stuck-debugging prompts must earn the named command beside a real answer, two trivial asks must not. Grader text lives once under `evals/_shared/`, each case holds per-file symlinks to it.
 
 ### Fixed
 - Every temp file the scripts create is rooted at `${TMPDIR:-/tmp}`. A bare `mktemp` lands in `/var/folders` on macOS whatever `TMPDIR` says, and a sandboxed host that only allows writes under its own tree (the `claude plugin eval` sandbox is one) killed the query before any provider was called. A bats guard fails on the next bare call.

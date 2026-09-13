@@ -118,14 +118,14 @@ if [[ " \$* " == *" --output-format json "* ]]; then
             echo '{"type":"result","subtype":"success","is_error":false,"result":"","session_id":"fake"}'
             exit 0 ;;
         bad-model)
-            echo "Cannot use this model: \${COUNCIL_FAKE_MODEL:-x}. Available models: auto" >&2
+            # Names the model it was actually handed, so a provider that drops
+            # --model on the floor cannot pass this case.
+            MODEL=""; PREV=""
+            for a in "\$@"; do [[ "\$PREV" == "--model" ]] && MODEL="\$a"; PREV="\$a"; done
+            echo "Cannot use this model: \${MODEL:-none}. Available models: auto" >&2
             exit 1 ;;
     esac
 fi
-EOF
-    fi
-    if [[ "$bin" == "cursor-agent" ]]; then
-        cat >> "$FAKE_BIN_DIR/$bin" <<EOF
 # The real Cursor CLI answers a logged-out "cursor-agent status" with
 # "Not logged in" on stdout and exit 0, never a non-zero exit
 if [[ "\${1:-}" == "status" && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then

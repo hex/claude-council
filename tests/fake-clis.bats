@@ -917,7 +917,7 @@ teardown() {
 
 @test "cursor-cli.sh: a rejected model surfaces the CLI's own message" {
     # A free plan rejects every named model; the user must see which one.
-    export COUNCIL_FAKE_BEHAVIOR=bad-model COUNCIL_FAKE_MODEL=composer-2.5 CURSOR_CLI_MODEL=composer-2.5
+    export COUNCIL_FAKE_BEHAVIOR=bad-model CURSOR_CLI_MODEL=composer-2.5
     run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
     [ "$status" -eq 1 ]
     [[ "$output" == *"Cannot use this model: composer-2.5"* ]]

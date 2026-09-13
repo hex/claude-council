@@ -247,17 +247,10 @@ toml_value() {
     ' "$file" 2>/dev/null || true
 }
 
-# Reads one top-level key from a JSON file, the counterpart to toml_value, and
-# swallows failure the same way: malformed JSON reports nothing rather than
-# failing the caller under set -e.
+# Reads one value from a JSON file at a jq path such as .model or
+# .model.modelId, the counterpart to toml_value, and swallows failure the same
+# way: malformed JSON reports nothing rather than failing the caller under set -e.
 json_value() {
-    local file="$1" key="$2"
-    [[ -f "$file" ]] || return 0
-    jq -r --arg k "$key" '.[$k] // empty' "$file" 2>/dev/null || true
-}
-
-# Same, for a value below the top level: $2 is a jq path such as .model.modelId.
-json_path_value() {
     local file="$1" path="$2"
     [[ -f "$file" ]] || return 0
     jq -r "$path // empty" "$file" 2>/dev/null || true
@@ -281,11 +274,11 @@ cli_config_model() {
         kimi-cli)   toml_value "$HOME/.kimi-code/config.toml" "" default_model ;;
         # The CLI keeps the picked model nested under .model; a free plan runs
         # "auto" whatever this says, and rejects an explicit --model.
-        cursor-cli) json_path_value "$HOME/.cursor/cli-config.json" ".model.modelId" ;;
+        cursor-cli) json_value "$HOME/.cursor/cli-config.json" .model.modelId ;;
         # agy records the app's current selection as a display label, spaces
         # and all ("Gemini 3.6 Flash (High)"). The key is absent until a model
         # has actually been selected, so a fresh install still reads as unset.
-        antigravity) json_value "$HOME/.gemini/antigravity-cli/settings.json" model ;;
+        antigravity) json_value "$HOME/.gemini/antigravity-cli/settings.json" .model ;;
     esac
 }
 
