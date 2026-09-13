@@ -845,3 +845,54 @@ EOF
     [[ "$output" != *"perplexity"* ]]
     [[ "$output" != *"gemini"* ]]
 }
+
+# ============================================================================
+# cursor-cli — Cursor's agent CLI, subscription auth, no API sibling
+# ============================================================================
+
+@test "discover_providers: includes cursor-cli when the cursor-agent binary is on PATH" {
+    if ! command_exists cursor-agent; then skip "Cursor CLI not installed"; fi
+    run source_lib_and_call 'discover_providers'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"cursor-cli"* ]]
+}
+
+@test "discover_providers: cursor-cli is gated on cursor-agent, never on the bare agent name" {
+    # Cursor installs both `cursor-agent` and `agent`; the grok CLI ships an
+    # `agent` too. Only the unambiguous name may seat the provider.
+    local bin="$BATS_TEST_TMPDIR/agentbin"
+    mkdir -p "$bin"
+    printf '#!/bin/bash\necho grok 1.0.0\n' > "$bin/agent"; chmod +x "$bin/agent"
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export PATH='$bin:$(path_without_clis)'
+        source '${PROVIDERS_LIB}'
+        discover_providers
+    "
+    [[ "$output" != *"cursor-cli"* ]]
+}
+
+@test "cursor-cli has no API sibling to shadow or fall back to" {
+    run source_lib_and_call 'api_sibling cursor-cli'
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "get_model: cursor-cli reads the model selected in the CLI's own config" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.cursor"
+    printf '%s\n' '{"version":1,"model":{"modelId":"gpt-5.2","displayName":"GPT-5.2 Medium"}}' \
+        > "$HOME_FIXTURE/.cursor/cli-config.json"
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CURSOR_CLI_MODEL; get_model cursor-cli"
+    [ "$status" -eq 0 ]
+    [ "$output" = "gpt-5.2" ]
+}
+
+@test "get_model: cursor-cli falls back to the label when unconfigured, and honours the override" {
+    empty_home
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CURSOR_CLI_MODEL; get_model cursor-cli"
+    [ "$output" = "default" ]
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; export CURSOR_CLI_MODEL=composer-2.5; get_model cursor-cli"
+    [ "$output" = "composer-2.5" ]
+}

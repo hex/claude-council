@@ -211,15 +211,16 @@ check_cli_provider() {
     fi
 
     # A probe can signal a logged-out state two ways: a non-zero exit (codex
-    # login status) or a "not authenticated" message with exit 0 (grok models),
-    # so both the exit code and the output classify auth.
+    # login status) or a message with exit 0 ("You are not authenticated." from
+    # grok models, "Not logged in" from cursor-agent status), so both the exit
+    # code and the output classify auth.
     local probe_out
     if [[ $# -gt 0 ]]; then
         if ! probe_out=$("$binary" "$@" 2>/dev/null); then
             echo "unauthed"
             return
         fi
-        if echo "$probe_out" | grep -qi "not authenticated"; then
+        if echo "$probe_out" | grep -qiE "not authenticated|not logged in"; then
             echo "unauthed"
             return
         fi
@@ -248,6 +249,8 @@ remediation_for() {
         grok-cli:no_binary)   echo "install the Grok CLI (grok)" ;;
         kimi-cli:no_binary)   echo "install the Kimi Code CLI (kimi)" ;;
         kimi-cli:unauthed)    echo "kimi login" ;;
+        cursor-cli:no_binary) echo "install the Cursor CLI (cursor-agent)" ;;
+        cursor-cli:unauthed)  echo "cursor-agent login" ;;
         ollama:no_binary)     echo "install Ollama (ollama.com)" ;;
         ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;
@@ -285,6 +288,7 @@ codex_status=$(check_cli_provider "codex" "codex" login status)
 antigravity_status=$(check_cli_provider "antigravity" "agy")
 grokcli_status=$(check_cli_provider "grok-cli" "grok" models)
 kimicli_status=$(check_cli_provider "kimi-cli" "kimi")
+cursorcli_status=$(check_cli_provider "cursor-cli" "cursor-agent" status)
 ollama_status=$(check_cli_provider "ollama" "ollama" list)
 
 # Format output
@@ -410,6 +414,7 @@ else
     [[ "$openrouter_status" == ok:* ]] && available_count=$((available_count + 1))
 fi
 format_status "Kimi CLI" "kimi-cli" "$kimicli_status"
+format_status "Cursor CLI" "cursor-cli" "$cursorcli_status"
 format_status "Ollama" "ollama" "$ollama_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
 format_status "Antigravity" "antigravity" "$antigravity_status"
@@ -426,6 +431,7 @@ echo ""
 [[ "$perplexity_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$kimi_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$kimicli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$cursorcli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$ollama_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))

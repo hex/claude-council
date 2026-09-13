@@ -109,7 +109,7 @@ assert_not_blank() {
 path_without_clis() {
     local clean=$PATH
     local cli dir
-    for cli in codex gemini agy grok kimi ollama; do
+    for cli in codex gemini agy grok kimi cursor-agent ollama; do
         dir=$(dirname "$(command -v "$cli" 2>/dev/null)" 2>/dev/null || true)
         [[ -n "$dir" ]] || continue
         clean=$(echo "$clean" | tr ':' '\n' | grep -vF -- "$dir" | tr '\n' ':')

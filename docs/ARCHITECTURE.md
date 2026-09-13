@@ -36,11 +36,11 @@
    +--------+ +-----+ +------+ +-----+ +------+ +-----------+ +---------+
    (API)      (API)   (API)    (API)   (API)    (CLI)         (CLI)
 
-         +------------+ +----------+ +----------+ +----------+
-         | openrouter | | grok-cli | | kimi-cli | |  ollama  |
-         |    .sh     | |   .sh    | |   .sh    | |   .sh    |
-         +------------+ +----------+ +----------+ +----------+
-         (API, router)  (CLI)        (CLI)        (local)
+         +------------+ +----------+ +----------+ +------------+ +----------+
+         | openrouter | | grok-cli | | kimi-cli | | cursor-cli | |  ollama  |
+         |    .sh     | |   .sh    | |   .sh    | |    .sh     | |   .sh    |
+         +------------+ +----------+ +----------+ +------------+ +----------+
+         (API, router)  (CLI)        (CLI)        (CLI)          (local)
         |               |               |               |
         |    +----------+----------+----------+        |
         +--->|      lib/cache.sh   |<---------+--------+
@@ -155,20 +155,22 @@ Two flavors share the interface:
   to its model, which is the only way a caller outside the library can label a
   numbered seat — the name alone does not say which model it carries. Without that the three seats would post one model behind three
   headers each claiming a different one.
-- **CLI providers** (`codex`, `antigravity`, `grok-cli`, `kimi-cli`), gated on the
+- **CLI providers** (`codex`, `antigravity`, `grok-cli`, `kimi-cli`, `cursor-cli`), gated on the
   binary being on `PATH`, use the user's existing CLI subscription auth, no per-call
   cost. When both an API and CLI sibling exist (codex+openai, antigravity+gemini,
   grok-cli+grok, kimi-cli+kimi), the orchestrator prefers the CLI by default; explicit
   `--providers` wins over the policy. If a CLI provider fails at query time, the
   council retries through its API sibling (when that key is set) and marks the
-  slot as a fallback.
+  slot as a fallback. `cursor-cli` has no sibling: the council has no Cursor API
+  seat, so its failure is final. It is gated on `cursor-agent`, not the `agent`
+  name the installer links beside it, because the grok CLI ships an `agent` too.
 - **`ollama`**, also gated on the binary being on `PATH`, but local and keyless:
   it shadows nothing, has no API sibling, and costs nothing per call.
 
 Environment-based configuration:
 - `{PROVIDER}_API_KEY` - Required authentication for API providers
 - `{PROVIDER}_MODEL` - Model override (also applies to CLI providers via
-  `CODEX_MODEL` / `ANTIGRAVITY_MODEL` / `GROK_CLI_MODEL` / `KIMI_CLI_MODEL`)
+  `CODEX_MODEL` / `ANTIGRAVITY_MODEL` / `GROK_CLI_MODEL` / `KIMI_CLI_MODEL` / `CURSOR_CLI_MODEL`)
 - `COUNCIL_MAX_TOKENS` - Response length limit (API providers only; `ollama`
   raises its own base to 4096)
 - `COUNCIL_DEBUG` - Enable verbose logging
@@ -188,7 +190,8 @@ Per-provider disposition when an image is attached:
 - **codex, antigravity, grok-cli, kimi-cli** (CLI, cannot accept an image) route
   to their vision API sibling — codex→openai, antigravity→gemini, grok-cli→grok,
   kimi-cli→kimi — with the image. The route is taken only when the sibling is
-  itself vision-capable and its key is set.
+  itself vision-capable and its key is set. **cursor-cli** has no sibling and
+  answers text-only.
 - **openrouter** accepts an image on its curated default, which is
   vision-capable. An `OPENROUTER_MODEL` override names one of hundreds of routed
   models whose modalities are not knowable from here, so it is treated as
@@ -535,6 +538,7 @@ claude-council/
 │   │   ├── antigravity.sh       # CLI (subscription auth, shadows gemini)
 │   │   ├── grok-cli.sh          # CLI (subscription auth, shadows grok)
 │   │   ├── kimi-cli.sh          # CLI (subscription auth, shadows kimi)
+│   │   ├── cursor-cli.sh        # CLI (subscription auth, no API sibling)
 │   │   └── ollama.sh            # Local (no key, no sibling)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
@@ -578,7 +582,7 @@ claude-council/
 │   ├── cache.bats
 │   ├── check-status.bats
 │   ├── check-status-probe.bats  # The probes themselves: endpoints, --max-time, keys off the argv
-│   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli, kimi-cli, ollama)
+│   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli, kimi-cli, cursor-cli, ollama)
 │   ├── deadline.bats            # run_with_deadline: stdin passthrough, own status, 143 at the deadline
 │   ├── display.bats
 │   ├── export.bats
@@ -625,6 +629,7 @@ claude-council/
 | `ANTIGRAVITY_MODEL` | (unset) | Model passed to `agy --model`, only when set (else the model selected in the Antigravity app) |
 | `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
 | `KIMI_CLI_MODEL` | (unset) | Model passed to `kimi -m`, only when set (else the kimi CLI's own configured model) |
+| `CURSOR_CLI_MODEL` | (unset) | Model passed to `cursor-agent --model`, only when set (else the model picked in the CLI). The CLI writes the passed model into its own config as the picked model, even when the plan rejects it |
 | `OPENROUTER_MODEL` | `anthropic/claude-sonnet-5` | Any id from openrouter.ai/models (single seat) |
 | `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
 | `OPENROUTER_<N>_MODEL` | (unset) | Overrides roster seat N's entry, as `<PROVIDER>_MODEL` does for any provider; the exit-3 degrade path sets it so a roster entry never resends the model that just failed |

@@ -377,7 +377,7 @@ Attach one image (e.g. a UI screenshot) so vision-capable providers can critique
 
 - Single image per query, raw size up to 10 MB, extensions: png / jpg / jpeg / webp / gif.
 - `gemini`, `openai`, `grok`, `perplexity`, `kimi` and `openrouter` (on its default model) receive the image alongside the prompt.
-- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok`, `kimi-cli` via `kimi` (the slot is marked as a fallback). If the sibling is unusable (no API key), not vision-capable, or already answering in its own slot, the CLI provider answers text-only instead and its answer is prefixed with `(answered without the image)`. Selecting `ollama` directly is text-only.
+- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok`, `kimi-cli` via `kimi` (the slot is marked as a fallback). If the sibling is unusable (no API key), not vision-capable, or already answering in its own slot, the CLI provider answers text-only instead and its answer is prefixed with `(answered without the image)`. Selecting `ollama` or `cursor-cli` directly is text-only.
 
 Privacy: the image is sent to the providers that can see it, but its bytes are **not** written to cache entries or the saved `council-*.md` transcripts — only a hash of the image keys the cache.
 
@@ -520,12 +520,13 @@ as a local provider.
 
 ### CLI Providers (subscription auth, no API key)
 
-If the `codex`, `agy`, `grok`, or `kimi` CLIs are installed and on `PATH`, they're discovered automatically and **preferred over their API siblings** by default:
+If the `codex`, `agy`, `grok`, `kimi`, or `cursor-agent` CLIs are installed and on `PATH`, they're discovered automatically, and the four with an API sibling are **preferred over it** by default:
 
 - `codex` (OpenAI Codex CLI) shadows the `openai` API provider — uses your `~/.codex/config.toml` model unless `CODEX_MODEL` is set
 - `antigravity` (Antigravity CLI, `agy`) shadows the `gemini` API provider — uses the model selected in the Antigravity app unless `ANTIGRAVITY_MODEL` is set
 - `grok-cli` (xAI Grok CLI, `grok`) shadows the `grok` API provider — uses the grok CLI's own default model unless `GROK_CLI_MODEL` is set
 - `kimi-cli` (Kimi Code CLI, `kimi`) shadows the `kimi` API provider, using the kimi CLI's own configured model unless `KIMI_CLI_MODEL` is set
+- `cursor-cli` (Cursor CLI, `cursor-agent`) has no API sibling; it uses the model picked in the CLI unless `CURSOR_CLI_MODEL` is set. A free Cursor plan runs `auto` only and rejects any named model. Discovery keys on `cursor-agent`, not the `agent` name the installer also links, because the grok CLI ships an `agent` too
 
 `ollama` is also discovered from `PATH`, but it is local and keyless rather than subscription-backed, so it shadows nothing and has no API sibling.
 
@@ -543,6 +544,7 @@ export CODEX_MODEL="gpt-5-codex"                # default: the codex CLI's own c
 export ANTIGRAVITY_MODEL="Gemini 3.1 Pro (High)"  # default: the model selected in the Antigravity app
 export GROK_CLI_MODEL="grok-4.3"                # default: the grok CLI's own default model
 export KIMI_CLI_MODEL="kimi-k3"                 # default: the kimi CLI's own configured model
+export CURSOR_CLI_MODEL="composer-2.5"          # default: the model picked in the Cursor CLI (paid plans only)
 ```
 
 The Antigravity CLI cannot take its prompt on stdin — `--print` with no value
@@ -571,7 +573,8 @@ alike.
 The Kimi CLI runs every prompt under an agent definition that grants it no tools
 (`prompts/kimi-cli-agent.md`). Its print mode auto-approves tool calls, so the
 council denies them outright rather than letting a prompt drive file writes or
-shell commands.
+shell commands. The Cursor CLI runs in `--mode ask`, its read-only mode, and is
+never passed `--force`; its print mode otherwise has every tool, shell included.
 
 ### Verbosity
 
@@ -610,7 +613,7 @@ continuation already triggered by a stop hook, caps blocks per session at
 
 Privacy: the review sends your full uncommitted `git diff` to the configured
 provider, named by its provider id. With `ollama` it never leaves the machine.
-With a CLI provider (`codex`, `antigravity`, `grok-cli`, `kimi-cli`) it stays
+With a CLI provider (`codex`, `antigravity`, `grok-cli`, `kimi-cli`, `cursor-cli`) it stays
 within that tool's own subscription auth; with an API provider (`gemini`,
 `openai`, `grok`, `perplexity`, `kimi`) the diff is transmitted to that
 third-party API — `kimi` sends it to Moonshot. `openrouter` is the one seat that

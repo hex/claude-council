@@ -1,4 +1,4 @@
-# ABOUTME: Installs fake codex/agy/grok/kimi/ollama CLI executables onto PATH for hermetic tests
+# ABOUTME: Installs fake codex/agy/grok/kimi/cursor-agent/ollama CLI executables onto PATH for hermetic tests
 # ABOUTME: Behavior switches via COUNCIL_FAKE_BEHAVIOR; calls recorded as JSONL in COUNCIL_FAKE_STATE_DIR
 
 # Behaviors (COUNCIL_FAKE_BEHAVIOR):
@@ -31,7 +31,7 @@ install_fake_clis() {
     export FAKE_BIN_DIR COUNCIL_FAKE_STATE_DIR
 
     local bin
-    for bin in codex agy grok kimi ollama; do
+    for bin in codex agy grok kimi cursor-agent ollama; do
         write_fake_cli "$bin"
     done
     PATH="$FAKE_BIN_DIR:$PATH"
@@ -96,6 +96,41 @@ if [[ " \$* " == *" --output-format stream-json "* ]]; then
         empty)
             exit 0 ;;
     esac
+fi
+EOF
+    fi
+    if [[ "$bin" == "cursor-agent" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<EOF
+# The real Cursor CLI answers --output-format json with one object whose
+# .result carries the whole answer. A failure emits no JSON at all: the
+# message goes to stderr and the exit is non-zero.
+if [[ " \$* " == *" --output-format json "* ]]; then
+    # A bare -p reads the prompt from stdin; keep a copy so a test can assert
+    # what reached the CLI and that it never rode argv.
+    if [[ " \$* " == *" -p --"* ]]; then
+        cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
+    fi
+    case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
+        valid)
+            echo '{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"$marker: deterministic answer","session_id":"fake"}'
+            exit 0 ;;
+        empty)
+            echo '{"type":"result","subtype":"success","is_error":false,"result":"","session_id":"fake"}'
+            exit 0 ;;
+        bad-model)
+            echo "Cannot use this model: \${COUNCIL_FAKE_MODEL:-x}. Available models: auto" >&2
+            exit 1 ;;
+    esac
+fi
+EOF
+    fi
+    if [[ "$bin" == "cursor-agent" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<EOF
+# The real Cursor CLI answers a logged-out "cursor-agent status" with
+# "Not logged in" on stdout and exit 0, never a non-zero exit
+if [[ "\${1:-}" == "status" && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then
+    echo "Not logged in"
+    exit 0
 fi
 EOF
     fi

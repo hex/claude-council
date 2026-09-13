@@ -50,8 +50,8 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     # antigravity and kimi-cli have no offline auth probe, so both still count;
-    # codex and grok-cli both probe auth and report unauthed under auth-failure
-    [[ "$output" == *"2/11 providers available"* ]]
+    # codex, grok-cli and cursor-cli probe auth and report unauthed under auth-failure
+    [[ "$output" == *"2/12 providers available"* ]]
 }
 
 @test "check-status: missing API key shows exact export remediation" {
@@ -112,8 +112,8 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connected"* ]]
-    # 6 API providers + codex + antigravity + grok-cli + kimi-cli + ollama, all healthy
-    [[ "$output" == *"11/11 providers available"* ]]
+    # 6 API providers + codex + antigravity + grok-cli + kimi-cli + cursor-cli + ollama, all healthy
+    [[ "$output" == *"12/12 providers available"* ]]
 }
 
 @test "check-status: the footer total equals the number of provider rows printed" {
@@ -144,8 +144,8 @@ setup() {
     # Every API provider must classify 401, not just whichever one happens to be
     # first: a substring match alone cannot tell six rows from one.
     [ "$(auth_failures "$output")" -eq 6 ]
-    # Only the five local providers remain (codex, antigravity, grok-cli, kimi-cli, ollama)
-    [[ "$output" == *"5/11 providers available"* ]]
+    # Only the six local providers remain (codex, antigravity, grok-cli, kimi-cli, cursor-cli, ollama)
+    [[ "$output" == *"6/12 providers available"* ]]
 }
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
@@ -168,7 +168,7 @@ setup() {
     [[ "$output" == *"Error (HTTP 500)"* ]]
     # A server-side fault is not a credentials problem
     [ "$(auth_failures "$output")" -eq 0 ]
-    [[ "$output" == *"5/11 providers available"* ]]
+    [[ "$output" == *"6/12 providers available"* ]]
 }
 
 @test "check-status: curl failure (000) reports a connection timeout" {
@@ -177,7 +177,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]
-    [[ "$output" == *"5/11 providers available"* ]]
+    [[ "$output" == *"6/12 providers available"* ]]
 }
 
 # Gemini and xAI answer a rejected key with 400 rather than a 401, so the status
@@ -257,4 +257,31 @@ setup() {
     [ "$(printf '%s\n' "$output" | grep -c 'Error (HTTP 400)' || true)" -eq 6 ]
     [ "$(auth_failures "$output")" -eq 0 ]
     [[ "$output" != *"key rejected"* ]]
+}
+
+@test "check-status: cursor-cli row, and a logged-out cursor-agent is its own state" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Cursor CLI"* ]]
+    # The real CLI prints "Not logged in" and exits 0, so the probe must
+    # classify the state from stdout, as it does for grok.
+    export COUNCIL_FAKE_BEHAVIOR=auth-failure
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"cursor-agent login"* ]]
+}
+
+@test "check-status: a missing cursor-agent names the binary to install" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    rm "$FAKE_BIN_DIR/cursor-agent"
+    # Drop only the directory a real cursor-agent lives in, so jq and bash
+    # stay reachable; on a machine without one the PATH is left alone.
+    local real_dir clean
+    real_dir=$(dirname "$(command -v cursor-agent 2>/dev/null)" 2>/dev/null || true)
+    clean=$PATH
+    [[ -n "$real_dir" ]] && clean=$(echo "$PATH" | tr ':' '\n' | grep -vxF -- "$real_dir" | paste -sd: -)
+    run bash -c "export PATH='$clean'; bash '$SCRIPT'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"install the Cursor CLI (cursor-agent)"* ]]
 }

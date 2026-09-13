@@ -859,3 +859,89 @@ teardown() {
     # The bad value must not pass unremarked
     [[ "$stderr" == *"COUNCIL_ARGV_LIMIT"* ]]
 }
+
+# ============================================================================
+# cursor-cli.sh against the fake binary
+# ============================================================================
+
+@test "fixture: fake cursor-agent shadows any real cursor-agent on PATH" {
+    run command -v cursor-agent
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$FAKE_BIN_DIR/cursor-agent" ]]
+}
+
+@test "cursor-cli.sh: returns the .result of the JSON envelope" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-CURSOR-AGENT-RESPONSE: deterministic answer" ]
+}
+
+@test "cursor-cli.sh: runs headless in ask mode with the workspace trusted, and never --force" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    [ "$(echo "$call" | jq -r '.args | index("-p") != null')" = "true" ]
+    [ "$(echo "$call" | jq -r '.args | index("--mode") as $i | .[$i+1]')" = "ask" ]
+    [ "$(echo "$call" | jq -r '.args | index("--trust") != null')" = "true" ]
+    [ "$(echo "$call" | jq -r '.args | index("--force") == null and index("--yolo") == null')" = "true" ]
+    # The prompt, system prompt included, arrives on stdin: -p is bare and
+    # the next argument is a flag, so nothing of the prompt rides argv.
+    [ "$(echo "$call" | jq -r '.args | index("-p") as $i | .[$i+1]')" = "--output-format" ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"test prompt"* ]]
+}
+
+@test "cursor-cli.sh: a prompt past the argument limit still reaches the CLI whole" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    big_prompt 300000 > "$pf"
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [ "$(wc -c < "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" -gt 300000 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -c)" -lt 1000 ]
+}
+
+@test "cursor-cli.sh: passes --model only when CURSOR_CLI_MODEL is set" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset CURSOR_CLI_MODEL
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("--model") == null')" = "true" ]
+    export CURSOR_CLI_MODEL=composer-2.5
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("--model") as $i | .[$i+1]')" = "composer-2.5" ]
+}
+
+@test "cursor-cli.sh: a rejected model surfaces the CLI's own message" {
+    # A free plan rejects every named model; the user must see which one.
+    export COUNCIL_FAKE_BEHAVIOR=bad-model COUNCIL_FAKE_MODEL=composer-2.5 CURSOR_CLI_MODEL=composer-2.5
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Cannot use this model: composer-2.5"* ]]
+}
+
+@test "cursor-cli.sh: an empty result is an error, not a blank answer" {
+    export COUNCIL_FAKE_BEHAVIOR=empty
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"no result"* ]]
+}
+
+@test "cursor-cli.sh: a hung CLI is ended at COUNCIL_TIMEOUT" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_TIMEOUT=1
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"timed out after 1s"* ]]
+}
+
+@test "cursor-cli.sh: reads the prompt from --prompt-file" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    printf 'prompt from file' > "$pf"
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"prompt from file"* ]]
+}

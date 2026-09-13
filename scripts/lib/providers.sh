@@ -4,7 +4,7 @@
 
 # Discover which provider scripts are available to query.
 # API providers are gated on their <NAME>_API_KEY env var; subscription-auth
-# CLI providers (codex, antigravity, grok-cli) are gated on their binary being on PATH.
+# CLI providers (codex, antigravity, grok-cli, kimi-cli, cursor-cli) are gated on their binary being on PATH.
 discover_providers() {
     local available=()
 
@@ -26,6 +26,11 @@ discover_providers() {
                 ;;
             kimi-cli)
                 command -v kimi >/dev/null 2>&1 && is_available=true
+                ;;
+            cursor-cli)
+                # cursor-agent, not the bare `agent` the installer also links:
+                # the grok CLI ships an `agent` too, so that name proves nothing.
+                command -v cursor-agent >/dev/null 2>&1 && is_available=true
                 ;;
             ollama)
                 command -v ollama >/dev/null 2>&1 && is_available=true
@@ -251,6 +256,13 @@ json_value() {
     jq -r --arg k "$key" '.[$k] // empty' "$file" 2>/dev/null || true
 }
 
+# Same, for a value below the top level: $2 is a jq path such as .model.modelId.
+json_path_value() {
+    local file="$1" path="$2"
+    [[ -f "$file" ]] || return 0
+    jq -r "$path // empty" "$file" 2>/dev/null || true
+}
+
 # The model a CLI provider will use when the council passes no model flag,
 # read from the CLI's own configuration. This is what the CLI would select,
 # not a record of what a given run did — the two can diverge if the model is
@@ -267,6 +279,9 @@ cli_config_model() {
         # its usage to that same id. Config and run agree there.
         grok-cli)   toml_value "$HOME/.grok/config.toml" models default ;;
         kimi-cli)   toml_value "$HOME/.kimi-code/config.toml" "" default_model ;;
+        # The CLI keeps the picked model nested under .model; a free plan runs
+        # "auto" whatever this says, and rejects an explicit --model.
+        cursor-cli) json_path_value "$HOME/.cursor/cli-config.json" ".model.modelId" ;;
         # agy records the app's current selection as a display label, spaces
         # and all ("Gemini 3.6 Flash (High)"). The key is absent until a model
         # has actually been selected, so a fresh install still reads as unset.
@@ -311,6 +326,7 @@ get_model() {
         antigravity) cli_model antigravity "${ANTIGRAVITY_MODEL:-}" ;;
         kimi)       echo "${KIMI_MODEL:-kimi-k3}" ;;
         kimi-cli)   cli_model kimi-cli "${KIMI_CLI_MODEL:-}" ;;
+        cursor-cli) cli_model cursor-cli "${CURSOR_CLI_MODEL:-}" ;;
         ollama)     echo "${OLLAMA_MODEL:-local}" ;;
         # Pinned rather than an alias for the reason stated above, and pinned to
         # an Anthropic id because that is the one vendor the council otherwise

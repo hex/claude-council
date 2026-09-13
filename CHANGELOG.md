@@ -6,6 +6,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Added
+- **Cursor CLI as a council member.** `cursor-cli` seats Cursor's `cursor-agent` when it is on `PATH`, on the Cursor login, no key. It runs headless in `--mode ask`, the read-only mode, and is never passed `--force`; the answer is read from the `--output-format json` envelope. The model is whatever the CLI has picked unless `CURSOR_CLI_MODEL` is set; a free plan runs `auto` only and rejects a named model with the CLI's own message. Discovery keys on `cursor-agent`, not the `agent` name the installer also links, because the grok CLI ships an `agent` too. No API sibling, so no shadow and no fallback. `/status` probes it with `cursor-agent status`, and the stop-review gate accepts it. Closes #33.
+
 ### Fixed
 - Every temp file the scripts create is rooted at `${TMPDIR:-/tmp}`. A bare `mktemp` lands in `/var/folders` on macOS whatever `TMPDIR` says, and a sandboxed host that only allows writes under its own tree (the `claude plugin eval` sandbox is one) killed the query before any provider was called. A bats guard fails on the next bare call.
 
