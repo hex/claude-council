@@ -192,6 +192,30 @@ why on the line above:
 ls -t "$dir"/*.json
 ```
 
+## Plugin Evals (`claude plugin eval`)
+
+`evals/` holds a seven-case suite for the `/claude-council:ask --local` flow:
+five cases where the local council must convene (two explicit slash commands,
+three natural-language requests) and two where it must not. Every case runs
+twice, with the plugin and without, so the headline number is the delta between
+the two arms, not a pass rate. Graders read the final message only: the sandbox
+denies writes under `.claude/`, so the saved transcript cannot be checked.
+
+```bash
+env -u ANTHROPIC_API_KEY claude plugin eval . --ablation with-without --judge-model sonnet
+```
+
+`env -u ANTHROPIC_API_KEY` matters on a machine whose shell exports a key the API
+rejects: the eval child inherits it and every turn fails authentication. Add
+`--no-publish` to keep the HTML report local. One full run is three passes per
+case and takes about an hour; `--runs 1` is the calibration pass.
+
+Two things the sandbox cannot do here, so the suite does not test them: reach an
+external provider (keys are stripped, CLI seats cannot open sockets), and read
+the plugin's own directory from the main agent.
+
+---
+
 ---
 
 ## Manual Tests
