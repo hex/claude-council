@@ -1,0 +1,1 @@
+../../_shared/positive/no-council-output.md

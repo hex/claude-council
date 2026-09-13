@@ -83,7 +83,7 @@ cache_set() {
     # Route prompt and response through --rawfile, not --arg: a large --file
     # prompt or response passed on jq's command line would overflow ARG_MAX.
     local ptmp rtmp
-    ptmp=$(mktemp); rtmp=$(mktemp)
+    ptmp=$(mktemp "${TMPDIR:-/tmp}/council-cache-prompt.XXXXXX"); rtmp=$(mktemp "${TMPDIR:-/tmp}/council-cache-response.XXXXXX")
     printf '%s' "$prompt" > "$ptmp"
     printf '%s' "$response" > "$rtmp"
     jq -n \

@@ -1,0 +1,1 @@
+../../_shared/negative/no-suggestion.md

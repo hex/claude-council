@@ -4,3 +4,4 @@ pane-watcher.bats
 query-council.bats
 router-seats.bats
 stop-gate.bats
+tmpdir.bats

@@ -6,6 +6,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Fixed
+- Every temp file the scripts create is rooted at `${TMPDIR:-/tmp}`. A bare `mktemp` lands in `/var/folders` on macOS whatever `TMPDIR` says, and a sandboxed host that only allows writes under its own tree (the `claude plugin eval` sandbox is one) killed the query before any provider was called. A bats guard fails on the next bare call.
+
 ### Other
 - Both `actions/checkout` steps run v7.0.1, pinned by commit. Dependabot raised the bump and the four Windows shards, macOS, Ubuntu and shellcheck all pass on it.
 - Every `*_API_KEY` assignment reads its value unquoted. A quoted one reads as a hardcoded secret to the HOL plugin scanner, which the awesome-ai-plugins catalog gates a listing on, and an assignment's right-hand side is never word-split. Test fixtures use `example-` key values for the same reason.

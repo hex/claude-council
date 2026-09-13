@@ -12,7 +12,7 @@ COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-300}"  # seconds per request (reasoning mode
 # Usage: cfg=$(curl_secret_config "Authorization: Bearer $KEY"); curl --config "$cfg" ...
 curl_secret_config() {
     local f header
-    f=$(mktemp)
+    f=$(mktemp "${TMPDIR:-/tmp}/council-retry.XXXXXX")
     chmod 600 "$f"
     for header in "$@"; do
         printf 'header = "%s"\n' "$header" >> "$f"
@@ -80,7 +80,7 @@ curl_with_retry() {
     local http_code=""
     local curl_exit=""
     local temp_file
-    temp_file=$(mktemp)
+    temp_file=$(mktemp "${TMPDIR:-/tmp}/council-retry-output.XXXXXX")
 
     while [[ $attempt -le $COUNCIL_MAX_RETRIES ]]; do
         # Make request with timeout, capture HTTP status code separately
@@ -192,7 +192,7 @@ model_unavailable_message() {
 # the orchestrator's file is not ours to delete. Reads the caller's PROMPT.
 stage_prompt_file() {
     [[ -z "$PROMPT_FILE" ]] || return 0
-    OWNED_PROMPT_FILE=$(mktemp)
+    OWNED_PROMPT_FILE=$(mktemp "${TMPDIR:-/tmp}/council-retry-prompt.XXXXXX")
     PROMPT_FILE="$OWNED_PROMPT_FILE"
     printf '%s' "$PROMPT" > "$PROMPT_FILE"
 }

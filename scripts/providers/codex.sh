@@ -53,7 +53,7 @@ ARGS+=("$FULL_PROMPT")
 # docs/ARCHITECTURE.md for why the two defaults differ.
 COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
 
-ERR_TMP=$(mktemp)
+ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-codex-err.XXXXXX")
 trap 'rm -f "$ERR_TMP"' EXIT
 
 if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" codex "${ARGS[@]}" 2>"$ERR_TMP"); then

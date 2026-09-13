@@ -192,6 +192,33 @@ why on the line above:
 ls -t "$dir"/*.json
 ```
 
+## Plugin Evals (`claude plugin eval`)
+
+`evals/` holds a seven-case suite for the unprompted council suggestion that
+`commands/ask.md` describes: five prompts where a competing-options choice, a
+stuck debugging thread, or a build-vs-buy call should earn a named
+`/claude-council:ask` suggestion alongside a real answer, and two where it must
+not. Every case runs twice, with the plugin and without, so the headline number
+is the delta between the two arms, not a pass rate. The graders read the final
+message only. The grader text lives once, in `evals/_shared/`; each case's
+`graders/` holds per-file symlinks to it, because the runner rejects a
+symlinked `graders/` directory but follows links to individual files. Edit the
+shared file, not a case copy. The only per-case grader is the negatives'
+`answers-directly.md`.
+
+```bash
+env -u ANTHROPIC_API_KEY claude plugin eval . --ablation with-without --judge-model sonnet
+```
+
+`env -u ANTHROPIC_API_KEY` matters on a machine whose shell exports a key the API
+rejects: the eval child inherits it and every turn fails authentication. Add
+`--no-publish` to keep the HTML report local. One full run is three passes per
+case and takes under twenty minutes; `--runs 1` is the calibration pass.
+
+Two things the sandbox cannot do here, so no suite tests them: reach an
+external provider (keys are stripped, CLI seats cannot open sockets), and read
+the plugin's own directory or the session transcript from the main agent.
+
 ---
 
 ## Manual Tests

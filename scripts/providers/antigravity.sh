@@ -55,7 +55,7 @@ ARGS=(--sandbox)
 # to agy's own selection (mirrors codex.sh and grok-cli.sh).
 [[ -n "${ANTIGRAVITY_MODEL:-}" ]] && ARGS+=(--model "$ANTIGRAVITY_MODEL")
 
-ERR_TMP=$(mktemp)
+ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-antigravity-err.XXXXXX")
 SPILL_DIR=""
 # One rm, not two statements: under `set -e` a trap body stops at its first
 # failing command, and removing ERR_TMP can fail on Windows when agy still holds
