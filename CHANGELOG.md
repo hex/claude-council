@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Other
+- `.github/workflows/hol-plugin-scanner.yml` runs the HOL plugin scanner on every push to main and every pull request, failing on a high finding or a score under 80. The awesome-ai-plugins catalog scans the repo on its own either way; a maintainer-owned run keeps the listing at full trust score and makes a finding reproducible here. A clean export of the tree scores 100.
+
 ## 2026.9.10
 
 ### Added
