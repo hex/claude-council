@@ -12,9 +12,11 @@ export const HOST_LABELS: Record<PaneHost, string> = {
   tmux: 'tmux pane',
 }
 
-// A query starts a pane; fetching or cancelling a job, and listing models, do not.
+// A query starts a pane; fetching, cancelling or listing jobs, listing models
+// and asking for help do not, and neither does a command that only names the
+// script (a grep, a cat): the script has to be what bash is given to run.
 export function isCouncilRun(command: string): boolean {
-  return /run-council\.sh/.test(command) && !/--(result|cancel)[=\s]/.test(command)
+  return /\bbash\s+["']?[^\s"']*run-council\.sh\b/.test(command) && !/--(result|cancel|jobs|help|list-[a-z-]+)(=|\s|$)/.test(command)
 }
 
 export function hostFrom(value: unknown): PaneHost | undefined {

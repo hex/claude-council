@@ -12,6 +12,16 @@ test('isCouncilRun spots a query, not a fetch, a cancel or a listing', () => {
   expect(isCouncilRun('git status')).toBe(false)
 })
 
+test('isCouncilRun ignores the script being listed, asked for help, or only named', () => {
+  expect(isCouncilRun('bash /x/scripts/run-council.sh --jobs')).toBe(false)
+  expect(isCouncilRun('bash /x/scripts/run-council.sh --help')).toBe(false)
+  expect(isCouncilRun('bash /x/scripts/run-council.sh --list-available')).toBe(false)
+  expect(isCouncilRun('bash /x/scripts/run-council.sh --list-default-models')).toBe(false)
+  expect(isCouncilRun('grep -rn run-council.sh scripts/')).toBe(false)
+  expect(isCouncilRun('cat scripts/run-council.sh')).toBe(false)
+  expect(isCouncilRun('cd /x && bash "scripts/run-council.sh" --verbosity=brief -- "q"')).toBe(true)
+})
+
 test('hostFrom reads a stored value or a dialog label, and nothing else', () => {
   expect(hostFrom('mod')).toBe('mod')
   expect(hostFrom('tmux')).toBe('tmux')

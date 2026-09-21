@@ -9,7 +9,7 @@ import { readText, readView, type Files } from './snapshot'
 import { councilArgs, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
-import { markdownBlocks, paneSections, unseenRun, type RunView, type Section } from './view'
+import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -32,7 +32,6 @@ type PaneState = {
   isPolling: boolean
   shown: Set<string>
   lastError: string
-  jobId: string
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
   retry?: { offer: RetryOffer; seenAtMs: number }
   retryShown?: RetrySection
@@ -93,13 +92,10 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.queryingSinceMs = {}
     state.fitted.clear()
     await $.ui.open({ id: PANE_ID, title: 'Council' })
-    state.jobId = (await readText(files($), `${state.runDir}/job-id`)).trim()
   }
   const runDir = state.runDir
   state.view = await readView(files($), runDir)
-  for (const { name, state: providerState } of state.view.providers) {
-    if (providerState === 'querying') state.queryingSinceMs[name] ??= now
-  }
+  state.queryingSinceMs = queryingSince(state.queryingSinceMs, state.view.providers, now)
   state.view.queryingSinceMs = state.queryingSinceMs
   if (state.synthesis) state.view.synthesis = state.synthesis
   // The run waits on its offer for a window of seconds; the offer file going
@@ -118,11 +114,14 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   if (state.view.isDone) {
     // A toast is one unstyled line for four seconds, easy to miss under a
     // streaming reply; the band holds the notice where the offer was.
-    state.finished = { text: finishNotice(state.view, state.jobId), untilMs: now + FINISH_NOTICE_MS }
+    // The run's dir is visible before the run writes its job files, so they
+    // are read now, when they are certain to be there.
+    const jobId = (await readText(files($), `${runDir}/job-id`)).trim()
+    state.finished = { text: finishNotice(state.view, jobId), untilMs: now + FINISH_NOTICE_MS }
     $.ui.invalidate('ui.render')
     // .done lands before the worker records where the result is, so the wake
     // waits for the job record to say the result can be fetched.
-    const wake = settings.wakesOnAsyncDone ? wakePrompt(state.jobId) : undefined
+    const wake = settings.wakesOnAsyncDone ? wakePrompt(jobId) : undefined
     const jobFile = (await readText(files($), `${runDir}/job-file`)).trim()
     if (wake && jobFile) state.pendingWake = { prompt: wake, jobFile, untilMs: now + WAKE_WAIT_MS }
     await $.process.run(['rm', '-rf', runDir])
@@ -214,7 +213,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', jobId: '', frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
 
   on('session.start', async ($, e, next) => {
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
@@ -232,7 +231,7 @@ export const register: Register = (on, options) => {
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     const view = state.view
-    const synthesis = e.agentId === undefined && view ? extractSynthesis(e.answer) : undefined
+    const synthesis = e.agentId === undefined && view && !state.synthesis ? extractSynthesis(e.answer) : undefined
     if (view && synthesis) {
       state.synthesis = synthesis
       state.view = { ...view, synthesis }

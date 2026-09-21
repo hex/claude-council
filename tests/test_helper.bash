@@ -108,10 +108,12 @@ assert_not_blank() {
 # nothing here that commonly shares a directory with jq, curl or node.
 path_without_clis() {
     local clean="" dir cli holds_cli
-    local IFS=:
+    local -a entries
+    # read splits on the colon without globbing, which an unquoted $PATH would.
+    IFS=: read -ra entries <<< "$PATH"
     # A CLI installed twice (a cask and an npm global) sits in two directories;
     # every entry is checked, so both go.
-    for dir in $PATH; do
+    for dir in "${entries[@]}"; do
         holds_cli=0
         for cli in codex gemini agy grok kimi cursor-agent ollama; do
             if [[ -f "$dir/$cli" && -x "$dir/$cli" ]]; then

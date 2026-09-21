@@ -103,6 +103,16 @@ function doneSummary(
   ]
 }
 
+// When each provider now querying was first seen querying. One that stops
+// loses its entry, so a provider the person retries starts a fresh clock.
+export function queryingSince(since: Record<string, number>, providers: ProviderStatus[], nowMs: number): Record<string, number> {
+  const next: Record<string, number> = {}
+  for (const { name, state } of providers) {
+    if (state === 'querying') next[name] = since[name] ?? nowMs
+  }
+  return next
+}
+
 export function paneSections(
   { providers, responses, errors, colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
   { collapsesWhenDone = true, frame = 0, nowMs = 0 }: { collapsesWhenDone?: boolean; frame?: number; nowMs?: number } = {},
