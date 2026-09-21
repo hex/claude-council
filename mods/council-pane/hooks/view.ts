@@ -50,7 +50,7 @@ function statusRows(providers: ProviderStatus[], vendor: (name: string) => strin
   return providers.map(({ name, state, ms, model }) => ({
     kind: 'status',
     glyph: glyph(state),
-    glyphColor: vendor(name),
+    glyphColor: state === 'error' ? 'red' : vendor(name),
     name: name.padEnd(names),
     state: state.padEnd(states),
     stateColor: STATE_COLORS[state] ?? 'gray',
@@ -71,7 +71,7 @@ function doneSummary(providers: ProviderStatus[], vendor: (name: string) => stri
   ]
   return [
     { kind: 'summary', text: parts.filter(Boolean).join(' \u00b7 ') },
-    { kind: 'strip', items: providers.map(({ name, state }) => ({ glyph: glyph(state), color: vendor(name), name })) },
+    { kind: 'strip', items: providers.map(({ name, state }) => ({ glyph: glyph(state), color: state === 'error' ? 'red' : vendor(name), name })) },
   ]
 }
 

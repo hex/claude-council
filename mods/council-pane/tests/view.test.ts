@@ -29,7 +29,7 @@ test('paneSections gives a coloured status row per provider, then a banner and b
   expect(sections).toEqual([
     { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'green', time: '4.2s', model: 'gemini-3-pro' },
     { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'yellow', time: '    ', model: '' },
-    { kind: 'status', glyph: '\u2717', glyphColor: 'rgb(239,68,68)', name: 'grok  ', state: 'error   ', stateColor: 'red', time: '0.9s', model: '' },
+    { kind: 'status', glyph: '\u2717', glyphColor: 'red', name: 'grok  ', state: 'error   ', stateColor: 'red', time: '0.9s', model: '' },
     { kind: 'banner', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)' },
     { kind: 'body', text: 'Use Postgres.' },
     { kind: 'error', title: 'grok error', text: 'HTTP 429' },
@@ -63,7 +63,7 @@ test('paneSections collapses the status rows to a summary and a strip once the r
       items: [
         { glyph: '\u25cf', color: 'rgb(59,130,246)', name: 'gemini' },
         { glyph: '\u25cf', color: 'rgb(113,113,122)', name: 'codex' },
-        { glyph: '\u2717', color: 'rgb(113,113,122)', name: 'grok' },
+        { glyph: '\u2717', color: 'red', name: 'grok' },
       ],
     },
   ])
