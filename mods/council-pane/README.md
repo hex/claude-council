@@ -57,7 +57,7 @@ They show up in `/config`. Changing one reloads the mod.
 | `wake_on_async_done` | off | Submits a prompt when a background job's result can be fetched. That starts a model turn and costs tokens. A job that fails wakes nobody. |
 | `council_tool` | off | Registers `mcp__claude-council__ask` so the model can call the council as a tool. |
 
-`council_tool` is off for a reason. The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. The plugin's eval suite checks that Claude does not convene the council on its own, but `claude plugin eval` does not load this mod, so those checks cannot see the tool.
+`council_tool` is off for a reason. The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. The plugin's eval suite checks that Claude does not convene the council on its own, but its graders watch the `Agent` tool, not this one, so the default is what keeps the tool out of those runs.
 
 ## Limits
 
@@ -72,10 +72,8 @@ They show up in `/config`. Changing one reloads the mod.
 ## Development
 
 ```
-cd mods/council-pane
-bun test
-bunx tsc -p .
-cd ../.. && claude plugin validate .
+(cd mods/council-pane && bun test && bunx tsc -p .)
+claude plugin validate .
 ```
 
 The types come from `/plugin-types`, which writes `.claude/types/` at the repo root. Regenerate them after a Claude Code update. Run with `--debug` and look for `claude-council` in the log when something does not draw.
