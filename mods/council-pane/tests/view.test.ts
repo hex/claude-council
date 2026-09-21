@@ -28,7 +28,7 @@ test('paneSections gives a coloured status row per provider, then a banner and b
   })
   expect(sections).toEqual([
     { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'green', time: '4.2s', model: 'gemini-3-pro' },
-    { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'yellow', time: '    ', model: '' },
+    { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'yellow', time: '    ', model: '' },
     { kind: 'status', glyph: '\u2717', glyphColor: 'red', name: 'grok  ', state: 'error   ', stateColor: 'red', time: '0.9s', model: '' },
     { kind: 'banner', key: 'jump:gemini', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)' },
     { kind: 'body', text: 'Use Postgres.' },
@@ -95,6 +95,29 @@ test('paneSections shows the synthesis after the provider answers, with a jump t
     hotkey: '0',
     target: 'jump:synthesis',
   })
+})
+
+test('a querying provider spins and counts up; a settled one keeps its dot and final time', () => {
+  const view = {
+    providers: [
+      { name: 'codex', state: 'querying' },
+      { name: 'kimi', state: 'complete', ms: 9200 },
+    ],
+    responses: {},
+    errors: {},
+    colors: {},
+    isDone: false,
+    queryingSinceMs: { codex: 1_000 },
+  }
+  const [codex, kimi] = paneSections(view, { frame: 13, nowMs: 13_450 })
+  expect(codex).toMatchObject({ kind: 'status', glyph: '\u2838', time: '12.4s' })
+  expect(kimi).toMatchObject({ kind: 'status', glyph: '\u25cf', time: ' 9.2s' })
+  // Frame 0 and a provider with no start recorded: first spinner frame, blank time.
+  const [first] = paneSections({ ...view, queryingSinceMs: {} }, { frame: 0, nowMs: 13_450 })
+  expect(first).toMatchObject({ glyph: '\u280b', time: '    ' })
+  // A clock reading older than the start (the first frame lands before the first tick) shows zero.
+  const [early] = paneSections(view, { frame: 0, nowMs: 0 })
+  expect(early).toMatchObject({ time: '0.0s' })
 })
 
 test('parseColors keeps the last colour written for each provider', () => {

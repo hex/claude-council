@@ -9,6 +9,8 @@ export type RunView = {
   colors: Record<string, string>
   isDone: boolean
   synthesis?: string
+  // When the pane first saw each provider querying; the status log carries no clock.
+  queryingSinceMs?: Record<string, number>
 }
 
 type DirEntry = { name: string; kind: string }
@@ -29,6 +31,7 @@ export type Section =
 
 const STATE_COLORS: Record<string, string> = { querying: 'yellow', complete: 'green', cached: 'cyan', error: 'red' }
 const NEUTRAL_RGB = '113;113;122'
+const SPINNER = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f']
 
 const jumpKey = (name: string) => `jump:${name}`
 
@@ -46,19 +49,25 @@ export function parseColors(log: string): Record<string, string> {
 }
 
 // Columns are padded here so the rows line up whatever the surface's layout does.
-function statusRows(providers: ProviderStatus[], vendor: (name: string) => string, glyph: (state: string) => string): Section[] {
+function statusRows(
+  providers: ProviderStatus[],
+  vendor: (name: string) => string,
+  glyph: (state: string) => string,
+  elapsed: (name: string) => string,
+): Section[] {
+  const shownTime = ({ name, state, ms }: ProviderStatus) => (state === 'querying' ? elapsed(name) : seconds(ms))
   const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
   const names = width(providers.map(provider => provider.name))
   const states = width(providers.map(provider => provider.state))
-  const times = width(providers.map(provider => seconds(provider.ms)))
-  return providers.map(({ name, state, ms, model }) => ({
+  const times = width(providers.map(shownTime))
+  return providers.map(provider => ({ provider, ...provider })).map(({ provider, name, state, model }) => ({
     kind: 'status',
     glyph: glyph(state),
     glyphColor: state === 'error' ? 'red' : vendor(name),
     name: name.padEnd(names),
     state: state.padEnd(states),
     stateColor: STATE_COLORS[state] ?? 'gray',
-    time: seconds(ms).padStart(times),
+    time: shownTime(provider).padStart(times),
     model: model ?? '',
   }))
 }
@@ -95,16 +104,24 @@ function doneSummary(
 }
 
 export function paneSections(
-  { providers, responses, errors, colors, isDone, synthesis }: RunView,
-  { collapsesWhenDone = true }: { collapsesWhenDone?: boolean } = {},
+  { providers, responses, errors, colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
+  { collapsesWhenDone = true, frame = 0, nowMs = 0 }: { collapsesWhenDone?: boolean; frame?: number; nowMs?: number } = {},
 ): Section[] {
   if (providers.length === 0) {
     return [{ kind: 'note', text: isDone ? 'Council finished with no answers.' : 'Waiting for the council...' }]
   }
   const vendor = (name: string) => `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`
-  const glyph = (state: string) => (state === 'error' ? '\u2717' : '\u25cf')
+  const glyph = (state: string) => {
+    if (state === 'error') return '\u2717'
+    return state === 'querying' ? (SPINNER[frame % SPINNER.length] ?? '\u25cf') : '\u25cf'
+  }
+  // A querying provider's time runs from when the pane first saw it, in whole tenths.
+  const elapsed = (name: string) => {
+    const since = queryingSinceMs[name]
+    return since === undefined ? '' : `${(Math.floor(Math.max(0, nowMs - since) / 100) / 10).toFixed(1)}s`
+  }
   const hasSection = (name: string) => responses[name] !== undefined || errors[name] !== undefined
-  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(providers, vendor, glyph, hasSection) : statusRows(providers, vendor, glyph)
+  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(providers, vendor, glyph, hasSection) : statusRows(providers, vendor, glyph, elapsed)
   for (const { name, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]

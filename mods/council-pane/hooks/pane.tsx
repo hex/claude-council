@@ -17,6 +17,8 @@ const RUN_TIMEOUT_MS = 600_000
 // synthesis is Claude's own text. No provider's banner uses it.
 const COUNCIL_RGB = 'rgb(217,119,87)'
 const POLL_MS = 500
+// Ten frames a second: the spinner's pace in the tmux pane.
+const FRAME_MS = 100
 
 type PaneState = {
   root: string
@@ -31,6 +33,11 @@ type PaneState = {
   retryShown?: RetrySection
   synthesis?: string
   finished?: FinishNotice
+  frame: number
+  nowMs: number
+  queryingSinceMs: Record<string, number>
+  // Fitted answer bodies by width and text: a frame redraws the tree, not the markdown.
+  fitted: Map<string, string[]>
 }
 
 async function readText($: EngineInterface, path: string): Promise<string> {
@@ -66,6 +73,8 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.runDir = `${state.root}/${name}`
     state.synthesis = undefined
     state.finished = undefined
+    state.queryingSinceMs = {}
+    state.fitted.clear()
     await $.ui.open({ id: PANE_ID, title: 'Council' })
     state.jobId = (await readText($, `${state.runDir}/job-id`)).trim()
   }
@@ -77,6 +86,11 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     colors: parseColors(await readText($, `${runDir}/colors`)),
     isDone: await $.fs.exists(`${runDir}/.done`),
   }
+  const now = await $.clock.now()
+  for (const { name, state: providerState } of state.view.providers) {
+    if (providerState === 'querying') state.queryingSinceMs[name] ??= now
+  }
+  state.view.queryingSinceMs = state.queryingSinceMs
   if (state.synthesis) state.view.synthesis = state.synthesis
   // The run waits on its offer for a window of seconds; the offer file going
   // away (accepted, declined or expired) withdraws the buttons.
@@ -103,6 +117,16 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.retry = undefined
     state.retryShown = undefined
   }
+}
+
+// Advances the spinner and the clock the elapsed times read, only while a
+// provider is still querying; an idle pane costs no redraws.
+async function animate($: EngineInterface, state: PaneState): Promise<void> {
+  const view = state.view
+  if (!view || view.isDone || !view.providers.some(provider => provider.state === 'querying')) return
+  state.frame += 1
+  state.nowMs = await $.clock.now()
+  $.ui.invalidate('ui.render')
 }
 
 async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
@@ -137,14 +161,15 @@ function retryRow(
       <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
       <ui.Text>{' '}</ui.Text>
       <ui.Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={press.skip} />
-      <ui.Text dimColor>{`  ${offer.remaining}s  click, or ctrl+x tab then r / s`}</ui.Text>
+      <ui.Text color={COUNCIL_RGB}>{`  ${offer.bar}`}</ui.Text>
+      <ui.Text dimColor>{` ${offer.remaining}s  click, or ctrl+x tab then r / s`}</ui.Text>
     </ui.Box>
   )
 }
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', jobId: '' }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', jobId: '', frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
 
   on('session.start', async ($, e, next) => {
     // Off: nothing is exported, so runs keep the tmux pane.
@@ -155,6 +180,7 @@ export const register: Register = (on, options) => {
     await $.env.set('COUNCIL_MOD_PANE_DIR', state.root)
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane with the last run', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
+    $.clock.every(FRAME_MS, () => { void animate($, state) })
     $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
     return next(e)
   })
@@ -235,6 +261,12 @@ export const register: Register = (on, options) => {
     if (e.requestId !== PANE_ID || !state.view) return next(e)
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
     const columns = e.props.bodyColumns
+    const fit = (text: string) => {
+      const cacheKey = `${columns}\n${text}`
+      const blocks = state.fitted.get(cacheKey) ?? markdownBlocks(fitTables(text, columns))
+      state.fitted.set(cacheKey, blocks)
+      return blocks
+    }
     const draw = (section: Section, index: number) => {
       const key = `section-${index}`
       switch (section.kind) {
@@ -287,7 +319,7 @@ export const register: Register = (on, options) => {
               <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={COUNCIL_RGB}>
                 <Text bold color="white" backgroundColor={COUNCIL_RGB}>SYNTHESIS</Text>
               </Box>
-              {markdownBlocks(fitTables(section.text, columns)).map((block, part) => (
+              {fit(section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
@@ -296,7 +328,7 @@ export const register: Register = (on, options) => {
           // Tables are fitted to the pane's width, which only a render knows.
           return (
             <Box key={key} flexDirection="column">
-              {markdownBlocks(fitTables(section.text, columns)).map((block, part) => (
+              {fit(section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
@@ -318,7 +350,7 @@ export const register: Register = (on, options) => {
           accept: () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) },
           skip: () => { void $.fs.write(`${runDir}/.retry-declined`, '') },
         })] : []}
-        {paneSections(state.view, settings).map(draw)}
+        {paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs }).map(draw)}
       </Box>
     )
   })
