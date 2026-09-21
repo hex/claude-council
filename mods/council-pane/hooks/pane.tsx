@@ -182,8 +182,21 @@ async function paneHost($: EngineInterface, setting: HostSetting): Promise<PaneH
 
 // Points the next run at this mod's pane or away from it; a Bash child reads
 // the variable when it starts, so this runs just before one does.
-async function aimRun($: EngineInterface, state: PaneState, setting: HostSetting): Promise<void> {
-  const host = await paneHost($, setting)
+// The watch root and the two timers start with the first council run, not the
+// session: a session that never convenes the council pays no polling and
+// leaves no directory behind.
+async function startWatching($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
+  if (state.root) return
+  const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
+  state.root = `${tmp}/council-mod.${await $.session.id()}`
+  await $.fs.write(`${state.root}/.keep`, '')
+  $.clock.every(FRAME_MS, () => { void animate($, state) })
+  $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
+}
+
+async function aimRun($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
+  await startWatching($, state, settings)
+  const host = await paneHost($, settings.host)
   await $.env.set('COUNCIL_MOD_PANE_DIR', host === 'mod' ? state.root : undefined)
 }
 
@@ -238,13 +251,8 @@ export const register: Register = (on, options) => {
   const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
 
   on('session.start', async ($, e, next) => {
-    const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
-    state.root = `${tmp}/council-mod.${await $.session.id()}`
-    await $.fs.write(`${state.root}/.keep`, '')
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
-    $.clock.every(FRAME_MS, () => { void animate($, state) })
-    $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
     return next(e)
   })
 
@@ -264,7 +272,7 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
-    if (isCouncilRun(e.command)) await aimRun($, state, settings.host)
+    if (isCouncilRun(e.command)) await aimRun($, state, settings)
     return next(e)
   })
 
@@ -285,7 +293,7 @@ export const register: Register = (on, options) => {
     if ('deny' in parsed) return { deny: parsed.deny }
     const script = `${$.plugin.root}/scripts/run-council.sh`
     if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
-    await aimRun($, state, settings.host)
+    await aimRun($, state, settings)
     const run = await $.process.run(['bash', script, ...parsed.args], { timeoutMs: RUN_TIMEOUT_MS })
     const saved = run.stdout.trim().split('\n').pop() ?? ''
     if (run.exitCode !== 0 || !saved) return { result: run.stderr || 'council run failed', isError: true }

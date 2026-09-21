@@ -1,7 +1,7 @@
 {
   "name": "claude-council",
   "version": "2026.9.11",
-  "description": "Consult multiple AI coding agents (Gemini, OpenAI, Grok, Perplexity, Kimi, any model OpenRouter routes to, plus codex, antigravity, grok and kimi CLIs when installed, and a local ollama model) to get diverse perspectives on coding problems",
+  "description": "Consult multiple AI coding agents (Gemini, OpenAI, Grok, Perplexity, Kimi, any model OpenRouter routes to, plus codex, antigravity, grok, kimi and cursor CLIs when installed, and a local ollama model) to get diverse perspectives on coding problems, with a streaming pane in tmux or inside Claude Code",
   "author": {
     "name": "hex",
     "url": "https://github.com/hex"
@@ -25,13 +25,16 @@
     "codex",
     "antigravity",
     "ollama",
-    "cli"
+    "cli",
+    "pane",
+    "tmux",
+    "mod"
   ],
   "userConfig": {
     "pane_host": {
       "type": "string",
       "title": "Pane opens in",
-      "description": "claude-code draws the pane inside Claude Code; tmux leaves it to the tmux pane; ask puts the question once inside tmux and remembers the answer.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. claude-code draws the pane inside Claude Code; tmux leaves it to the tmux pane; ask puts the question once inside tmux and remembers the answer.",
       "options": [
         "ask",
         "claude-code",
@@ -42,19 +45,19 @@
     "collapse_when_done": {
       "type": "boolean",
       "title": "Collapse status when done",
-      "description": "Replace the provider list with a one-line summary once a run finishes.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Replace the provider list with a one-line summary once a run finishes.",
       "default": true
     },
     "wake_on_async_done": {
       "type": "boolean",
       "title": "Wake on async finish",
-      "description": "Submit a prompt when a background council run completes. Starts a model turn, which costs tokens.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Submit a prompt when a background council run completes. Starts a model turn, which costs tokens.",
       "default": false
     },
     "council_tool": {
       "type": "boolean",
       "title": "Council as a tool",
-      "description": "Let the model call the council as a tool. Off by default: the council sends your question to third-party providers, and a tool is easier to call unprompted than a slash command.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Let the model call the council as a tool. Off by default: the council sends your question to third-party providers, and a tool is easier to call unprompted than a slash command.",
       "default": false
     }
   }
