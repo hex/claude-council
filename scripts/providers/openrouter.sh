@@ -184,7 +184,7 @@ TEXT=$(echo "$RESPONSE" | jq -r '(.choices[0].message.content)? // empty')
     # Whitespace-stripped, not just empty: a model that answers with a single
     # space passes a bare -z test, and the council would store that as a
     # successful answer and weigh it in the synthesis like any other.
-if [[ -z "${TEXT//[[:space:]]/}" ]]; then
+if [[ ! "$TEXT" =~ [^[:space:]] ]]; then
     # Three different failures all arrive here as "no text", and only the first
     # carries a top-level .error: a wire error (>=400, given a message by
     # ensure_error_body); a mid-generation upstream failure, which OpenRouter
