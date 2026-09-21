@@ -3,7 +3,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 import { parseStatus } from './status'
 import { fitTables } from './tables'
-import { markdownBlocks, paneMarkdown, unseenRun, type RunView } from './view'
+import { markdownBlocks, paneSections, parseColors, unseenRun, type RunView, type Section } from './view'
 
 const PANE_ID = 'council'
 const POLL_MS = 500
@@ -13,8 +13,6 @@ type PaneState = {
   runDir?: string
   view?: RunView
   drawn: string
-  blocks: string[]
-  blocksFor: string
   isPolling: boolean
   shown: Set<string>
   lastError: string
@@ -54,9 +52,10 @@ async function poll($: EngineInterface, state: PaneState): Promise<void> {
     providers: parseStatus(await readText($, `${runDir}/status`)),
     responses: await readFolder($, `${runDir}/responses`, '.md'),
     errors: await readFolder($, `${runDir}/errors`, '.txt'),
+    colors: parseColors(await readText($, `${runDir}/colors`)),
     isDone: await $.fs.exists(`${runDir}/.done`),
   }
-  const text = paneMarkdown(state.view)
+  const text = JSON.stringify(state.view)
   if (text !== state.drawn) {
     state.drawn = text
     $.ui.invalidate('ui.render')
@@ -86,7 +85,7 @@ async function pollOnce($: EngineInterface, state: PaneState): Promise<void> {
 }
 
 export const register: Register = on => {
-  const state: PaneState = { root: '', drawn: '', blocks: [], blocksFor: '', isPolling: false, shown: new Set(), lastError: '' }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '' }
 
   on('session.start', async ($, e, next) => {
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
@@ -101,18 +100,46 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== PANE_ID || !state.view) return next(e)
-    // Tables are fitted to the pane's width, which only a render knows; the
-    // blocks are rebuilt when the text or that width changes.
-    const fittedFor = `${e.props.bodyColumns}:${state.drawn}`
-    if (fittedFor !== state.blocksFor) {
-      state.blocks = markdownBlocks(fitTables(state.drawn, e.props.bodyColumns))
-      state.blocksFor = fittedFor
+    const { Box, Markdown, Text } = $.ui.resolve(e)
+    const columns = e.props.bodyColumns
+    const draw = (section: Section, index: number) => {
+      const key = `section-${index}`
+      switch (section.kind) {
+        case 'note':
+          return <Text key={key} dimColor>{section.text}</Text>
+        case 'status':
+          return (
+            <Box key={key} flexDirection="row">
+              <Text color={section.color}>{'\u25cf '}</Text>
+              <Text bold>{section.name}</Text>
+              <Text dimColor>{` ${section.detail}`}</Text>
+            </Box>
+          )
+        case 'banner':
+          return (
+            <Box key={key} flexDirection="row" marginTop={1} paddingX={1} width={columns} backgroundColor={section.background}>
+              <Text bold color="white" backgroundColor={section.background}>{section.title}</Text>
+              <Text italic color="white" backgroundColor={section.background}>{` ${section.subtitle}`}</Text>
+            </Box>
+          )
+        case 'body':
+          // Tables are fitted to the pane's width, which only a render knows.
+          return (
+            <Box key={key} flexDirection="column">
+              {markdownBlocks(fitTables(section.text, columns)).map((block, part) => (
+                <Markdown key={`${key}-${part}`} text={block} />
+              ))}
+            </Box>
+          )
+        case 'error':
+          return (
+            <Box key={key} flexDirection="column" marginTop={1}>
+              <Text bold color="red">{`\u2717 ${section.title}`}</Text>
+              <Text color="red" dimColor>{(markdownBlocks(section.text, 2000)[0] ?? '')}</Text>
+            </Box>
+          )
+      }
     }
-    const { Box, Markdown } = $.ui.resolve(e)
-    return (
-      <Box flexDirection="column">
-        {state.blocks.map((block, index) => <Markdown key={`block-${index}`} text={block} />)}
-      </Box>
-    )
+    return <Box flexDirection="column">{paneSections(state.view).map(draw)}</Box>
   })
 }

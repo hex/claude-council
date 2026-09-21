@@ -6,6 +6,7 @@ export type RunView = {
   providers: ProviderStatus[]
   responses: Record<string, string>
   errors: Record<string, string>
+  colors: Record<string, string>
   isDone: boolean
 }
 
@@ -15,19 +16,56 @@ export function unseenRun(entries: readonly DirEntry[], shown: ReadonlySet<strin
   return entries.find(entry => entry.kind === 'dir' && entry.name.startsWith('run.') && !shown.has(entry.name))?.name
 }
 
-function progressLine({ name, state, ms, model }: ProviderStatus): string {
-  const timing = ms === undefined ? '' : `, ${(ms / 1000).toFixed(1)}s`
-  return `- ${name}: ${state}${timing}${model ? ` (${model})` : ''}`
+export type Section =
+  | { kind: 'note'; text: string }
+  | { kind: 'status'; name: string; detail: string; color: string }
+  | { kind: 'banner'; title: string; subtitle: string; background: string }
+  | { kind: 'body'; text: string }
+  | { kind: 'error'; title: string; text: string }
+
+const STATE_COLORS: Record<string, string> = { querying: 'yellow', complete: 'green', cached: 'cyan', error: 'red' }
+const NEUTRAL_RGB = '113;113;122'
+
+function seconds(ms: number | undefined): string {
+  return ms === undefined ? '' : `${(ms / 1000).toFixed(1)}s`
 }
 
-export function paneMarkdown({ providers, responses, errors, isDone }: RunView): string {
-  if (providers.length === 0) return isDone ? 'Council finished with no answers.' : 'Waiting for the council...'
-  const sections = providers.flatMap(({ name }) => {
-    if (responses[name] !== undefined) return [`## ${name}`, responses[name]]
-    if (errors[name] !== undefined) return [`## ${name} error`, errors[name]]
-    return []
-  })
-  return [providers.map(progressLine).join('\n'), ...sections].join('\n\n')
+export function parseColors(log: string): Record<string, string> {
+  const colors: Record<string, string> = {}
+  for (const line of log.split('\n')) {
+    const [name, rgb] = line.replace(/\r$/, '').split('\t')
+    if (name && rgb && /^\d+;\d+;\d+$/.test(rgb)) colors[name] = rgb
+  }
+  return colors
+}
+
+export function paneSections({ providers, responses, errors, colors, isDone }: RunView): Section[] {
+  if (providers.length === 0) {
+    return [{ kind: 'note', text: isDone ? 'Council finished with no answers.' : 'Waiting for the council...' }]
+  }
+  const sections: Section[] = providers.map(({ name, state, ms }) => ({
+    kind: 'status',
+    name,
+    detail: ms === undefined ? state : `${state}, ${seconds(ms)}`,
+    color: STATE_COLORS[state] ?? 'gray',
+  }))
+  for (const { name, ms, model } of providers) {
+    const response = responses[name]
+    const error = errors[name]
+    if (response !== undefined) {
+      const timing = ms === undefined ? '' : `(${seconds(ms)})`
+      sections.push({
+        kind: 'banner',
+        title: name.toUpperCase(),
+        subtitle: [model, timing].filter(Boolean).join(' '),
+        background: `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`,
+      })
+      sections.push({ kind: 'body', text: response })
+    } else if (error !== undefined) {
+      sections.push({ kind: 'error', title: `${name} error`, text: error })
+    }
+  }
+  return sections
 }
 
 // A Markdown element takes at most this many characters, tab and newline its
