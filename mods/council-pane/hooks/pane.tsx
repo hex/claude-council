@@ -14,6 +14,7 @@ type PaneState = {
   drawn: string
   isPolling: boolean
   shown: Set<string>
+  lastError: string
 }
 
 async function readText($: EngineInterface, path: string): Promise<string> {
@@ -31,6 +32,13 @@ async function readFolder($: EngineInterface, dir: string, suffix: string): Prom
 }
 
 async function poll($: EngineInterface, state: PaneState): Promise<void> {
+  // Temp cleaners remove the root under a long session; runs find it again
+  // only if it exists, so it is put back rather than reported.
+  if (!(await $.fs.exists(state.root))) {
+    await $.fs.write(`${state.root}/.keep`, '')
+    state.runDir = undefined
+    return
+  }
   if (!state.runDir) {
     const name = unseenRun(await $.fs.list(state.root), state.shown)
     if (!name) return
@@ -63,15 +71,19 @@ async function pollOnce($: EngineInterface, state: PaneState): Promise<void> {
   state.isPolling = true
   try {
     await poll($, state)
+    state.lastError = ''
   } catch (error) {
-    $.ui.log(`council-pane: ${String(error)}`)
+    // The poll repeats twice a second: a failure that persists is logged once.
+    const message = String(error)
+    if (message !== state.lastError) $.ui.log(message)
+    state.lastError = message
   } finally {
     state.isPolling = false
   }
 }
 
 export const register: Register = on => {
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set() }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '' }
 
   on('session.start', async ($, e, next) => {
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
