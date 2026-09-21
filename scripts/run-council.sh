@@ -86,6 +86,7 @@ run_worker() {
     # committed to answering its retry offer; waiting the window out would only
     # deliver the result late. An explicit COUNCIL_RETRY_WAIT still opts in.
     export COUNCIL_RETRY_WAIT="${COUNCIL_RETRY_WAIT:-0}"
+    export COUNCIL_JOB_ID="$JOB_ID"
     local outfile
     outfile=$(run_sync "$JOB_ID")
     job_set "$JOB_ID" outfile "$outfile"

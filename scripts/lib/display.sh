@@ -399,6 +399,8 @@ display_pane_open() {
         [[ "${COUNCIL_NO_PANE:-}" == "1" ]] && return 1
         watch_dir=$(mktemp -d "$COUNCIL_MOD_PANE_DIR/run.XXXXXX") || return 1
         mkdir -p "$watch_dir/responses"
+        # A detached worker's run is announced when it ends; the id says which.
+        [[ -z "${COUNCIL_JOB_ID:-}" ]] || printf '%s' "$COUNCIL_JOB_ID" > "$watch_dir/job-id"
         printf '%s' "$watch_dir"
         return 0
     fi

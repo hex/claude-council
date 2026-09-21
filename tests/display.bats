@@ -577,3 +577,21 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
     run cat "$PANE_DIR/status"
     [ "$output" = "perplexity"$'\t'"querying"$'\t\t'$'\n'"openrouter-2"$'\t'"complete"$'\t'"1200"$'\t'"z-ai/glm" ]
 }
+
+@test "display_pane_open: a background job names itself in the mod's watch dir" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR" COUNCIL_JOB_ID="job-abc123"
+    run display_pane_open
+    [ "$status" -eq 0 ]
+    [ "$(cat "$output/job-id")" = "job-abc123" ]
+}
+
+@test "display_pane_open: a foreground run leaves no job id in the mod's watch dir" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE COUNCIL_JOB_ID
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR"
+    run display_pane_open
+    [ "$status" -eq 0 ]
+    [ ! -e "$output/job-id" ]
+}
