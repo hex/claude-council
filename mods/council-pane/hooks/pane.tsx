@@ -1,6 +1,7 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { Elements, EngineInterface, Register } from 'claude-code'
+import { HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, isCouncilRun, paneCommand, type PaneHost } from './host'
 import { FINISH_NOTICE_MS, finishNotice, noticeIsLive, reopenReply, wakePrompt, type FinishNotice } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
@@ -129,6 +130,22 @@ async function animate($: EngineInterface, state: PaneState): Promise<void> {
   $.ui.invalidate('ui.render')
 }
 
+// Settles where this run's pane goes. The stored answer wins; with none, the
+// person is asked once and the answer kept. A dismissed dialog or a headless
+// run stores nothing and the mod draws the pane, so the question comes back.
+async function paneHost($: EngineInterface): Promise<PaneHost> {
+  const stored = hostFrom(await $.store.get(HOST_STORE_KEY))
+  if (stored) return stored
+  let asked: PaneHost | undefined
+  try {
+    asked = hostFrom(await $.ui.ask(HOST_QUESTION, { header: 'Council pane', options: [HOST_LABELS.mod, HOST_LABELS.tmux] }))
+  } catch {
+    asked = undefined
+  }
+  if (asked) await $.store.set(HOST_STORE_KEY, asked)
+  return asked ?? 'mod'
+}
+
 async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
   if (state.isPolling) return
   state.isPolling = true
@@ -178,7 +195,7 @@ export const register: Register = (on, options) => {
     state.root = `${tmp}/council-mod.${await $.session.id()}`
     await $.fs.write(`${state.root}/.keep`, '')
     await $.env.set('COUNCIL_MOD_PANE_DIR', state.root)
-    await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane with the last run', immediate: true })
+    await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or choose where it opens', argumentHint: '[mod|tmux|ask]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     $.clock.every(FRAME_MS, () => { void animate($, state) })
     $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
@@ -200,6 +217,14 @@ export const register: Register = (on, options) => {
     return result
   })
 
+  // Outside tmux there is one place a pane can open, so nothing is asked.
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    if (!settings.isEnabled || !isCouncilRun(e.command) || !(await $.env.get('TMUX'))) return next(e)
+    const host = await paneHost($)
+    await $.env.set('COUNCIL_MOD_PANE_DIR', host === 'mod' ? state.root : undefined)
+    return next(e)
+  })
+
   // The generated types list the tools connected when they were written, so a
   // tool registered at run time is matched by pattern.
   on('tool.call', { tool: /^mcp__council-pane__ask$/ }, async ($, e) => {
@@ -217,7 +242,17 @@ export const register: Register = (on, options) => {
     return { result: await $.fs.read(saved) }
   })
 
-  on('command.run', { command: REOPEN_COMMAND }, async $ => {
+  on('command.run', { command: REOPEN_COMMAND }, async ($, e) => {
+    const command = paneCommand(e.args)
+    if (command.action === 'choose') {
+      await $.store.set(HOST_STORE_KEY, command.host)
+      return { text: `Council runs will open: ${HOST_LABELS[command.host]}.` }
+    }
+    if (command.action === 'forget') {
+      await $.store.delete(HOST_STORE_KEY)
+      return { text: 'The next council run inside tmux will ask where to open its pane.' }
+    }
+    if (command.action === 'unknown') return { text: 'Usage: /council-pane [mod|tmux|ask]' }
     if (state.view) await $.ui.open({ id: PANE_ID, title: 'Council' })
     return { text: reopenReply(state.view !== undefined) }
   })

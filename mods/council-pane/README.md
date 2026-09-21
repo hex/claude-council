@@ -43,6 +43,7 @@ Without the mod the variable is never set and the scripts behave as before.
 - Press `1` to `9` in the focused pane to jump to that provider's answer.
 - When a run ends, a `COUNCIL` notice sits above the prompt for 20 seconds with buttons to open the pane or dismiss it. This covers `--async` jobs too, and the notice names the job.
 - `/council-pane` reopens the pane with the last run.
+- Inside tmux, the first council run asks where the pane should open, inside Claude Code or in tmux, and remembers the answer across sessions. `/council-pane mod` or `/council-pane tmux` changes it, and `/council-pane ask` makes the next run ask again. Outside tmux nothing asks.
 
 ## Settings
 
