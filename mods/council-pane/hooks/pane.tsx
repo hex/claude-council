@@ -2,7 +2,7 @@
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { EngineInterface, Register } from 'claude-code'
 import { parseStatus } from './status'
-import { paneMarkdown, unseenRun, type RunView } from './view'
+import { markdownBlocks, paneMarkdown, unseenRun, type RunView } from './view'
 
 const PANE_ID = 'council'
 const POLL_MS = 500
@@ -12,6 +12,7 @@ type PaneState = {
   runDir?: string
   view?: RunView
   drawn: string
+  blocks: string[]
   isPolling: boolean
   shown: Set<string>
   lastError: string
@@ -56,6 +57,7 @@ async function poll($: EngineInterface, state: PaneState): Promise<void> {
   const text = paneMarkdown(state.view)
   if (text !== state.drawn) {
     state.drawn = text
+    state.blocks = markdownBlocks(text)
     $.ui.invalidate('ui.render')
   }
   // The run is over once .done lands: its dir is removed so the next run is
@@ -83,7 +85,7 @@ async function pollOnce($: EngineInterface, state: PaneState): Promise<void> {
 }
 
 export const register: Register = on => {
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '' }
+  const state: PaneState = { root: '', drawn: '', blocks: [], isPolling: false, shown: new Set(), lastError: '' }
 
   on('session.start', async ($, e, next) => {
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
@@ -98,7 +100,11 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== PANE_ID || !state.view) return next(e)
-    const { Markdown } = $.ui.resolve(e)
-    return <Markdown text={state.drawn} />
+    const { Box, Markdown } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column">
+        {state.blocks.map((block, index) => <Markdown key={`block-${index}`} text={block} />)}
+      </Box>
+    )
   })
 }
