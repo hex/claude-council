@@ -6,7 +6,15 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Added
+- **An experimental pane inside Claude Code.** `mods/council-pane` is a Claude Code mod that draws the streaming pane in Claude Code itself, so it works outside tmux. Mods are early access behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and the installed plugin does not load it; run it from a checkout with `--plugin-dir . --plugin-dir mods/council-pane`. It shows a status list in each provider's color that collapses to a summary, a banner per answer, the synthesis, and a `COUNCIL` row above the prompt for the retry offer and the finish. Its README lists the settings and the limits.
+- The scripts support a pane drawn outside the shell. When `COUNCIL_MOD_PANE_DIR` names a directory, a run writes its watch directory there and opens no tmux pane. Each status event also records the provider's color in `colors`, an `--async` worker writes its `job-id`, and a pane that stays open can turn the retry offer down with `.retry-declined`, where the tmux pane declines by closing. Only the mod sets the variable, so nothing changes without it.
+
+### Fixed
+- A long answer no longer hangs its provider on macOS. Nine providers and `format-output.sh` tested for an empty answer with `${TEXT//[[:space:]]/}`, which bash 3.2 runs in quadratic time over multibyte text: 18,000 characters took 284 seconds, and a Detailed run left `grok.sh` at 96% CPU for eight minutes. The test is now a regex search that stops at the first character that is not a space, 4 ms for 180,000 characters. A bats guard fails if the old expression comes back.
+
 ### Other
+- `path_without_clis` in the test helper strips every `PATH` directory that holds a provider CLI. It stripped only the first, so a machine with `codex` or `grok` installed twice failed one `cli-providers` test that CI, which has neither, always passed.
 - `.github/workflows/hol-plugin-scanner.yml` runs the HOL plugin scanner on every push to main and every pull request, failing on a high finding or a score under 80. The awesome-ai-plugins catalog scans the repo on its own either way; a maintainer-owned run keeps the listing at full trust score and makes a finding reproducible here. A clean export of the tree scores 100.
 
 ## 2026.9.10
