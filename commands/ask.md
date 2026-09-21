@@ -19,6 +19,15 @@ asks for a terse answer still produces a full council display of terse answers.
 Never answer the question yourself in place of running the council. If no
 provider is available, say so; do not substitute your own answer for theirs.
 
+## A provider named in the request
+
+A request can name providers instead of the council: "check with grok", "ask
+gemini and kimi", or a bare `--grok` in `$ARGUMENTS`. There is no `--<provider>`
+flag and the scripts reject one. Resolve each name against the roster listing
+under Provider Selection and pass `--providers=<list>`, taking the seat the
+listing shows for that vendor (`grok-cli`, not `grok`, when the CLI shadows the
+API). The providers are then chosen, so skip the provider question.
+
 ## Progress Tracking
 
 Create a task at the start to show progress throughout the query:

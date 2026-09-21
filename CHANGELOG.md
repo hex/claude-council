@@ -12,6 +12,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ### Fixed
 - A long answer no longer hangs its provider on macOS. Nine providers and `format-output.sh` tested for an empty answer with `${TEXT//[[:space:]]/}`, which bash 3.2 runs in quadratic time over multibyte text: 18,000 characters took 284 seconds, and a Detailed run left `grok.sh` at 96% CPU for eight minutes. The test is now a regex search that stops at the first character that is not a space, 4 ms for 180,000 characters. A bats guard fails if the old expression comes back.
+- Naming a provider works as a request for it. "Check with grok" already started the council, but with a `--grok` flag that does not exist and the scripts reject. `/claude-council:ask` now resolves a named provider against the roster and passes `--providers=`, picking `grok-cli` when the CLI shadows the API. Two eval cases cover it: one that names a provider, and one that only mentions a provider's API and must stay quiet.
 
 ### Other
 - `path_without_clis` in the test helper strips every `PATH` directory that holds a provider CLI. It stripped only the first, so a machine with `codex` or `grok` installed twice failed one `cli-providers` test that CI, which has neither, always passed.
