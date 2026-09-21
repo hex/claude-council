@@ -277,14 +277,13 @@ export const register: Register = (on, options) => {
 
   // The generated types list the tools connected when they were written, so a
   // tool registered at run time is matched by pattern.
-  on('tool.call', { tool: /^mcp__council-pane__ask$/ }, async ($, e) => {
+  on('tool.call', { tool: /^mcp__claude-council__ask$/ }, async ($, e) => {
     // `e` is flat: the tool's input fields sit beside `tool` and `tool_use_id`.
     // Its declared type is the union of the listed tools, none of them this one.
     const input = e as unknown as Record<string, unknown>
     const parsed = councilArgs(input)
     if ('deny' in parsed) return { deny: parsed.deny }
-    // The mod sits in the council plugin's repo; the run script is two levels up.
-    const script = `${$.plugin.root}/../../scripts/run-council.sh`
+    const script = `${$.plugin.root}/scripts/run-council.sh`
     if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
     await aimRun($, state, settings.host)
     const run = await $.process.run(['bash', script, ...parsed.args], { timeoutMs: RUN_TIMEOUT_MS })

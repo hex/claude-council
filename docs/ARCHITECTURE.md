@@ -511,10 +511,9 @@ claude-council/
 ├── evals/                       # `claude plugin eval` cases: prompt.md + graders/ per case
 │   └── _shared/                 # Grader text the cases link to, file by file
 ├── hooks/
-│   └── hooks.json               # Stop hook registration (stop gate)
+│   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/
 │   └── council-pane/            # Experimental Claude Code mod: the pane drawn inside Claude Code
-│       ├── .claude-plugin/plugin.json
 │       ├── README.md            # Settings, watch-dir files, limits
 │       ├── hooks/               # pane.tsx wires the engine; the other modules are pure
 │       └── tests/               # bun tests for the pure modules

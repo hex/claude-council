@@ -6,13 +6,13 @@ Mods are early access. You need `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, and the A
 
 ## Run it
 
-From the repo root:
+The mod ships with the plugin: `hooks/hooks.json` at the repo root names `pane.tsx` as a module, so an installed council loads it whenever the variable is set. Without the variable Claude Code skips the module and the tmux pane works as before.
 
 ```
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir . --plugin-dir mods/council-pane
+CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude
 ```
 
-Both flags matter. `--plugin-dir .` loads this checkout's scripts over the installed plugin, which does not know about the mod yet. Then run `/claude-council:ask` as usual.
+Then run `/claude-council:ask` as usual. From a checkout, add `--plugin-dir .` to run this tree's copy over the installed one.
 
 ## How it hooks in
 
@@ -55,7 +55,7 @@ They show up in `/config`. Changing one reloads the mod.
 | `pane_host` | `ask` | Where the pane opens. `claude-code` always draws it here, `tmux` always leaves it to tmux. `ask` puts the question once, the first time a run starts inside tmux, and remembers the answer across sessions; the row's label shows what it remembered. `/council-pane ask` forgets it. Outside tmux, `ask` opens the pane here without asking. |
 | `collapse_when_done` | on | Off keeps the full status list after a run. |
 | `wake_on_async_done` | off | Submits a prompt when a background job's result can be fetched. That starts a model turn and costs tokens. A job that fails wakes nobody. |
-| `council_tool` | off | Registers `mcp__council-pane__ask` so the model can call the council as a tool. |
+| `council_tool` | off | Registers `mcp__claude-council__ask` so the model can call the council as a tool. |
 
 `council_tool` is off for a reason. The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. The plugin's eval suite checks that Claude does not convene the council on its own, but `claude plugin eval` does not load this mod, so those checks cannot see the tool.
 
@@ -75,9 +75,9 @@ They show up in `/config`. Changing one reloads the mod.
 cd mods/council-pane
 bun test
 bunx tsc -p .
-claude plugin validate .
+cd ../.. && claude plugin validate .
 ```
 
-The types come from `/plugin-types`, which writes `.claude/types/` at the repo root. Regenerate them after a Claude Code update. Run with `--debug` and look for `council-pane` in the log when something does not draw.
+The types come from `/plugin-types`, which writes `.claude/types/` at the repo root. Regenerate them after a Claude Code update. Run with `--debug` and look for `claude-council` in the log when something does not draw.
 
 `claude plugin validate` enforces one rule `tsc` does not: you can pass `$` only to functions declared at the top of the hooks module, never to a closure inside `register`.

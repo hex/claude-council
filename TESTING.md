@@ -74,11 +74,10 @@ bats --verbose-run tests/cache.bats
 
 **Total: 712 tests** across 31 `.bats` files.
 
-The bats suite does not cover `mods/`. The council-pane mod has its own checks, run from `mods/council-pane`:
+The bats suite does not cover `mods/`. The council-pane mod has its own checks:
 
 ```bash
-bun test
-bunx tsc -p .
+(cd mods/council-pane && bun test && bunx tsc -p .)
 claude plugin validate .
 ```
 
