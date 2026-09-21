@@ -122,6 +122,19 @@ wait_for_job() {
     grep -q "FAKE-CODEX-RESPONSE" "$outfile"
 }
 
+@test "run-council --async: the worker tells a mod pane where its job record is" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    export COUNCIL_MOD_PANE_DIR="${BATS_TEST_TMPDIR}/mod-pane"
+    mkdir -p "$COUNCIL_MOD_PANE_DIR"
+    unset COUNCIL_NO_PANE
+    local id
+    id=$(bash "$RUN_COUNCIL" --async --providers=codex -- "test question" | head -1)
+    run wait_for_job "$id"
+    [ "$output" == "completed" ]
+    run cat "$COUNCIL_MOD_PANE_DIR"/run.*/job-file
+    [ "$output" == "${COUNCIL_JOBS_DIR}/${id}.json" ]
+}
+
 @test "run-council --result: still-running job exits 2" {
     export COUNCIL_FAKE_BEHAVIOR=slow
     export COUNCIL_FAKE_SLEEP=15

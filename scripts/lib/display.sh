@@ -404,6 +404,9 @@ display_pane_open() {
         mkdir -p "$watch_dir/responses"
         # A detached worker's run is announced when it ends; the id says which.
         [[ -z "${COUNCIL_JOB_ID:-}" ]] || printf '%s' "$COUNCIL_JOB_ID" > "$watch_dir/job-id"
+        # .done lands before the worker records the result, so the record's
+        # path goes along: it is what says the job can be fetched.
+        [[ -z "${COUNCIL_JOB_FILE:-}" ]] || printf '%s' "$COUNCIL_JOB_FILE" > "$watch_dir/job-file"
         printf '%s' "$watch_dir"
         return 0
     fi

@@ -87,6 +87,8 @@ run_worker() {
     # deliver the result late. An explicit COUNCIL_RETRY_WAIT still opts in.
     export COUNCIL_RETRY_WAIT="${COUNCIL_RETRY_WAIT:-0}"
     export COUNCIL_JOB_ID="$JOB_ID"
+    COUNCIL_JOB_FILE=$(job_file "$JOB_ID")
+    export COUNCIL_JOB_FILE
     local outfile
     outfile=$(run_sync "$JOB_ID")
     job_set "$JOB_ID" outfile "$outfile"
