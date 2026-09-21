@@ -1,7 +1,8 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { EngineInterface, Register } from 'claude-code'
-import { paneOptions } from './options'
+import { finishToast, statusLine, wakePrompt } from './notices'
+import { paneOptions, type PaneOptions } from './options'
 import { parseStatus } from './status'
 import { fitTables } from './tables'
 import { markdownBlocks, paneSections, parseColors, unseenRun, type RunView, type Section } from './view'
@@ -17,6 +18,8 @@ type PaneState = {
   isPolling: boolean
   shown: Set<string>
   lastError: string
+  jobId: string
+  statusShown?: string
 }
 
 async function readText($: EngineInterface, path: string): Promise<string> {
@@ -33,7 +36,7 @@ async function readFolder($: EngineInterface, dir: string, suffix: string): Prom
   return texts
 }
 
-async function poll($: EngineInterface, state: PaneState): Promise<void> {
+async function poll($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
   // Temp cleaners remove the root under a long session; runs find it again
   // only if it exists, so it is put back rather than reported.
   if (!(await $.fs.exists(state.root))) {
@@ -47,6 +50,7 @@ async function poll($: EngineInterface, state: PaneState): Promise<void> {
     state.shown.add(name)
     state.runDir = `${state.root}/${name}`
     await $.ui.open({ id: PANE_ID, title: 'Council' })
+    state.jobId = (await readText($, `${state.runDir}/job-id`)).trim()
   }
   const runDir = state.runDir
   state.view = {
@@ -63,17 +67,25 @@ async function poll($: EngineInterface, state: PaneState): Promise<void> {
   }
   // The run is over once .done lands: its dir is removed so the next run is
   // picked up, and the pane keeps the last view until the person closes it.
+  const status = statusLine(state.view)
+  if (status !== state.statusShown) {
+    $.ui.status(status)
+    state.statusShown = status
+  }
   if (state.view.isDone) {
+    $.ui.toast(finishToast(state.view, state.jobId))
+    const wake = settings.wakesOnAsyncDone ? wakePrompt(state.jobId) : undefined
+    if (wake) await $.prompt.submit({ text: wake })
     await $.process.run(['rm', '-rf', runDir])
     state.runDir = undefined
   }
 }
 
-async function pollOnce($: EngineInterface, state: PaneState): Promise<void> {
+async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
   if (state.isPolling) return
   state.isPolling = true
   try {
-    await poll($, state)
+    await poll($, state, settings)
     state.lastError = ''
   } catch (error) {
     // The poll repeats twice a second: a failure that persists is logged once.
@@ -87,7 +99,7 @@ async function pollOnce($: EngineInterface, state: PaneState): Promise<void> {
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '' }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', jobId: '' }
 
   on('session.start', async ($, e, next) => {
     // Off: nothing is exported, so runs keep the tmux pane.
@@ -98,7 +110,7 @@ export const register: Register = (on, options) => {
     await $.env.set('COUNCIL_MOD_PANE_DIR', state.root)
     // Nothing in the pane answers the retry offer, so the run must not wait on it.
     await $.env.set('COUNCIL_RETRY_WAIT', '0')
-    $.clock.every(POLL_MS, () => { void pollOnce($, state) })
+    $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
     return next(e)
   })
 
