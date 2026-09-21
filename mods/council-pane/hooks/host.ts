@@ -41,7 +41,7 @@ export function decideHost(facts: { setting: HostSetting; remembered: PaneHost |
 
 export function hostRowLabel(label: string, setting: HostSetting, remembered: PaneHost | undefined): string {
   if (setting !== 'ask' || !remembered) return label
-  return `${label} (remembered: ${remembered === 'mod' ? 'claude-code' : 'tmux'})`
+  return `${label} \u2192 ${remembered === 'mod' ? 'Claude' : 'tmux'}`
 }
 
 export type PaneCommand = { action: 'reopen' } | { action: 'forget' } | { action: 'unknown' }

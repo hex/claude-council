@@ -258,7 +258,7 @@ export const register: Register = (on, options) => {
       await $.store.delete(HOST_STORE_KEY)
       return { text: 'Forgotten. With the setting on ask, the next council run inside tmux asks where to open its pane.' }
     }
-    if (command.action === 'unknown') return { text: 'Usage: /council-pane [ask]. Choose the pane in /config, row "Council pane opens in".' }
+    if (command.action === 'unknown') return { text: 'Usage: /council-pane [ask]. Choose the pane in /config, row "Pane opens in".' }
     if (state.view) await $.ui.open({ id: PANE_ID, title: 'Council' })
     return { text: reopenReply(state.view !== undefined) }
   })

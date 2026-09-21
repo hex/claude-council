@@ -41,9 +41,11 @@ test('decideHost: outside tmux the only pane is the one in Claude Code, unless t
   expect(decideHost({ setting: 'tmux', remembered: undefined, isInTmux: false })).toBe('tmux')
 })
 
-test('hostRowLabel shows what ask has remembered', () => {
-  expect(hostRowLabel('Council pane opens in', 'ask', 'tmux')).toBe('Council pane opens in (remembered: tmux)')
-  expect(hostRowLabel('Council pane opens in', 'ask', 'mod')).toBe('Council pane opens in (remembered: claude-code)')
-  expect(hostRowLabel('Council pane opens in', 'ask', undefined)).toBe('Council pane opens in')
-  expect(hostRowLabel('Council pane opens in', 'tmux', 'mod')).toBe('Council pane opens in')
+test('hostRowLabel shows what ask has remembered, short enough for the settings column', () => {
+  expect(hostRowLabel('Pane opens in', 'ask', 'tmux')).toBe('Pane opens in \u2192 tmux')
+  expect(hostRowLabel('Pane opens in', 'ask', 'mod')).toBe('Pane opens in \u2192 Claude')
+  expect(hostRowLabel('Pane opens in', 'ask', undefined)).toBe('Pane opens in')
+  expect(hostRowLabel('Pane opens in', 'tmux', 'mod')).toBe('Pane opens in')
+  // The menu appends " · council-pane" and cuts the row at about 41 characters.
+  expect(`${hostRowLabel('Pane opens in', 'ask', 'mod')} \u00b7 council-pane`.length).toBeLessThanOrEqual(41)
 })
