@@ -38,8 +38,8 @@ Without the mod the variable is never set and the scripts behave as before.
 - A status list with one row per provider, in the provider's color. When the run ends it collapses to one summary line and a row of names.
 - A banner per answer with the model and the time it took. Errors show in red.
 - Tables wider than the pane are rewritten as one record per row. Claude Code sizes tables to the terminal, so a wide one wraps into noise otherwise.
-- The synthesis, above the answers, once Claude has written it.
-- `retry` and `skip` buttons with a countdown when a provider fails. Hotkeys `r` and `s` while the pane has focus.
+- The synthesis, below the answers, once Claude has written it. Press `0` to jump to it.
+- `retry` and `skip` buttons with a countdown when a provider fails. Click them, or press `r` and `s` while the pane has focus.
 - Press `1` to `9` in the focused pane to jump to that provider's answer.
 - Progress in the status line (`council 3/6`) and a toast when a run ends. This covers `--async` jobs too, and the toast names the job.
 - `/council-pane` reopens the pane with the last run.

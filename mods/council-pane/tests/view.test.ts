@@ -76,7 +76,7 @@ test('paneSections keeps the status rows on a finished run when collapsing is of
   expect(paneSections(view).map(section => section.kind)).toEqual(['summary', 'strip'])
 })
 
-test('paneSections shows the synthesis above the provider answers', () => {
+test('paneSections shows the synthesis after the provider answers, with a jump to it in the strip', () => {
   const kinds = paneSections({
     providers: [{ name: 'kimi', state: 'cached' }],
     responses: { kimi: 'x' },
@@ -85,8 +85,16 @@ test('paneSections shows the synthesis above the provider answers', () => {
     isDone: true,
     synthesis: '**Consensus.** SQLite.',
   })
-  expect(kinds.map(section => section.kind)).toEqual(['summary', 'strip', 'synthesis', 'banner', 'body'])
-  expect(kinds[2]).toEqual({ kind: 'synthesis', text: '**Consensus.** SQLite.' })
+  expect(kinds.map(section => section.kind)).toEqual(['summary', 'strip', 'banner', 'body', 'synthesis'])
+  expect(kinds[4]).toEqual({ kind: 'synthesis', key: 'jump:synthesis', text: '**Consensus.** SQLite.' })
+  const strip = kinds[1]
+  expect(strip?.kind === 'strip' ? strip.items.at(-1) : undefined).toEqual({
+    glyph: '\u2261',
+    color: 'rgb(113,113,122)',
+    name: 'synthesis',
+    hotkey: '0',
+    target: 'jump:synthesis',
+  })
 })
 
 test('parseColors keeps the last colour written for each provider', () => {

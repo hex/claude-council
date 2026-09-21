@@ -221,7 +221,7 @@ export const register: Register = (on, options) => {
           )
         case 'synthesis':
           return (
-            <Box key={key} flexDirection="column" marginTop={1}>
+            <Box key={section.key} flexDirection="column" marginTop={1}>
               <Box flexDirection="row" paddingX={1} width={columns} backgroundColor="rgb(113,113,122)">
                 <Text bold color="white" backgroundColor="rgb(113,113,122)">SYNTHESIS</Text>
               </Box>
@@ -261,7 +261,7 @@ export const register: Register = (on, options) => {
               onPress={() => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) }}
             />
             <Text>{' '}</Text>
-            <Button key="retry:skip" hotkey="s" label="skip" onPress={() => { void $.fs.write(`${runDir}/.retry-declined`, '') }} />
+            <Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={() => { void $.fs.write(`${runDir}/.retry-declined`, '') }} />
             <Text dimColor>{`  ${offer.remaining}s`}</Text>
           </Box>
         ))}

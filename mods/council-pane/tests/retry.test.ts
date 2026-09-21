@@ -15,6 +15,6 @@ test('parseRetryOffer refuses a file with no usable window or no providers', () 
 
 test('retrySection counts the window down from when the offer was first seen', () => {
   const offer = { seconds: 45, providers: ['cursor-cli', 'grok'] }
-  expect(retrySection(offer, 10_000, 17_400)).toEqual({ kind: 'retry', label: 'retry failed (cursor-cli, grok)', remaining: 38 })
-  expect(retrySection(offer, 10_000, 99_000)).toEqual({ kind: 'retry', label: 'retry failed (cursor-cli, grok)', remaining: 0 })
+  expect(retrySection(offer, 10_000, 17_400)).toEqual({ kind: 'retry', label: 'r \u00b7 retry failed (cursor-cli, grok)', skipLabel: 's \u00b7 skip', remaining: 38 })
+  expect(retrySection(offer, 10_000, 99_000)).toEqual({ kind: 'retry', label: 'r \u00b7 retry failed (cursor-cli, grok)', skipLabel: 's \u00b7 skip', remaining: 0 })
 })
