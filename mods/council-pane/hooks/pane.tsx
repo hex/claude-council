@@ -5,6 +5,7 @@ import { finishToast, reopenReply, statusLine, wakePrompt } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { parseStatus } from './status'
+import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { markdownBlocks, paneSections, parseColors, unseenRun, type RunView, type Section } from './view'
 
@@ -24,6 +25,7 @@ type PaneState = {
   statusShown?: string
   retry?: { offer: RetryOffer; seenAtMs: number }
   retryShown?: RetrySection
+  synthesis?: string
 }
 
 async function readText($: EngineInterface, path: string): Promise<string> {
@@ -53,6 +55,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     if (!name) return
     state.shown.add(name)
     state.runDir = `${state.root}/${name}`
+    state.synthesis = undefined
     await $.ui.open({ id: PANE_ID, title: 'Council' })
     state.jobId = (await readText($, `${state.runDir}/job-id`)).trim()
   }
@@ -64,6 +67,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     colors: parseColors(await readText($, `${runDir}/colors`)),
     isDone: await $.fs.exists(`${runDir}/.done`),
   }
+  if (state.synthesis) state.view.synthesis = state.synthesis
   // The run waits on its offer for a window of seconds; the offer file going
   // away (accepted, declined or expired) withdraws the buttons.
   const offer = parseRetryOffer(await readText($, `${runDir}/retry-offer`))
@@ -125,6 +129,21 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // The synthesis is written into the reply after the run ends; nothing on disk
+  // holds it, so it is lifted from the main loop's final message.
+  on('turn.complete', async ($, e, next) => {
+    const result = await next(e)
+    const view = state.view
+    const synthesis = e.agentId === undefined && view ? extractSynthesis(e.answer) : undefined
+    if (view && synthesis) {
+      state.synthesis = synthesis
+      state.view = { ...view, synthesis }
+      state.drawn = JSON.stringify([state.view, state.retryShown])
+      $.ui.invalidate('ui.render')
+    }
+    return result
+  })
+
   on('command.run', { command: REOPEN_COMMAND }, async $ => {
     if (state.view) await $.ui.open({ id: PANE_ID, title: 'Council' })
     return { text: reopenReply(state.view !== undefined) }
@@ -178,6 +197,17 @@ export const register: Register = (on, options) => {
             <Box key={section.key} flexDirection="row" marginTop={1} paddingX={1} width={columns} backgroundColor={section.background}>
               <Text bold color="white" backgroundColor={section.background}>{section.title}</Text>
               <Text italic color="white" backgroundColor={section.background}>{` ${section.subtitle}`}</Text>
+            </Box>
+          )
+        case 'synthesis':
+          return (
+            <Box key={key} flexDirection="column" marginTop={1}>
+              <Box flexDirection="row" paddingX={1} width={columns} backgroundColor="rgb(113,113,122)">
+                <Text bold color="white" backgroundColor="rgb(113,113,122)">SYNTHESIS</Text>
+              </Box>
+              {markdownBlocks(fitTables(section.text, columns)).map((block, part) => (
+                <Markdown key={`${key}-${part}`} text={block} />
+              ))}
             </Box>
           )
         case 'body':

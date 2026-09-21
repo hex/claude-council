@@ -8,6 +8,7 @@ export type RunView = {
   errors: Record<string, string>
   colors: Record<string, string>
   isDone: boolean
+  synthesis?: string
 }
 
 type DirEntry = { name: string; kind: string }
@@ -23,6 +24,7 @@ export type Section =
   | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string }[] }
   | { kind: 'banner'; key: string; title: string; subtitle: string; background: string }
   | { kind: 'body'; text: string }
+  | { kind: 'synthesis'; text: string }
   | { kind: 'error'; key: string; title: string; text: string }
 
 const STATE_COLORS: Record<string, string> = { querying: 'yellow', complete: 'green', cached: 'cyan', error: 'red' }
@@ -93,7 +95,7 @@ function doneSummary(
 }
 
 export function paneSections(
-  { providers, responses, errors, colors, isDone }: RunView,
+  { providers, responses, errors, colors, isDone, synthesis }: RunView,
   { collapsesWhenDone = true }: { collapsesWhenDone?: boolean } = {},
 ): Section[] {
   if (providers.length === 0) {
@@ -103,6 +105,7 @@ export function paneSections(
   const glyph = (state: string) => (state === 'error' ? '\u2717' : '\u25cf')
   const hasSection = (name: string) => responses[name] !== undefined || errors[name] !== undefined
   const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(providers, vendor, glyph, hasSection) : statusRows(providers, vendor, glyph)
+  if (synthesis) sections.push({ kind: 'synthesis', text: synthesis })
   for (const { name, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]
