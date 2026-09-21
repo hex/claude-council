@@ -41,8 +41,9 @@ type PaneState = {
   frame: number
   nowMs: number
   queryingSinceMs: Record<string, number>
-  // Fitted answer bodies by width and text: a frame redraws the tree, not the markdown.
-  fitted: Map<string, string[]>
+  // Each section's fitted body, for the width and text it was fitted to: a
+  // frame redraws the tree, not the markdown, and a resize replaces the entry.
+  fitted: Map<string, { columns: number; text: string; blocks: string[] }>
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -76,7 +77,8 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.runDir = undefined
     return
   }
-  if (state.finished && !noticeIsLive(state.finished, await $.clock.now())) {
+  const now = await $.clock.now()
+  if (state.finished && !noticeIsLive(state.finished, now)) {
     state.finished = undefined
     $.ui.invalidate('ui.render')
   }
@@ -95,7 +97,6 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   }
   const runDir = state.runDir
   state.view = await readView(files($), runDir)
-  const now = await $.clock.now()
   for (const { name, state: providerState } of state.view.providers) {
     if (providerState === 'querying') state.queryingSinceMs[name] ??= now
   }
@@ -105,8 +106,8 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   // away (accepted, declined or expired) withdraws the buttons.
   const offer = parseRetryOffer(await readText(files($), `${runDir}/retry-offer`))
   if (!offer) state.retry = undefined
-  else if (!state.retry) state.retry = { offer, seenAtMs: await $.clock.now() }
-  state.retryShown = state.retry ? retrySection(state.retry.offer, state.retry.seenAtMs, await $.clock.now()) : undefined
+  else if (!state.retry) state.retry = { offer, seenAtMs: now }
+  state.retryShown = state.retry ? retrySection(state.retry.offer, state.retry.seenAtMs, now) : undefined
   const text = JSON.stringify([state.view, state.retryShown])
   if (text !== state.drawn) {
     state.drawn = text
@@ -117,13 +118,13 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   if (state.view.isDone) {
     // A toast is one unstyled line for four seconds, easy to miss under a
     // streaming reply; the band holds the notice where the offer was.
-    state.finished = { text: finishNotice(state.view, state.jobId), untilMs: (await $.clock.now()) + FINISH_NOTICE_MS }
+    state.finished = { text: finishNotice(state.view, state.jobId), untilMs: now + FINISH_NOTICE_MS }
     $.ui.invalidate('ui.render')
     // .done lands before the worker records where the result is, so the wake
     // waits for the job record to say the result can be fetched.
     const wake = settings.wakesOnAsyncDone ? wakePrompt(state.jobId) : undefined
     const jobFile = (await readText(files($), `${runDir}/job-file`)).trim()
-    if (wake && jobFile) state.pendingWake = { prompt: wake, jobFile, untilMs: (await $.clock.now()) + WAKE_WAIT_MS }
+    if (wake && jobFile) state.pendingWake = { prompt: wake, jobFile, untilMs: now + WAKE_WAIT_MS }
     await $.process.run(['rm', '-rf', runDir])
     state.runDir = undefined
     state.retry = undefined
@@ -178,6 +179,14 @@ async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOpti
     state.lastError = message
   } finally {
     state.isPolling = false
+  }
+}
+
+// What the offer's buttons do: the run waits on these two file names.
+function retryPresses($: EngineInterface, runDir: string) {
+  return {
+    accept: () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) },
+    skip: () => { void $.fs.write(`${runDir}/.retry-declined`, '') },
   }
 }
 
@@ -304,19 +313,18 @@ export const register: Register = (on, options) => {
       )
     }
     if (!retry || !runDir) return next(e)
-    const accept = () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) }
-    const skip = () => { void $.fs.write(`${runDir}/.retry-declined`, '') }
-    return retryRow($.ui.resolve(e), retry, { accept, skip })
+    return retryRow($.ui.resolve(e), retry, retryPresses($, runDir))
   })
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== PANE_ID || !state.view) return next(e)
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
     const columns = e.props.bodyColumns
-    const fit = (text: string) => {
-      const cacheKey = `${columns}\n${text}`
-      const blocks = state.fitted.get(cacheKey) ?? markdownBlocks(fitTables(text, columns))
-      state.fitted.set(cacheKey, blocks)
+    const fit = (sectionKey: string, text: string) => {
+      const kept = state.fitted.get(sectionKey)
+      if (kept && kept.columns === columns && kept.text === text) return kept.blocks
+      const blocks = markdownBlocks(fitTables(text, columns))
+      state.fitted.set(sectionKey, { columns, text, blocks })
       return blocks
     }
     const draw = (section: Section, index: number) => {
@@ -371,7 +379,7 @@ export const register: Register = (on, options) => {
               <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={COUNCIL_RGB}>
                 <Text bold color="white" backgroundColor={COUNCIL_RGB}>SYNTHESIS</Text>
               </Box>
-              {fit(section.text).map((block, part) => (
+              {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
@@ -380,7 +388,7 @@ export const register: Register = (on, options) => {
           // Tables are fitted to the pane's width, which only a render knows.
           return (
             <Box key={key} flexDirection="column">
-              {fit(section.text).map((block, part) => (
+              {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
@@ -398,10 +406,7 @@ export const register: Register = (on, options) => {
     const runDir = state.runDir
     return (
       <Box flexDirection="column">
-        {e.surface !== 'terminal' && retry && runDir ? [retryRow($.ui.resolve(e), retry, {
-          accept: () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) },
-          skip: () => { void $.fs.write(`${runDir}/.retry-declined`, '') },
-        })] : []}
+        {e.surface !== 'terminal' && retry && runDir ? [retryRow($.ui.resolve(e), retry, retryPresses($, runDir))] : []}
         {paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs }).map(draw)}
       </Box>
     )
