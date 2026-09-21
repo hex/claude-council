@@ -1,6 +1,6 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
-import type { EngineInterface, Register } from 'claude-code'
+import type { Elements, EngineInterface, Register } from 'claude-code'
 import { finishToast, reopenReply, statusLine, wakePrompt } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
@@ -115,6 +115,23 @@ async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOpti
   }
 }
 
+// The offer's two buttons and its countdown. The keys work once the person has
+// given the site the keyboard (a click, ctrl+x tab); a click works at any time.
+function retryRow(
+  ui: Pick<Elements['terminal'], 'Box' | 'Button' | 'Text'>,
+  offer: RetrySection,
+  press: { accept: () => void; skip: () => void },
+) {
+  return (
+    <ui.Box key="retry" flexDirection="row">
+      <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
+      <ui.Text>{' '}</ui.Text>
+      <ui.Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={press.skip} />
+      <ui.Text dimColor>{`  ${offer.remaining}s  click, or ctrl+x tab then r / s`}</ui.Text>
+    </ui.Box>
+  )
+}
+
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
   const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', jobId: '' }
@@ -167,6 +184,17 @@ export const register: Register = (on, options) => {
   on('command.run', { command: REOPEN_COMMAND }, async $ => {
     if (state.view) await $.ui.open({ id: PANE_ID, title: 'Council' })
     return { text: reopenReply(state.view !== undefined) }
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
+    // The band sits on the prompt, so the offer stays in view however far the
+    // pane has scrolled; a survey owns the band while it runs.
+    const retry = state.retryShown
+    const runDir = state.runDir
+    if (!retry || !runDir || e.props.hasSurvey) return next(e)
+    const accept = () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) }
+    const skip = () => { void $.fs.write(`${runDir}/.retry-declined`, '') }
+    return retryRow($.ui.resolve(e), retry, { accept, skip })
   })
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
@@ -252,19 +280,10 @@ export const register: Register = (on, options) => {
     const runDir = state.runDir
     return (
       <Box flexDirection="column">
-        {(retry && runDir ? [retry] : []).map(offer => (
-          <Box key="retry" flexDirection="row" marginBottom={1}>
-            <Button
-              key="retry:accept"
-              hotkey="r"
-              label={offer.label}
-              onPress={() => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) }}
-            />
-            <Text>{' '}</Text>
-            <Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={() => { void $.fs.write(`${runDir}/.retry-declined`, '') }} />
-            <Text dimColor>{`  ${offer.remaining}s`}</Text>
-          </Box>
-        ))}
+        {e.surface !== 'terminal' && retry && runDir ? [retryRow($.ui.resolve(e), retry, {
+          accept: () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) },
+          skip: () => { void $.fs.write(`${runDir}/.retry-declined`, '') },
+        })] : []}
         {paneSections(state.view, settings).map(draw)}
       </Box>
     )

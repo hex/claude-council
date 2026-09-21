@@ -39,7 +39,7 @@ Without the mod the variable is never set and the scripts behave as before.
 - A banner per answer with the model and the time it took. Errors show in red.
 - Tables wider than the pane are rewritten as one record per row. Claude Code sizes tables to the terminal, so a wide one wraps into noise otherwise.
 - The synthesis, below the answers, once Claude has written it. Press `0` to jump to it.
-- `retry` and `skip` buttons with a countdown when a provider fails. Click them, or press `r` and `s` while the pane has focus.
+- `retry` and `skip` buttons with a countdown when a provider fails. They sit in the band above the prompt, so they stay in view while the pane scrolls. Click them, or press ctrl+x tab to give the band the keys and then `r` or `s`. Typing goes to the prompt until you do.
 - Press `1` to `9` in the focused pane to jump to that provider's answer.
 - Progress in the status line (`council 3/6`) and a toast when a run ends. This covers `--async` jobs too, and the toast names the job.
 - `/council-pane` reopens the pane with the last run.
