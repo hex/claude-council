@@ -827,6 +827,12 @@ export COUNCIL_RETRY_WAIT=45             # seconds the pane's retry offer stays 
 
 Per-call opt-out via `--no-pane`. iTerm2 features no-op silently outside iTerm2; pane no-ops outside tmux.
 
+#### Pane inside Claude Code (experimental)
+
+`mods/council-pane` is a Claude Code mod that draws the same pane inside Claude Code, without tmux. Mods are early access, so the installed plugin does not include it. Run it from a checkout as its [README](mods/council-pane/README.md) describes.
+
+The scripts support it through one variable. When `COUNCIL_MOD_PANE_DIR` names an existing directory, a run writes its watch directory there and does not open tmux. `--no-pane` and `COUNCIL_NO_PANE=1` still win. Only the mod sets the variable.
+
 ## Adding New Providers
 
 See the `provider-integration` skill for guidance on adding new AI providers.
