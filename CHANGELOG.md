@@ -4,7 +4,7 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.9.11
 
 ### Added
 - **An experimental pane inside Claude Code.** `mods/council-pane` is a Claude Code mod that draws the streaming pane in Claude Code itself, so it works outside tmux. Mods are early access behind `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and the installed plugin does not load it; run it from a checkout with `--plugin-dir . --plugin-dir mods/council-pane`. It shows a status list in each provider's color, with a spinner and a running time on a provider still querying, that collapses to a summary when the run ends. Below it come a banner per answer and the synthesis. A `COUNCIL` row above the prompt carries the retry offer with a countdown bar, and a notice when the run finishes. One setting, `pane_host`, decides where the pane opens: `claude-code`, `tmux`, or `ask`, which puts the question once inside tmux and remembers the answer. Its README lists the other settings and the limits.
@@ -16,6 +16,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ### Other
 - `path_without_clis` in the test helper strips every `PATH` directory that holds a provider CLI. It stripped only the first, so a machine with `codex` or `grok` installed twice failed one `cli-providers` test that CI, which has neither, always passed.
+- `TESTING.md` counts 712 tests across 31 files and covers the nine eval cases, the mod's own checks and the HOL scanner gate. `docs/ARCHITECTURE.md` lists `mods/`, `evals/` and the scanner workflow, and the CLI lists name `cursor-agent`.
 - `.github/workflows/hol-plugin-scanner.yml` runs the HOL plugin scanner on every push to main and every pull request, failing on a high finding or a score under 80. The awesome-ai-plugins catalog scans the repo on its own either way; a maintainer-owned run keeps the listing at full trust score and makes a finding reproducible here. A clean export of the tree scores 100.
 
 ## 2026.9.10
