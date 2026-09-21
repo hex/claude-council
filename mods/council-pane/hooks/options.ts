@@ -5,6 +5,7 @@ export type PaneOptions = {
   isEnabled: boolean
   collapsesWhenDone: boolean
   wakesOnAsyncDone: boolean
+  offersTool: boolean
 }
 
 function flag(value: unknown, fallback: boolean): boolean {
@@ -16,5 +17,6 @@ export function paneOptions(options: Record<string, unknown>): PaneOptions {
     isEnabled: flag(options.pane, true),
     collapsesWhenDone: flag(options.collapse_when_done, true),
     wakesOnAsyncDone: flag(options.wake_on_async_done, false),
+    offersTool: flag(options.council_tool, false),
   }
 }

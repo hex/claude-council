@@ -5,12 +5,14 @@ import { finishToast, reopenReply, statusLine, wakePrompt } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { parseStatus } from './status'
+import { councilArgs, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { markdownBlocks, paneSections, parseColors, unseenRun, type RunView, type Section } from './view'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
+const RUN_TIMEOUT_MS = 600_000
 const POLL_MS = 500
 
 type PaneState = {
@@ -125,6 +127,7 @@ export const register: Register = (on, options) => {
     await $.fs.write(`${state.root}/.keep`, '')
     await $.env.set('COUNCIL_MOD_PANE_DIR', state.root)
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane with the last run', immediate: true })
+    if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
     return next(e)
   })
@@ -142,6 +145,23 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
     }
     return result
+  })
+
+  // The generated types list the tools connected when they were written, so a
+  // tool registered at run time is matched by pattern.
+  on('tool.call', { tool: /^mcp__council-pane__ask$/ }, async ($, e) => {
+    // `e` is flat: the tool's input fields sit beside `tool` and `tool_use_id`.
+    // Its declared type is the union of the listed tools, none of them this one.
+    const input = e as unknown as Record<string, unknown>
+    const parsed = councilArgs(input)
+    if ('deny' in parsed) return { deny: parsed.deny }
+    // The mod sits in the council plugin's repo; the run script is two levels up.
+    const script = `${$.plugin.root}/../../scripts/run-council.sh`
+    if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
+    const run = await $.process.run(['bash', script, ...parsed.args], { timeoutMs: RUN_TIMEOUT_MS })
+    const saved = run.stdout.trim().split('\n').pop() ?? ''
+    if (run.exitCode !== 0 || !saved) return { result: run.stderr || 'council run failed', isError: true }
+    return { result: await $.fs.read(saved) }
   })
 
   on('command.run', { command: REOPEN_COMMAND }, async $ => {

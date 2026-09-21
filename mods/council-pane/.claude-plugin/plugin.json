@@ -25,6 +25,12 @@
       "title": "Wake when an async run finishes",
       "description": "Submit a prompt when a background council run completes. Starts a model turn, which costs tokens.",
       "default": false
+    },
+    "council_tool": {
+      "type": "boolean",
+      "title": "Council as a tool",
+      "description": "Let the model call the council as a tool. Off by default: the council sends your question to third-party providers, and a tool is easier to call unprompted than a slash command.",
+      "default": false
     }
   }
 }
