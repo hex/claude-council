@@ -538,3 +538,72 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
     [ "$status" -eq 1 ]
     perl -e 'exit(($ARGV[1] - $ARGV[0]) >= 1.0 ? 0 : 1)' "$start" "$end"
 }
+
+# ----- mod-hosted pane (COUNCIL_MOD_PANE_DIR) -----
+
+@test "display_pane_open: a mod pane root yields a watch dir without tmux" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR"
+    run display_pane_open
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$PANE_DIR"/run.* ]]
+    [ -d "$output/responses" ]
+}
+
+@test "display_pane_open: COUNCIL_NO_PANE still wins over a mod pane root" {
+    source "$LIB"
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR" COUNCIL_NO_PANE=1
+    run display_pane_open
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "display_pane_open: a mod pane root that is not a directory falls back" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR/gone"
+    run display_pane_open
+    [ "$status" -eq 1 ]
+}
+
+@test "pane_status_event: records each provider's vendor colour beside the status log" {
+    source "$LIB"
+    pane_status_event "$PANE_DIR" perplexity querying
+    pane_status_event "$PANE_DIR" openrouter-2 complete 1200 z-ai/glm
+    run cat "$PANE_DIR/colors"
+    [ "$output" = "perplexity"$'\t'"22;163;74"$'\n'"openrouter-2"$'\t'"124;58;237" ]
+    # The status log keeps its four fields: the tmux watcher reads exactly those.
+    run cat "$PANE_DIR/status"
+    [ "$output" = "perplexity"$'\t'"querying"$'\t\t'$'\n'"openrouter-2"$'\t'"complete"$'\t'"1200"$'\t'"z-ai/glm" ]
+}
+
+@test "display_pane_open: a background job names itself in the mod's watch dir" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR" COUNCIL_JOB_ID="job-abc123"
+    run display_pane_open
+    [ "$status" -eq 0 ]
+    [ "$(cat "$output/job-id")" = "job-abc123" ]
+}
+
+@test "display_pane_open: a foreground run leaves no job id in the mod's watch dir" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE COUNCIL_JOB_ID
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR"
+    run display_pane_open
+    [ "$status" -eq 0 ]
+    [ ! -e "$output/job-id" ]
+}
+
+@test "display: pane_retry_await ends at once when the pane declines the offer" {
+    source "$LIB"
+    pane_retry_offer_write "$PANE_DIR" 30 grok
+    touch "$PANE_DIR/.retry-declined"
+    local started=$SECONDS
+    run pane_retry_await "$PANE_DIR" 30
+    [ "$status" -eq 1 ]
+    [ $(( SECONDS - started )) -lt 5 ]
+    [ ! -e "$PANE_DIR/retry-offer" ]
+    [ ! -e "$PANE_DIR/.retry-declined" ]
+}

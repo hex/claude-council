@@ -100,6 +100,11 @@ pane_status_event() {
     local model="${5:-}"
     [[ -d "$pane_dir" ]] || return 0
     printf '%s\t%s\t%s\t%s\n' "$provider" "$state" "$ms" "$model" >> "$pane_dir/status"
+    # A pane drawn outside this shell cannot call provider_color_rgb, so the
+    # colour travels with the run; a repeated provider repeats its line.
+    local rgb
+    provider_color_rgb rgb "$provider"
+    printf '%s\t%s\n' "$provider" "$rgb" >> "$pane_dir/colors"
 }
 
 pane_response_write() {
@@ -153,10 +158,13 @@ pane_retry_await() {
     local ticks=$(( seconds * 5 ))
     while [[ $ticks -gt 0 && ! -f "$pane_dir/.retry" ]]; do
         [[ -d "$pane_dir" ]] || return 1
+        # A pane that keeps showing the run declines by dropping this marker,
+        # where the tmux pane declines by closing, which removes the dir.
+        [[ -f "$pane_dir/.retry-declined" ]] && break
         sleep 0.2
         ticks=$(( ticks - 1 ))
     done
-    rm -f "$pane_dir/retry-offer"
+    rm -f "$pane_dir/retry-offer" "$pane_dir/.retry-declined"
     [[ -f "$pane_dir/.retry" ]] || return 1
     rm -f "$pane_dir/.retry"
 }
@@ -384,9 +392,24 @@ council_waiting_list() {
 # Prints the watch directory path to stdout (caller stores in COUNCIL_PANE_DIR).
 # Returns 1 if pane could not be opened (caller falls back gracefully).
 display_pane_open() {
+    local watch_dir
+
+    # A Claude Code mod that draws the pane itself exports the directory it
+    # polls. It reads status and responses/ as the watcher would, so the run
+    # needs only the watch dir: no tmux, no renderer. The mod removes the dir.
+    # A root that is gone means the mod is too, so the tmux pane still applies.
+    if [[ -n "${COUNCIL_MOD_PANE_DIR:-}" && -d "$COUNCIL_MOD_PANE_DIR" ]]; then
+        [[ "${COUNCIL_NO_PANE:-}" == "1" ]] && return 1
+        watch_dir=$(mktemp -d "$COUNCIL_MOD_PANE_DIR/run.XXXXXX") || return 1
+        mkdir -p "$watch_dir/responses"
+        # A detached worker's run is announced when it ends; the id says which.
+        [[ -z "${COUNCIL_JOB_ID:-}" ]] || printf '%s' "$COUNCIL_JOB_ID" > "$watch_dir/job-id"
+        printf '%s' "$watch_dir"
+        return 0
+    fi
+
     should_open_pane || return 1
 
-    local watch_dir
     watch_dir=$(mktemp -d "${TMPDIR:-/tmp}/council_pane.XXXXXX")
     mkdir -p "$watch_dir/responses"
 

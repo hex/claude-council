@@ -90,7 +90,7 @@ render_response() {
     if echo "$entry" | jq -e '.response | type == "string"' >/dev/null 2>&1; then
         local response
         response=$(echo "$entry" | jq -r '.response')
-        if [[ -z "${response//[[:space:]]/}" ]]; then
+        if [[ ! "$response" =~ [^[:space:]] ]]; then
             echo "[empty response]"
         else
             echo "$response"

@@ -73,7 +73,7 @@ if [[ $rc -eq 0 ]]; then
           | select(type == "object" and .type == "result")
           | .result // empty
         ] | join("")' "$OUT_TMP" 2>/dev/null || true)
-    if [[ -z "${RESPONSE//[[:space:]]/}" ]]; then
+    if [[ ! "$RESPONSE" =~ [^[:space:]] ]]; then
         echo "Error from cursor-agent CLI: no result in response" >&2
         exit 1
     fi

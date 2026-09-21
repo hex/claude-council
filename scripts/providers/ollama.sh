@@ -147,7 +147,7 @@ fi
 
 TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
 
-if [[ -z "${TEXT//[[:space:]]/}" ]]; then
+if [[ ! "$TEXT" =~ [^[:space:]] ]]; then
     # A thinking model that hit the cap answers with an empty .content and
     # finish_reason "length" — its whole budget went into .reasoning. Say that
     # plainly instead of reporting an "unknown error" the operator cannot act on.
