@@ -1,5 +1,92 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
+import { parseStatus } from './status'
+import { paneMarkdown, unseenRun, type RunView } from './view'
 
-export const register: Register = () => {}
+const PANE_ID = 'council'
+const POLL_MS = 500
+
+type PaneState = {
+  root: string
+  runDir?: string
+  view?: RunView
+  drawn: string
+  isPolling: boolean
+  shown: Set<string>
+}
+
+async function readText($: EngineInterface, path: string): Promise<string> {
+  return (await $.fs.exists(path)) ? await $.fs.read(path) : ''
+}
+
+async function readFolder($: EngineInterface, dir: string, suffix: string): Promise<Record<string, string>> {
+  const texts: Record<string, string> = {}
+  if (!(await $.fs.exists(dir))) return texts
+  for (const entry of await $.fs.list(dir)) {
+    if (entry.kind !== 'file' || entry.name.startsWith('.') || !entry.name.endsWith(suffix)) continue
+    texts[entry.name.slice(0, -suffix.length)] = await $.fs.read(`${dir}/${entry.name}`)
+  }
+  return texts
+}
+
+async function poll($: EngineInterface, state: PaneState): Promise<void> {
+  if (!state.runDir) {
+    const name = unseenRun(await $.fs.list(state.root), state.shown)
+    if (!name) return
+    state.shown.add(name)
+    state.runDir = `${state.root}/${name}`
+    await $.ui.open({ id: PANE_ID, title: 'Council' })
+  }
+  const runDir = state.runDir
+  state.view = {
+    providers: parseStatus(await readText($, `${runDir}/status`)),
+    responses: await readFolder($, `${runDir}/responses`, '.md'),
+    errors: await readFolder($, `${runDir}/errors`, '.txt'),
+    isDone: await $.fs.exists(`${runDir}/.done`),
+  }
+  const text = paneMarkdown(state.view)
+  if (text !== state.drawn) {
+    state.drawn = text
+    $.ui.invalidate('ui.render')
+  }
+  // The run is over once .done lands: its dir is removed so the next run is
+  // picked up, and the pane keeps the last view until the person closes it.
+  if (state.view.isDone) {
+    await $.process.run(['rm', '-rf', runDir])
+    state.runDir = undefined
+  }
+}
+
+async function pollOnce($: EngineInterface, state: PaneState): Promise<void> {
+  if (state.isPolling) return
+  state.isPolling = true
+  try {
+    await poll($, state)
+  } catch (error) {
+    $.ui.log(`council-pane: ${String(error)}`)
+  } finally {
+    state.isPolling = false
+  }
+}
+
+export const register: Register = on => {
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set() }
+
+  on('session.start', async ($, e, next) => {
+    const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
+    state.root = `${tmp}/council-mod.${await $.session.id()}`
+    await $.fs.write(`${state.root}/.keep`, '')
+    await $.env.set('COUNCIL_MOD_PANE_DIR', state.root)
+    // Nothing in the pane answers the retry offer, so the run must not wait on it.
+    await $.env.set('COUNCIL_RETRY_WAIT', '0')
+    $.clock.every(POLL_MS, () => { void pollOnce($, state) })
+    return next(e)
+  })
+
+  on('ui.render', { component: 'Pane' }, ($, e, next) => {
+    if (e.requestId !== PANE_ID || !state.view) return next(e)
+    const { Markdown } = $.ui.resolve(e)
+    return <Markdown text={state.drawn} />
+  })
+}
