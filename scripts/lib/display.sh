@@ -158,10 +158,13 @@ pane_retry_await() {
     local ticks=$(( seconds * 5 ))
     while [[ $ticks -gt 0 && ! -f "$pane_dir/.retry" ]]; do
         [[ -d "$pane_dir" ]] || return 1
+        # A pane that keeps showing the run declines by dropping this marker,
+        # where the tmux pane declines by closing, which removes the dir.
+        [[ -f "$pane_dir/.retry-declined" ]] && break
         sleep 0.2
         ticks=$(( ticks - 1 ))
     done
-    rm -f "$pane_dir/retry-offer"
+    rm -f "$pane_dir/retry-offer" "$pane_dir/.retry-declined"
     [[ -f "$pane_dir/.retry" ]] || return 1
     rm -f "$pane_dir/.retry"
 }

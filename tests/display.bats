@@ -595,3 +595,15 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
     [ "$status" -eq 0 ]
     [ ! -e "$output/job-id" ]
 }
+
+@test "display: pane_retry_await ends at once when the pane declines the offer" {
+    source "$LIB"
+    pane_retry_offer_write "$PANE_DIR" 30 grok
+    touch "$PANE_DIR/.retry-declined"
+    local started=$SECONDS
+    run pane_retry_await "$PANE_DIR" 30
+    [ "$status" -eq 1 ]
+    [ $(( SECONDS - started )) -lt 5 ]
+    [ ! -e "$PANE_DIR/retry-offer" ]
+    [ ! -e "$PANE_DIR/.retry-declined" ]
+}
