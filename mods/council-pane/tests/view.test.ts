@@ -30,9 +30,9 @@ test('paneSections gives a coloured status row per provider, then a banner and b
     { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'green', time: '4.2s', model: 'gemini-3-pro' },
     { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'yellow', time: '    ', model: '' },
     { kind: 'status', glyph: '\u2717', glyphColor: 'red', name: 'grok  ', state: 'error   ', stateColor: 'red', time: '0.9s', model: '' },
-    { kind: 'banner', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)' },
+    { kind: 'banner', key: 'jump:gemini', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)' },
     { kind: 'body', text: 'Use Postgres.' },
-    { kind: 'error', title: 'grok error', text: 'HTTP 429' },
+    { kind: 'error', key: 'jump:grok', title: 'grok error', text: 'HTTP 429' },
   ])
 })
 
@@ -41,7 +41,7 @@ test('paneSections falls back to a neutral banner colour and notes an empty run'
   expect(paneSections({ ...base, providers: [], isDone: false })).toEqual([{ kind: 'note', text: 'Waiting for the council...' }])
   expect(paneSections({ ...base, providers: [], isDone: true })).toEqual([{ kind: 'note', text: 'Council finished with no answers.' }])
   const [, , banner] = paneSections({ ...base, providers: [{ name: 'kimi', state: 'cached' }], responses: { kimi: 'x' }, isDone: true })
-  expect(banner).toEqual({ kind: 'banner', title: 'KIMI', subtitle: '', background: 'rgb(113,113,122)' })
+  expect(banner).toEqual({ kind: 'banner', key: 'jump:kimi', title: 'KIMI', subtitle: '', background: 'rgb(113,113,122)' })
 })
 
 test('paneSections collapses the status rows to a summary and a strip once the run is done', () => {
@@ -51,19 +51,20 @@ test('paneSections collapses the status rows to a summary and a strip once the r
       { name: 'codex', state: 'cached' },
       { name: 'grok', state: 'error', ms: 900 },
     ],
-    responses: {},
-    errors: {},
+    responses: { gemini: 'a' },
+    errors: { grok: 'b' },
     colors: { gemini: '59;130;246' },
     isDone: true,
   })
-  expect(sections).toEqual([
+  // A provider with nothing drawn below (codex) has no jump target.
+  expect(sections.slice(0, 2)).toEqual([
     { kind: 'summary', text: '2 of 3 answered \u00b7 1 error \u00b7 1 cached \u00b7 4.2s' },
     {
       kind: 'strip',
       items: [
-        { glyph: '\u25cf', color: 'rgb(59,130,246)', name: 'gemini' },
-        { glyph: '\u25cf', color: 'rgb(113,113,122)', name: 'codex' },
-        { glyph: '\u2717', color: 'red', name: 'grok' },
+        { glyph: '\u25cf', color: 'rgb(59,130,246)', name: 'gemini', hotkey: '1', target: 'jump:gemini' },
+        { glyph: '\u25cf', color: 'rgb(113,113,122)', name: 'codex', hotkey: '2' },
+        { glyph: '\u2717', color: 'red', name: 'grok', hotkey: '3', target: 'jump:grok' },
       ],
     },
   ])

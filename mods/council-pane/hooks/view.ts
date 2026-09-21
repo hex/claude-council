@@ -20,13 +20,15 @@ export type Section =
   | { kind: 'note'; text: string }
   | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string }
   | { kind: 'summary'; text: string }
-  | { kind: 'strip'; items: { glyph: string; color: string; name: string }[] }
-  | { kind: 'banner'; title: string; subtitle: string; background: string }
+  | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string }[] }
+  | { kind: 'banner'; key: string; title: string; subtitle: string; background: string }
   | { kind: 'body'; text: string }
-  | { kind: 'error'; title: string; text: string }
+  | { kind: 'error'; key: string; title: string; text: string }
 
 const STATE_COLORS: Record<string, string> = { querying: 'yellow', complete: 'green', cached: 'cyan', error: 'red' }
 const NEUTRAL_RGB = '113;113;122'
+
+const jumpKey = (name: string) => `jump:${name}`
 
 function seconds(ms: number | undefined): string {
   return ms === undefined ? '' : `${(ms / 1000).toFixed(1)}s`
@@ -59,7 +61,12 @@ function statusRows(providers: ProviderStatus[], vendor: (name: string) => strin
   }))
 }
 
-function doneSummary(providers: ProviderStatus[], vendor: (name: string) => string, glyph: (state: string) => string): Section[] {
+function doneSummary(
+  providers: ProviderStatus[],
+  vendor: (name: string) => string,
+  glyph: (state: string) => string,
+  hasSection: (name: string) => boolean,
+): Section[] {
   const count = (state: string) => providers.filter(provider => provider.state === state).length
   const answered = count('complete') + count('cached')
   const slowest = Math.max(0, ...providers.map(provider => provider.ms ?? 0))
@@ -71,7 +78,17 @@ function doneSummary(providers: ProviderStatus[], vendor: (name: string) => stri
   ]
   return [
     { kind: 'summary', text: parts.filter(Boolean).join(' \u00b7 ') },
-    { kind: 'strip', items: providers.map(({ name, state }) => ({ glyph: glyph(state), color: state === 'error' ? 'red' : vendor(name), name })) },
+    {
+      kind: 'strip',
+      // The digit is the hotkey that jumps to the provider's section while the pane has the keys.
+      items: providers.map(({ name, state }, index) => ({
+        glyph: glyph(state),
+        color: state === 'error' ? 'red' : vendor(name),
+        name,
+        hotkey: index < 9 ? String(index + 1) : '',
+        ...(hasSection(name) ? { target: jumpKey(name) } : {}),
+      })),
+    },
   ]
 }
 
@@ -84,7 +101,8 @@ export function paneSections(
   }
   const vendor = (name: string) => `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`
   const glyph = (state: string) => (state === 'error' ? '\u2717' : '\u25cf')
-  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(providers, vendor, glyph) : statusRows(providers, vendor, glyph)
+  const hasSection = (name: string) => responses[name] !== undefined || errors[name] !== undefined
+  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(providers, vendor, glyph, hasSection) : statusRows(providers, vendor, glyph)
   for (const { name, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]
@@ -92,13 +110,14 @@ export function paneSections(
       const timing = ms === undefined ? '' : `(${seconds(ms)})`
       sections.push({
         kind: 'banner',
+        key: jumpKey(name),
         title: name.toUpperCase(),
         subtitle: [model, timing].filter(Boolean).join(' '),
         background: vendor(name),
       })
       sections.push({ kind: 'body', text: response })
     } else if (error !== undefined) {
-      sections.push({ kind: 'error', title: `${name} error`, text: error })
+      sections.push({ kind: 'error', key: jumpKey(name), title: `${name} error`, text: error })
     }
   }
   return sections

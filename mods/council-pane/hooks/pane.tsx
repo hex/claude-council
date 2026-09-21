@@ -116,7 +116,7 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== PANE_ID || !state.view) return next(e)
-    const { Box, Markdown, Text } = $.ui.resolve(e)
+    const { Box, Button, Markdown, Text } = $.ui.resolve(e)
     const columns = e.props.bodyColumns
     const draw = (section: Section, index: number) => {
       const key = `section-${index}`
@@ -141,14 +141,25 @@ export const register: Register = (on, options) => {
               {section.items.map(item => (
                 <Box key={`${key}-${item.name}`} flexDirection="row">
                   <Text color={item.color}>{`${item.glyph} `}</Text>
-                  <Text>{`${item.name}  `}</Text>
+                  {item.target ? (
+                    <Button
+                      key={`press:${item.name}`}
+                      plain
+                      label={item.name}
+                      {...(item.hotkey ? { hotkey: item.hotkey } : {})}
+                      onPress={() => { void $.ui.scroll({ in: PANE_ID, to: { key: item.target ?? '' }, block: 'start' }) }}
+                    />
+                  ) : (
+                    <Text dimColor>{item.name}</Text>
+                  )}
+                  <Text>{'  '}</Text>
                 </Box>
               ))}
             </Box>
           )
         case 'banner':
           return (
-            <Box key={key} flexDirection="row" marginTop={1} paddingX={1} width={columns} backgroundColor={section.background}>
+            <Box key={section.key} flexDirection="row" marginTop={1} paddingX={1} width={columns} backgroundColor={section.background}>
               <Text bold color="white" backgroundColor={section.background}>{section.title}</Text>
               <Text italic color="white" backgroundColor={section.background}>{` ${section.subtitle}`}</Text>
             </Box>
@@ -164,7 +175,7 @@ export const register: Register = (on, options) => {
           )
         case 'error':
           return (
-            <Box key={key} flexDirection="column" marginTop={1}>
+            <Box key={section.key} flexDirection="column" marginTop={1}>
               <Text bold color="red">{`\u2717 ${section.title}`}</Text>
               <Text color="red" dimColor>{(markdownBlocks(section.text, 2000)[0] ?? '')}</Text>
             </Box>
