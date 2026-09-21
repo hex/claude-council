@@ -1,0 +1,7 @@
+{
+  "name": "council-pane",
+  "version": "0.0.1",
+  "description": "Draws the claude-council streaming pane inside Claude Code",
+  "author": { "name": "hex", "url": "https://github.com/hex" },
+  "license": "MIT"
+}
