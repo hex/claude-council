@@ -278,7 +278,7 @@ export const register: Register = (on, options) => {
               <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
               <Text bold>{`${section.name}  `}</Text>
               <Text color={section.stateColor}>{`${section.state}  `}</Text>
-              <Text>{`${section.time}  `}</Text>
+              <Text dimColor>{`${section.time}  `}</Text>
               <Text dimColor>{section.model}</Text>
             </Box>
           )
