@@ -2,6 +2,7 @@
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { EngineInterface, Register } from 'claude-code'
 import { parseStatus } from './status'
+import { fitTables } from './tables'
 import { markdownBlocks, paneMarkdown, unseenRun, type RunView } from './view'
 
 const PANE_ID = 'council'
@@ -13,6 +14,7 @@ type PaneState = {
   view?: RunView
   drawn: string
   blocks: string[]
+  blocksFor: string
   isPolling: boolean
   shown: Set<string>
   lastError: string
@@ -57,7 +59,6 @@ async function poll($: EngineInterface, state: PaneState): Promise<void> {
   const text = paneMarkdown(state.view)
   if (text !== state.drawn) {
     state.drawn = text
-    state.blocks = markdownBlocks(text)
     $.ui.invalidate('ui.render')
   }
   // The run is over once .done lands: its dir is removed so the next run is
@@ -85,7 +86,7 @@ async function pollOnce($: EngineInterface, state: PaneState): Promise<void> {
 }
 
 export const register: Register = on => {
-  const state: PaneState = { root: '', drawn: '', blocks: [], isPolling: false, shown: new Set(), lastError: '' }
+  const state: PaneState = { root: '', drawn: '', blocks: [], blocksFor: '', isPolling: false, shown: new Set(), lastError: '' }
 
   on('session.start', async ($, e, next) => {
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
@@ -100,6 +101,13 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== PANE_ID || !state.view) return next(e)
+    // Tables are fitted to the pane's width, which only a render knows; the
+    // blocks are rebuilt when the text or that width changes.
+    const fittedFor = `${e.props.bodyColumns}:${state.drawn}`
+    if (fittedFor !== state.blocksFor) {
+      state.blocks = markdownBlocks(fitTables(state.drawn, e.props.bodyColumns))
+      state.blocksFor = fittedFor
+    }
     const { Box, Markdown } = $.ui.resolve(e)
     return (
       <Box flexDirection="column">
