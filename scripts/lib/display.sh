@@ -384,9 +384,22 @@ council_waiting_list() {
 # Prints the watch directory path to stdout (caller stores in COUNCIL_PANE_DIR).
 # Returns 1 if pane could not be opened (caller falls back gracefully).
 display_pane_open() {
+    local watch_dir
+
+    # A Claude Code mod that draws the pane itself exports the directory it
+    # polls. It reads status and responses/ as the watcher would, so the run
+    # needs only the watch dir: no tmux, no renderer. The mod removes the dir.
+    # A root that is gone means the mod is too, so the tmux pane still applies.
+    if [[ -n "${COUNCIL_MOD_PANE_DIR:-}" && -d "$COUNCIL_MOD_PANE_DIR" ]]; then
+        [[ "${COUNCIL_NO_PANE:-}" == "1" ]] && return 1
+        watch_dir=$(mktemp -d "$COUNCIL_MOD_PANE_DIR/run.XXXXXX") || return 1
+        mkdir -p "$watch_dir/responses"
+        printf '%s' "$watch_dir"
+        return 0
+    fi
+
     should_open_pane || return 1
 
-    local watch_dir
     watch_dir=$(mktemp -d "${TMPDIR:-/tmp}/council_pane.XXXXXX")
     mkdir -p "$watch_dir/responses"
 

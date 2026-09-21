@@ -538,3 +538,31 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
     [ "$status" -eq 1 ]
     perl -e 'exit(($ARGV[1] - $ARGV[0]) >= 1.0 ? 0 : 1)' "$start" "$end"
 }
+
+# ----- mod-hosted pane (COUNCIL_MOD_PANE_DIR) -----
+
+@test "display_pane_open: a mod pane root yields a watch dir without tmux" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR"
+    run display_pane_open
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$PANE_DIR"/run.* ]]
+    [ -d "$output/responses" ]
+}
+
+@test "display_pane_open: COUNCIL_NO_PANE still wins over a mod pane root" {
+    source "$LIB"
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR" COUNCIL_NO_PANE=1
+    run display_pane_open
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "display_pane_open: a mod pane root that is not a directory falls back" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR/gone"
+    run display_pane_open
+    [ "$status" -eq 1 ]
+}
