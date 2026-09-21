@@ -14,9 +14,10 @@ export function statusLine({ providers, isDone }: RunProgress): string | undefin
   return `council ${count(providers, 'complete', 'cached', 'error')}/${providers.length}`
 }
 
-export function finishToast({ providers }: RunProgress, jobId = ''): string {
+export function finishNotice({ providers }: RunProgress, jobId = ''): string {
   const errors = count(providers, 'error')
-  const subject = jobId ? `Council job ${jobId} finished` : 'Council finished'
+  // The band draws a COUNCIL badge ahead of this, so the text does not repeat the name.
+  const subject = jobId ? `job ${jobId} finished` : 'finished'
   const answered = `${count(providers, 'complete', 'cached')} of ${providers.length} answered`
   return `${subject}: ${answered}${errors > 0 ? `, ${errors} error` : ''}`
 }
@@ -30,4 +31,12 @@ export function reopenReply(hasRun: boolean): string {
   return hasRun
     ? 'Council pane reopened with the last run.'
     : 'No council run in this session yet. Start one with /claude-council:ask.'
+}
+
+export type FinishNotice = { text: string; untilMs: number }
+
+export const FINISH_NOTICE_MS = 20_000
+
+export function noticeIsLive(notice: FinishNotice | undefined, nowMs: number): boolean {
+  return notice !== undefined && nowMs < notice.untilMs
 }

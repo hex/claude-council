@@ -1,7 +1,7 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { Elements, EngineInterface, Register } from 'claude-code'
-import { finishToast, reopenReply, statusLine, wakePrompt } from './notices'
+import { FINISH_NOTICE_MS, finishNotice, noticeIsLive, reopenReply, statusLine, wakePrompt, type FinishNotice } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { parseStatus } from './status'
@@ -31,6 +31,7 @@ type PaneState = {
   retry?: { offer: RetryOffer; seenAtMs: number }
   retryShown?: RetrySection
   synthesis?: string
+  finished?: FinishNotice
 }
 
 async function readText($: EngineInterface, path: string): Promise<string> {
@@ -55,12 +56,17 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.runDir = undefined
     return
   }
+  if (state.finished && !noticeIsLive(state.finished, await $.clock.now())) {
+    state.finished = undefined
+    $.ui.invalidate('ui.render')
+  }
   if (!state.runDir) {
     const name = unseenRun(await $.fs.list(state.root), state.shown)
     if (!name) return
     state.shown.add(name)
     state.runDir = `${state.root}/${name}`
     state.synthesis = undefined
+    state.finished = undefined
     await $.ui.open({ id: PANE_ID, title: 'Council' })
     state.jobId = (await readText($, `${state.runDir}/job-id`)).trim()
   }
@@ -92,7 +98,10 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.statusShown = status
   }
   if (state.view.isDone) {
-    $.ui.toast(finishToast(state.view, state.jobId))
+    // A toast is one unstyled line for four seconds, easy to miss under a
+    // streaming reply; the band holds the notice where the offer was.
+    state.finished = { text: finishNotice(state.view, state.jobId), untilMs: (await $.clock.now()) + FINISH_NOTICE_MS }
+    $.ui.invalidate('ui.render')
     const wake = settings.wakesOnAsyncDone ? wakePrompt(state.jobId) : undefined
     if (wake) await $.prompt.submit({ text: wake })
     await $.process.run(['rm', '-rf', runDir])
@@ -198,7 +207,31 @@ export const register: Register = (on, options) => {
     // pane has scrolled; a survey owns the band while it runs.
     const retry = state.retryShown
     const runDir = state.runDir
-    if (!retry || !runDir || e.props.hasSurvey) return next(e)
+    if (e.props.hasSurvey) return next(e)
+    const finished = state.finished
+    if (finished && !retry) {
+      const ui = $.ui.resolve(e)
+      return (
+        <ui.Box key="finished" flexDirection="row">
+          <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
+            <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>COUNCIL</ui.Text>
+          </ui.Box>
+          <ui.Text bold>{` \u2713 ${finished.text}  `}</ui.Text>
+          <ui.Button key="finished:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
+          <ui.Text>{' '}</ui.Text>
+          <ui.Button
+            key="finished:dismiss"
+            hotkey="x"
+            label={'x \u00b7 dismiss'}
+            onPress={() => {
+              state.finished = undefined
+              $.ui.invalidate('ui.render')
+            }}
+          />
+        </ui.Box>
+      )
+    }
+    if (!retry || !runDir) return next(e)
     const accept = () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) }
     const skip = () => { void $.fs.write(`${runDir}/.retry-declined`, '') }
     return retryRow($.ui.resolve(e), retry, { accept, skip })

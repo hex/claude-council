@@ -41,7 +41,7 @@ Without the mod the variable is never set and the scripts behave as before.
 - The synthesis, below the answers, once Claude has written it. Press `0` to jump to it.
 - `retry` and `skip` buttons with a countdown when a provider fails. They sit in the band above the prompt, so they stay in view while the pane scrolls. Click them, or press ctrl+x tab to give the band the keys and then `r` or `s`. Typing goes to the prompt until you do.
 - Press `1` to `9` in the focused pane to jump to that provider's answer.
-- Progress in the status line (`council 3/6`) and a toast when a run ends. This covers `--async` jobs too, and the toast names the job.
+- Progress in the status line (`council 3/6`). When a run ends, a `COUNCIL` notice sits above the prompt for 20 seconds with buttons to open the pane or dismiss it. This covers `--async` jobs too, and the notice names the job.
 - `/council-pane` reopens the pane with the last run.
 
 ## Settings
