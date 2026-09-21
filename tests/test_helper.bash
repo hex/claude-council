@@ -108,11 +108,17 @@ assert_not_blank() {
 # nothing here that commonly shares a directory with jq, curl or node.
 path_without_clis() {
     local clean=$PATH
-    local cli dir
+    local cli dir trimmed
     for cli in codex gemini agy grok kimi cursor-agent ollama; do
-        dir=$(dirname "$(command -v "$cli" 2>/dev/null)" 2>/dev/null || true)
-        [[ -n "$dir" ]] || continue
-        clean=$(echo "$clean" | tr ':' '\n' | grep -vF -- "$dir" | tr '\n' ':')
+        # A CLI installed twice (a cask and an npm global) sits in two
+        # directories; each pass drops the one the trimmed PATH still finds.
+        while dir=$(PATH=$clean command -v "$cli" 2>/dev/null) && [[ "$dir" == /* ]]; do
+            trimmed=$(echo "$clean" | tr ':' '\n' | grep -vF -- "$(dirname "$dir")" | tr '\n' ':')
+            trimmed=${trimmed%:}
+            # An entry the filter cannot match would be found again forever.
+            [[ "$trimmed" != "$clean" ]] || break
+            clean=$trimmed
+        done
     done
     echo "${clean%:}"
 }
