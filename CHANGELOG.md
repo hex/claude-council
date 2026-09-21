@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Changed
+- **The pane mod ships inside the plugin.** `hooks/hooks.json` names `mods/council-pane/hooks/pane.tsx` as a module, so an installed council loads the pane whenever Claude Code runs with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`; no `--plugin-dir` is needed. Without the variable Claude Code skips the module and nothing changes. The four settings moved to the plugin's own `/config` rows, and the council tool is now `mcp__claude-council__ask`. A remembered `pane_host` answer from the standalone mod is not carried over; the setting asks again once. `mods/council-pane` is no longer a plugin of its own: its manifest and `hooks.json` are gone, and `claude plugin validate .` at the repo root checks the module.
+
 ## 2026.9.11
 
 ### Added

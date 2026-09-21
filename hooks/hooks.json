@@ -11,5 +11,8 @@
         ]
       }
     ]
-  }
+  },
+  "modules": [
+    "../mods/council-pane/hooks/pane.tsx"
+  ]
 }

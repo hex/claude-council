@@ -829,7 +829,7 @@ Per-call opt-out via `--no-pane`. iTerm2 features no-op silently outside iTerm2;
 
 #### Pane inside Claude Code (experimental)
 
-`mods/council-pane` is a Claude Code mod that draws the same pane inside Claude Code, without tmux. Mods are early access, so the installed plugin does not include it. Run it from a checkout as its [README](mods/council-pane/README.md) describes.
+`mods/council-pane` is a Claude Code mod that draws the same pane inside Claude Code, without tmux. It ships with the plugin and loads when Claude Code runs with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`; mods are early access, so without that variable nothing changes. Its [README](mods/council-pane/README.md) lists the settings and the limits.
 
 The scripts support it through one variable. When `COUNCIL_MOD_PANE_DIR` names an existing directory, a run writes its watch directory there and does not open tmux. `--no-pane` and `COUNCIL_NO_PANE=1` still win. Only the mod sets the variable.
 
