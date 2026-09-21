@@ -1,6 +1,7 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { Elements, EngineInterface, Register } from 'claude-code'
+import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
 import { FINISH_NOTICE_MS, finishNotice, noticeIsLive, reopenReply, wakePrompt, type FinishNotice } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
@@ -17,6 +18,8 @@ const RUN_TIMEOUT_MS = 600_000
 // synthesis is Claude's own text. No provider's banner uses it.
 const COUNCIL_RGB = 'rgb(217,119,87)'
 const POLL_MS = 500
+// Ten frames a second: the spinner's pace in the tmux pane.
+const FRAME_MS = 100
 
 type PaneState = {
   root: string
@@ -31,6 +34,11 @@ type PaneState = {
   retryShown?: RetrySection
   synthesis?: string
   finished?: FinishNotice
+  frame: number
+  nowMs: number
+  queryingSinceMs: Record<string, number>
+  // Fitted answer bodies by width and text: a frame redraws the tree, not the markdown.
+  fitted: Map<string, string[]>
 }
 
 async function readText($: EngineInterface, path: string): Promise<string> {
@@ -66,6 +74,8 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.runDir = `${state.root}/${name}`
     state.synthesis = undefined
     state.finished = undefined
+    state.queryingSinceMs = {}
+    state.fitted.clear()
     await $.ui.open({ id: PANE_ID, title: 'Council' })
     state.jobId = (await readText($, `${state.runDir}/job-id`)).trim()
   }
@@ -77,6 +87,11 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     colors: parseColors(await readText($, `${runDir}/colors`)),
     isDone: await $.fs.exists(`${runDir}/.done`),
   }
+  const now = await $.clock.now()
+  for (const { name, state: providerState } of state.view.providers) {
+    if (providerState === 'querying') state.queryingSinceMs[name] ??= now
+  }
+  state.view.queryingSinceMs = state.queryingSinceMs
   if (state.synthesis) state.view.synthesis = state.synthesis
   // The run waits on its offer for a window of seconds; the offer file going
   // away (accepted, declined or expired) withdraws the buttons.
@@ -103,6 +118,40 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.retry = undefined
     state.retryShown = undefined
   }
+}
+
+// Advances the spinner and the clock the elapsed times read, only while a
+// provider is still querying; an idle pane costs no redraws.
+async function animate($: EngineInterface, state: PaneState): Promise<void> {
+  const view = state.view
+  if (!view || view.isDone || !view.providers.some(provider => provider.state === 'querying')) return
+  state.frame += 1
+  state.nowMs = await $.clock.now()
+  $.ui.invalidate('ui.render')
+}
+
+// Settles where this run's pane goes, asking once when the setting says ask
+// and nothing is remembered. A dismissed dialog or a headless run stores
+// nothing and the pane is drawn here, so the question comes back.
+async function paneHost($: EngineInterface, setting: HostSetting): Promise<PaneHost> {
+  const remembered = hostFrom(await $.store.get(HOST_STORE_KEY))
+  const decided = decideHost({ setting, remembered, isInTmux: Boolean(await $.env.get('TMUX')) })
+  if (decided !== 'ask') return decided
+  let asked: PaneHost | undefined
+  try {
+    asked = hostFrom(await $.ui.ask(HOST_QUESTION, { header: 'Council pane', options: [HOST_LABELS.mod, HOST_LABELS.tmux] }))
+  } catch {
+    asked = undefined
+  }
+  if (asked) await $.store.set(HOST_STORE_KEY, asked)
+  return asked ?? 'mod'
+}
+
+// Points the next run at this mod's pane or away from it; a Bash child reads
+// the variable when it starts, so this runs just before one does.
+async function aimRun($: EngineInterface, state: PaneState, setting: HostSetting): Promise<void> {
+  const host = await paneHost($, setting)
+  await $.env.set('COUNCIL_MOD_PANE_DIR', host === 'mod' ? state.root : undefined)
 }
 
 async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
@@ -137,24 +186,23 @@ function retryRow(
       <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
       <ui.Text>{' '}</ui.Text>
       <ui.Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={press.skip} />
-      <ui.Text dimColor>{`  ${offer.remaining}s  click, or ctrl+x tab then r / s`}</ui.Text>
+      <ui.Text color={COUNCIL_RGB}>{`  ${offer.bar}`}</ui.Text>
+      <ui.Text dimColor>{` ${offer.remaining}s  click, or ctrl+x tab then r / s`}</ui.Text>
     </ui.Box>
   )
 }
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', jobId: '' }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', jobId: '', frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
 
   on('session.start', async ($, e, next) => {
-    // Off: nothing is exported, so runs keep the tmux pane.
-    if (!settings.isEnabled) return next(e)
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
     state.root = `${tmp}/council-mod.${await $.session.id()}`
     await $.fs.write(`${state.root}/.keep`, '')
-    await $.env.set('COUNCIL_MOD_PANE_DIR', state.root)
-    await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane with the last run', immediate: true })
+    await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
+    $.clock.every(FRAME_MS, () => { void animate($, state) })
     $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
     return next(e)
   })
@@ -174,6 +222,18 @@ export const register: Register = (on, options) => {
     return result
   })
 
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    if (isCouncilRun(e.command)) await aimRun($, state, settings.host)
+    return next(e)
+  })
+
+  // The settings row says ask while an answer is remembered; its label says which.
+  on('config.describe', async ($, e, next) => {
+    const row = await next(e)
+    if (!e.key.endsWith('.pane_host')) return row
+    return { ...row, label: hostRowLabel(row.label, settings.host, hostFrom(await $.store.get(HOST_STORE_KEY))) }
+  })
+
   // The generated types list the tools connected when they were written, so a
   // tool registered at run time is matched by pattern.
   on('tool.call', { tool: /^mcp__council-pane__ask$/ }, async ($, e) => {
@@ -185,13 +245,20 @@ export const register: Register = (on, options) => {
     // The mod sits in the council plugin's repo; the run script is two levels up.
     const script = `${$.plugin.root}/../../scripts/run-council.sh`
     if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
+    await aimRun($, state, settings.host)
     const run = await $.process.run(['bash', script, ...parsed.args], { timeoutMs: RUN_TIMEOUT_MS })
     const saved = run.stdout.trim().split('\n').pop() ?? ''
     if (run.exitCode !== 0 || !saved) return { result: run.stderr || 'council run failed', isError: true }
     return { result: await $.fs.read(saved) }
   })
 
-  on('command.run', { command: REOPEN_COMMAND }, async $ => {
+  on('command.run', { command: REOPEN_COMMAND }, async ($, e) => {
+    const command = paneCommand(e.args)
+    if (command.action === 'forget') {
+      await $.store.delete(HOST_STORE_KEY)
+      return { text: 'Forgotten. With the setting on ask, the next council run inside tmux asks where to open its pane.' }
+    }
+    if (command.action === 'unknown') return { text: 'Usage: /council-pane [ask]. Choose the pane in /config, row "Pane opens in".' }
     if (state.view) await $.ui.open({ id: PANE_ID, title: 'Council' })
     return { text: reopenReply(state.view !== undefined) }
   })
@@ -235,6 +302,12 @@ export const register: Register = (on, options) => {
     if (e.requestId !== PANE_ID || !state.view) return next(e)
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
     const columns = e.props.bodyColumns
+    const fit = (text: string) => {
+      const cacheKey = `${columns}\n${text}`
+      const blocks = state.fitted.get(cacheKey) ?? markdownBlocks(fitTables(text, columns))
+      state.fitted.set(cacheKey, blocks)
+      return blocks
+    }
     const draw = (section: Section, index: number) => {
       const key = `section-${index}`
       switch (section.kind) {
@@ -246,7 +319,7 @@ export const register: Register = (on, options) => {
               <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
               <Text bold>{`${section.name}  `}</Text>
               <Text color={section.stateColor}>{`${section.state}  `}</Text>
-              <Text>{`${section.time}  `}</Text>
+              <Text dimColor>{`${section.time}  `}</Text>
               <Text dimColor>{section.model}</Text>
             </Box>
           )
@@ -287,7 +360,7 @@ export const register: Register = (on, options) => {
               <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={COUNCIL_RGB}>
                 <Text bold color="white" backgroundColor={COUNCIL_RGB}>SYNTHESIS</Text>
               </Box>
-              {markdownBlocks(fitTables(section.text, columns)).map((block, part) => (
+              {fit(section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
@@ -296,7 +369,7 @@ export const register: Register = (on, options) => {
           // Tables are fitted to the pane's width, which only a render knows.
           return (
             <Box key={key} flexDirection="column">
-              {markdownBlocks(fitTables(section.text, columns)).map((block, part) => (
+              {fit(section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
@@ -318,7 +391,7 @@ export const register: Register = (on, options) => {
           accept: () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) },
           skip: () => { void $.fs.write(`${runDir}/.retry-declined`, '') },
         })] : []}
-        {paneSections(state.view, settings).map(draw)}
+        {paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs }).map(draw)}
       </Box>
     )
   })

@@ -16,7 +16,7 @@ Both flags matter. `--plugin-dir .` loads this checkout's scripts over the insta
 
 ## How it hooks in
 
-At session start the mod creates a directory under `$TMPDIR` and exports its path as `COUNCIL_MOD_PANE_DIR`. Every Bash command Claude runs after that inherits it.
+At session start the mod creates a directory under `$TMPDIR`. Just before Claude runs `run-council.sh`, the mod sets `COUNCIL_MOD_PANE_DIR` to that directory, or clears it when the pane belongs to tmux. The run inherits it.
 
 When the variable is set, `run-council.sh` writes its watch directory there and skips tmux. The mod polls that directory twice a second and draws what it finds. The files are the same ones the tmux watcher reads, plus a few the mod needs:
 
@@ -35,11 +35,11 @@ Without the mod the variable is never set and the scripts behave as before.
 
 ## What you get
 
-- A status list with one row per provider, in the provider's color. When the run ends it collapses to one summary line and a row of names.
+- A status list with one row per provider, in the provider's color. A provider still querying shows a spinner and a running time. When the run ends it collapses to one summary line and a row of names.
 - A banner per answer with the model and the time it took. Errors show in red.
 - Tables wider than the pane are rewritten as one record per row. Claude Code sizes tables to the terminal, so a wide one wraps into noise otherwise.
 - The synthesis, below the answers, once Claude has written it. Press `0` to jump to it.
-- `retry` and `skip` buttons with a countdown when a provider fails. They sit in the band above the prompt, so they stay in view while the pane scrolls. Click them, or press ctrl+x tab to give the band the keys and then `r` or `s`. Typing goes to the prompt until you do.
+- `retry` and `skip` buttons with a countdown bar when a provider fails. They sit in the band above the prompt, so they stay in view while the pane scrolls. Click them, or press ctrl+x tab to give the band the keys and then `r` or `s`. Typing goes to the prompt until you do.
 - Press `1` to `9` in the focused pane to jump to that provider's answer.
 - When a run ends, a `COUNCIL` notice sits above the prompt for 20 seconds with buttons to open the pane or dismiss it. This covers `--async` jobs too, and the notice names the job.
 - `/council-pane` reopens the pane with the last run.
@@ -50,7 +50,7 @@ They show up in `/config`. Changing one reloads the mod.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `pane` | on | Off exports nothing, so runs go back to the tmux pane. |
+| `pane_host` | `ask` | Where the pane opens. `claude-code` always draws it here, `tmux` always leaves it to tmux. `ask` puts the question once, the first time a run starts inside tmux, and remembers the answer across sessions; the row's label shows what it remembered. `/council-pane ask` forgets it. Outside tmux, `ask` opens the pane here without asking. |
 | `collapse_when_done` | on | Off keeps the full status list after a run. |
 | `wake_on_async_done` | off | Submits a prompt when a background job finishes. That starts a model turn and costs tokens. |
 | `council_tool` | off | Registers `mcp__council-pane__ask` so the model can call the council as a tool. |

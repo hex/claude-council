@@ -3,7 +3,9 @@
 
 export type RetryOffer = { seconds: number; providers: string[] }
 
-export type RetrySection = { kind: 'retry'; badge: string; notice: string; label: string; skipLabel: string; remaining: number }
+export type RetrySection = { kind: 'retry'; badge: string; notice: string; label: string; skipLabel: string; remaining: number; bar: string }
+
+const BAR_CELLS = 8
 
 export function parseRetryOffer(text: string): RetryOffer | undefined {
   const [window = '', ...rest] = text.split('\n').map(line => line.trim())
@@ -15,7 +17,9 @@ export function parseRetryOffer(text: string): RetryOffer | undefined {
 export function retrySection(offer: RetryOffer, seenAtMs: number, nowMs: number): RetrySection {
   const remaining = Math.max(0, offer.seconds - Math.floor((nowMs - seenAtMs) / 1000))
   const { providers } = offer
+  const filled = Math.ceil((remaining / offer.seconds) * BAR_CELLS)
+  const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(BAR_CELLS - filled)
   const notice = providers.length === 1 ? `${providers[0]} failed` : `${providers.length} providers failed: ${providers.join(', ')}`
   // The labels name their hotkeys: a terminal Button draws as `[ label ]` and shows no key of its own.
-  return { kind: 'retry', badge: 'COUNCIL', notice, label: 'r \u00b7 retry', skipLabel: 's \u00b7 skip', remaining }
+  return { kind: 'retry', badge: 'COUNCIL', notice, label: 'r \u00b7 retry', skipLabel: 's \u00b7 skip', remaining, bar }
 }
