@@ -110,9 +110,24 @@ export const register: Register = on => {
         case 'status':
           return (
             <Box key={key} flexDirection="row">
-              <Text color={section.color}>{'\u25cf '}</Text>
-              <Text bold>{section.name}</Text>
-              <Text dimColor>{` ${section.detail}`}</Text>
+              <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
+              <Text bold>{`${section.name}  `}</Text>
+              <Text color={section.stateColor}>{`${section.state}  `}</Text>
+              <Text>{`${section.time}  `}</Text>
+              <Text dimColor>{section.model}</Text>
+            </Box>
+          )
+        case 'summary':
+          return <Text key={key} bold>{section.text}</Text>
+        case 'strip':
+          return (
+            <Box key={key} flexDirection="row" flexWrap="wrap">
+              {section.items.map(item => (
+                <Box key={`${key}-${item.name}`} flexDirection="row">
+                  <Text color={item.color}>{`${item.glyph} `}</Text>
+                  <Text>{`${item.name}  `}</Text>
+                </Box>
+              ))}
             </Box>
           )
         case 'banner':

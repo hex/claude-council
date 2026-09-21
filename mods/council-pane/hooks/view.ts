@@ -18,7 +18,9 @@ export function unseenRun(entries: readonly DirEntry[], shown: ReadonlySet<strin
 
 export type Section =
   | { kind: 'note'; text: string }
-  | { kind: 'status'; name: string; detail: string; color: string }
+  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string }
+  | { kind: 'summary'; text: string }
+  | { kind: 'strip'; items: { glyph: string; color: string; name: string }[] }
   | { kind: 'banner'; title: string; subtitle: string; background: string }
   | { kind: 'body'; text: string }
   | { kind: 'error'; title: string; text: string }
@@ -39,16 +41,47 @@ export function parseColors(log: string): Record<string, string> {
   return colors
 }
 
+// Columns are padded here so the rows line up whatever the surface's layout does.
+function statusRows(providers: ProviderStatus[], vendor: (name: string) => string, glyph: (state: string) => string): Section[] {
+  const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
+  const names = width(providers.map(provider => provider.name))
+  const states = width(providers.map(provider => provider.state))
+  const times = width(providers.map(provider => seconds(provider.ms)))
+  return providers.map(({ name, state, ms, model }) => ({
+    kind: 'status',
+    glyph: glyph(state),
+    glyphColor: vendor(name),
+    name: name.padEnd(names),
+    state: state.padEnd(states),
+    stateColor: STATE_COLORS[state] ?? 'gray',
+    time: seconds(ms).padStart(times),
+    model: model ?? '',
+  }))
+}
+
+function doneSummary(providers: ProviderStatus[], vendor: (name: string) => string, glyph: (state: string) => string): Section[] {
+  const count = (state: string) => providers.filter(provider => provider.state === state).length
+  const answered = count('complete') + count('cached')
+  const slowest = Math.max(0, ...providers.map(provider => provider.ms ?? 0))
+  const parts = [
+    `${answered} of ${providers.length} answered`,
+    count('error') > 0 ? `${count('error')} error` : '',
+    count('cached') > 0 ? `${count('cached')} cached` : '',
+    slowest > 0 ? seconds(slowest) : '',
+  ]
+  return [
+    { kind: 'summary', text: parts.filter(Boolean).join(' \u00b7 ') },
+    { kind: 'strip', items: providers.map(({ name, state }) => ({ glyph: glyph(state), color: vendor(name), name })) },
+  ]
+}
+
 export function paneSections({ providers, responses, errors, colors, isDone }: RunView): Section[] {
   if (providers.length === 0) {
     return [{ kind: 'note', text: isDone ? 'Council finished with no answers.' : 'Waiting for the council...' }]
   }
-  const sections: Section[] = providers.map(({ name, state, ms }) => ({
-    kind: 'status',
-    name,
-    detail: ms === undefined ? state : `${state}, ${seconds(ms)}`,
-    color: STATE_COLORS[state] ?? 'gray',
-  }))
+  const vendor = (name: string) => `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`
+  const glyph = (state: string) => (state === 'error' ? '\u2717' : '\u25cf')
+  const sections: Section[] = isDone ? doneSummary(providers, vendor, glyph) : statusRows(providers, vendor, glyph)
   for (const { name, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]
@@ -58,7 +91,7 @@ export function paneSections({ providers, responses, errors, colors, isDone }: R
         kind: 'banner',
         title: name.toUpperCase(),
         subtitle: [model, timing].filter(Boolean).join(' '),
-        background: `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`,
+        background: vendor(name),
       })
       sections.push({ kind: 'body', text: response })
     } else if (error !== undefined) {

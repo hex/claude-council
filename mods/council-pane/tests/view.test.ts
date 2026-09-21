@@ -27,9 +27,9 @@ test('paneSections gives a coloured status row per provider, then a banner and b
     isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'status', name: 'gemini', detail: 'complete, 4.2s', color: 'green' },
-    { kind: 'status', name: 'openai', detail: 'querying', color: 'yellow' },
-    { kind: 'status', name: 'grok', detail: 'error, 0.9s', color: 'red' },
+    { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'green', time: '4.2s', model: 'gemini-3-pro' },
+    { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'yellow', time: '    ', model: '' },
+    { kind: 'status', glyph: '\u2717', glyphColor: 'rgb(239,68,68)', name: 'grok  ', state: 'error   ', stateColor: 'red', time: '0.9s', model: '' },
     { kind: 'banner', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)' },
     { kind: 'body', text: 'Use Postgres.' },
     { kind: 'error', title: 'grok error', text: 'HTTP 429' },
@@ -40,8 +40,33 @@ test('paneSections falls back to a neutral banner colour and notes an empty run'
   const base = { responses: {}, errors: {}, colors: {} }
   expect(paneSections({ ...base, providers: [], isDone: false })).toEqual([{ kind: 'note', text: 'Waiting for the council...' }])
   expect(paneSections({ ...base, providers: [], isDone: true })).toEqual([{ kind: 'note', text: 'Council finished with no answers.' }])
-  const [, banner] = paneSections({ ...base, providers: [{ name: 'kimi', state: 'cached' }], responses: { kimi: 'x' }, isDone: true })
+  const [, , banner] = paneSections({ ...base, providers: [{ name: 'kimi', state: 'cached' }], responses: { kimi: 'x' }, isDone: true })
   expect(banner).toEqual({ kind: 'banner', title: 'KIMI', subtitle: '', background: 'rgb(113,113,122)' })
+})
+
+test('paneSections collapses the status rows to a summary and a strip once the run is done', () => {
+  const sections = paneSections({
+    providers: [
+      { name: 'gemini', state: 'complete', ms: 4210 },
+      { name: 'codex', state: 'cached' },
+      { name: 'grok', state: 'error', ms: 900 },
+    ],
+    responses: {},
+    errors: {},
+    colors: { gemini: '59;130;246' },
+    isDone: true,
+  })
+  expect(sections).toEqual([
+    { kind: 'summary', text: '2 of 3 answered \u00b7 1 error \u00b7 1 cached \u00b7 4.2s' },
+    {
+      kind: 'strip',
+      items: [
+        { glyph: '\u25cf', color: 'rgb(59,130,246)', name: 'gemini' },
+        { glyph: '\u25cf', color: 'rgb(113,113,122)', name: 'codex' },
+        { glyph: '\u2717', color: 'rgb(113,113,122)', name: 'grok' },
+      ],
+    },
+  ])
 })
 
 test('parseColors keeps the last colour written for each provider', () => {
