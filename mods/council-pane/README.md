@@ -26,6 +26,7 @@ When the variable is set, `run-council.sh` writes its watch directory there and 
 | `responses/<name>.md` | the run | each answer |
 | `errors/<name>.txt` | the run | each error |
 | `colors` | the run | each provider's banner color as `r;g;b` |
+| `pid` | the run | the run's process id, so a run that was killed is not waited on |
 | `job-id` | an `--async` run | the background job's id |
 | `job-file` | an `--async` run | the path of the job's record, which says when the result can be fetched |
 | `retry-offer` | the run | seconds the offer stays open, then the failed providers |
@@ -60,6 +61,7 @@ They show up in `/config`. Changing one reloads the mod.
 
 ## Limits
 
+- A run that is killed outright writes no `.done`. The mod checks the run's pid every five seconds and, once the process is gone, shows `stopped before it finished` and moves on.
 - The pane follows one run at a time. If a second run starts while one is live, the pane picks it up when the first ends.
 - Saving a file in the mod or changing a setting reloads it and clears the pane. Run `/claude-council:ask` again.
 - The mod parses the synthesis out of Claude's reply, between the `## Synthesis` heading and the `Full output saved` line. If the council skill changes that format, the section stops appearing.

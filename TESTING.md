@@ -42,7 +42,7 @@ bats --verbose-run tests/cache.bats
 |------|-------|----------|
 | `cache.bats` | 26 tests | cache_key (incl. verbosity/token/image components), cache_get/set, cache_valid, TTL, clear, self-ignoring dir |
 | `cli-providers.bats` | 73 tests | codex/antigravity/grok-cli/kimi-cli/ollama discovery, CLI-prefers-API policy, shadow_origin↔api_sibling single source, --list-available / --list-default, flag parsing, coerce_result_json JSON guard, CLI→API fallback (dedup, cache reuse, missing-script, round 2), a new API seat riding the generic `<NAME>_API_KEY` branch into the default set, `--list-default-models` pairing each default provider with the model it would send and naming exactly what `--list-default` names, gated E2E |
-| `display.bats` | 52 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, retry-await window floor, waiting-line truncation + autowrap guard, the mod pane's watch dir (`COUNCIL_MOD_PANE_DIR`, `colors`, `job-id`, `job-file`, `.retry-declined`), a guard that no blank check strips a whole response, renderer selection (Rich feature probe, uv route + timeout, perl fallback, COUNCIL_RENDERER=perl, runtime fallback + stdout forwarding, think-block styling incl. unclosed tags, code-theme direction, link style, COLUMNS=0) |
+| `display.bats` | 53 tests | tmux/iTerm2 detection, wrapper no-op behavior, manifest writes, pane gating, tty probe, pane env forwarding, retry-await window floor, waiting-line truncation + autowrap guard, the mod pane's watch dir (`COUNCIL_MOD_PANE_DIR`, `pid`, `colors`, `job-id`, `job-file`, `.retry-declined`), a guard that no blank check strips a whole response, renderer selection (Rich feature probe, uv route + timeout, perl fallback, COUNCIL_RENDERER=perl, runtime fallback + stdout forwarding, think-block styling incl. unclosed tags, code-theme direction, link style, COLUMNS=0) |
 | `keys.bats` | 7 tests | XAI_API_KEY ↔ GROK_API_KEY resolution, precedence, silent-conflict policy |
 | `roles.bats` | 56 tests | presets, validation, prompt injection, positional and `provider=role` assignment (mixed forms, an absent provider and a duplicate provider all refused; roleless providers named on stderr; an empty roster refused under `set -u` on bash 3.2), local-council role resolution + member count |
 | `tokens.bats` | 9 tests | reasoning-model token-cap bumping, glob patterns, floor, multi-pattern |
@@ -72,7 +72,7 @@ bats --verbose-run tests/cache.bats
 | `shards.bats` | 1 test | every bats file is named in the shard lists the Windows CI job runs from |
 | `tmpdir.bats` | 1 test | every temp file the scripts create honours `TMPDIR` |
 
-**Total: 711 tests** across 31 `.bats` files.
+**Total: 712 tests** across 31 `.bats` files.
 
 The bats suite does not cover `mods/`. The council-pane mod has its own checks, run from `mods/council-pane`:
 

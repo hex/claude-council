@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the status-line text, the finish toast and the wake prompt of a council run
 // ABOUTME: Expected strings are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { finishNotice, wakePrompt, reopenReply, noticeIsLive, jobOutcome } from '../hooks/notices'
+import { finishNotice, wakePrompt, reopenReply, noticeIsLive, jobOutcome, abandonedNotice, runPid } from '../hooks/notices'
 
 const providers = [
   { name: 'gemini', state: 'complete', ms: 4210 },
@@ -45,4 +45,18 @@ test('jobOutcome waits on a record caught mid-write and gives up on one that is 
   expect(jobOutcome('{"id":"job-abc","sta')).toBe('running')
   expect(jobOutcome('[]')).toBe('failed')
   expect(jobOutcome('')).toBe('failed')
+})
+
+test('abandonedNotice says the run stopped short and how far it got', () => {
+  expect(abandonedNotice({ providers, isDone: false })).toBe('stopped before it finished: 2 of 4 answered')
+  expect(abandonedNotice({ providers, isDone: false }, 'job-abc')).toBe('job job-abc stopped before it finished: 2 of 4 answered')
+})
+
+test('runPid accepts a process id and nothing else', () => {
+  expect(runPid('4242')).toBe('4242')
+  expect(runPid(' 4242\n')).toBe('4242')
+  expect(runPid('')).toBeUndefined()
+  expect(runPid('0')).toBeUndefined()
+  expect(runPid('-1')).toBeUndefined()
+  expect(runPid('42; rm -rf /')).toBeUndefined()
 })

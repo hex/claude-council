@@ -578,6 +578,15 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
     [ "$output" = "perplexity"$'\t'"querying"$'\t\t'$'\n'"openrouter-2"$'\t'"complete"$'\t'"1200"$'\t'"z-ai/glm" ]
 }
 
+@test "display_pane_open: the run leaves its pid in the mod's watch dir" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR"
+    run display_pane_open
+    [ "$status" -eq 0 ]
+    [ "$(cat "$output/pid")" = "$$" ]
+}
+
 @test "display_pane_open: a background job names itself in the mod's watch dir" {
     source "$LIB"
     unset COUNCIL_NO_PANE

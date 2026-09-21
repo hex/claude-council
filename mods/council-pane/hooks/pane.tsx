@@ -2,7 +2,7 @@
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { Elements, EngineInterface, Register } from 'claude-code'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
-import { FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, wakePrompt, type FinishNotice } from './notices'
+import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
@@ -23,6 +23,8 @@ const FRAME_MS = 100
 // The worker records its result seconds after .done; a worker killed outright
 // leaves its record at running, so the wait for it ends.
 const WAKE_WAIT_MS = 120_000
+// How often a run still going is asked whether its process is alive.
+const PID_CHECK_MS = 5_000
 
 type PaneState = {
   root: string
@@ -32,6 +34,7 @@ type PaneState = {
   isPolling: boolean
   shown: Set<string>
   lastError: string
+  pidCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
   retry?: { offer: RetryOffer; seenAtMs: number }
   retryShown?: RetrySection
@@ -66,6 +69,21 @@ async function wakeWhenFetchable($: EngineInterface, state: PaneState): Promise<
   state.pendingWake = undefined
   if (outcome === 'completed') await $.prompt.submit({ text: pending.prompt })
   else $.ui.log(`council job record ${pending.jobFile} did not complete (${outcome}); no wake prompt sent`)
+}
+
+// .done comes from the run's EXIT trap, which a SIGKILL skips. A run whose
+// process is gone and that left no .done will never write one; without this
+// the pane would follow it for the rest of the session and see no later run.
+async function runHasDied($: EngineInterface, state: PaneState, runDir: string, now: number): Promise<boolean> {
+  if (now - state.pidCheckedAtMs < PID_CHECK_MS) return false
+  state.pidCheckedAtMs = now
+  const pid = runPid(await readText(files($), `${runDir}/pid`))
+  if (!pid) return false
+  const alive = await $.process.run(['kill', '-0', pid])
+  if (alive.exitCode === 0) return false
+  // The trap writes .done and then the process goes: look once more, so a run
+  // that ended normally between the two reads is not called dead.
+  return !(await $.fs.exists(`${runDir}/.done`))
 }
 
 async function poll($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
@@ -109,6 +127,9 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.drawn = text
     $.ui.invalidate('ui.render')
   }
+  const hasDied = !state.view.isDone && (await runHasDied($, state, runDir, now))
+  // A dead run is drawn as over: the spinners stop and the list collapses.
+  if (hasDied) state.view = { ...state.view, isDone: true }
   // The run is over once .done lands: its dir is removed so the next run is
   // picked up, and the pane keeps the last view until the person closes it.
   if (state.view.isDone) {
@@ -117,11 +138,12 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     // The run's dir is visible before the run writes its job files, so they
     // are read now, when they are certain to be there.
     const jobId = (await readText(files($), `${runDir}/job-id`)).trim()
-    state.finished = { text: finishNotice(state.view, jobId), untilMs: now + FINISH_NOTICE_MS }
+    const notice = hasDied ? abandonedNotice(state.view, jobId) : finishNotice(state.view, jobId)
+    state.finished = { text: notice, untilMs: now + FINISH_NOTICE_MS, isFailure: hasDied }
     $.ui.invalidate('ui.render')
     // .done lands before the worker records where the result is, so the wake
     // waits for the job record to say the result can be fetched.
-    const wake = settings.wakesOnAsyncDone ? wakePrompt(jobId) : undefined
+    const wake = settings.wakesOnAsyncDone && !hasDied ? wakePrompt(jobId) : undefined
     const jobFile = (await readText(files($), `${runDir}/job-file`)).trim()
     if (wake && jobFile) state.pendingWake = { prompt: wake, jobFile, untilMs: now + WAKE_WAIT_MS }
     await $.process.run(['rm', '-rf', runDir])
@@ -213,7 +235,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
 
   on('session.start', async ($, e, next) => {
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
@@ -296,7 +318,7 @@ export const register: Register = (on, options) => {
           <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
             <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>COUNCIL</ui.Text>
           </ui.Box>
-          <ui.Text bold>{` \u2713 ${finished.text}  `}</ui.Text>
+          <ui.Text bold {...(finished.isFailure ? { color: 'red' } : {})}>{` ${finished.isFailure ? '\u2717' : '\u2713'} ${finished.text}  `}</ui.Text>
           <ui.Button key="finished:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
           <ui.Text>{' '}</ui.Text>
           <ui.Button
