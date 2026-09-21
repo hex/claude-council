@@ -13,8 +13,9 @@ import { markdownBlocks, paneSections, parseColors, unseenRun, type RunView, typ
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
 const RUN_TIMEOUT_MS = 600_000
-// violet-600, the colour the council's own router seats carry
-const COUNCIL_RGB = 'rgb(124,58,237)'
+// Claude's orange (#D97757): the council speaks inside Claude Code, and the
+// synthesis is Claude's own text. No provider's banner uses it.
+const COUNCIL_RGB = 'rgb(217,119,87)'
 const POLL_MS = 500
 
 type PaneState = {
@@ -256,8 +257,8 @@ export const register: Register = (on, options) => {
         case 'synthesis':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
-              <Box flexDirection="row" paddingX={1} width={columns} backgroundColor="rgb(113,113,122)">
-                <Text bold color="white" backgroundColor="rgb(113,113,122)">SYNTHESIS</Text>
+              <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={COUNCIL_RGB}>
+                <Text bold color="white" backgroundColor={COUNCIL_RGB}>SYNTHESIS</Text>
               </Box>
               {markdownBlocks(fitTables(section.text, columns)).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
