@@ -1,7 +1,7 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { Elements, EngineInterface, Register } from 'claude-code'
-import { HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, isCouncilRun, paneCommand, type PaneHost } from './host'
+import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
 import { FINISH_NOTICE_MS, finishNotice, noticeIsLive, reopenReply, wakePrompt, type FinishNotice } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
@@ -130,12 +130,13 @@ async function animate($: EngineInterface, state: PaneState): Promise<void> {
   $.ui.invalidate('ui.render')
 }
 
-// Settles where this run's pane goes. The stored answer wins; with none, the
-// person is asked once and the answer kept. A dismissed dialog or a headless
-// run stores nothing and the mod draws the pane, so the question comes back.
-async function paneHost($: EngineInterface): Promise<PaneHost> {
-  const stored = hostFrom(await $.store.get(HOST_STORE_KEY))
-  if (stored) return stored
+// Settles where this run's pane goes, asking once when the setting says ask
+// and nothing is remembered. A dismissed dialog or a headless run stores
+// nothing and the pane is drawn here, so the question comes back.
+async function paneHost($: EngineInterface, setting: HostSetting): Promise<PaneHost> {
+  const remembered = hostFrom(await $.store.get(HOST_STORE_KEY))
+  const decided = decideHost({ setting, remembered, isInTmux: Boolean(await $.env.get('TMUX')) })
+  if (decided !== 'ask') return decided
   let asked: PaneHost | undefined
   try {
     asked = hostFrom(await $.ui.ask(HOST_QUESTION, { header: 'Council pane', options: [HOST_LABELS.mod, HOST_LABELS.tmux] }))
@@ -144,6 +145,13 @@ async function paneHost($: EngineInterface): Promise<PaneHost> {
   }
   if (asked) await $.store.set(HOST_STORE_KEY, asked)
   return asked ?? 'mod'
+}
+
+// Points the next run at this mod's pane or away from it; a Bash child reads
+// the variable when it starts, so this runs just before one does.
+async function aimRun($: EngineInterface, state: PaneState, setting: HostSetting): Promise<void> {
+  const host = await paneHost($, setting)
+  await $.env.set('COUNCIL_MOD_PANE_DIR', host === 'mod' ? state.root : undefined)
 }
 
 async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
@@ -189,13 +197,10 @@ export const register: Register = (on, options) => {
   const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', jobId: '', frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
 
   on('session.start', async ($, e, next) => {
-    // Off: nothing is exported, so runs keep the tmux pane.
-    if (!settings.isEnabled) return next(e)
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
     state.root = `${tmp}/council-mod.${await $.session.id()}`
     await $.fs.write(`${state.root}/.keep`, '')
-    await $.env.set('COUNCIL_MOD_PANE_DIR', state.root)
-    await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or choose where it opens', argumentHint: '[mod|tmux|ask]', immediate: true })
+    await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     $.clock.every(FRAME_MS, () => { void animate($, state) })
     $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
@@ -217,12 +222,16 @@ export const register: Register = (on, options) => {
     return result
   })
 
-  // Outside tmux there is one place a pane can open, so nothing is asked.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
-    if (!settings.isEnabled || !isCouncilRun(e.command) || !(await $.env.get('TMUX'))) return next(e)
-    const host = await paneHost($)
-    await $.env.set('COUNCIL_MOD_PANE_DIR', host === 'mod' ? state.root : undefined)
+    if (isCouncilRun(e.command)) await aimRun($, state, settings.host)
     return next(e)
+  })
+
+  // The settings row says ask while an answer is remembered; its label says which.
+  on('config.describe', async ($, e, next) => {
+    const row = await next(e)
+    if (!e.key.endsWith('.pane_host')) return row
+    return { ...row, label: hostRowLabel(row.label, settings.host, hostFrom(await $.store.get(HOST_STORE_KEY))) }
   })
 
   // The generated types list the tools connected when they were written, so a
@@ -236,6 +245,7 @@ export const register: Register = (on, options) => {
     // The mod sits in the council plugin's repo; the run script is two levels up.
     const script = `${$.plugin.root}/../../scripts/run-council.sh`
     if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
+    await aimRun($, state, settings.host)
     const run = await $.process.run(['bash', script, ...parsed.args], { timeoutMs: RUN_TIMEOUT_MS })
     const saved = run.stdout.trim().split('\n').pop() ?? ''
     if (run.exitCode !== 0 || !saved) return { result: run.stderr || 'council run failed', isError: true }
@@ -244,15 +254,11 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: REOPEN_COMMAND }, async ($, e) => {
     const command = paneCommand(e.args)
-    if (command.action === 'choose') {
-      await $.store.set(HOST_STORE_KEY, command.host)
-      return { text: `Council runs will open: ${HOST_LABELS[command.host]}.` }
-    }
     if (command.action === 'forget') {
       await $.store.delete(HOST_STORE_KEY)
-      return { text: 'The next council run inside tmux will ask where to open its pane.' }
+      return { text: 'Forgotten. With the setting on ask, the next council run inside tmux asks where to open its pane.' }
     }
-    if (command.action === 'unknown') return { text: 'Usage: /council-pane [mod|tmux|ask]' }
+    if (command.action === 'unknown') return { text: 'Usage: /council-pane [ask]. Choose the pane in /config, row "Council pane opens in".' }
     if (state.view) await $.ui.open({ id: PANE_ID, title: 'Council' })
     return { text: reopenReply(state.view !== undefined) }
   })

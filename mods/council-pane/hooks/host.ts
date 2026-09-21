@@ -1,5 +1,5 @@
 // ABOUTME: Where a council run's pane is drawn: inside Claude Code by this mod, or in tmux
-// ABOUTME: The choice is asked once, kept in the plugin store, and changed with /council-pane mod|tmux|ask
+// ABOUTME: The pane_host setting decides; on ask the answer is asked once, kept in the plugin store, and forgotten with /council-pane ask
 
 export type PaneHost = 'mod' | 'tmux'
 
@@ -23,12 +23,31 @@ export function hostFrom(value: unknown): PaneHost | undefined {
   return undefined
 }
 
-export type PaneCommand = { action: 'reopen' } | { action: 'choose'; host: PaneHost } | { action: 'forget' } | { action: 'unknown' }
+export type HostSetting = 'ask' | 'claude-code' | 'tmux'
+
+export function hostSetting(value: unknown): HostSetting {
+  return value === 'claude-code' || value === 'tmux' ? value : 'ask'
+}
+
+// The settings row decides outright unless it says ask; then the remembered
+// answer does, and with none the person is asked. Outside tmux the pane in
+// Claude Code is the only one there is, so nothing is asked there.
+export function decideHost(facts: { setting: HostSetting; remembered: PaneHost | undefined; isInTmux: boolean }): PaneHost | 'ask' {
+  if (facts.setting === 'claude-code') return 'mod'
+  if (facts.setting === 'tmux') return 'tmux'
+  if (!facts.isInTmux) return 'mod'
+  return facts.remembered ?? 'ask'
+}
+
+export function hostRowLabel(label: string, setting: HostSetting, remembered: PaneHost | undefined): string {
+  if (setting !== 'ask' || !remembered) return label
+  return `${label} (remembered: ${remembered === 'mod' ? 'claude-code' : 'tmux'})`
+}
+
+export type PaneCommand = { action: 'reopen' } | { action: 'forget' } | { action: 'unknown' }
 
 export function paneCommand(args: string): PaneCommand {
   const word = args.trim().toLowerCase()
   if (word === '') return { action: 'reopen' }
-  if (word === 'ask') return { action: 'forget' }
-  const host = hostFrom(word)
-  return host ? { action: 'choose', host } : { action: 'unknown' }
+  return word === 'ask' ? { action: 'forget' } : { action: 'unknown' }
 }

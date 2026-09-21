@@ -8,11 +8,16 @@
   },
   "license": "MIT",
   "userConfig": {
-    "pane": {
-      "type": "boolean",
-      "title": "Council pane",
-      "description": "Draw council runs in a pane inside Claude Code; off leaves them to the tmux pane.",
-      "default": true
+    "pane_host": {
+      "type": "string",
+      "title": "Council pane opens in",
+      "description": "claude-code draws the pane inside Claude Code; tmux leaves it to the tmux pane; ask puts the question once inside tmux and remembers the answer.",
+      "options": [
+        "ask",
+        "claude-code",
+        "tmux"
+      ],
+      "default": "ask"
     },
     "collapse_when_done": {
       "type": "boolean",
