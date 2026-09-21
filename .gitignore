@@ -39,3 +39,6 @@ autoresearch-results.tsv
 .claude/settings.local.json
 .obsidian/
 CLAUDE.local.md
+
+# Generated plugin API types (/plugin-types); regenerated per Claude Code build
+.claude/types/
