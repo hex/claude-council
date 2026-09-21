@@ -3,6 +3,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 import { finishToast, reopenReply, statusLine, wakePrompt } from './notices'
 import { paneOptions, type PaneOptions } from './options'
+import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { parseStatus } from './status'
 import { fitTables } from './tables'
 import { markdownBlocks, paneSections, parseColors, unseenRun, type RunView, type Section } from './view'
@@ -21,6 +22,8 @@ type PaneState = {
   lastError: string
   jobId: string
   statusShown?: string
+  retry?: { offer: RetryOffer; seenAtMs: number }
+  retryShown?: RetrySection
 }
 
 async function readText($: EngineInterface, path: string): Promise<string> {
@@ -61,7 +64,13 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     colors: parseColors(await readText($, `${runDir}/colors`)),
     isDone: await $.fs.exists(`${runDir}/.done`),
   }
-  const text = JSON.stringify(state.view)
+  // The run waits on its offer for a window of seconds; the offer file going
+  // away (accepted, declined or expired) withdraws the buttons.
+  const offer = parseRetryOffer(await readText($, `${runDir}/retry-offer`))
+  if (!offer) state.retry = undefined
+  else if (!state.retry) state.retry = { offer, seenAtMs: await $.clock.now() }
+  state.retryShown = state.retry ? retrySection(state.retry.offer, state.retry.seenAtMs, await $.clock.now()) : undefined
+  const text = JSON.stringify([state.view, state.retryShown])
   if (text !== state.drawn) {
     state.drawn = text
     $.ui.invalidate('ui.render')
@@ -79,6 +88,8 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     if (wake) await $.prompt.submit({ text: wake })
     await $.process.run(['rm', '-rf', runDir])
     state.runDir = undefined
+    state.retry = undefined
+    state.retryShown = undefined
   }
 }
 
@@ -109,8 +120,6 @@ export const register: Register = (on, options) => {
     state.root = `${tmp}/council-mod.${await $.session.id()}`
     await $.fs.write(`${state.root}/.keep`, '')
     await $.env.set('COUNCIL_MOD_PANE_DIR', state.root)
-    // Nothing in the pane answers the retry offer, so the run must not wait on it.
-    await $.env.set('COUNCIL_RETRY_WAIT', '0')
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane with the last run', immediate: true })
     $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
     return next(e)
@@ -189,6 +198,25 @@ export const register: Register = (on, options) => {
           )
       }
     }
-    return <Box flexDirection="column">{paneSections(state.view, settings).map(draw)}</Box>
+    const retry = state.retryShown
+    const runDir = state.runDir
+    return (
+      <Box flexDirection="column">
+        {(retry && runDir ? [retry] : []).map(offer => (
+          <Box key="retry" flexDirection="row" marginBottom={1}>
+            <Button
+              key="retry:accept"
+              hotkey="r"
+              label={offer.label}
+              onPress={() => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) }}
+            />
+            <Text>{' '}</Text>
+            <Button key="retry:skip" hotkey="s" label="skip" onPress={() => { void $.fs.write(`${runDir}/.retry-declined`, '') }} />
+            <Text dimColor>{`  ${offer.remaining}s`}</Text>
+          </Box>
+        ))}
+        {paneSections(state.view, settings).map(draw)}
+      </Box>
+    )
   })
 }
