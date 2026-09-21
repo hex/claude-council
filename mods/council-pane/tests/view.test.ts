@@ -1,7 +1,7 @@
 // ABOUTME: Tests for choosing which council run the pane shows and the markdown it draws
 // ABOUTME: Expected strings are written out by hand, never rebuilt from the code under test
 import { test, expect } from 'bun:test'
-import { unseenRun, paneSections, parseColors, markdownBlocks } from '../hooks/view'
+import { unseenRun, paneSections, parseColors, markdownBlocks, queryingSince } from '../hooks/view'
 
 test('unseenRun names the first run dir not shown before, ignoring other entries', () => {
   const entries = [
@@ -135,4 +135,13 @@ test('markdownBlocks splits a long text at paragraph breaks, every block within 
 
 test('markdownBlocks cuts a single paragraph longer than the limit', () => {
   expect(markdownBlocks('abcdefghij', 4)).toEqual(['abcd', 'efgh', 'ij'])
+})
+
+test('queryingSince starts a clock when a provider queries and drops it when it stops, so a retry starts over', () => {
+  const first = queryingSince({}, [{ name: 'grok', state: 'querying' }, { name: 'kimi', state: 'complete' }], 1000)
+  expect(first).toEqual({ grok: 1000 })
+  expect(queryingSince(first, [{ name: 'grok', state: 'querying' }], 1500)).toEqual({ grok: 1000 })
+  const failed = queryingSince(first, [{ name: 'grok', state: 'error' }], 2000)
+  expect(failed).toEqual({})
+  expect(queryingSince(failed, [{ name: 'grok', state: 'querying' }], 9000)).toEqual({ grok: 9000 })
 })

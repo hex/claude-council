@@ -2,14 +2,14 @@
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { Elements, EngineInterface, Register } from 'claude-code'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
-import { FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, wakePrompt, type FinishNotice } from './notices'
+import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import { councilArgs, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
-import { markdownBlocks, paneSections, unseenRun, type RunView, type Section } from './view'
+import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -23,6 +23,8 @@ const FRAME_MS = 100
 // The worker records its result seconds after .done; a worker killed outright
 // leaves its record at running, so the wait for it ends.
 const WAKE_WAIT_MS = 120_000
+// How often a run still going is asked whether its process is alive.
+const PID_CHECK_MS = 5_000
 
 type PaneState = {
   root: string
@@ -32,7 +34,7 @@ type PaneState = {
   isPolling: boolean
   shown: Set<string>
   lastError: string
-  jobId: string
+  pidCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
   retry?: { offer: RetryOffer; seenAtMs: number }
   retryShown?: RetrySection
@@ -41,8 +43,9 @@ type PaneState = {
   frame: number
   nowMs: number
   queryingSinceMs: Record<string, number>
-  // Fitted answer bodies by width and text: a frame redraws the tree, not the markdown.
-  fitted: Map<string, string[]>
+  // Each section's fitted body, for the width and text it was fitted to: a
+  // frame redraws the tree, not the markdown, and a resize replaces the entry.
+  fitted: Map<string, { columns: number; text: string; blocks: string[] }>
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -68,6 +71,21 @@ async function wakeWhenFetchable($: EngineInterface, state: PaneState): Promise<
   else $.ui.log(`council job record ${pending.jobFile} did not complete (${outcome}); no wake prompt sent`)
 }
 
+// .done comes from the run's EXIT trap, which a SIGKILL skips. A run whose
+// process is gone and that left no .done will never write one; without this
+// the pane would follow it for the rest of the session and see no later run.
+async function runHasDied($: EngineInterface, state: PaneState, runDir: string, now: number): Promise<boolean> {
+  if (now - state.pidCheckedAtMs < PID_CHECK_MS) return false
+  state.pidCheckedAtMs = now
+  const pid = runPid(await readText(files($), `${runDir}/pid`))
+  if (!pid) return false
+  const alive = await $.process.run(['kill', '-0', pid])
+  if (alive.exitCode === 0) return false
+  // The trap writes .done and then the process goes: look once more, so a run
+  // that ended normally between the two reads is not called dead.
+  return !(await $.fs.exists(`${runDir}/.done`))
+}
+
 async function poll($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
   // Temp cleaners remove the root under a long session; runs find it again
   // only if it exists, so it is put back rather than reported.
@@ -76,7 +94,8 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.runDir = undefined
     return
   }
-  if (state.finished && !noticeIsLive(state.finished, await $.clock.now())) {
+  const now = await $.clock.now()
+  if (state.finished && !noticeIsLive(state.finished, now)) {
     state.finished = undefined
     $.ui.invalidate('ui.render')
   }
@@ -91,39 +110,42 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.queryingSinceMs = {}
     state.fitted.clear()
     await $.ui.open({ id: PANE_ID, title: 'Council' })
-    state.jobId = (await readText(files($), `${state.runDir}/job-id`)).trim()
   }
   const runDir = state.runDir
   state.view = await readView(files($), runDir)
-  const now = await $.clock.now()
-  for (const { name, state: providerState } of state.view.providers) {
-    if (providerState === 'querying') state.queryingSinceMs[name] ??= now
-  }
+  state.queryingSinceMs = queryingSince(state.queryingSinceMs, state.view.providers, now)
   state.view.queryingSinceMs = state.queryingSinceMs
   if (state.synthesis) state.view.synthesis = state.synthesis
   // The run waits on its offer for a window of seconds; the offer file going
   // away (accepted, declined or expired) withdraws the buttons.
   const offer = parseRetryOffer(await readText(files($), `${runDir}/retry-offer`))
   if (!offer) state.retry = undefined
-  else if (!state.retry) state.retry = { offer, seenAtMs: await $.clock.now() }
-  state.retryShown = state.retry ? retrySection(state.retry.offer, state.retry.seenAtMs, await $.clock.now()) : undefined
+  else if (!state.retry) state.retry = { offer, seenAtMs: now }
+  state.retryShown = state.retry ? retrySection(state.retry.offer, state.retry.seenAtMs, now) : undefined
   const text = JSON.stringify([state.view, state.retryShown])
   if (text !== state.drawn) {
     state.drawn = text
     $.ui.invalidate('ui.render')
   }
+  const hasDied = !state.view.isDone && (await runHasDied($, state, runDir, now))
+  // A dead run is drawn as over: the spinners stop and the list collapses.
+  if (hasDied) state.view = { ...state.view, isDone: true }
   // The run is over once .done lands: its dir is removed so the next run is
   // picked up, and the pane keeps the last view until the person closes it.
   if (state.view.isDone) {
     // A toast is one unstyled line for four seconds, easy to miss under a
     // streaming reply; the band holds the notice where the offer was.
-    state.finished = { text: finishNotice(state.view, state.jobId), untilMs: (await $.clock.now()) + FINISH_NOTICE_MS }
+    // The run's dir is visible before the run writes its job files, so they
+    // are read now, when they are certain to be there.
+    const jobId = (await readText(files($), `${runDir}/job-id`)).trim()
+    const notice = hasDied ? abandonedNotice(state.view, jobId) : finishNotice(state.view, jobId)
+    state.finished = { text: notice, untilMs: now + FINISH_NOTICE_MS, isFailure: hasDied }
     $.ui.invalidate('ui.render')
     // .done lands before the worker records where the result is, so the wake
     // waits for the job record to say the result can be fetched.
-    const wake = settings.wakesOnAsyncDone ? wakePrompt(state.jobId) : undefined
+    const wake = settings.wakesOnAsyncDone && !hasDied ? wakePrompt(jobId) : undefined
     const jobFile = (await readText(files($), `${runDir}/job-file`)).trim()
-    if (wake && jobFile) state.pendingWake = { prompt: wake, jobFile, untilMs: (await $.clock.now()) + WAKE_WAIT_MS }
+    if (wake && jobFile) state.pendingWake = { prompt: wake, jobFile, untilMs: now + WAKE_WAIT_MS }
     await $.process.run(['rm', '-rf', runDir])
     state.runDir = undefined
     state.retry = undefined
@@ -181,6 +203,14 @@ async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOpti
   }
 }
 
+// What the offer's buttons do: the run waits on these two file names.
+function retryPresses($: EngineInterface, runDir: string) {
+  return {
+    accept: () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) },
+    skip: () => { void $.fs.write(`${runDir}/.retry-declined`, '') },
+  }
+}
+
 // The offer's two buttons and its countdown. The keys work once the person has
 // given the site the keyboard (a click, ctrl+x tab); a click works at any time.
 function retryRow(
@@ -205,7 +235,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', jobId: '', frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
 
   on('session.start', async ($, e, next) => {
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
@@ -223,7 +253,7 @@ export const register: Register = (on, options) => {
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     const view = state.view
-    const synthesis = e.agentId === undefined && view ? extractSynthesis(e.answer) : undefined
+    const synthesis = e.agentId === undefined && view && !state.synthesis ? extractSynthesis(e.answer) : undefined
     if (view && synthesis) {
       state.synthesis = synthesis
       state.view = { ...view, synthesis }
@@ -288,7 +318,7 @@ export const register: Register = (on, options) => {
           <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
             <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>COUNCIL</ui.Text>
           </ui.Box>
-          <ui.Text bold>{` \u2713 ${finished.text}  `}</ui.Text>
+          <ui.Text bold {...(finished.isFailure ? { color: 'red' } : {})}>{` ${finished.isFailure ? '\u2717' : '\u2713'} ${finished.text}  `}</ui.Text>
           <ui.Button key="finished:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
           <ui.Text>{' '}</ui.Text>
           <ui.Button
@@ -304,19 +334,18 @@ export const register: Register = (on, options) => {
       )
     }
     if (!retry || !runDir) return next(e)
-    const accept = () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) }
-    const skip = () => { void $.fs.write(`${runDir}/.retry-declined`, '') }
-    return retryRow($.ui.resolve(e), retry, { accept, skip })
+    return retryRow($.ui.resolve(e), retry, retryPresses($, runDir))
   })
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     if (e.requestId !== PANE_ID || !state.view) return next(e)
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
     const columns = e.props.bodyColumns
-    const fit = (text: string) => {
-      const cacheKey = `${columns}\n${text}`
-      const blocks = state.fitted.get(cacheKey) ?? markdownBlocks(fitTables(text, columns))
-      state.fitted.set(cacheKey, blocks)
+    const fit = (sectionKey: string, text: string) => {
+      const kept = state.fitted.get(sectionKey)
+      if (kept && kept.columns === columns && kept.text === text) return kept.blocks
+      const blocks = markdownBlocks(fitTables(text, columns))
+      state.fitted.set(sectionKey, { columns, text, blocks })
       return blocks
     }
     const draw = (section: Section, index: number) => {
@@ -371,7 +400,7 @@ export const register: Register = (on, options) => {
               <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={COUNCIL_RGB}>
                 <Text bold color="white" backgroundColor={COUNCIL_RGB}>SYNTHESIS</Text>
               </Box>
-              {fit(section.text).map((block, part) => (
+              {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
@@ -380,7 +409,7 @@ export const register: Register = (on, options) => {
           // Tables are fitted to the pane's width, which only a render knows.
           return (
             <Box key={key} flexDirection="column">
-              {fit(section.text).map((block, part) => (
+              {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
@@ -398,10 +427,7 @@ export const register: Register = (on, options) => {
     const runDir = state.runDir
     return (
       <Box flexDirection="column">
-        {e.surface !== 'terminal' && retry && runDir ? [retryRow($.ui.resolve(e), retry, {
-          accept: () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) },
-          skip: () => { void $.fs.write(`${runDir}/.retry-declined`, '') },
-        })] : []}
+        {e.surface !== 'terminal' && retry && runDir ? [retryRow($.ui.resolve(e), retry, retryPresses($, runDir))] : []}
         {paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs }).map(draw)}
       </Box>
     )

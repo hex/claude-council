@@ -16,6 +16,18 @@ export function finishNotice({ providers }: RunProgress, jobId = ''): string {
   return `${subject}: ${answered}${errors > 0 ? `, ${errors} error` : ''}`
 }
 
+// A run whose process died without writing .done: what the band says instead.
+export function abandonedNotice({ providers }: RunProgress, jobId = ''): string {
+  const subject = jobId ? `job ${jobId} stopped` : 'stopped'
+  return `${subject} before it finished: ${count(providers, 'complete', 'cached')} of ${providers.length} answered`
+}
+
+// The pid a run left in its watch dir, fit to hand to kill -0: digits, not zero.
+export function runPid(text: string): string | undefined {
+  const pid = text.trim()
+  return /^[1-9]\d*$/.test(pid) ? pid : undefined
+}
+
 export function wakePrompt(jobId: string): string | undefined {
   if (!jobId) return undefined
   return `The background council job ${jobId} has finished. Fetch it with /claude-council:result ${jobId} and summarise it.`
@@ -27,7 +39,7 @@ export function reopenReply(hasRun: boolean): string {
     : 'No council run in this session yet. Start one with /claude-council:ask.'
 }
 
-export type FinishNotice = { text: string; untilMs: number }
+export type FinishNotice = { text: string; untilMs: number; isFailure?: boolean }
 
 export const FINISH_NOTICE_MS = 20_000
 

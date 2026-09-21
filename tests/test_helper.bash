@@ -89,14 +89,14 @@ await_any_file() {
 
 # Helper: assert a string is empty or whitespace-only
 assert_blank() {
-    [[ -z "${1//[[:space:]]/}" ]]
+    [[ ! "$1" =~ [^[:space:]] ]]
 }
 
 # Helper: assert a string carries something a user could act on. A provider that
 # fails silently is worse than one that fails loudly — the council stores the
 # script's own output as the error text, so a blank one renders an empty slot.
 assert_not_blank() {
-    [[ -n "${1//[[:space:]]/}" ]]
+    [[ "$1" =~ [^[:space:]] ]]
 }
 
 # Helper: compute a PATH that excludes the directories holding codex and gemini.
@@ -107,20 +107,23 @@ assert_not_blank() {
 # into a shared prefix takes that whole prefix out of PATH for the test — put
 # nothing here that commonly shares a directory with jq, curl or node.
 path_without_clis() {
-    local clean=$PATH
-    local cli dir trimmed
-    for cli in codex gemini agy grok kimi cursor-agent ollama; do
-        # A CLI installed twice (a cask and an npm global) sits in two
-        # directories; each pass drops the one the trimmed PATH still finds.
-        while dir=$(PATH=$clean command -v "$cli" 2>/dev/null) && [[ "$dir" == /* ]]; do
-            trimmed=$(echo "$clean" | tr ':' '\n' | grep -vF -- "$(dirname "$dir")" | tr '\n' ':')
-            trimmed=${trimmed%:}
-            # An entry the filter cannot match would be found again forever.
-            [[ "$trimmed" != "$clean" ]] || break
-            clean=$trimmed
+    local clean="" dir cli holds_cli
+    local -a entries
+    # read splits on the colon without globbing, which an unquoted $PATH would.
+    IFS=: read -ra entries <<< "$PATH"
+    # A CLI installed twice (a cask and an npm global) sits in two directories;
+    # every entry is checked, so both go.
+    for dir in "${entries[@]}"; do
+        holds_cli=0
+        for cli in codex gemini agy grok kimi cursor-agent ollama; do
+            if [[ -f "$dir/$cli" && -x "$dir/$cli" ]]; then
+                holds_cli=1
+                break
+            fi
         done
+        [[ $holds_cli -eq 1 ]] || clean="${clean:+$clean:}$dir"
     done
-    echo "${clean%:}"
+    echo "$clean"
 }
 
 # Helper: put a jq on PATH whose stdout ends every line with \r\n, as jq's

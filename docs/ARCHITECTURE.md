@@ -265,11 +265,11 @@ script: a preferred-model exit 3 (see Provider Scripts below), or a cached
 verdict, retries once with the fallback. The substitution is reported on the
 response header, on stderr, and folded into the synthesis prompt.
 
-### The Empty Answer (every API provider)
+### The Empty Answer (every API provider, plus cursor-cli, kimi-cli and ollama)
 
 A provider that returns no visible text is an error even when HTTP says the
-call succeeded, so every API seat guards on whitespace-stripped emptiness
-rather than `-z`: the council would otherwise cache a model that answers with
+call succeeded, so each of these seats asks whether the answer holds any
+character that is not whitespace rather than testing `-z`: the council would otherwise cache a model that answers with
 a single space and weigh it in the synthesis like any other vote.
 
 This case never reaches the machinery above. `ensure_error_body` stamps a message
@@ -492,11 +492,13 @@ claude-council/
 ├── .github/
 │   ├── dependabot.yml           # Weekly bumps for the pinned GitHub Actions
 │   └── workflows/
+│       ├── hol-plugin-scanner.yml  # HOL plugin scanner; fails on a high finding or a score under 80
 │       ├── stale.yml            # Closes idle issues and PRs
 │       └── tests.yml            # bats on ubuntu, macos and 4 windows shards; shellcheck blocks a merge
 ├── agents/
 │   └── council-advisor.md       # Proactive suggestions
 ├── commands/
+│   ├── advise.md                # /advise — put this conversation to the council
 │   ├── ask.md                   # Main /ask command
 │   ├── result.md                # /result — fetch/list/cancel background jobs
 │   └── status.md                # /status command
@@ -506,8 +508,16 @@ claude-council/
 │   ├── ARCHITECTURE.md          # This file
 │   └── images/
 │       └── council-pane.png   # README screenshot of a five-provider run
+├── evals/                       # `claude plugin eval` cases: prompt.md + graders/ per case
+│   └── _shared/                 # Grader text the cases link to, file by file
 ├── hooks/
 │   └── hooks.json               # Stop hook registration (stop gate)
+├── mods/
+│   └── council-pane/            # Experimental Claude Code mod: the pane drawn inside Claude Code
+│       ├── .claude-plugin/plugin.json
+│       ├── README.md            # Settings, watch-dir files, limits
+│       ├── hooks/               # pane.tsx wires the engine; the other modules are pure
+│       └── tests/               # bun tests for the pure modules
 ├── prompts/
 │   ├── role-injection.md        # {{VAR}} template for role-wrapped prompts
 │   ├── synthesis.md             # Synthesis structure + calibration rules
@@ -575,7 +585,7 @@ claude-council/
 │   ├── shards/                  # Which bats files each Windows CI shard runs
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── fixtures/
-│   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/ollama binaries on PATH
+│   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/cursor-agent/ollama binaries on PATH
 │   │   └── status-fakes.bash    # Recording curl + jq for the check-status tests
 │   ├── agent-analysis.bats
 │   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
@@ -599,15 +609,21 @@ claude-council/
 │   ├── retry.bats
 │   ├── roles.bats
 │   ├── router-seats.bats        # OPENROUTER_MODELS -> openrouter-1..N, one script, many seats
+│   ├── session-transcript.bats  # Session id to transcript path
+│   ├── shards.bats              # Every bats file is named in a Windows shard list
 │   ├── stop-gate.bats
 │   ├── theme.bats
+│   ├── tmpdir.bats              # Temp files honour TMPDIR
 │   ├── tokens.bats
+│   ├── transcript-digest.bats   # Session JSONL to the markdown digest /advise sends
 │   ├── verbosity.bats
 │   └── query-council.bats
+├── .gitattributes
 ├── .shellcheckrc               # Points shellcheck at the sourced libs
 ├── CHANGELOG.md
 ├── LICENSE
 ├── README.md
+├── SECURITY.md
 └── TESTING.md
 ```
 
@@ -655,6 +671,7 @@ claude-council/
 | `COUNCIL_PROMPTS_DIR` | prompts/ | Prompt template location |
 | `COUNCIL_DEBUG` | - | Enable debug output |
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
+| `COUNCIL_MOD_PANE_DIR` | - | An existing directory a run writes its watch dir into, opening no tmux pane. Only the council-pane mod sets it; `COUNCIL_NO_PANE` still wins |
 | `COUNCIL_RENDERER` | auto | `perl` forces the built-in perl renderer; otherwise the pane prefers Rich when a Rich-capable Python exists (python3 with a modern rich, else `uv run --no-project --with rich`), with perl as the fallback |
 | `COUNCIL_RICH_PROBE_TIMEOUT` | 10 | Seconds before the pane-open uv probe for Rich is abandoned (guards against a cold uv cache on a dead network stalling pane opening) |
 | `COUNCIL_THEME` | auto-detected | Force pane render palette (emphasis + muted text): `light` / `dark` (else OSC 11 query; `COLORFGBG` only asserts `light`, never `dark` since it goes stale; otherwise attribute-only emphasis that inherits the foreground, and muted text keeps faint/bright-black) |

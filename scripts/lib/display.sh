@@ -402,6 +402,10 @@ display_pane_open() {
         [[ "${COUNCIL_NO_PANE:-}" == "1" ]] && return 1
         watch_dir=$(mktemp -d "$COUNCIL_MOD_PANE_DIR/run.XXXXXX") || return 1
         mkdir -p "$watch_dir/responses"
+        # .done comes from an EXIT trap, which a SIGKILL skips; the pid lets
+        # the mod tell a run that died from one still working. $$ is the
+        # script's own pid even inside the $(...) this runs in.
+        printf '%s' "$$" > "$watch_dir/pid"
         # A detached worker's run is announced when it ends; the id says which.
         [[ -z "${COUNCIL_JOB_ID:-}" ]] || printf '%s' "$COUNCIL_JOB_ID" > "$watch_dir/job-id"
         # .done lands before the worker records the result, so the record's

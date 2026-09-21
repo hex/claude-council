@@ -60,15 +60,15 @@ function statusRows(
   const names = width(providers.map(provider => provider.name))
   const states = width(providers.map(provider => provider.state))
   const times = width(providers.map(shownTime))
-  return providers.map(provider => ({ provider, ...provider })).map(({ provider, name, state, model }) => ({
+  return providers.map(provider => ({
     kind: 'status',
-    glyph: glyph(state),
-    glyphColor: state === 'error' ? 'red' : vendor(name),
-    name: name.padEnd(names),
-    state: state.padEnd(states),
-    stateColor: STATE_COLORS[state] ?? 'gray',
+    glyph: glyph(provider.state),
+    glyphColor: provider.state === 'error' ? 'red' : vendor(provider.name),
+    name: provider.name.padEnd(names),
+    state: provider.state.padEnd(states),
+    stateColor: STATE_COLORS[provider.state] ?? 'gray',
     time: shownTime(provider).padStart(times),
-    model: model ?? '',
+    model: provider.model ?? '',
   }))
 }
 
@@ -101,6 +101,16 @@ function doneSummary(
       })),
     },
   ]
+}
+
+// When each provider now querying was first seen querying. One that stops
+// loses its entry, so a provider the person retries starts a fresh clock.
+export function queryingSince(since: Record<string, number>, providers: ProviderStatus[], nowMs: number): Record<string, number> {
+  const next: Record<string, number> = {}
+  for (const { name, state } of providers) {
+    if (state === 'querying') next[name] = since[name] ?? nowMs
+  }
+  return next
 }
 
 export function paneSections(
@@ -152,7 +162,7 @@ export function paneSections(
 
 // A Markdown element takes at most this many characters, tab and newline its
 // only control characters; a tree holding one that breaks either rule is not drawn.
-export const MARKDOWN_LIMIT = 10000
+const MARKDOWN_LIMIT = 10000
 
 export function markdownBlocks(text: string, limit: number = MARKDOWN_LIMIT): string[] {
   const clean = text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
