@@ -13,8 +13,19 @@ test('parseRetryOffer refuses a file with no usable window or no providers', () 
   expect(parseRetryOffer('45\n\n')).toBeUndefined()
 })
 
+test('retrySection names a single failed provider in the singular', () => {
+  expect(retrySection({ seconds: 45, providers: ['cursor-cli'] }, 0, 0).notice).toBe('cursor-cli failed')
+})
+
 test('retrySection counts the window down from when the offer was first seen', () => {
   const offer = { seconds: 45, providers: ['cursor-cli', 'grok'] }
-  expect(retrySection(offer, 10_000, 17_400)).toEqual({ kind: 'retry', label: 'r \u00b7 retry failed (cursor-cli, grok)', skipLabel: 's \u00b7 skip', remaining: 38 })
-  expect(retrySection(offer, 10_000, 99_000)).toEqual({ kind: 'retry', label: 'r \u00b7 retry failed (cursor-cli, grok)', skipLabel: 's \u00b7 skip', remaining: 0 })
+  expect(retrySection(offer, 10_000, 17_400)).toEqual({
+    kind: 'retry',
+    badge: 'COUNCIL',
+    notice: '2 providers failed: cursor-cli, grok',
+    label: 'r \u00b7 retry',
+    skipLabel: 's \u00b7 skip',
+    remaining: 38,
+  })
+  expect(retrySection(offer, 10_000, 99_000)).toEqual(expect.objectContaining({ remaining: 0 }))
 })

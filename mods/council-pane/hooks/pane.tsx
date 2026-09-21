@@ -13,6 +13,8 @@ import { markdownBlocks, paneSections, parseColors, unseenRun, type RunView, typ
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
 const RUN_TIMEOUT_MS = 600_000
+// violet-600, the colour the council's own router seats carry
+const COUNCIL_RGB = 'rgb(124,58,237)'
 const POLL_MS = 500
 
 type PaneState = {
@@ -124,6 +126,10 @@ function retryRow(
 ) {
   return (
     <ui.Box key="retry" flexDirection="row">
+      <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
+        <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>{offer.badge}</ui.Text>
+      </ui.Box>
+      <ui.Text bold color="red">{` \u2717 ${offer.notice}  `}</ui.Text>
       <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
       <ui.Text>{' '}</ui.Text>
       <ui.Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={press.skip} />
