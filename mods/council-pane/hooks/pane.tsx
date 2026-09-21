@@ -2,7 +2,7 @@
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { Elements, EngineInterface, Register } from 'claude-code'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
-import { FINISH_NOTICE_MS, finishNotice, noticeIsLive, reopenReply, wakePrompt, type FinishNotice } from './notices'
+import { FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, wakePrompt, type FinishNotice } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
@@ -20,6 +20,9 @@ const COUNCIL_RGB = 'rgb(217,119,87)'
 const POLL_MS = 500
 // Ten frames a second: the spinner's pace in the tmux pane.
 const FRAME_MS = 100
+// The worker records its result seconds after .done; a worker killed outright
+// leaves its record at running, so the wait for it ends.
+const WAKE_WAIT_MS = 120_000
 
 type PaneState = {
   root: string
@@ -30,6 +33,7 @@ type PaneState = {
   shown: Set<string>
   lastError: string
   jobId: string
+  pendingWake?: { prompt: string; jobFile: string; untilMs: number }
   retry?: { offer: RetryOffer; seenAtMs: number }
   retryShown?: RetrySection
   synthesis?: string
@@ -51,6 +55,19 @@ function files($: EngineInterface): Files {
   }
 }
 
+// Submits the wake prompt once the job's record says completed. A job that
+// failed, or whose record never settles, wakes nobody: the prompt would send
+// the model to fetch a result that is not there.
+async function wakeWhenFetchable($: EngineInterface, state: PaneState): Promise<void> {
+  const pending = state.pendingWake
+  if (!pending) return
+  const outcome = jobOutcome(await readText(files($), pending.jobFile))
+  if (outcome === 'running' && (await $.clock.now()) < pending.untilMs) return
+  state.pendingWake = undefined
+  if (outcome === 'completed') await $.prompt.submit({ text: pending.prompt })
+  else $.ui.log(`council job record ${pending.jobFile} did not complete (${outcome}); no wake prompt sent`)
+}
+
 async function poll($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
   // Temp cleaners remove the root under a long session; runs find it again
   // only if it exists, so it is put back rather than reported.
@@ -63,6 +80,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.finished = undefined
     $.ui.invalidate('ui.render')
   }
+  if (state.pendingWake) await wakeWhenFetchable($, state)
   if (!state.runDir) {
     const name = unseenRun(await $.fs.list(state.root), state.shown)
     if (!name) return
@@ -101,8 +119,11 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     // streaming reply; the band holds the notice where the offer was.
     state.finished = { text: finishNotice(state.view, state.jobId), untilMs: (await $.clock.now()) + FINISH_NOTICE_MS }
     $.ui.invalidate('ui.render')
+    // .done lands before the worker records where the result is, so the wake
+    // waits for the job record to say the result can be fetched.
     const wake = settings.wakesOnAsyncDone ? wakePrompt(state.jobId) : undefined
-    if (wake) await $.prompt.submit({ text: wake })
+    const jobFile = (await readText(files($), `${runDir}/job-file`)).trim()
+    if (wake && jobFile) state.pendingWake = { prompt: wake, jobFile, untilMs: (await $.clock.now()) + WAKE_WAIT_MS }
     await $.process.run(['rm', '-rf', runDir])
     state.runDir = undefined
     state.retry = undefined

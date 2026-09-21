@@ -34,3 +34,21 @@ export const FINISH_NOTICE_MS = 20_000
 export function noticeIsLive(notice: FinishNotice | undefined, nowMs: number): boolean {
   return notice !== undefined && nowMs < notice.untilMs
 }
+
+export type JobOutcome = 'completed' | 'failed' | 'running'
+
+// Reads a job record as run-council.sh --result does: completed can be
+// fetched, queued and running cannot yet, anything else never will. A record
+// cut off mid-write is read again on the next poll; one that is gone or is
+// not a record is over.
+export function jobOutcome(record: string): JobOutcome {
+  if (!record.trim()) return 'failed'
+  let status: unknown
+  try {
+    status = (JSON.parse(record) as { status?: unknown }).status
+  } catch {
+    return 'running'
+  }
+  if (status === 'completed') return 'completed'
+  return status === 'queued' || status === 'running' ? 'running' : 'failed'
+}

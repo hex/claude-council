@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the status-line text, the finish toast and the wake prompt of a council run
 // ABOUTME: Expected strings are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { finishNotice, wakePrompt, reopenReply, noticeIsLive } from '../hooks/notices'
+import { finishNotice, wakePrompt, reopenReply, noticeIsLive, jobOutcome } from '../hooks/notices'
 
 const providers = [
   { name: 'gemini', state: 'complete', ms: 4210 },
@@ -31,4 +31,18 @@ test('noticeIsLive keeps a finish notice up for its window only', () => {
   expect(noticeIsLive({ text: 'x', untilMs: 5000 }, 4999)).toBe(true)
   expect(noticeIsLive({ text: 'x', untilMs: 5000 }, 5000)).toBe(false)
   expect(noticeIsLive(undefined, 0)).toBe(false)
+})
+
+test('jobOutcome reads a job record the way run-council --result does', () => {
+  expect(jobOutcome('{"id":"job-abc","status":"completed","outfile":".claude/council-cache/job-abc.md"}')).toBe('completed')
+  expect(jobOutcome('{"id":"job-abc","status":"running","pid":"4242"}')).toBe('running')
+  expect(jobOutcome('{"id":"job-abc","status":"queued"}')).toBe('running')
+  expect(jobOutcome('{"id":"job-abc","status":"failed"}')).toBe('failed')
+  expect(jobOutcome('{"id":"job-abc","status":"cancelled"}')).toBe('failed')
+})
+
+test('jobOutcome waits on a record caught mid-write and gives up on one that is gone', () => {
+  expect(jobOutcome('{"id":"job-abc","sta')).toBe('running')
+  expect(jobOutcome('[]')).toBe('failed')
+  expect(jobOutcome('')).toBe('failed')
 })

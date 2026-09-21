@@ -27,6 +27,7 @@ When the variable is set, `run-council.sh` writes its watch directory there and 
 | `errors/<name>.txt` | the run | each error |
 | `colors` | the run | each provider's banner color as `r;g;b` |
 | `job-id` | an `--async` run | the background job's id |
+| `job-file` | an `--async` run | the path of the job's record, which says when the result can be fetched |
 | `retry-offer` | the run | seconds the offer stays open, then the failed providers |
 | `.retry` / `.retry-declined` | the pane | the answer to the offer |
 | `.done` | the run | the run has finished |
@@ -52,7 +53,7 @@ They show up in `/config`. Changing one reloads the mod.
 |---|---|---|
 | `pane_host` | `ask` | Where the pane opens. `claude-code` always draws it here, `tmux` always leaves it to tmux. `ask` puts the question once, the first time a run starts inside tmux, and remembers the answer across sessions; the row's label shows what it remembered. `/council-pane ask` forgets it. Outside tmux, `ask` opens the pane here without asking. |
 | `collapse_when_done` | on | Off keeps the full status list after a run. |
-| `wake_on_async_done` | off | Submits a prompt when a background job finishes. That starts a model turn and costs tokens. |
+| `wake_on_async_done` | off | Submits a prompt when a background job's result can be fetched. That starts a model turn and costs tokens. A job that fails wakes nobody. |
 | `council_tool` | off | Registers `mcp__council-pane__ask` so the model can call the council as a tool. |
 
 `council_tool` is off for a reason. The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. The plugin's eval suite checks that Claude does not convene the council on its own, but `claude plugin eval` does not load this mod, so those checks cannot see the tool.
