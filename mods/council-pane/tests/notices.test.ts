@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the status-line text, the finish toast and the wake prompt of a council run
 // ABOUTME: Expected strings are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { statusLine, finishNotice, wakePrompt, reopenReply, noticeIsLive } from '../hooks/notices'
+import { finishNotice, wakePrompt, reopenReply, noticeIsLive } from '../hooks/notices'
 
 const providers = [
   { name: 'gemini', state: 'complete', ms: 4210 },
@@ -9,12 +9,6 @@ const providers = [
   { name: 'grok', state: 'error' },
   { name: 'kimi', state: 'querying' },
 ]
-
-test('statusLine counts settled providers while a run is live and clears once it is done', () => {
-  expect(statusLine({ providers, isDone: false })).toBe('council 3/4')
-  expect(statusLine({ providers, isDone: true })).toBeUndefined()
-  expect(statusLine({ providers: [], isDone: false })).toBe('council starting')
-})
 
 test('finishNotice reports answers and errors, and names a background job', () => {
   expect(finishNotice({ providers, isDone: true })).toBe('finished: 2 of 4 answered, 1 error')

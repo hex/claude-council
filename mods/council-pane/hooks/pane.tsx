@@ -1,7 +1,7 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { Elements, EngineInterface, Register } from 'claude-code'
-import { FINISH_NOTICE_MS, finishNotice, noticeIsLive, reopenReply, statusLine, wakePrompt, type FinishNotice } from './notices'
+import { FINISH_NOTICE_MS, finishNotice, noticeIsLive, reopenReply, wakePrompt, type FinishNotice } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { parseStatus } from './status'
@@ -27,7 +27,6 @@ type PaneState = {
   shown: Set<string>
   lastError: string
   jobId: string
-  statusShown?: string
   retry?: { offer: RetryOffer; seenAtMs: number }
   retryShown?: RetrySection
   synthesis?: string
@@ -92,11 +91,6 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   }
   // The run is over once .done lands: its dir is removed so the next run is
   // picked up, and the pane keeps the last view until the person closes it.
-  const status = statusLine(state.view)
-  if (status !== state.statusShown) {
-    $.ui.status(status)
-    state.statusShown = status
-  }
   if (state.view.isDone) {
     // A toast is one unstyled line for four seconds, easy to miss under a
     // streaming reply; the band holds the notice where the offer was.
