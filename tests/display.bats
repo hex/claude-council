@@ -587,13 +587,23 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
     [ "$(cat "$output/job-id")" = "job-abc123" ]
 }
 
+@test "display_pane_open: a background job names its record in the mod's watch dir" {
+    source "$LIB"
+    unset COUNCIL_NO_PANE
+    export COUNCIL_MOD_PANE_DIR="$PANE_DIR" COUNCIL_JOB_ID="job-abc123" COUNCIL_JOB_FILE="/state/jobs/job-abc123.json"
+    run display_pane_open
+    [ "$status" -eq 0 ]
+    [ "$(cat "$output/job-file")" = "/state/jobs/job-abc123.json" ]
+}
+
 @test "display_pane_open: a foreground run leaves no job id in the mod's watch dir" {
     source "$LIB"
-    unset COUNCIL_NO_PANE COUNCIL_JOB_ID
+    unset COUNCIL_NO_PANE COUNCIL_JOB_ID COUNCIL_JOB_FILE
     export COUNCIL_MOD_PANE_DIR="$PANE_DIR"
     run display_pane_open
     [ "$status" -eq 0 ]
     [ ! -e "$output/job-id" ]
+    run ! test -e "$output/job-file"
 }
 
 @test "display: pane_retry_await ends at once when the pane declines the offer" {
