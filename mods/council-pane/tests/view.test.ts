@@ -69,6 +69,12 @@ test('paneSections collapses the status rows to a summary and a strip once the r
   ])
 })
 
+test('paneSections keeps the status rows on a finished run when collapsing is off', () => {
+  const view = { providers: [{ name: 'kimi', state: 'cached' }], responses: {}, errors: {}, colors: {}, isDone: true }
+  expect(paneSections(view, { collapsesWhenDone: false }).map(section => section.kind)).toEqual(['status'])
+  expect(paneSections(view).map(section => section.kind)).toEqual(['summary', 'strip'])
+})
+
 test('parseColors keeps the last colour written for each provider', () => {
   expect(parseColors('grok\t1;2;3\nkimi\t63;63;70\ngrok\t239;68;68\nbad line\n')).toEqual({ grok: '239;68;68', kimi: '63;63;70' })
 })

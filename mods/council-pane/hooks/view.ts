@@ -75,13 +75,16 @@ function doneSummary(providers: ProviderStatus[], vendor: (name: string) => stri
   ]
 }
 
-export function paneSections({ providers, responses, errors, colors, isDone }: RunView): Section[] {
+export function paneSections(
+  { providers, responses, errors, colors, isDone }: RunView,
+  { collapsesWhenDone = true }: { collapsesWhenDone?: boolean } = {},
+): Section[] {
   if (providers.length === 0) {
     return [{ kind: 'note', text: isDone ? 'Council finished with no answers.' : 'Waiting for the council...' }]
   }
   const vendor = (name: string) => `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`
   const glyph = (state: string) => (state === 'error' ? '\u2717' : '\u25cf')
-  const sections: Section[] = isDone ? doneSummary(providers, vendor, glyph) : statusRows(providers, vendor, glyph)
+  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(providers, vendor, glyph) : statusRows(providers, vendor, glyph)
   for (const { name, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]

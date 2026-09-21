@@ -2,6 +2,29 @@
   "name": "council-pane",
   "version": "0.0.1",
   "description": "Draws the claude-council streaming pane inside Claude Code",
-  "author": { "name": "hex", "url": "https://github.com/hex" },
-  "license": "MIT"
+  "author": {
+    "name": "hex",
+    "url": "https://github.com/hex"
+  },
+  "license": "MIT",
+  "userConfig": {
+    "pane": {
+      "type": "boolean",
+      "title": "Council pane",
+      "description": "Draw council runs in a pane inside Claude Code; off leaves them to the tmux pane.",
+      "default": true
+    },
+    "collapse_when_done": {
+      "type": "boolean",
+      "title": "Collapse status when done",
+      "description": "Replace the provider list with a one-line summary once a run finishes.",
+      "default": true
+    },
+    "wake_on_async_done": {
+      "type": "boolean",
+      "title": "Wake when an async run finishes",
+      "description": "Submit a prompt when a background council run completes. Starts a model turn, which costs tokens.",
+      "default": false
+    }
+  }
 }

@@ -1,6 +1,7 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { EngineInterface, Register } from 'claude-code'
+import { paneOptions } from './options'
 import { parseStatus } from './status'
 import { fitTables } from './tables'
 import { markdownBlocks, paneSections, parseColors, unseenRun, type RunView, type Section } from './view'
@@ -84,10 +85,13 @@ async function pollOnce($: EngineInterface, state: PaneState): Promise<void> {
   }
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const settings = paneOptions(options)
   const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '' }
 
   on('session.start', async ($, e, next) => {
+    // Off: nothing is exported, so runs keep the tmux pane.
+    if (!settings.isEnabled) return next(e)
     const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
     state.root = `${tmp}/council-mod.${await $.session.id()}`
     await $.fs.write(`${state.root}/.keep`, '')
@@ -155,6 +159,6 @@ export const register: Register = on => {
           )
       }
     }
-    return <Box flexDirection="column">{paneSections(state.view).map(draw)}</Box>
+    return <Box flexDirection="column">{paneSections(state.view, settings).map(draw)}</Box>
   })
 }
