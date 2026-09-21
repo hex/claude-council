@@ -90,7 +90,7 @@ if [[ $rc -eq 0 ]]; then
             elif type == "string" then .
             else empty end
         ] | join("")' "$OUT_TMP" 2>/dev/null || true)
-    if [[ -z "${RESPONSE//[[:space:]]/}" ]]; then
+    if [[ ! "$RESPONSE" =~ [^[:space:]] ]]; then
         echo "Error from kimi CLI: no assistant content in response" >&2
         exit 1
     fi

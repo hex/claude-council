@@ -146,3 +146,20 @@ envelope_with_entry() {
     [[ "$output" == *"OPENAI_ANSWER"* ]]
     [[ "$output" != *"null"* ]]
 }
+
+# bash 3.2 runs ${var//[[:space:]]/} in quadratic time over multibyte text:
+# 18000 characters took 284 s. /bin/bash is that shell on macOS.
+@test "format-output: a long multibyte response renders within seconds on the system bash" {
+    local body json
+    body=$(printf 'word — é %.0s' $(seq 1 1400))
+    json=$(envelope_with_entry "$(jq -n --arg r "$body" '{status:"success",model:"m1",response:$r}')")
+    run perl -e 'alarm 20; exec @ARGV' /bin/bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"word — é"* ]]
+}
+
+@test "scripts: no blank check strips whitespace from a whole response" {
+    run grep -rn -F '//[[:space:]]/}' "$SCRIPTS_DIR"
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}

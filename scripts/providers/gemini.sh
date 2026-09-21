@@ -133,7 +133,7 @@ TEXT=$(echo "$RESPONSE" | jq -r '[.candidates[0].content.parts[]? | select(.text
     # Whitespace-stripped, not just empty: a model that answers with a single
     # space passes a bare -z test, and the council would store that as a
     # successful answer and weigh it in the synthesis like any other.
-if [[ -z "${TEXT//[[:space:]]/}" ]]; then
+if [[ ! "$TEXT" =~ [^[:space:]] ]]; then
     # A well-formed HTTP error carries .error.message. A 200 with no visible
     # text (most often the model spending its whole token budget on internal
     # reasoning, or a safety block) carries neither .error nor .candidates —
