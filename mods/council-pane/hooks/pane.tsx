@@ -1,13 +1,14 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { EngineInterface, Register } from 'claude-code'
-import { finishToast, statusLine, wakePrompt } from './notices'
+import { finishToast, reopenReply, statusLine, wakePrompt } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseStatus } from './status'
 import { fitTables } from './tables'
 import { markdownBlocks, paneSections, parseColors, unseenRun, type RunView, type Section } from './view'
 
 const PANE_ID = 'council'
+const REOPEN_COMMAND = 'council-pane'
 const POLL_MS = 500
 
 type PaneState = {
@@ -110,8 +111,14 @@ export const register: Register = (on, options) => {
     await $.env.set('COUNCIL_MOD_PANE_DIR', state.root)
     // Nothing in the pane answers the retry offer, so the run must not wait on it.
     await $.env.set('COUNCIL_RETRY_WAIT', '0')
+    await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane with the last run', immediate: true })
     $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
     return next(e)
+  })
+
+  on('command.run', { command: REOPEN_COMMAND }, async $ => {
+    if (state.view) await $.ui.open({ id: PANE_ID, title: 'Council' })
+    return { text: reopenReply(state.view !== undefined) }
   })
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {

@@ -25,3 +25,9 @@ export function wakePrompt(jobId: string): string | undefined {
   if (!jobId) return undefined
   return `The background council job ${jobId} has finished. Fetch it with /claude-council:result ${jobId} and summarise it.`
 }
+
+export function reopenReply(hasRun: boolean): string {
+  return hasRun
+    ? 'Council pane reopened with the last run.'
+    : 'No council run in this session yet. Start one with /claude-council:ask.'
+}
