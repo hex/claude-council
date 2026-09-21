@@ -23,7 +23,7 @@ on.
 # 2. Configure at least one provider — any of these works:
 export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY,
                                     # OPENROUTER_API_KEY
-                                    # OR install the codex / antigravity (agy) / grok / kimi CLIs (uses your
+                                    # OR install the codex / antigravity (agy) / grok / kimi / cursor-agent CLIs (uses your
                                     # existing subscription — no API key needed)
 
 # 3. Ask anything
@@ -152,7 +152,7 @@ claude --plugin-dir /path/to/claude-council    # repo root; loaded for this sess
 
 | Flag | Description |
 |------|-------------|
-| `--providers=list` | Query specific providers (e.g., `gemini,openai,codex`) |
+| `--providers=list` | Query specific providers (e.g., `gemini,openai,codex`). Naming one in plain words works too: "check with grok" runs the council with that provider alone. There is no `--grok` style flag |
 | `--roles=list` | Assign roles (e.g., `security,performance`, a preset like `balanced`, or `provider=role` pairs) |
 | `--debate` | Enable two-round debate mode |
 | `--file=path` | Include specific file in context |
@@ -892,7 +892,7 @@ bash scripts/query-council.sh --list-default-models
 ## Requirements
 
 - `curl` and `jq` for API calls
-- Valid API keys for at least one provider, OR `codex` / `agy` (Antigravity) / `grok` / `kimi` CLI installed, OR `ollama` running locally
+- Valid API keys for at least one provider, OR `codex` / `agy` (Antigravity) / `grok` / `kimi` / `cursor-agent` CLI installed, OR `ollama` running locally
 - Optional: a Rich-capable Python (`python3` with a modern `rich`, or `uv`) upgrades the tmux pane's markdown rendering; without it the built-in perl renderer is used
 - macOS, Linux, or Windows via Git Bash; the test suite runs on all three in CI
 
@@ -933,7 +933,7 @@ bats tests/roles.bats
 ```
 
 CLI-provider paths are tested hermetically: `tests/fixtures/fake-clis.bash`
-installs fake `codex`/`agy`/`grok`/`kimi`/`ollama` executables onto `PATH` whose behavior is
+installs fake `codex`/`agy`/`grok`/`kimi`/`cursor-agent`/`ollama` executables onto `PATH` whose behavior is
 switched via `COUNCIL_FAKE_BEHAVIOR` and which record every invocation, so
 provider scripts, async jobs, and the stop gate run end-to-end with no
 network and no real CLIs.
