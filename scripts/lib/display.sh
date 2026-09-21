@@ -100,6 +100,11 @@ pane_status_event() {
     local model="${5:-}"
     [[ -d "$pane_dir" ]] || return 0
     printf '%s\t%s\t%s\t%s\n' "$provider" "$state" "$ms" "$model" >> "$pane_dir/status"
+    # A pane drawn outside this shell cannot call provider_color_rgb, so the
+    # colour travels with the run; a repeated provider repeats its line.
+    local rgb
+    provider_color_rgb rgb "$provider"
+    printf '%s\t%s\n' "$provider" "$rgb" >> "$pane_dir/colors"
 }
 
 pane_response_write() {

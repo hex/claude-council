@@ -566,3 +566,14 @@ SAMPLE_MD=$'<think>\nweighing the options here\n</think>\n\n# Verdict\n\nUse **s
     run display_pane_open
     [ "$status" -eq 1 ]
 }
+
+@test "pane_status_event: records each provider's vendor colour beside the status log" {
+    source "$LIB"
+    pane_status_event "$PANE_DIR" perplexity querying
+    pane_status_event "$PANE_DIR" openrouter-2 complete 1200 z-ai/glm
+    run cat "$PANE_DIR/colors"
+    [ "$output" = "perplexity"$'\t'"22;163;74"$'\n'"openrouter-2"$'\t'"124;58;237" ]
+    # The status log keeps its four fields: the tmux watcher reads exactly those.
+    run cat "$PANE_DIR/status"
+    [ "$output" = "perplexity"$'\t'"querying"$'\t\t'$'\n'"openrouter-2"$'\t'"complete"$'\t'"1200"$'\t'"z-ai/glm" ]
+}
