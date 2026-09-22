@@ -394,6 +394,15 @@ run_provider_with_image() {
     [ "$(jq -r '.max_output_tokens' "$DATA_FILE")" -ge 32768 ]
 }
 
+@test "openai: a gpt-6 id routes to v1/responses with a bumped token cap" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"text":"OAI_RESP"}]}]}'
+    run_provider openai.sh "hi" OPENAI_API_KEY=k OPENAI_MODEL=gpt-6-astra
+    [ "$status" -eq 0 ]
+    [ "$output" = "OAI_RESP" ]
+    grep -qF "https://api.openai.com/v1/responses" "$ARGV_FILE"
+    [ "$(jq -r '.max_output_tokens' "$DATA_FILE")" -ge 32768 ]
+}
+
 @test "openai: surfaces .error.message on a failure body" {
     FAKE_BODY='{"error":{"message":"bad key"}}' FAKE_HTTP=401
     run_provider openai.sh "hi" OPENAI_API_KEY=k OPENAI_MODEL=gpt-5.1
@@ -847,12 +856,12 @@ run_provider_with_image() {
 }
 
 @test "openrouter: extracts content and posts the pinned default to the router" {
-    FAKE_BODY='{"choices":[{"message":{"content":"OR_OK"}}],"model":"anthropic/claude-sonnet-5"}'
+    FAKE_BODY='{"choices":[{"message":{"content":"OR_OK"}}],"model":"anthropic/claude-fable-5.1"}'
     run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
     [ "$status" -eq 0 ]
     [ "$output" = "OR_OK" ]
     grep -qF "https://openrouter.ai/api/v1/chat/completions" "$ARGV_FILE"
-    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-sonnet-5" ]]
+    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-fable-5.1" ]]
 }
 
 @test "openrouter: a numbered seat posts its own roster model, not the default" {
@@ -873,7 +882,7 @@ run_provider_with_image() {
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k COUNCIL_SEAT=gemini
     [ "$status" -eq 0 ]
-    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-sonnet-5" ]]
+    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-fable-5.1" ]]
 }
 
 @test "openrouter: sends a reasoning budget by default" {

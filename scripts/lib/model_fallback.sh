@@ -20,7 +20,7 @@ source "${LIB_MODEL_FALLBACK_DIR}/providers.sh"
 # the served model (Gemini reports modelVersion) rather than the id, which is why
 # gemini's default is the flash alias, so it degrades to a pinned flash id: an
 # alias that has stopped serving is the failure a fallback can still answer.
-MODEL_FALLBACKS="openai:gpt-5.5-pro grok:grok-4.20-reasoning perplexity:sonar-pro gemini:gemini-3.5-flash kimi:kimi-k2.6"
+MODEL_FALLBACKS="openai:gpt-5.6-sol grok:grok-4.6 perplexity:sonar-pro gemini:gemini-3.8-flash kimi:kimi-k2.6"
 
 # The model a provider degrades to when its preferred model is unavailable.
 # Empty for CLI providers, which degrade to their API sibling instead.

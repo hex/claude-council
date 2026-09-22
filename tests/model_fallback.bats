@@ -119,15 +119,15 @@ mf() {
 
 @test "model_fallback_for: each API provider has its verified fallback" {
     mf 'model_fallback_for openai'
-    [ "$output" = "gpt-5.5-pro" ]
+    [ "$output" = "gpt-5.6-sol" ]
     mf 'model_fallback_for grok'
-    [ "$output" = "grok-4.20-reasoning" ]
+    [ "$output" = "grok-4.6" ]
     mf 'model_fallback_for perplexity'
     [ "$output" = "sonar-pro" ]
     mf 'model_fallback_for gemini'
     # A flash id, not another pro id: gemini's default is an alias, and the pro id
     # it currently serves would make the retry re-send the failed request.
-    [ "$output" = "gemini-3.5-flash" ]
+    [ "$output" = "gemini-3.8-flash" ]
 }
 
 @test "model_fallback_for: no provider degrades to the model it already prefers" {
@@ -251,9 +251,9 @@ mf() {
     # availability moves on its own schedule, so neither branch may fail the test.
     local model
     model=$(jq -r '.round1.grok.model' <<<"$output")
-    [[ "$model" == "grok-latest" || "$model" == "grok-4.20-reasoning" ]]
+    [[ "$model" == "grok-latest" || "$model" == "grok-4.6" ]]
     [ "$(jq -r '.round1.grok.status' <<<"$output")" = "success" ]
-    if [[ "$model" == "grok-4.20-reasoning" ]]; then
+    if [[ "$model" == "grok-4.6" ]]; then
         [ "$(jq -r '.round1.grok.model_fallback' <<<"$output")" = "grok-latest" ]
     fi
 }

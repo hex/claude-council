@@ -69,14 +69,14 @@ BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
 stage_prompt_file
 
 # Determine which API to use based on model
-# Models requiring v1/responses: codex-*, *-codex, o3-*, o4-*, gpt-5.[4-9]*
-if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-* ]] || [[ "$MODEL" == o4-* ]] || [[ "$MODEL" == gpt-5.[4-9]* ]]; then
+# Models requiring v1/responses: codex-*, *-codex, o3-*, o4-*, gpt-5.[4-9]*, gpt-[6-9]*
+if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-* ]] || [[ "$MODEL" == o4-* ]] || [[ "$MODEL" == gpt-5.[4-9]* ]] || [[ "$MODEL" == gpt-[6-9]* ]]; then
     # Use v1/responses API
     ENDPOINT="https://api.openai.com/v1/responses"
 
     # Reasoning models need higher token limits (reasoning + output combined):
     # bump to 8x base, minimum 32768. Same patterns that selected this endpoint.
-    bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'codex-*' '*-codex' 'o3-*' 'o4-*' 'gpt-5.[4-9]*'
+    bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'codex-*' '*-codex' 'o3-*' 'o4-*' 'gpt-5.[4-9]*' 'gpt-[6-9]*'
 
     # Reasoning effort: low/medium/high (override via OPENAI_REASONING_EFFORT)
     EFFORT="${OPENAI_REASONING_EFFORT:-medium}"

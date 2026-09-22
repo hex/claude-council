@@ -494,7 +494,7 @@ export OPENROUTER_API_KEY="your-key"   # one key, any model on openrouter.ai/mod
 ```
 
 `openrouter` seats whatever model `OPENROUTER_MODEL` names, defaulting to
-`anthropic/claude-sonnet-5` — the one vendor the council has no direct seat for.
+`anthropic/claude-fable-5.1` — the one vendor the council has no direct seat for.
 To seat several routed models at once, list them instead:
 
 ```bash
@@ -631,7 +631,7 @@ Override default models via environment variables:
 
 ```bash
 export GEMINI_MODEL="gemini-flash-latest"           # default (tracks Google's current Flash)
-export OPENAI_MODEL="gpt-5.6-sol"                   # default
+export OPENAI_MODEL="gpt-6-astra"                   # default
 export GROK_MODEL="grok-latest"                     # default (tracks xAI's current flagship)
 export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
 export KIMI_MODEL="kimi-k3"                         # default (reads images)
@@ -641,7 +641,7 @@ export KIMI_VISION=1                                # only needed when KIMI_MODE
 export COUNCIL_AGENT_MODEL="sonnet"                 # default: the model the --agents
                                                     # ANALYSTS run on (sonnet/opus/haiku/fable).
                                                     # Not a provider model — see below.
-export OPENROUTER_MODEL="anthropic/claude-sonnet-5"  # default (single seat)
+export OPENROUTER_MODEL="anthropic/claude-fable-5.1"  # default (single seat)
 export OPENROUTER_MODELS="a/b,c/d,e/f"              # or: one seat per entry
 export OPENROUTER_2_MODEL="c/d-pinned"              # overrides roster seat 2's entry;
                                                     # what the exit-3 degrade path sets
@@ -683,18 +683,18 @@ council answers with a verified fallback model instead of failing, and says so
 in the response header:
 
 ```
-## 🟥 Grok - grok-4.20-reasoning (grok-latest unavailable)
+## 🟥 Grok - grok-4.6 (grok-latest unavailable)
 ```
 
 | Provider | Default | Fallback |
 |---|---|---|
-| openai | `gpt-5.6-sol` | `gpt-5.5-pro` |
-| grok | `grok-latest` | `grok-4.20-reasoning` |
-| gemini | `gemini-flash-latest` | `gemini-3.5-flash` |
+| openai | `gpt-6-astra` | `gpt-5.6-sol` |
+| grok | `grok-latest` | `grok-4.6` |
+| gemini | `gemini-flash-latest` | `gemini-3.8-flash` |
 | perplexity | `sonar-reasoning-pro` | `sonar-pro` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
 | ollama | first local model (`OLLAMA_MODEL` to pin) | — |
-| openrouter | `anthropic/claude-sonnet-5` | — |
+| openrouter | `anthropic/claude-fable-5.1` | — |
 
 The same substitution is also noted on stderr and folded into the synthesis,
 so it's visible even in quiet mode or a headless run. Setting `<PROVIDER>_MODEL`
@@ -741,8 +741,8 @@ models ignore it.
 | Model Type | COUNCIL_MAX_TOKENS | Actual Limit |
 |------------|-------------------|--------------|
 | Standard (gpt-5.1) | 2048 (default) | 2048 |
-| Reasoning (gpt-5.6-sol) | 2048 (default) | 32768 |
-| Reasoning (gpt-5.6-sol) | 4096 | 32768 |
+| Reasoning (gpt-6-astra) | 2048 (default) | 32768 |
+| Reasoning (gpt-6-astra) | 4096 | 32768 |
 
 Control reasoning effort to balance speed vs thoroughness:
 

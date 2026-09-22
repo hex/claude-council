@@ -79,7 +79,7 @@ setup() {
     [[ "$output" == *"z-ai/glm-5.3"* ]]
     [[ "$output" == *"qwen/qwen3-max"* ]]
     # The single unnumbered row must be gone, not joined by three more.
-    [[ "$output" != *"anthropic/claude-sonnet-5"* ]]
+    [[ "$output" != *"anthropic/claude-fable-5.1"* ]]
     [[ "$output" == *"14/14 providers available"* ]]
 }
 

@@ -43,7 +43,7 @@ this key or region. Do not report this as an error. Instead:
    the provider's name upper-cased with `_MODEL` appended. For example, for
    provider `grok`:
    ```bash
-   GROK_MODEL=grok-4.20-reasoning COUNCIL_TIMEOUT=500 bash "{PLUGIN_ROOT}/scripts/providers/grok.sh" --prompt-file "{QUESTION_FILE}"
+   GROK_MODEL=grok-4.6 COUNCIL_TIMEOUT=500 bash "{PLUGIN_ROOT}/scripts/providers/grok.sh" --prompt-file "{QUESTION_FILE}"
    ```
 3. If the re-run also fails, carry the original error through to Round 3 as
    described above.

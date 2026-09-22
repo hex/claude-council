@@ -311,7 +311,7 @@ cli_model() {
 get_model() {
     case "$1" in
         gemini)     echo "${GEMINI_MODEL:-gemini-flash-latest}" ;;
-        openai)     echo "${OPENAI_MODEL:-gpt-5.6-sol}" ;;
+        openai)     echo "${OPENAI_MODEL:-gpt-6-astra}" ;;
         grok)       echo "${GROK_MODEL:-grok-latest}" ;;
         grok-cli)   cli_model grok-cli "${GROK_CLI_MODEL:-}" ;;
         perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
@@ -325,7 +325,7 @@ get_model() {
         # an Anthropic id because that is the one vendor the council otherwise
         # has no voice for. A router's default is retargetable by design:
         # OPENROUTER_MODEL takes any id from openrouter.ai/models.
-        openrouter) echo "${OPENROUTER_MODEL:-anthropic/claude-sonnet-5}" ;;
+        openrouter) echo "${OPENROUTER_MODEL:-anthropic/claude-fable-5.1}" ;;
         openrouter-[0-9]*)
             # An explicit <PREFIX>_MODEL wins, exactly as it does for every other
             # provider: the exit-3 degrade path forces a fallback that way, and a

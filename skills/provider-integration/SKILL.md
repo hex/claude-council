@@ -24,12 +24,12 @@ Each provider is a shell script in `scripts/providers/` that:
 | Provider | API Key Variable | Default Model |
 |----------|------------------|---------------|
 | Gemini | `GEMINI_API_KEY` | gemini-flash-latest |
-| OpenAI | `OPENAI_API_KEY` | gpt-5.6-sol |
+| OpenAI | `OPENAI_API_KEY` | gpt-6-astra |
 | Grok | `XAI_API_KEY` (or `GROK_API_KEY`) | grok-latest |
 | Perplexity | `PERPLEXITY_API_KEY` | sonar-reasoning-pro |
 | Kimi | `KIMI_API_KEY` | kimi-k3 |
 | Ollama | none (local) | first model `ollama list` shows |
-| OpenRouter | `OPENROUTER_API_KEY` | anthropic/claude-sonnet-5 (or one seat per `OPENROUTER_MODELS` entry) |
+| OpenRouter | `OPENROUTER_API_KEY` | anthropic/claude-fable-5.1 (or one seat per `OPENROUTER_MODELS` entry) |
 
 CLI providers (`codex`, `antigravity`, `grok-cli`, `kimi-cli`, `cursor-cli`) need no key: they are discovered when their binary is on `PATH` and use that CLI's own login. See `scripts/providers/kimi-cli.sh` and `cursor-cli.sh` for the headless-run pattern: a read-only mode, a JSON output format the answer is parsed from, `--model` only on an explicit `*_CLI_MODEL` override, and `run_with_deadline` in place of the API providers' retry.
 

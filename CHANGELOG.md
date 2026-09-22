@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Other
+- Model defaults refreshed by the new release-time check: OpenAI default `gpt-6-astra` (fallback `gpt-5.6-sol`), OpenRouter seat `anthropic/claude-fable-5.1`, Grok fallback `grok-4.6`, Gemini fallback `gemini-3.8-flash`. `gpt-6*` ids route to `v1/responses` with the reasoning token bump.
+
 ## 2026.9.12
 
 ### Added

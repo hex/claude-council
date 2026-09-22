@@ -645,7 +645,7 @@ claude-council/
 | `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
 | `KIMI_CLI_MODEL` | (unset) | Model passed to `kimi -m`, only when set (else the kimi CLI's own configured model) |
 | `CURSOR_CLI_MODEL` | (unset) | Model passed to `cursor-agent --model`, only when set (else the model picked in the CLI). The CLI writes the passed model into its own config as the picked model, even when the plan rejects it |
-| `OPENROUTER_MODEL` | `anthropic/claude-sonnet-5` | Any id from openrouter.ai/models (single seat) |
+| `OPENROUTER_MODEL` | `anthropic/claude-fable-5.1` | Any id from openrouter.ai/models (single seat) |
 | `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
 | `OPENROUTER_<N>_MODEL` | (unset) | Overrides roster seat N's entry, as `<PROVIDER>_MODEL` does for any provider; the exit-3 degrade path sets it so a roster entry never resends the model that just failed |
 | `COUNCIL_SEAT` | (set by the orchestrator) | Which seat a provider script is running as; only the router reads it |

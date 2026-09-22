@@ -283,7 +283,7 @@ EOF
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
         "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
-    assert_json_eq "$output" '.round1.grok.model' 'grok-4.20-reasoning'
+    assert_json_eq "$output" '.round1.grok.model' 'grok-4.6'
     assert_json_eq "$output" '.round1.grok.model_fallback' 'grok-latest'
     [[ "$stderr" == *"grok-latest unavailable"* ]]
 }
@@ -295,7 +295,7 @@ EOF
         "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
     [ "$(sed -n 1p "$CALLS_LOG")" = "grok-latest" ]
-    [ "$(sed -n 2p "$CALLS_LOG")" = "grok-4.20-reasoning" ]
+    [ "$(sed -n 2p "$CALLS_LOG")" = "grok-4.6" ]
 }
 
 @test "wrapper: a cached verdict skips the known-bad preferred model" {
@@ -309,7 +309,7 @@ EOF
     env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
         "$HOST_BASH" "$SCRIPT" --providers=grok --no-pane --no-auto-context --no-cache "q" >/dev/null 2>&1
     [ "$(grep -c . "$CALLS_LOG")" -eq 1 ]
-    [ "$(sed -n 1p "$CALLS_LOG")" = "grok-4.20-reasoning" ]
+    [ "$(sed -n 1p "$CALLS_LOG")" = "grok-4.6" ]
 }
 
 @test "wrapper: an explicit GROK_MODEL override never falls back" {
@@ -343,7 +343,7 @@ EOF
     run --separate-stderr env PROVIDERS_DIR="$STUB_DIR" COUNCIL_CACHE_DIR="$TEST_CACHE_DIR" \
         "$HOST_BASH" "$SCRIPT" --providers=grok --debate --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
-    assert_json_eq "$output" '.round2.grok.model' 'grok-4.20-reasoning'
+    assert_json_eq "$output" '.round2.grok.model' 'grok-4.6'
     assert_json_eq "$output" '.round2.grok.model_fallback' 'grok-latest'
 }
 
@@ -351,7 +351,7 @@ EOF
     # codex is unusable; its sibling openai answers, and openai's preferred model
     # is itself unavailable, so the slot must name both fallbacks.
     export OPENAI_API_KEY=k
-    write_model_aware_stub openai gpt-5.6-sol
+    write_model_aware_stub openai gpt-6-astra
     cat > "$STUB_DIR/codex.sh" <<'EOF'
 #!/bin/bash
 echo "codex is broken" >&2
@@ -362,8 +362,8 @@ EOF
         "$HOST_BASH" "$SCRIPT" --providers=codex --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
     assert_json_eq "$output" '.round1.codex.fallback' 'openai'
-    assert_json_eq "$output" '.round1.codex.model' 'gpt-5.5-pro'
-    assert_json_eq "$output" '.round1.codex.model_fallback' 'gpt-5.6-sol'
+    assert_json_eq "$output" '.round1.codex.model' 'gpt-5.6-sol'
+    assert_json_eq "$output" '.round1.codex.model_fallback' 'gpt-6-astra'
 }
 
 # ============================================================================
