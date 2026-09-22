@@ -7,7 +7,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Other
-- Model defaults refreshed by the new release-time check: OpenAI default `gpt-6-astra` (fallback `gpt-5.6-sol`), OpenRouter seat `anthropic/claude-fable-5.1`, Grok fallback `grok-4.6`, Gemini fallback `gemini-3.8-flash`. `gpt-6*` ids route to `v1/responses` with the reasoning token bump.
+- Model defaults refreshed by the new release-time check: OpenAI default `gpt-6-astra` (fallback `gpt-5.6-sol`), OpenRouter seat `anthropic/claude-fable-5.1`, Grok fallback `grok-4.6`, Gemini fallback `gemini-3.8-flash`. `gpt-6` and later ids route to `v1/responses` with the reasoning token bump.
 
 ## 2026.9.12
 

@@ -1001,7 +1001,7 @@ run_provider_with_image() {
         [ "$status" -eq 0 ]
         assert_blank "$stderr"
         echo "seat=$seat sent model=$(jq -r '.model' "$DATA_FILE")"
-        [[ "$(jq -r '.model' "$DATA_FILE")" == 'anthropic/claude-sonnet-5' ]]
+        [[ "$(jq -r '.model' "$DATA_FILE")" == 'anthropic/claude-fable-5.1' ]]
     done
 }
 
