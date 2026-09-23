@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult,
+  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -246,4 +246,18 @@ test('a round whose process vanished without an exit code is reported as stopped
     isError: true,
     result: `Run ${record.id} (sec, round 1) stopped before it finished: its process is gone and left no exit code.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\nUncommitted in the worktree:\n M src/login.ts`,
   })
+})
+
+test('roundClock counts m:ss, and h:mm:ss past an hour', () => {
+  expect(roundClock(0, 49_900)).toBe('0:49')
+  expect(roundClock(1_000, 193_000)).toBe('3:12')
+  expect(roundClock(0, 3_725_000)).toBe('1:02:05')
+  expect(roundClock(5_000, 1_000)).toBe('0:00')
+})
+
+test('roundStatus: running, ended and failed each have their own mark and colour', () => {
+  expect(roundStatus(true, undefined, '0:49')).toEqual({ glyph: '◷', text: '0:49', color: 'yellow' })
+  expect(roundStatus(false, { result: 'ok', isError: false }, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'green' })
+  expect(roundStatus(false, { result: 'boom', isError: true }, '3:12')).toEqual({ glyph: '✗', text: 'failed 3:12', color: 'red' })
+  expect(roundStatus(false, undefined, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'green' })
 })

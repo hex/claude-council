@@ -258,6 +258,22 @@ export function roundLiveness(exitText: string, isProcessAlive: boolean): 'runni
   return isProcessAlive ? 'running' : 'lost'
 }
 
+// A fixed-width m:ss clock, so the line it sits on does not shift each second.
+export function roundClock(startedMs: number, nowMs: number): string {
+  const secs = Math.max(0, Math.floor((nowMs - startedMs) / 1000))
+  const hours = Math.floor(secs / 3600)
+  const mins = Math.floor((secs % 3600) / 60)
+  const ss = String(secs % 60).padStart(2, '0')
+  return hours > 0 ? `${hours}:${String(mins).padStart(2, '0')}:${ss}` : `${mins}:${ss}`
+}
+
+// The one coloured item in the pane's header: how the round stands.
+export function roundStatus(isLive: boolean, last: RunRecord['last'], clock: string): { glyph: string; text: string; color: string } {
+  if (isLive) return { glyph: '\u25f7', text: clock, color: 'yellow' }
+  if (last?.isError) return { glyph: '\u2717', text: `failed ${clock}`, color: 'red' }
+  return { glyph: '\u2713', text: `ended ${clock}`, color: 'green' }
+}
+
 // Submitted as a prompt when a round ends. It names the run only: the
 // specialist's own words reach the model as a tool result, never as a prompt.
 export function specialistWake(record: RunRecord): string {
