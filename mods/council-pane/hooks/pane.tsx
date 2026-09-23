@@ -7,9 +7,9 @@ import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import {
-  dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, roundResult, runStamp, settledRuns, specialistCall,
+  dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, startQuestion, threadFrom,
-  commitSubject, latestStep, ROUND_MS, specialistSteps,
+  commitSubject, latestStep, lostResult, roundLiveness, specialistSteps, specialistWake, startedReply,
   type Roles, type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -64,6 +64,8 @@ type PaneState = {
   // What the last specialist round did, step by step; the pane's subject. It
   // outlives the round so the pane can still be read after it ends.
   specialistLog?: { record: RunRecord; steps: Step[]; isLive: boolean }
+  // Runs whose end is being written up now, so one tick does not repeat another's.
+  finishing: Set<string>
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -236,7 +238,80 @@ async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOpti
   }
 }
 
-// Reads the live round's event stream once a second, for the band and the pane.
+function specialistRun($: EngineInterface, args: string[], init?: { stdin?: string }) {
+  return $.process.run(['bash', `${$.plugin.root}/scripts/specialist.sh`, ...args], init)
+}
+
+function keyValues(text: string): Record<string, string> {
+  return Object.fromEntries(text.split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]))
+}
+
+const stateDirOf = (record: RunRecord) => `${record.worktree.replace(/\/[^/]+$/, '')}/.state/${record.id}`
+
+async function loadRuns($: EngineInterface): Promise<Record<string, RunRecord>> {
+  return ((await $.store.get(RUNS_KEY)) ?? {}) as Record<string, RunRecord>
+}
+
+// Every session shares the store, so a write re-reads it first rather than
+// overwriting the others' records with a stale copy.
+async function saveRun($: EngineInterface, record: RunRecord): Promise<void> {
+  const runs = await loadRuns($)
+  runs[record.id] = record
+  await $.store.set(RUNS_KEY, runs)
+}
+
+async function roundState($: EngineInterface, record: RunRecord): Promise<'running' | 'ended' | 'lost'> {
+  const stateDir = stateDirOf(record)
+  const pid = (await readText(files($), `${stateDir}/pid`)).trim()
+  const isAlive = /^\d+$/.test(pid) && (await $.process.run(['kill', '-0', pid])).exitCode === 0
+  return roundLiveness(await readText(files($), `${stateDir}/exit`), isAlive)
+}
+
+// Closes a round that ended: commits it, keeps its result on the record for
+// {run, result: true}, and wakes the model to fetch it.
+async function finishRound($: EngineInterface, state: PaneState, record: RunRecord, how: 'ended' | 'lost'): Promise<void> {
+  if (state.finishing.has(record.id)) return
+  state.finishing.add(record.id)
+  try {
+    // Another session may have closed it already.
+    if ((await loadRuns($))[record.id]?.state !== 'running') return
+    const stateDir = stateDirOf(record)
+    const events = await readText(files($), `${stateDir}/events.jsonl`)
+    const report = async () => {
+      const text = (await specialistRun($, ['report', record.worktree, record.roundBase, record.base])).stdout
+      return (name: string) => text.split(`--- ${name}\n`)[1]?.split('\n--- ')[0]?.trimEnd() ?? ''
+    }
+    let thread = record.thread
+    let outcome: { result: string; isError: boolean }
+    if (how === 'lost') {
+      outcome = lostResult(record, (await report())('status'))
+    } else {
+      const exitCode = Number((await readText(files($), `${stateDir}/exit`)).trim())
+      thread = (await readText(files($), `${stateDir}/thread`)).trim() || threadFrom(events) || record.thread
+      const commit = exitCode === 0 ? await specialistRun($, ['commit', record.worktree, record.subject]) : undefined
+      const committed = commit !== undefined && keyValues(commit.stdout).committed === 'yes'
+      const commitError = commit && commit.exitCode !== 0 ? commit.stderr.trim() || `commit exited ${commit.exitCode}` : ''
+      const section = await report()
+      outcome = roundResult({
+        record, exitCode, committed, commitError,
+        lastMessage: (await readText(files($), `${stateDir}/last-message.md`)).trim(),
+        roundStat: section('round'), totalStat: section('total'), status: section('status'),
+        stderrTail: (await readText(files($), `${stateDir}/stderr.txt`)).split('\n').slice(-15).join('\n').trim(),
+      })
+    }
+    const done: RunRecord = { ...record, thread, state: 'idle', last: outcome }
+    await saveRun($, done)
+    if (state.specialist?.record.id === record.id) state.specialist = undefined
+    state.specialistLog = { record: done, steps: specialistSteps(events, record.worktree), isLive: false }
+    $.ui.invalidate('ui.render')
+    await $.prompt.submit({ text: specialistWake(done) })
+  } finally {
+    state.finishing.delete(record.id)
+  }
+}
+
+// Once a second while a round runs: its steps for the band and the pane, and
+// its end.
 async function followSpecialist($: EngineInterface, state: PaneState): Promise<void> {
   const working = state.specialist
   if (!working) return
@@ -244,15 +319,19 @@ async function followSpecialist($: EngineInterface, state: PaneState): Promise<v
   const steps = specialistSteps(await readText(files($), `${working.stateDir}/events.jsonl`), working.record.worktree)
   state.specialistLog = { record: working.record, steps, isLive: true }
   $.ui.invalidate('ui.render')
+  const now = await roundState($, working.record)
+  if (now !== 'running') await finishRound($, state, working.record, now)
 }
 
-// The engine gave up on the round, but codex may still be writing to the
-// worktree: stop it and its children before anything reads the worktree.
-async function stopSpecialist($: EngineInterface, stateDir: string): Promise<void> {
-  const pid = (await readText(files($), `${stateDir}/pid`)).trim()
-  if (!/^\d+$/.test(pid)) return
-  await $.process.run(['pkill', '-TERM', '-P', pid])
-  await $.process.run(['kill', '-TERM', pid])
+// A round survives the session that started it: at start, follow one still
+// running and close one that ended meanwhile.
+async function recoverRounds($: EngineInterface, state: PaneState): Promise<void> {
+  for (const record of Object.values(await loadRuns($))) {
+    if (record.state !== 'running') continue
+    const now = await roundState($, record)
+    if (now === 'running') state.specialist = { record, startedMs: record.startedMs, stateDir: stateDirOf(record) }
+    else await finishRound($, state, record, now)
+  }
 }
 
 // What the offer's buttons do: the run waits on these two file names.
@@ -287,7 +366,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {} }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set() }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -304,6 +383,7 @@ export const register: Register = (on, options) => {
       await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void followSpecialist($, state) })
+      await recoverRounds($, state)
     }
     return next(e)
   })
@@ -367,64 +447,36 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: /^mcp__claude-council__specialist$/ }, async ($, e) => {
     const call = specialistCall(e as unknown as Record<string, unknown>, state.specialists)
     if ('deny' in call) return { deny: call.deny }
-    const script = `${$.plugin.root}/scripts/specialist.sh`
-    const sh = (args: string[], init?: { stdin?: string; timeoutMs?: number }) => $.process.run(['bash', script, ...args], init)
-    const kv = (text: string): Record<string, string> =>
-      Object.fromEntries(text.split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]))
-    const stored = ((await $.store.get(RUNS_KEY)) ?? {}) as Record<string, RunRecord>
-    const runs = settledRuns(stored, await $.clock.now())
-    // One round at a time across every session: they all share the store.
+    const sh = (args: string[], init?: { stdin?: string }) => specialistRun($, args, init)
+    const kv = keyValues
+    // One round at a time across every session: they all share the store. A
+    // round that ended with nobody following it is closed first.
+    for (const r of Object.values(await loadRuns($))) {
+      if (r.state !== 'running') continue
+      const now = await roundState($, r)
+      if (now !== 'running') await finishRound($, state, r, now)
+    }
+    const runs = await loadRuns($)
     const live = Object.values(runs).find(r => r.state === 'running')
-    const save = async (r: RunRecord) => { runs[r.id] = r; await $.store.set(RUNS_KEY, runs) }
     const ask = async (question: string, go: string, stop: string) => {
       try { return await $.ui.ask(question, { header: 'Specialist', options: [go, stop] }) } catch { return undefined }
     }
 
-    const round = async (record: RunRecord, prompt: string, thread: string, commitMessage: string) => {
+    // Starts a round and returns at once; followSpecialist closes it.
+    const round = async (record: RunRecord, prompt: string, thread: string, subject: string) => {
       const roundBase = (await sh(['head', record.worktree])).stdout.trim()
-      const stateDir = `${record.worktree.replace(/\/[^/]+$/, '')}/.state/${record.id}`
-      const startedMs = await $.clock.now()
-      await save({ ...record, state: 'running', startedMs })
-      state.specialist = { record, startedMs, stateDir }
-      state.specialistLog = { record, steps: [], isLive: true }
-      $.ui.invalidate('ui.render')
-      let exitCode = 1
-      let found = thread
-      let scriptError = ''
-      try {
-        const ran = await sh(['codex', record.worktree, stateDir, record.model, ...(thread ? [thread] : [])], { stdin: prompt, timeoutMs: ROUND_MS })
-        const out = kv(ran.stdout)
-        exitCode = ran.exitCode !== 0 ? ran.exitCode : Number(out.exit ?? 1)
-        found = out.thread || thread
-        // The script itself failed before codex ran: its own message is the reason.
-        if (ran.exitCode !== 0) scriptError = ran.stderr.trim()
-      } catch {
-        // The engine rejects a process still running at its timeout.
-        exitCode = 124
-        await stopSpecialist($, stateDir)
-      } finally {
-        state.specialist = undefined
-        const steps = specialistSteps(await readText(files($), `${stateDir}/events.jsonl`), record.worktree)
-        state.specialistLog = { record, steps, isLive: false }
-        $.ui.invalidate('ui.render')
+      const running: RunRecord = { ...record, state: 'running', startedMs: await $.clock.now(), roundBase, subject }
+      const stateDir = stateDirOf(running)
+      await saveRun($, running)
+      const launched = await sh(['codex', record.worktree, stateDir, record.model, ...(thread ? [thread] : [])], { stdin: prompt })
+      if (launched.exitCode !== 0) {
+        await saveRun($, { ...record, state: 'idle' })
+        return { result: `Run ${record.id}: the round did not start: ${launched.stderr.trim()}`, isError: true as const }
       }
-      // A round cut off at the limit printed no thread id; its events file has it,
-      // and a follow-up must resume that session, not open a new one.
-      if (!found) found = threadFrom(await readText(files($), `${stateDir}/events.jsonl`))
-      const done: RunRecord = { ...record, thread: found, state: 'idle', startedMs }
-      const commit = exitCode === 0 ? await sh(['commit', record.worktree, commitMessage]) : undefined
-      const committed = commit !== undefined && kv(commit.stdout).committed === 'yes'
-      const commitError = commit && commit.exitCode !== 0 ? commit.stderr.trim() || `commit exited ${commit.exitCode}` : ''
-      const report = (await sh(['report', record.worktree, roundBase, record.base])).stdout
-      const section = (name: string) => report.split(`--- ${name}\n`)[1]?.split('\n--- ')[0]?.trimEnd() ?? ''
-      await save(done)
-      const outcome = roundResult({
-        record: done, exitCode, committed, commitError,
-        lastMessage: (await readText(files($), `${stateDir}/last-message.md`)).trim(),
-        roundStat: section('round'), totalStat: section('total'), status: section('status'),
-        stderrTail: scriptError || (await readText(files($), `${stateDir}/stderr.txt`)).split('\n').slice(-15).join('\n').trim(),
-      })
-      return outcome.isError ? { result: outcome.result, isError: true as const } : { result: outcome.result }
+      state.specialist = { record: running, startedMs: running.startedMs, stateDir }
+      state.specialistLog = { record: running, steps: [], isLive: true }
+      $.ui.invalidate('ui.render')
+      return { result: startedReply(running) }
     }
 
     if (call.kind === 'start') {
@@ -446,12 +498,18 @@ export const register: Register = (on, options) => {
       const perspectivePrompt = state.roles[s.perspective]?.prompt ?? ''
       const record: RunRecord = {
         id: `${s.name}-${ts}`, specialist: s.name, model: s.model, perspective: s.perspective, prompt: perspectivePrompt,
-        repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 1, state: 'idle', startedMs: 0,
+        repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 1, state: 'idle', startedMs: 0, roundBase: '', subject: '',
       }
       return await round(record, specialistPrompt(perspectivePrompt, call.task), '', commitSubject(s.name, call.task))
     }
 
-    const record = runs[call.run]
+    const record = Object.hasOwn(runs, call.run) ? runs[call.run] : undefined
+    if (call.kind === 'result') {
+      if (!record) return { deny: `no run ${call.run}` }
+      if (record.state === 'running') return { deny: `${record.specialist} is still working on run ${record.id}; a prompt arrives when the round ends` }
+      if (!record.last) return { deny: `run ${record.id} has no finished round yet` }
+      return record.last.isError ? { result: record.last.result, isError: true as const } : { result: record.last.result }
+    }
     if (call.kind === 'followUp') {
       const exists = record ? await $.fs.exists(record.worktree) : false
       const refusal = followUpRefusal(record, call.run, exists)
@@ -476,7 +534,7 @@ export const register: Register = (on, options) => {
     if ('deny' in outcome) return { deny: outcome.deny }
     const finished = await sh(['finish', record.repo, record.worktree, record.branch, call.finish])
     if (finished.exitCode === 0) {
-      await save({ ...record, state: 'finished' })
+      await saveRun($, { ...record, state: 'finished' })
       return { result: `Run ${record.id}: ${call.finish === 'merge' ? `merged into ${target}` : 'discarded'}; worktree and branch removed.` }
     }
     const lines = finished.stdout.trim()

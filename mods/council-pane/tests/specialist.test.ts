@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, settledRuns, threadFrom, commitSubject, specialistSteps, latestStep,
+  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -67,6 +67,7 @@ test('the description lists every specialist and the confirmation rule', () => {
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     'Specialists: sec (security, gpt-6-sol), use when: auth, crypto; perf (performance, gpt-6-astra), use when: hot loops. ' +
     'Suggest one when a task matches its use-when. Start with {specialist, task}; send review feedback with {run, message}; ' +
+    'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +
     'The user confirms before anything starts or is sent. A refusal comes back as the result; do not retry unless the reply asks for a change.',
   )
@@ -83,7 +84,7 @@ const sec = { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'a
 const record: RunRecord = {
   id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', perspective: 'security', prompt: 'You are a security-focused code reviewer.',
   repo: '/r/app', worktree: '/r/app.specialists/sec-20260923-151204', branch: 'specialist/sec/20260923-151204',
-  base: 'a1b2c3d', thread: '01a0ce2a-1d08-76c0-a6ef-8340b581212d', rounds: 1, state: 'idle', startedMs: 0,
+  base: 'a1b2c3d', thread: '01a0ce2a-1d08-76c0-a6ef-8340b581212d', rounds: 1, state: 'idle', startedMs: 0, roundBase: 'a1b2c3d', subject: 'specialist sec: harden login',
 }
 
 test('each call shape is recognised, and nothing else is', () => {
@@ -92,9 +93,11 @@ test('each call shape is recognised, and nothing else is', () => {
   expect(specialistCall({ run: 'sec-1', finish: 'discard' }, [sec])).toEqual({ kind: 'finish', run: 'sec-1', finish: 'discard' })
   expect(specialistCall({ specialist: 'nope', task: 't' }, [sec])).toEqual({ deny: "no specialist named 'nope'; configured: sec" })
   expect(specialistCall({ specialist: 'sec', task: '  ' }, [sec])).toEqual({ deny: 'task must be a non-empty string' })
-  expect(specialistCall({ run: 'sec-1', message: 'm', finish: 'merge' }, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message} or {run, finish}' })
+  expect(specialistCall({ run: 'sec-1', message: 'm', finish: 'merge' }, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}' })
   expect(specialistCall({ run: 'sec-1', finish: 'keep' }, [sec])).toEqual({ deny: 'finish must be merge or discard' })
-  expect(specialistCall({}, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message} or {run, finish}' })
+  expect(specialistCall({}, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}' })
+  expect(specialistCall({ run: 'sec-1', result: true }, [sec])).toEqual({ kind: 'result', run: 'sec-1' })
+  expect(specialistCall({ run: 'sec-1', result: true, message: 'm' }, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}' })
 })
 
 test('runStamp is local time, zero padded', () => {
@@ -147,17 +150,6 @@ test('a round result carries what Claude needs to review', () => {
   expect(failed.result).toContain('Codex exited 1; nothing was committed.')
   expect(failed.result).toContain('Uncommitted in the worktree:\n M src/login.ts')
   expect(failed.result).toContain('Codex stderr (tail):\nboom')
-})
-
-test('a running record is live for one round limit plus a minute after it started, whoever started it', () => {
-  const now = 1_000_000
-  const live = { ...record, id: 'sec-1', state: 'running' as const, startedMs: now - 600_000 }
-  const dead = { ...record, id: 'sec-2', state: 'running' as const, startedMs: now - 661_000 }
-  const unstamped = { ...record, id: 'sec-3', state: 'running' as const, startedMs: undefined as unknown as number }
-  const idle = { ...record, id: 'sec-4', state: 'idle' as const, startedMs: now - 700_000 }
-  expect(settledRuns({ 'sec-1': live, 'sec-2': dead, 'sec-3': unstamped, 'sec-4': idle }, now)).toEqual({
-    'sec-1': live, 'sec-2': { ...dead, state: 'idle' }, 'sec-3': { ...unstamped, state: 'idle' }, 'sec-4': idle,
-  })
 })
 
 test('a round whose commit was refused is an error that names the refusal, not "no changes"', () => {
@@ -222,4 +214,31 @@ test('the band shows the latest step in one short line', () => {
   expect(latestStep(steps.slice(0, 3))).toBe('\u270e tests/a.bats')
   expect(latestStep([{ kind: 'run', text: 'x'.repeat(80), state: 'running' }])).toBe(`$ ${'x'.repeat(59)}…`)
   expect(latestStep([])).toBe('')
+})
+
+test('a round is running while its process lives and has written no exit code', () => {
+  expect(roundLiveness('', true)).toBe('running')
+  expect(roundLiveness('0\n', true)).toBe('ended')
+  expect(roundLiveness('1', false)).toBe('ended')
+  expect(roundLiveness('', false)).toBe('lost')
+})
+
+test('the wake prompt names the run and how to fetch it, and carries none of the specialist\'s text', () => {
+  expect(specialistWake(record)).toBe(
+    'Specialist sec finished round 1 of run sec-20260923-151204. Fetch its result with mcp__claude-council__specialist {"run": "sec-20260923-151204", "result": true}, review it, and ask the user before any follow-up or finish.',
+  )
+})
+
+test('a start or follow-up returns at once with where to look', () => {
+  expect(startedReply(record)).toBe(
+    'Run sec-20260923-151204 (sec, round 1) started in the background.\nBranch: specialist/sec/20260923-151204\nWorktree: /r/app.specialists/sec-20260923-151204\n\n' +
+    'A prompt arrives when the round ends; the band above the prompt shows its progress. Do not poll for it.',
+  )
+})
+
+test('a round whose process vanished without an exit code is reported as stopped', () => {
+  expect(lostResult(record, ' M src/login.ts')).toEqual({
+    isError: true,
+    result: `Run ${record.id} (sec, round 1) stopped before it finished: its process is gone and left no exit code.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\nUncommitted in the worktree:\n M src/login.ts`,
+  })
 })

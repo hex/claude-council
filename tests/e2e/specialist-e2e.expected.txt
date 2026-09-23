@@ -1,10 +1,10 @@
-repo: /private/var/folders/jw/p42m2bvx7dv4kjhc1mk2qf800000gn/T/specialist-e2e.W7j1KY/app (model gpt-6-sol)
+repo: /private/var/folders/jw/p42m2bvx7dv4kjhc1mk2qf800000gn/T/specialist-e2e.PDvHiV/app (model gpt-6-sol)
 1. start
-   branch=specialist/e2e/20260923-153056
+   branch=specialist/e2e/20260923-163835
 2. round 1: write answer.sh
-   exit=0 thread=01a0ce3f...
+   returned at once with pid; exit=0 thread=01a0ce7d...
 3. commit round 1 (Codex may have committed its work itself; either way the branch moves)
-   committed=no, branch commits since base: 1
+   committed=yes, branch commits since base: 1
 4. round 2 (resume): network reachable from the sandbox
    exit=0 same-thread=yes reply=200
 5. merge

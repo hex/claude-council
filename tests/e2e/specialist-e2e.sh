@@ -10,6 +10,13 @@ MODEL="${SPECIALIST_E2E_MODEL:-gpt-6-sol}"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 field() { printf '%s\n' "$1" | sed -n "s/^$2=//p"; }
 
+# A round runs detached; it is over when its exit file appears (10 min cap).
+wait_round() {
+    local tick=0
+    while [ ! -f "${STATE}/exit" ] && [ "$tick" -lt 600 ]; do sleep 1; tick=$((tick + 1)); done
+    [ -f "${STATE}/exit" ] || fail "round did not end within 10 minutes"
+}
+
 HOME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/specialist-e2e.XXXXXX")"
 HOME_DIR="$(cd "$HOME_DIR" && pwd -P)"
 REPO="${HOME_DIR}/app"
@@ -27,10 +34,12 @@ WT="$(field "$out" worktree)"; BR="$(field "$out" branch)"; STATE="$(field "$out
 echo "   branch=$BR"
 
 echo "2. round 1: write answer.sh"
-out="$(printf '%s' "Create answer.sh that prints 42. Then run: bash test.sh" | "$SPECIALIST" codex "$WT" "$STATE" "$MODEL")"
-THREAD="$(field "$out" thread)"
-echo "   exit=$(field "$out" exit) thread=${THREAD:0:8}..."
-[ "$(field "$out" exit)" = 0 ] || { tail -20 "${STATE}/stderr.txt" >&2; fail "round 1 exit $(field "$out" exit)"; }
+out="$(printf '%s' "Create answer.sh that prints 42. Then run: bash test.sh. Do not commit." | "$SPECIALIST" codex "$WT" "$STATE" "$MODEL")"
+[ -n "$(field "$out" pid)" ] || fail "round 1 printed no pid: $out"
+wait_round
+THREAD="$(cat "${STATE}/thread")"
+echo "   returned at once with pid; exit=$(cat "${STATE}/exit") thread=${THREAD:0:8}..."
+[ "$(cat "${STATE}/exit")" = 0 ] || { tail -20 "${STATE}/stderr.txt" >&2; fail "round 1 exit $(cat "${STATE}/exit")"; }
 [ -n "$THREAD" ] || fail "round 1 printed no thread id"
 
 echo "3. commit round 1 (Codex may have committed its work itself; either way the branch moves)"
@@ -41,10 +50,11 @@ echo "   $out, branch commits since base: $commits"
 [ -f "${WT}/answer.sh" ] || fail "round 1 did not create answer.sh"
 
 echo "4. round 2 (resume): network reachable from the sandbox"
-out="$(printf '%s' "Run: curl -sS -o /dev/null -w '%{http_code}' https://example.com and reply with only the code" | "$SPECIALIST" codex "$WT" "$STATE" "$MODEL" "$THREAD")"
-echo "   exit=$(field "$out" exit) same-thread=$([ "$(field "$out" thread)" = "$THREAD" ] && echo yes || echo no) reply=$(tr -d '\n' < "${STATE}/last-message.md")"
-[ "$(field "$out" exit)" = 0 ] || fail "round 2 exit $(field "$out" exit)"
-[ "$(field "$out" thread)" = "$THREAD" ] || fail "round 2 did not resume thread $THREAD"
+printf '%s' "Run: curl -sS -o /dev/null -w '%{http_code}' https://example.com and reply with only the code" | "$SPECIALIST" codex "$WT" "$STATE" "$MODEL" "$THREAD" >/dev/null
+wait_round
+echo "   exit=$(cat "${STATE}/exit") same-thread=$([ "$(cat "${STATE}/thread")" = "$THREAD" ] && echo yes || echo no) reply=$(tr -d '\n' < "${STATE}/last-message.md")"
+[ "$(cat "${STATE}/exit")" = 0 ] || fail "round 2 exit $(cat "${STATE}/exit")"
+[ "$(cat "${STATE}/thread")" = "$THREAD" ] || fail "round 2 did not resume thread $THREAD"
 grep -q 200 "${STATE}/last-message.md" || fail "network step did not return 200"
 
 echo "5. merge"

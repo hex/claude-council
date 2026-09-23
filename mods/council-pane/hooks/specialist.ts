@@ -44,6 +44,7 @@ export function specialistDescription(list: Specialist[]): string {
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     `Specialists: ${roster}. ` +
     'Suggest one when a task matches its use-when. Start with {specialist, task}; send review feedback with {run, message}; ' +
+    'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +
     'The user confirms before anything starts or is sent. A refusal comes back as the result; do not retry unless the reply asks for a change.'
   )
@@ -58,6 +59,7 @@ export function specialistSchema(list: Specialist[]): Record<string, unknown> {
       run: { type: 'string', description: 'Follow-up or finish: the run id a start returned.' },
       message: { type: 'string', description: 'Follow-up: feedback for the specialist, e.g. a failing test.' },
       finish: { type: 'string', enum: ['merge', 'discard'] },
+      result: { type: 'boolean', description: 'Fetch the last round\'s result: {run, result: true}, after the prompt saying the round ended.' },
     },
     additionalProperties: false,
   }
@@ -67,24 +69,33 @@ export type RunRecord = {
   id: string; specialist: string; model: string; perspective: string; prompt: string
   repo: string; worktree: string; branch: string; base: string; thread: string
   rounds: number; state: 'running' | 'idle' | 'finished'
-  // When the current or last round started; a running record older than one
-  // round limit has nobody waiting on it.
+  // When the current or last round started; the band's clock.
   startedMs: number
+  // What the current or last round started from, and the subject its commit gets.
+  roundBase: string
+  subject: string
+  // The last finished round's result, fetched with {run, result: true}.
+  last?: { result: string; isError: boolean }
 }
 
 export type SpecialistCall =
   | { kind: 'start'; specialist: Specialist; task: string }
   | { kind: 'followUp'; run: string; message: string }
   | { kind: 'finish'; run: string; finish: 'merge' | 'discard' }
+  | { kind: 'result'; run: string }
 
-const SHAPES = 'give one of {specialist, task}, {run, message} or {run, finish}'
+const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}'
 const QUOTED_MAX = 300
 const quote = (text: string) => (text.length > QUOTED_MAX ? `${text.slice(0, QUOTED_MAX)}…` : text)
 const filled = (value: unknown) => typeof value === 'string' && value.trim() !== ''
 
 export function specialistCall(input: Record<string, unknown>, list: Specialist[]): SpecialistCall | { deny: string } {
-  const { specialist, task, run, message, finish } = input
+  const { specialist, task, run, message, finish, result } = input
   const has = (v: unknown) => v !== undefined
+  if (has(result)) {
+    if (result !== true || !filled(run) || has(specialist) || has(task) || has(message) || has(finish)) return { deny: SHAPES }
+    return { kind: 'result', run: run as string }
+  }
   if (has(specialist) && !has(run) && !has(message) && !has(finish)) {
     const found = list.find(s => s.name === specialist)
     if (!found) return { deny: `no specialist named '${String(specialist)}'; configured: ${list.map(s => s.name).join(', ')}` }
@@ -163,18 +174,6 @@ export function roundResult(r: {
   return { isError: false, result: [head, changes, `Specialist's summary:\n${r.lastMessage}`].join('\n\n') }
 }
 
-// The engine stops any process at ten minutes, so a record still marked
-// running a minute past that has nobody waiting on it: a reload or crash left
-// it. Every session shares the store, so age decides, not which session asks.
-export const ROUND_MS = 600_000
-const ROUND_SLACK_MS = 60_000
-export function settledRuns(runs: Record<string, RunRecord>, nowMs: number): Record<string, RunRecord> {
-  const isLive = (r: RunRecord) => typeof r.startedMs === 'number' && nowMs - r.startedMs <= ROUND_MS + ROUND_SLACK_MS
-  return Object.fromEntries(
-    Object.entries(runs).map(([id, r]) => [id, r.state === 'running' && !isLive(r) ? { ...r, state: 'idle' as const } : r]),
-  )
-}
-
 const THREAD_STARTED = /"type":"thread\.started","thread_id":"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/
 
 // The Codex session a round opened, from its JSON event stream. A round cut off
@@ -242,4 +241,28 @@ export function latestStep(steps: Step[]): string {
   if (step.kind === 'run') return `$ ${cut(step.text, BAND_STEP_MAX)}`
   if (step.kind === 'edit') return `✎ ${cut(step.text, BAND_STEP_MAX)}`
   return cut(step.text.split('\n')[0] ?? '', BAND_STEP_MAX + 2)
+}
+
+// A round is over once its exit file exists; a process gone without one was
+// killed, and nothing will ever finish it.
+export function roundLiveness(exitText: string, isProcessAlive: boolean): 'running' | 'ended' | 'lost' {
+  if (exitText.trim() !== '') return 'ended'
+  return isProcessAlive ? 'running' : 'lost'
+}
+
+// Submitted as a prompt when a round ends. It names the run only: the
+// specialist's own words reach the model as a tool result, never as a prompt.
+export function specialistWake(record: RunRecord): string {
+  return `Specialist ${record.specialist} finished round ${record.rounds} of run ${record.id}. ` +
+    `Fetch its result with mcp__claude-council__specialist {"run": "${record.id}", "result": true}, review it, and ask the user before any follow-up or finish.`
+}
+
+export function startedReply(record: RunRecord): string {
+  return `Run ${record.id} (${record.specialist}, round ${record.rounds}) started in the background.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\n` +
+    'A prompt arrives when the round ends; the band above the prompt shows its progress. Do not poll for it.'
+}
+
+export function lostResult(record: RunRecord, status: string): { result: string; isError: boolean } {
+  const head = `Run ${record.id} (${record.specialist}, round ${record.rounds}) stopped before it finished: its process is gone and left no exit code.\nBranch: ${record.branch}\nWorktree: ${record.worktree}`
+  return { isError: true, result: status ? `${head}\n\nUncommitted in the worktree:\n${status}` : head }
 }
