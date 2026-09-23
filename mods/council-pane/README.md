@@ -73,13 +73,14 @@ sec = gpt-6-sol as security, when: auth, crypto, untrusted input
 
 The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. The perspective is a key of `config/roles.json` (`security`, `performance`, `maintainability`, `devil`, `simplicity`, `scalability`, `dx`, `compliance`), and its prompt opens every task. The text after `when:` is what Claude matches tasks against, up to 200 characters. The mod ignores an empty row and skips a row that does not parse; the session log says which row and why. With at least one valid row the mod registers `mcp__claude-council__specialist`.
 
-The tool takes three calls, and each opens a dialog first:
+The tool takes four calls. The first three open a dialog first:
 
 - Start, `{specialist, task}`: asks `Hand "<task>" to sec (security, gpt-6-sol)?` and names the commit it starts from. It warns when you have uncommitted changes, since the worktree starts from `HEAD` without them.
 - Follow-up, `{run, message}`: asks `Send to sec (run <id>)`. The message continues the same Codex session in the same worktree.
 - Finish, `{run, finish}`: asks `Merge <branch> (N commits, M files) into <branch>?` or `Discard run <id> and delete its branch?`
+- Result, `{run, result: true}`: returns the last round's result. It starts nothing and sends nothing, so it asks nothing.
 
-Claude waits for each round. While one runs, a `SPECIALIST` band above the prompt shows the specialist, its perspective, the time so far and its latest step: the command it runs, the file it edits, or the first line of what it says. `o · open pane` opens a pane that lists every step of the round, with a mark for each command and edit that is running, done or failed. The pane keeps the last round after it ends. The result carries Codex's last message, the diff stat for the round and for the whole run, the branch and the worktree path. Claude reviews that and runs the tests in the worktree before asking you how to finish.
+A round runs in the background: start and follow-up return at once, and you can keep talking to Claude. When the round ends, the mod commits it and submits a prompt asking Claude to fetch the result and review it. The prompt carries only the run id; the specialist's own words reach Claude as a tool result. While a round runs, a `SPECIALIST` band above the prompt shows the specialist, its perspective, the time so far and its latest step: the command it runs, the file it edits, or the first line of what it says. `o · open pane` opens a pane that lists every step of the round, with a mark for each command and edit that is running, done or failed. The pane keeps the last round after it ends. The result carries Codex's last message, the diff stat for the round and for the whole run, the branch and the worktree path. Claude reviews that and runs the tests in the worktree before asking you how to finish.
 
 Worktrees go beside the repository, in `../<repo>.specialists/<name>-<time>`, on a branch `specialist/<name>/<time>`. The mod commits each round's changes on that branch, with the task's first line as the subject. The prompt asks Codex not to commit: a worktree's git index lives in the main repository, outside the sandbox's writable area. A merge is a `--no-ff` merge into the branch you have checked out. The mod refuses it when your uncommitted changes touch the files the branch changed, or when you are on a detached `HEAD`. It aborts a conflicting merge and keeps the worktree and branch. When git refuses to start the merge, for example over an untracked file in the way, the result carries git's own message. Merge and discard remove the worktree and the branch. Nothing else cleans them up.
 
@@ -93,9 +94,9 @@ Network access is on inside the Codex sandbox. The worktree limits where a speci
 - The mod parses the synthesis out of Claude's reply, between the `## Synthesis` heading and the `Full output saved` line. If the council skill changes that format, the section stops appearing.
 - Answer bodies use Claude Code's own markdown styling. The Rich renderer's fitted tables and code highlighting are tmux only.
 - The mod cuts a single paragraph over 10,000 characters mid-text, because one `Markdown` element holds no more than that. A cut inside a code fence breaks the rendering of what follows.
-- A specialist round stops at ten minutes, the most the engine lets a process run. The mod then stops Codex, and the worktree keeps what the round wrote. Send `continue` as a follow-up to resume the same Codex session.
-- One specialist round runs at a time, across every session: they share the run records. A record left running by a crash counts as over once eleven minutes have passed.
-- Nobody has measured yet whether pressing Esc during a specialist round stops Codex. Until then, check `pgrep -fl 'codex exec'` after an Esc.
+- A round has no time limit and no cancel. To stop one, kill the pid in `../<repo>.specialists/.state/<run>/pid`; the mod then reports the round as stopped before it finished.
+- One specialist round runs at a time, across every session: they share the run records. A round outlives the session that started it: the next session that loads the mod follows it, or closes it if it ended meanwhile.
+- A mod reload does not stop Codex. One round, measured, kept running through a reload.
 - Nobody has tested specialists on Windows.
 - The drawing has no automated test. The docs describe `claude plugin test`, but 2.1.278 does not have it. `bun test` covers the logic. Only a person looking at the pane checks the drawing.
 
