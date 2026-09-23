@@ -19,6 +19,6 @@ export function paneOptions(options: Record<string, unknown>): PaneOptions {
     host: hostSetting(options.pane_host),
     collapsesWhenDone: flag(options.collapse_when_done, true),
     wakesOnAsyncDone: flag(options.wake_on_async_done, false),
-    offersTool: flag(options.council_tool, false),
+    offersTool: flag(options.council_tool, true),
   }
 }

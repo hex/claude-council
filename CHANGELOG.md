@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Features
+- The council tool (`council_tool` in `/config`) is on by default. Every call now opens a dialog that quotes the question and names the providers, and nothing leaves the machine until you choose `Send to the council`. Dismissing it, or a run with no one to ask, refuses the call. Needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`.
+
 ## 2026.9.14
 
 ### Features

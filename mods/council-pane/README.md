@@ -55,9 +55,9 @@ They show up in `/config`. Changing one reloads the mod.
 | `pane_host` | `ask` | Where the pane opens. `claude-code` always draws it here, `tmux` always leaves it to tmux. `ask` puts the question once, the first time a run starts inside tmux, and remembers the answer across sessions; the row's label shows what it remembered. `/council-pane ask` forgets it. Outside tmux, `ask` opens the pane here without asking. |
 | `collapse_when_done` | on | Off keeps the full status list after a run. |
 | `wake_on_async_done` | off | Submits a prompt when a background job's result can be fetched. That starts a model turn and costs tokens. A job that fails wakes nobody. |
-| `council_tool` | off | Registers `mcp__claude-council__ask` so the model can call the council as a tool. |
+| `council_tool` | on | Registers `mcp__claude-council__ask` so the model can call the council as a tool. Each call asks you first. |
 
-`council_tool` is off for a reason. The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. The plugin's eval suite checks that Claude does not convene the council on its own, but its graders watch the `Agent` tool, not this one, so the default is what keeps the tool out of those runs.
+The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. Every call opens a dialog quoting the question and naming the providers, and nothing leaves the machine unless you choose `Send to the council`. `Don't send` or dismissing the dialog refuses the call. Anything you type under Other goes back to the model as the reason. A run with no one to ask, such as `claude -p` or the plugin's eval suite, gets the same refusal, so the tool never convenes the council unattended.
 
 ## Limits
 

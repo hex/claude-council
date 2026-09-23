@@ -5,7 +5,8 @@ export const TOOL_NAME = 'ask'
 
 export const TOOL_DESCRIPTION =
   'Ask the council of external AI models one question and get each answer back. ' +
-  'Call this only when the user has asked for the council; never convene it on your own initiative.'
+  'Call this when the user asks for the council, or when a decision would benefit from outside perspectives. ' +
+  'The user is asked to confirm before anything is sent; a refusal comes back as the result, so do not retry it.'
 
 export const TOOL_SCHEMA = {
   type: 'object',
@@ -19,6 +20,32 @@ export const TOOL_SCHEMA = {
 }
 
 const VERBOSITIES = ['brief', 'standard', 'detailed']
+
+export const SEND_LABEL = 'Send to the council'
+export const KEEP_LABEL = "Don't send"
+
+// The dialog shows a question of this many characters at most; the run still
+// receives the whole question.
+const QUOTED_MAX = 300
+
+// The confirmation the user answers before the question leaves the machine.
+// Called on input councilArgs has already accepted.
+export function confirmQuestion(input: Record<string, unknown>): string {
+  const question = String(input.question)
+  const quoted = question.length > QUOTED_MAX ? `${question.slice(0, QUOTED_MAX)}\u2026` : question
+  const who = Array.isArray(input.providers) ? input.providers.join(', ') : 'every configured provider'
+  return `Send "${quoted}" to ${who}?`
+}
+
+// Only the exact send label sends. `answer` is undefined when the dialog
+// rejected: dismissed, or a run with no one to ask. Free text typed under
+// Other goes back to the model, since it is usually an instruction.
+export function confirmOutcome(answer: string | undefined): { send: true } | { deny: string } {
+  if (answer === SEND_LABEL) return { send: true }
+  if (answer === undefined) return { deny: 'The user was not asked (dialog dismissed or no one to ask), so nothing was sent to the council.' }
+  if (answer === KEEP_LABEL) return { deny: 'The user chose not to send this to the council.' }
+  return { deny: `The user did not send this to the council and said: ${answer}` }
+}
 
 export function councilArgs(input: Record<string, unknown>): { args: string[] } | { deny: string } {
   const { question, providers, verbosity } = input

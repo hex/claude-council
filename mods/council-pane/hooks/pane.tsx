@@ -6,7 +6,7 @@ import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLi
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
-import { councilArgs, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
+import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
@@ -293,6 +293,16 @@ export const register: Register = (on, options) => {
     if ('deny' in parsed) return { deny: parsed.deny }
     const script = `${$.plugin.root}/scripts/run-council.sh`
     if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
+    // The question goes to third-party providers, so the user confirms every
+    // call; this gate holds even where the tool itself needs no permission.
+    let answer: string | undefined
+    try {
+      answer = await $.ui.ask(confirmQuestion(input), { header: 'Council', options: [SEND_LABEL, KEEP_LABEL] })
+    } catch {
+      answer = undefined
+    }
+    const outcome = confirmOutcome(answer)
+    if ('deny' in outcome) return { deny: outcome.deny }
     await aimRun($, state, settings)
     const run = await $.process.run(['bash', script, ...parsed.args], { timeoutMs: RUN_TIMEOUT_MS })
     const saved = run.stdout.trim().split('\n').pop() ?? ''
