@@ -22,7 +22,6 @@ cmd_start() {
     base="$(git -C "$root" rev-parse HEAD)"
     short="$(git -C "$root" rev-parse --short=7 HEAD)"
     if [[ -n "$(git -C "$root" status --porcelain)" ]]; then dirty=yes; else dirty=no; fi
-    mkdir -p "$home"
     git -C "$root" worktree add -q -b "$branch" "$worktree" "$base" >&2 || exit 1
     mkdir -p "$state"
     printf 'repo=%s\nworktree=%s\nbranch=%s\nbase=%s\nshort=%s\nstate=%s\ndirty=%s\n' \
