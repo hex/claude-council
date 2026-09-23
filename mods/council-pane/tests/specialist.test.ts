@@ -136,7 +136,7 @@ test('a follow-up needs a live run with its worktree', () => {
   expect(followUpRefusal({ ...record, state: 'finished' }, record.id, true)).toBe(`run ${record.id} is finished; start a new one`)
   expect(followUpRefusal({ ...record, state: 'running' }, record.id, true)).toBe(`sec is still working on run ${record.id}`)
   expect(followUpRefusal(record, record.id, false)).toBe(`run ${record.id} has no worktree any more; start a new one`)
-  expect(followUpRefusal({ ...record, thread: '' }, record.id, true)).toBe(`run ${record.id} has no Codex thread to resume; start a new run`)
+  expect(followUpRefusal({ ...record, thread: '' }, record.id, true)).toBe(`run ${record.id} has no Codex thread to resume; start a new one`)
   expect(followUpRefusal(record, record.id, true)).toBeUndefined()
 })
 
