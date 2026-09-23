@@ -306,6 +306,27 @@ launch() {
     wait_round
 }
 
+@test "killing the codex pid ends the round with codex's exit code" {
+    start_run
+    fake_codex "echo \$\$ > '${BATS_TEST_TMPDIR}/seen-pid'; n=0; while [ \$n -lt 100 ]; do sleep 0.1; n=\$((n + 1)); done"
+    launch
+    local tick=0
+    while [ ! -s "${BATS_TEST_TMPDIR}/seen-pid" ] && [ "$tick" -lt 100 ]; do sleep 0.1; tick=$((tick + 1)); done
+    [ "$(cat "$STATE/codex-pid")" = "$(cat "${BATS_TEST_TMPDIR}/seen-pid")" ]
+    kill "$(cat "$STATE/codex-pid")"
+    wait_round
+    [ "$(cat "$STATE/exit")" = "143" ]
+}
+
+@test "a round whose events repeat thread.started still ends with its thread and exit code" {
+    start_run
+    fake_codex "i=0; while [ \$i -lt 20000 ]; do echo '{\"type\":\"thread.started\",\"thread_id\":\"01a0ce2a-1d08-76c0-a6ef-8340b581212d\"}'; i=\$((i + 1)); done"
+    launch
+    wait_round
+    [ "$(cat "$STATE/exit")" = "0" ]
+    [ "$(cat "$STATE/thread")" = "01a0ce2a-1d08-76c0-a6ef-8340b581212d" ]
+}
+
 @test "codex receives the prompt on stdin" {
     start_run
     fake_codex "cat > '${BATS_TEST_TMPDIR}/seen-prompt'"
