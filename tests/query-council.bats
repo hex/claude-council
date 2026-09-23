@@ -496,6 +496,25 @@ setup_pane() {
     assert_json_eq "$output" '.metadata.pane_shown' 'true'
 }
 
+@test "metadata: pane_shown is false when the pane was closed before the run ended" {
+    # A closed pane stops receiving answers, so the chat must not skip them.
+    setup_pane
+    write_flaky_stub grok
+    play_pane close &
+    COUNCIL_RETRY_WAIT=5 run_council_with_pane --providers=grok "q"
+    [ "$status" -eq 0 ]
+    [ ! -d "$PANE" ]
+    assert_json_eq "$output" '.metadata.pane_shown' 'false'
+}
+
+@test "metadata: pane_shown is false for a detached --async job" {
+    setup_pane
+    write_stub gemini
+    COUNCIL_JOB_ID=job-test run_council_with_pane --providers=gemini "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.metadata.pane_shown' 'false'
+}
+
 @test "metadata: pane_shown is false when no pane opened" {
     write_stub gemini
     run_council --no-cache --no-pane --providers=gemini "q"
