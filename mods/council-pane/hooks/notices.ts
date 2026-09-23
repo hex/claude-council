@@ -16,6 +16,26 @@ export function finishNotice({ providers }: RunProgress, jobId = ''): string {
   return `${subject}: ${answered}${errors > 0 ? `, ${errors} error` : ''}`
 }
 
+const PROGRESS_CELLS = 8
+
+// The band above the prompt while a run is live: a thin line and a percent,
+// both counting providers that are finished, an error included. Both round
+// down, so neither reads full while a provider is still out. `startedAtMs` is
+// when the pane picked the run up; before that there is no elapsed time.
+export function progressBand(
+  { providers, isDone }: RunProgress,
+  startedAtMs: number | undefined,
+  nowMs: number,
+): { bar: string; text: string } | undefined {
+  if (isDone || providers.length === 0) return undefined
+  const share = count(providers, 'complete', 'cached', 'error') / providers.length
+  const filled = Math.floor(share * PROGRESS_CELLS)
+  const bar = '\u2501'.repeat(filled) + '\u2500'.repeat(PROGRESS_CELLS - filled)
+  const parts = [`${Math.floor(share * 100)}%`]
+  if (startedAtMs !== undefined) parts.push(`${Math.max(0, Math.floor((nowMs - startedAtMs) / 1000))}s`)
+  return { bar, text: parts.join(' \u00b7 ') }
+}
+
 // A run whose process died without writing .done: what the band says instead.
 export function abandonedNotice({ providers }: RunProgress, jobId = ''): string {
   const subject = jobId ? `job ${jobId} stopped` : 'stopped'

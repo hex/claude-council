@@ -4,6 +4,13 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Features
+- Specialists: up to four Codex agents, each on its own model and council perspective, set in `/config` rows `specialist_1` to `specialist_4`. Claude suggests one when a task fits, and a dialog confirms every start, follow-up and finish. The specialist writes code in its own git worktree and branch, follow-ups continue its Codex session, rounds run in the background and a prompt wakes Claude when one ends, and a confirmed merge or discard removes the worktree and branch. While a round runs, the band shows its latest step and opens a pane that follows the round. Network access is on inside its sandbox. Needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and a logged-in `codex`.
+- While a council run is live, the band above the prompt shows its progress: a thin line and a percent of providers finished, and the seconds so far. It gives way to the retry offer and the finish notice.
+- The council tool (`council_tool` in `/config`) is on by default. Every call now opens a dialog that quotes the question and names the providers, and nothing leaves the machine until you choose `Send to the council`. Dismissing it, or a run with no one to ask, refuses the call. Needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`.
+
 ## 2026.9.14
 
 ### Features
