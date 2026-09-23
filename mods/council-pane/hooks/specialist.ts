@@ -141,7 +141,7 @@ export function followUpRefusal(record: RunRecord | undefined, id: string, workt
 
 export function roundResult(r: {
   record: RunRecord; exitCode: number; lastMessage: string; roundStat: string; totalStat: string
-  committed: boolean; status: string; stderrTail: string
+  committed: boolean; status: string; stderrTail: string; commitError: string
 }): { result: string; isError: boolean } {
   const { record } = r
   const head = `Run ${record.id} (${record.specialist}, round ${record.rounds}) ${r.exitCode === 0 ? 'finished' : 'failed'}.\nBranch: ${record.branch}\nWorktree: ${record.worktree}`
@@ -152,6 +152,19 @@ export function roundResult(r: {
     if (r.stderrTail) parts.push(`Codex stderr (tail):\n${r.stderrTail}`)
     return { isError: true, result: parts.join('\n\n') }
   }
+  if (r.commitError) {
+    const refused = `The round's commit failed; the changes are uncommitted in the worktree:\n${r.status}\n\ngit said:\n${r.commitError}`
+    return { isError: true, result: [head, refused, `Specialist's summary:\n${r.lastMessage}`].join('\n\n') }
+  }
   const changes = r.committed || r.roundStat ? `This round:\n${r.roundStat}\nSince ${record.base}:\n${r.totalStat}` : 'No changes this round.'
   return { isError: false, result: [head, changes, `Specialist's summary:\n${r.lastMessage}`].join('\n\n') }
+}
+
+// Only the round this mod instance is waiting on is running. A record still
+// marked running after a reload or crash has nobody waiting on it, and would
+// otherwise refuse every start, follow-up and finish for good.
+export function settledRuns(runs: Record<string, RunRecord>, liveId: string | undefined): Record<string, RunRecord> {
+  return Object.fromEntries(
+    Object.entries(runs).map(([id, r]) => [id, r.state === 'running' && r.id !== liveId ? { ...r, state: 'idle' as const } : r]),
+  )
 }

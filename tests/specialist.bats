@@ -180,3 +180,15 @@ start_run() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"exit=127"* ]]
 }
+
+@test "commit fails with the hook's message when the repository's pre-commit hook refuses" {
+    start_run
+    mkdir -p "$REPO/.git/hooks"
+    printf '#!/bin/sh\necho "lint failed" >&2\nexit 1\n' > "$REPO/.git/hooks/pre-commit"
+    chmod +x "$REPO/.git/hooks/pre-commit"
+    echo 'b' > "$WT/src/b.txt"
+    run "$SPECIALIST" commit "$WT" r1
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"lint failed"* ]]
+    [[ "$output" != *"committed="* ]]
+}

@@ -6,6 +6,11 @@ import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLi
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
+import {
+  dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, roundResult, runStamp, settledRuns, specialistCall,
+  specialistDescription, specialistPrompt, specialistRoster, specialistSchema, startQuestion,
+  type Roles, type RunRecord, type Specialist,
+} from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
@@ -25,6 +30,10 @@ const FRAME_MS = 100
 const WAKE_WAIT_MS = 120_000
 // How often a run still going is asked whether its process is alive.
 const PID_CHECK_MS = 5_000
+const SPECIALIST_TOOL = 'specialist'
+const RUNS_KEY = 'specialist-runs'
+// A round waits on Codex for as long as the engine lets a process run.
+const ROUND_MS = 600_000
 
 type PaneState = {
   root: string
@@ -48,6 +57,10 @@ type PaneState = {
   // Each section's fitted body, for the width and text it was fitted to: a
   // frame redraws the tree, not the markdown, and a resize replaces the entry.
   fitted: Map<string, { columns: number; text: string; blocks: string[] }>
+  specialists: Specialist[]
+  roles: Roles
+  // The specialist round this session is waiting on; the band's subject.
+  specialist?: { record: RunRecord; startedMs: number }
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -252,11 +265,26 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map() }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {} }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
+    // Perspectives come from the council's own roles file, so one definition
+    // serves both; a row naming a missing one is reported, never dropped quietly.
+    const rolesText = await readText(files($), `${$.plugin.root}/config/roles.json`)
+    const roles: Roles = rolesText ? (JSON.parse(rolesText).roles ?? {}) : {}
+    const roster = specialistRoster(options, roles)
+    for (const problem of roster.problems) $.ui.log(problem)
+    state.specialists = roster.specialists
+    state.roles = roles
+    if (roster.specialists.length > 0) {
+      await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
+      // The band's clock moves only while a round runs.
+      $.clock.every(1000, () => {
+        if (state.specialist) void $.clock.now().then(now => { state.nowMs = now; $.ui.invalidate('ui.render') })
+      })
+    }
     return next(e)
   })
 
@@ -314,6 +342,115 @@ export const register: Register = (on, options) => {
     return { result: await $.fs.read(saved) }
   })
 
+  // Every start, follow-up and finish is confirmed in a dialog: a specialist
+  // writes code with its own model, and a finish merges or deletes its branch.
+  on('tool.call', { tool: /^mcp__claude-council__specialist$/ }, async ($, e) => {
+    const call = specialistCall(e as unknown as Record<string, unknown>, state.specialists)
+    if ('deny' in call) return { deny: call.deny }
+    const script = `${$.plugin.root}/scripts/specialist.sh`
+    const sh = (args: string[], init?: { stdin?: string; timeoutMs?: number }) => $.process.run(['bash', script, ...args], init)
+    const kv = (text: string): Record<string, string> =>
+      Object.fromEntries(text.split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]))
+    const stored = ((await $.store.get(RUNS_KEY)) ?? {}) as Record<string, RunRecord>
+    const runs = settledRuns(stored, state.specialist?.record.id)
+    const save = async (r: RunRecord) => { runs[r.id] = r; await $.store.set(RUNS_KEY, runs) }
+    const ask = async (question: string, go: string, stop: string) => {
+      try { return await $.ui.ask(question, { header: 'Specialist', options: [go, stop] }) } catch { return undefined }
+    }
+
+    const round = async (record: RunRecord, prompt: string, thread: string, commitMessage: string) => {
+      const roundBase = (await sh(['head', record.worktree])).stdout.trim()
+      const stateDir = `${record.worktree.replace(/\/[^/]+$/, '')}/.state/${record.id}`
+      await save({ ...record, state: 'running' })
+      state.specialist = { record, startedMs: await $.clock.now() }
+      $.ui.invalidate('ui.render')
+      let exitCode = 1
+      let found = thread
+      try {
+        const ran = await sh(['codex', record.worktree, stateDir, record.model, ...(thread ? [thread] : [])], { stdin: prompt, timeoutMs: ROUND_MS })
+        const out = kv(ran.stdout)
+        exitCode = ran.exitCode !== 0 ? ran.exitCode : Number(out.exit ?? 1)
+        found = out.thread || thread
+      } catch {
+        // The engine rejects a process still running at its timeout.
+        exitCode = 124
+      } finally {
+        state.specialist = undefined
+        $.ui.invalidate('ui.render')
+      }
+      const done: RunRecord = { ...record, thread: found, state: 'idle' }
+      const commit = exitCode === 0 ? await sh(['commit', record.worktree, commitMessage]) : undefined
+      const committed = commit !== undefined && kv(commit.stdout).committed === 'yes'
+      const commitError = commit && commit.exitCode !== 0 ? commit.stderr.trim() || `commit exited ${commit.exitCode}` : ''
+      const report = (await sh(['report', record.worktree, roundBase, record.base])).stdout
+      const section = (name: string) => report.split(`--- ${name}\n`)[1]?.split('\n--- ')[0]?.trimEnd() ?? ''
+      await save(done)
+      const outcome = roundResult({
+        record: done, exitCode, committed, commitError,
+        lastMessage: (await readText(files($), `${stateDir}/last-message.md`)).trim(),
+        roundStat: section('round'), totalStat: section('total'), status: section('status'),
+        stderrTail: (await readText(files($), `${stateDir}/stderr.txt`)).split('\n').slice(-15).join('\n').trim(),
+      })
+      return outcome.isError ? { result: outcome.result, isError: true as const } : { result: outcome.result }
+    }
+
+    if (call.kind === 'start') {
+      const live = state.specialist?.record
+      if (live) return { deny: `${live.specialist} is still working on run ${live.id}` }
+      const login = await $.process.run(['codex', 'login', 'status']).catch(() => undefined)
+      if (!login || login.exitCode !== 0) return { deny: 'codex is not installed or not logged in; run `codex login`' }
+      const cwd = await $.session.cwd()
+      const top = await $.process.run(['git', '-C', cwd, 'rev-parse', '--short=7', 'HEAD'])
+      if (top.exitCode !== 0) return { deny: `${cwd} is not inside a git repository with a commit` }
+      const dirty = (await $.process.run(['git', '-C', cwd, 'status', '--porcelain'])).stdout.trim() !== ''
+      const s = call.specialist
+      const go = `Start ${s.name}`
+      const outcome = dialogOutcome(await ask(startQuestion(s, call.task, top.stdout.trim(), dirty), go, "Don't start"), go, "Don't start", `did not start ${s.name}`)
+      if ('deny' in outcome) return { deny: outcome.deny }
+      const ts = runStamp(new Date(await $.clock.now()))
+      const started = await sh(['start', cwd, s.name, ts])
+      if (started.exitCode !== 0) return { result: started.stderr.trim() || 'could not create the worktree', isError: true }
+      const at = kv(started.stdout)
+      const perspectivePrompt = state.roles[s.perspective]?.prompt ?? ''
+      const record: RunRecord = {
+        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, perspective: s.perspective, prompt: perspectivePrompt,
+        repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 1, state: 'idle',
+      }
+      return await round(record, specialistPrompt(perspectivePrompt, call.task), '', `specialist ${s.name}: ${call.task.split('\n')[0]}`)
+    }
+
+    const record = runs[call.run]
+    if (call.kind === 'followUp') {
+      const exists = record ? await $.fs.exists(record.worktree) : false
+      const refusal = followUpRefusal(record, call.run, exists)
+      if (refusal || !record) return { deny: refusal ?? `no run ${call.run}` }
+      const outcome = dialogOutcome(await ask(followUpQuestion(record, call.message), 'Send', "Don't send"), 'Send', "Don't send", `did not send this to ${record.specialist}`)
+      if ('deny' in outcome) return { deny: outcome.deny }
+      const next = { ...record, rounds: record.rounds + 1 }
+      return await round(next, call.message, record.thread, `specialist ${record.specialist}: round ${next.rounds}`)
+    }
+
+    if (!record || record.state === 'finished') return { deny: `no open run ${call.run}` }
+    if (record.state === 'running') return { deny: `${record.specialist} is still working on run ${record.id}` }
+    const counts = kv((await sh(['counts', record.repo, record.branch, record.base])).stdout)
+    const target = counts.target || 'a detached HEAD'
+    const go = call.finish === 'merge' ? 'Merge' : 'Discard'
+    const question = finishQuestion(record, call.finish, Number(counts.commits ?? 0), Number(counts.files ?? 0), target)
+    const outcome = dialogOutcome(await ask(question, go, 'Keep it'), go, 'Keep it', `kept run ${record.id}`)
+    if ('deny' in outcome) return { deny: outcome.deny }
+    const finished = await sh(['finish', record.repo, record.worktree, record.branch, call.finish])
+    if (finished.exitCode === 0) {
+      await save({ ...record, state: 'finished' })
+      return { result: `Run ${record.id}: ${call.finish === 'merge' ? `merged into ${target}` : 'discarded'}; worktree and branch removed.` }
+    }
+    const lines = finished.stdout.trim()
+    const why = finished.exitCode === 3 ? `merge conflicts, merge aborted; worktree and branch kept:\n${lines}`
+      : finished.exitCode === 4 ? `your uncommitted changes touch the branch's files; commit or stash them first:\n${lines}`
+      : finished.exitCode === 5 ? 'the repository is on a detached HEAD; check out a branch to merge into'
+      : finished.stderr.trim() || 'finish failed'
+    return { result: `Run ${record.id} not finished: ${why}`, isError: true }
+  })
+
   on('command.run', { command: REOPEN_COMMAND }, async ($, e) => {
     const command = paneCommand(e.args)
     if (command.action === 'forget') {
@@ -355,6 +492,20 @@ export const register: Register = (on, options) => {
       )
     }
     if (retry && runDir) return retryRow($.ui.resolve(e), retry, retryPresses($, runDir))
+    const working = state.specialist
+    if (working) {
+      const ui = $.ui.resolve(e)
+      const secs = Math.max(0, Math.floor((state.nowMs - working.startedMs) / 1000))
+      const clock = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`
+      return (
+        <ui.Box key="specialist" flexDirection="row" marginTop={1}>
+          <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
+            <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>SPECIALIST</ui.Text>
+          </ui.Box>
+          <ui.Text>{`  ${working.record.specialist} \u00b7 ${working.record.perspective} \u00b7 ${clock}`}</ui.Text>
+        </ui.Box>
+      )
+    }
     const progress = state.view ? progressBand(state.view, state.runStartedMs, state.nowMs) : undefined
     if (!progress) return next(e)
     const ui = $.ui.resolve(e)

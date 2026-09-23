@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult,
+  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, settledRuns,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -136,7 +136,7 @@ test('a follow-up needs a live run with its worktree', () => {
 })
 
 test('a round result carries what Claude needs to review', () => {
-  const base = { record, lastMessage: 'Added a rate limit.', roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '' }
+  const base = { record, lastMessage: 'Added a rate limit.', roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '' }
   expect(roundResult({ ...base, exitCode: 0, committed: true })).toEqual({
     isError: false,
     result: `Run ${record.id} (sec, round 1) finished.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\nThis round:\n src/login.ts | 12 +++\nSince ${record.base}:\n src/login.ts | 12 +++\n\nSpecialist's summary:\nAdded a rate limit.`,
@@ -147,4 +147,27 @@ test('a round result carries what Claude needs to review', () => {
   expect(failed.result).toContain('Codex exited 1; nothing was committed.')
   expect(failed.result).toContain('Uncommitted in the worktree:\n M src/login.ts')
   expect(failed.result).toContain('Codex stderr (tail):\nboom')
+})
+
+test('a record left running by a reload or crash reads as idle; the live round stays running', () => {
+  const stale = { ...record, id: 'sec-1', state: 'running' as const }
+  const live = { ...record, id: 'sec-2', state: 'running' as const }
+  const done = { ...record, id: 'sec-3', state: 'finished' as const }
+  expect(settledRuns({ 'sec-1': stale, 'sec-2': live, 'sec-3': done }, 'sec-2')).toEqual({
+    'sec-1': { ...stale, state: 'idle' }, 'sec-2': live, 'sec-3': done,
+  })
+  expect(settledRuns({ 'sec-1': stale }, undefined)).toEqual({ 'sec-1': { ...stale, state: 'idle' } })
+})
+
+test('a round whose commit was refused is an error that names the refusal, not "no changes"', () => {
+  const refused = roundResult({
+    record, exitCode: 0, committed: false, lastMessage: 'Added a rate limit.', roundStat: '', totalStat: '',
+    status: ' M src/login.ts', stderrTail: '', commitError: 'pre-commit: lint failed',
+  })
+  expect(refused).toEqual({
+    isError: true,
+    result: `Run ${record.id} (sec, round 1) finished.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\n` +
+      `The round's commit failed; the changes are uncommitted in the worktree:\n M src/login.ts\n\ngit said:\npre-commit: lint failed\n\n` +
+      "Specialist's summary:\nAdded a rate limit.",
+  })
 })
