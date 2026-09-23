@@ -236,7 +236,7 @@ function retryRow(
   press: { accept: () => void; skip: () => void },
 ) {
   return (
-    <ui.Box key="retry" flexDirection="row">
+    <ui.Box key="retry" flexDirection="row" marginTop={1}>
       <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
         <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>{offer.badge}</ui.Text>
       </ui.Box>
@@ -335,7 +335,7 @@ export const register: Register = (on, options) => {
     if (finished && !retry) {
       const ui = $.ui.resolve(e)
       return (
-        <ui.Box key="finished" flexDirection="row">
+        <ui.Box key="finished" flexDirection="row" marginTop={1}>
           <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
             <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>COUNCIL</ui.Text>
           </ui.Box>
@@ -359,7 +359,7 @@ export const register: Register = (on, options) => {
     if (!progress) return next(e)
     const ui = $.ui.resolve(e)
     return (
-      <ui.Box key="progress" flexDirection="row">
+      <ui.Box key="progress" flexDirection="row" marginTop={1}>
         <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
           <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>COUNCIL</ui.Text>
         </ui.Box>
