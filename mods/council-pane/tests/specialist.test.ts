@@ -68,6 +68,7 @@ test('the description lists every specialist and the confirmation rule', () => {
     'Specialists: sec (security, gpt-6-sol), use when: auth, crypto; perf (performance, gpt-6-astra), use when: hot loops. ' +
     'Suggest one when a task matches its use-when. Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
+    'the tool commits each round itself, so never tell a specialist to commit; ' +
     'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +
     'The user confirms before anything starts or is sent. A refusal comes back as the result; do not retry unless the reply asks for a change.',
   )
@@ -140,12 +141,16 @@ test('a follow-up needs a live run with its worktree', () => {
 
 test('a round result carries what Claude needs to review', () => {
   const base = { record, lastMessage: 'Added a rate limit.', roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '' }
-  expect(roundResult({ ...base, exitCode: 0, committed: true })).toEqual({
+  expect(roundResult({ ...base, exitCode: 0, commit: '31db1a2' })).toEqual({
     isError: false,
-    result: `Run ${record.id} (sec, round 1) finished.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\nThis round:\n src/login.ts | 12 +++\nSince ${record.base}:\n src/login.ts | 12 +++\n\nSpecialist's summary:\nAdded a rate limit.`,
+    result: `Run ${record.id} (sec, round 1) finished.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\n` +
+      'The tool committed this round on the branch as 31db1a2.\n\n' +
+      `This round:\n src/login.ts | 12 +++\nSince ${record.base}:\n src/login.ts | 12 +++\n\n` +
+      "The specialist's own report (written before the tool committed):\nAdded a rate limit.",
   })
-  expect(roundResult({ ...base, exitCode: 0, committed: false, roundStat: '', totalStat: '' }).result).toContain('No changes this round.')
-  const failed = roundResult({ ...base, exitCode: 1, committed: false, status: ' M src/login.ts', stderrTail: 'boom' })
+  expect(roundResult({ ...base, exitCode: 0, commit: '' }).result).toContain('The specialist committed this round itself.')
+  expect(roundResult({ ...base, exitCode: 0, commit: '', roundStat: '', totalStat: '' }).result).toContain('No changes this round.')
+  const failed = roundResult({ ...base, exitCode: 1, commit: '', status: ' M src/login.ts', stderrTail: 'boom' })
   expect(failed.isError).toBe(true)
   expect(failed.result).toContain('Codex exited 1; nothing was committed.')
   expect(failed.result).toContain('Uncommitted in the worktree:\n M src/login.ts')
@@ -154,14 +159,14 @@ test('a round result carries what Claude needs to review', () => {
 
 test('a round whose commit was refused is an error that names the refusal, not "no changes"', () => {
   const refused = roundResult({
-    record, exitCode: 0, committed: false, lastMessage: 'Added a rate limit.', roundStat: '', totalStat: '',
+    record, exitCode: 0, commit: '', lastMessage: 'Added a rate limit.', roundStat: '', totalStat: '',
     status: ' M src/login.ts', stderrTail: '', commitError: 'pre-commit: lint failed',
   })
   expect(refused).toEqual({
     isError: true,
     result: `Run ${record.id} (sec, round 1) finished.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\n` +
       `The round's commit failed; the changes are uncommitted in the worktree:\n M src/login.ts\n\ngit said:\npre-commit: lint failed\n\n` +
-      "Specialist's summary:\nAdded a rate limit.",
+      "The specialist's own report (written before the tool committed):\nAdded a rate limit.",
   })
 })
 

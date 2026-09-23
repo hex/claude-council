@@ -45,6 +45,7 @@ export function specialistDescription(list: Specialist[]): string {
     `Specialists: ${roster}. ` +
     'Suggest one when a task matches its use-when. Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
+    'the tool commits each round itself, so never tell a specialist to commit; ' +
     'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +
     'The user confirms before anything starts or is sent. A refusal comes back as the result; do not retry unless the reply asks for a change.'
   )
@@ -153,9 +154,12 @@ export function followUpRefusal(record: RunRecord | undefined, id: string, workt
   return undefined
 }
 
+const OWN_REPORT = "The specialist's own report (written before the tool committed):"
+
 export function roundResult(r: {
   record: RunRecord; exitCode: number; lastMessage: string; roundStat: string; totalStat: string
-  committed: boolean; status: string; stderrTail: string; commitError: string
+  // The short sha of the commit the tool made for this round; '' when it made none.
+  commit: string; status: string; stderrTail: string; commitError: string
 }): { result: string; isError: boolean } {
   const { record } = r
   const head = `Run ${record.id} (${record.specialist}, round ${record.rounds}) ${r.exitCode === 0 ? 'finished' : 'failed'}.\nBranch: ${record.branch}\nWorktree: ${record.worktree}`
@@ -168,10 +172,14 @@ export function roundResult(r: {
   }
   if (r.commitError) {
     const refused = `The round's commit failed; the changes are uncommitted in the worktree:\n${r.status}\n\ngit said:\n${r.commitError}`
-    return { isError: true, result: [head, refused, `Specialist's summary:\n${r.lastMessage}`].join('\n\n') }
+    return { isError: true, result: [head, refused, `${OWN_REPORT}\n${r.lastMessage}`].join('\n\n') }
   }
-  const changes = r.committed || r.roundStat ? `This round:\n${r.roundStat}\nSince ${record.base}:\n${r.totalStat}` : 'No changes this round.'
-  return { isError: false, result: [head, changes, `Specialist's summary:\n${r.lastMessage}`].join('\n\n') }
+  if (!r.commit && !r.roundStat) return { isError: false, result: [head, 'No changes this round.', `${OWN_REPORT}\n${r.lastMessage}`].join('\n\n') }
+  // The specialist wrote its report before the tool committed, so it cannot
+  // know the commit exists; the tool's own line settles it.
+  const who = r.commit ? `The tool committed this round on the branch as ${r.commit}.` : 'The specialist committed this round itself.'
+  const changes = `This round:\n${r.roundStat}\nSince ${record.base}:\n${r.totalStat}`
+  return { isError: false, result: [head, who, changes, `${OWN_REPORT}\n${r.lastMessage}`].join('\n\n') }
 }
 
 const THREAD_STARTED = /"type":"thread\.started","thread_id":"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/

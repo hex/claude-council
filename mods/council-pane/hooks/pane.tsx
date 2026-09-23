@@ -289,11 +289,12 @@ async function finishRound($: EngineInterface, state: PaneState, record: RunReco
       const exitCode = Number((await readText(files($), `${stateDir}/exit`)).trim())
       thread = (await readText(files($), `${stateDir}/thread`)).trim() || threadFrom(events) || record.thread
       const commit = exitCode === 0 ? await specialistRun($, ['commit', record.worktree, record.subject]) : undefined
-      const committed = commit !== undefined && keyValues(commit.stdout).committed === 'yes'
+      const didCommit = commit !== undefined && keyValues(commit.stdout).committed === 'yes'
+      const committed = didCommit ? (await specialistRun($, ['head', record.worktree])).stdout.trim().slice(0, 7) : ''
       const commitError = commit && commit.exitCode !== 0 ? commit.stderr.trim() || `commit exited ${commit.exitCode}` : ''
       const section = await report()
       outcome = roundResult({
-        record, exitCode, committed, commitError,
+        record, exitCode, commit: committed, commitError,
         lastMessage: (await readText(files($), `${stateDir}/last-message.md`)).trim(),
         roundStat: section('round'), totalStat: section('total'), status: section('status'),
         stderrTail: (await readText(files($), `${stateDir}/stderr.txt`)).split('\n').slice(-15).join('\n').trim(),
