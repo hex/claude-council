@@ -15,6 +15,10 @@ This outputs the path to the saved file (e.g., `.claude/council-cache/council-17
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 
+**Pass only the flags the user asked for.** Never add `--no-pane`, `--quiet`,
+`--no-cache` or `--no-auto-context` on your own judgment; they are the user's
+to choose, and the script already skips a pane that cannot open.
+
 **CRITICAL**: Always place `--` before the prompt to prevent prompt text containing dashes from being parsed as flags.
 
 **Run this Bash call with `timeout: 600000`** (ten minutes). The Bash tool's

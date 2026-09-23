@@ -82,7 +82,7 @@ retained by them, and cannot be recalled.
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh \
-  --file="$DIGEST" --no-auto-context --no-pane \
+  --file="$DIGEST" --no-auto-context \
   -- "<the user's question>"
 ```
 

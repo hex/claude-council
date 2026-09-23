@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixes
+- The model running `/claude-council:ask` no longer adds `--no-pane`, `--quiet`, `--no-cache` or `--no-auto-context` on its own; it forwards only what the user typed. `/claude-council:advise` streams into the pane like `ask` instead of always suppressing it.
+
 ## 2026.9.13
 
 ### Features
