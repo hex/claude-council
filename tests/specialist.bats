@@ -36,6 +36,23 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     [ "$(git -C "$(field worktree)" rev-parse --abbrev-ref HEAD)" = "specialist/sec/20260923-151204" ]
 }
 
+@test "start rejects invalid names before creating a worktree or branch" {
+    for name in ../evil -rf a/b Sec 9sec 'a b' ''; do
+        run "$SPECIALIST" start "$REPO" "$name" 20260923-151204
+        [ "$status" -eq 1 ] || return 1
+        [ "$output" = "specialist: invalid name '${name}': must match ^[a-z][a-z0-9-]*\$" ] || return 1
+        [ ! -d "${ROOT}/app.specialists" ] || return 1
+        [ -z "$(git -C "$REPO" branch --list 'specialist/*')" ] || return 1
+    done
+}
+
+@test "start accepts a name with a hyphen" {
+    run "$SPECIALIST" start "$REPO" sec-2 20260923-151204
+    [ "$status" -eq 0 ]
+    [ "$(field branch)" = "specialist/sec-2/20260923-151204" ]
+    [ -d "$(field state)" ]
+}
+
 @test "start reports a dirty main tree" {
     echo 'two' >> "$REPO/src/a.txt"
     run "$SPECIALIST" start "$REPO" sec 20260923-151204
