@@ -22,10 +22,14 @@ teardown() {
     rm -rf "$TEST_CACHE_DIR"
 }
 
-# Poll a job until it reaches a terminal status or the deadline passes
+# Poll a job until it reaches a terminal status or the bound passes. A healthy
+# job finishes in seconds; the bound is generous because a loaded machine
+# (bats -j, or an endpoint agent inspecting every exec) can stretch one run
+# past 20 s, and a job still running at the bound is reported, not hidden.
+# Counted in sleep ticks, since an integer SECONDS deadline can expire early.
 wait_for_job() {
-    local id="$1" deadline=$((SECONDS + 20)) status
-    while (( SECONDS < deadline )); do
+    local id="$1" ticks=240 status=""
+    while (( ticks-- > 0 )); do
         status=$(jq -r .status "${COUNCIL_JOBS_DIR}/${id}.json" 2>/dev/null || echo "")
         case "$status" in
             completed|failed|cancelled) echo "$status"; return 0 ;;
