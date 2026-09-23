@@ -9,7 +9,7 @@ import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, startQuestion, threadFrom,
-  commitSubject, latestStep, lostResult, roundLiveness, specialistSteps, specialistWake, startedReply,
+  commitSubject, latestStep, lostResult, roundLiveness, specialistSteps, specialistWake, startedReply, roundClock, roundStatus,
   type Roles, type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -24,8 +24,6 @@ const RUN_TIMEOUT_MS = 600_000
 // Claude's orange (#D97757): the council speaks inside Claude Code, and the
 // synthesis is Claude's own text. No provider's banner uses it.
 const COUNCIL_RGB = 'rgb(217,119,87)'
-const MAGENTA_RGB = 'rgb(196,72,128)'
-const VIOLET_RGB = 'rgb(124,77,196)'
 const CHIP_STOPS = [COUNCIL_RGB, 'rgb(232,150,62)', 'rgb(240,190,70)']
 // Dark text reads on every shade of the chip, the yellow end included.
 const CHIP_TEXT = 'rgb(51,33,17)'
@@ -380,11 +378,6 @@ function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label
   )
 }
 
-function elapsed(nowMs: number, startedMs: number): string {
-  const secs = Math.max(0, Math.floor((nowMs - startedMs) / 1000))
-  return secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`
-}
-
 // What the offer's buttons do: the run waits on these two file names.
 function retryPresses($: EngineInterface, runDir: string) {
   return {
@@ -646,7 +639,7 @@ export const register: Register = (on, options) => {
     const working = state.specialist
     if (working) {
       const ui = $.ui.resolve(e)
-      const clock = elapsed(state.nowMs, working.startedMs)
+      const clock = roundClock(working.startedMs, state.nowMs)
       return (
         <ui.Box key="specialist" flexDirection="row" marginTop={1}>
           {/* Only the step gives way when the band is narrow, as beside an open pane. */}
@@ -654,8 +647,9 @@ export const register: Register = (on, options) => {
           <ui.Box flexShrink={0}>
             <ui.Text>
               <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
-              <ui.Text color={MAGENTA_RGB}>{`  \u25c6 ${working.record.perspective}`}</ui.Text>
-              <ui.Text color={COUNCIL_RGB}>{`  \u25f7 ${clock}`}</ui.Text>
+              <ui.Text dimColor>{' \u00b7 '}</ui.Text>
+              <ui.Text>{working.record.perspective}</ui.Text>
+              <ui.Text color="yellow">{`  \u25f7 ${clock}`}</ui.Text>
             </ui.Text>
           </ui.Box>
           <ui.Box flexGrow={1} flexShrink={1}>
@@ -688,28 +682,26 @@ export const register: Register = (on, options) => {
     const columns = e.props.bodyColumns
     const { record } = log
     const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', 'yellow'] : step.state === 'failed' ? ['\u2717', 'red'] : ['\u2713', 'green'])
+    const status = roundStatus(log.isLive, record.last, roundClock(record.startedMs, state.nowMs))
     return (
       <Box key="specialist" flexDirection="column">
-        <Box flexDirection="row">
-          {chip(ui, 'chip', '\u2726 SPECIALIST', log.isLive ? state.specialistFrame : undefined)}
-          <Text bold>{`  ${record.specialist}`}</Text>
+        <Box flexDirection="row" width={columns} justifyContent="space-between">
+          <Box flexDirection="row">
+            {chip(ui, 'chip', '\u2726 SPECIALIST', log.isLive ? state.specialistFrame : undefined)}
+            <Text bold>{`  ${record.specialist}`}</Text>
+          </Box>
+          <Text bold color={status.color}>{`${status.glyph} ${status.text}`}</Text>
         </Box>
         <Text>
-          <Text color={MAGENTA_RGB}>{`\u25c6 ${record.perspective}  `}</Text>
-          <Text color={VIOLET_RGB}>{`\u25c8 ${record.model}  `}</Text>
-          <Text color={COUNCIL_RGB}>{`\u21bb round ${record.rounds}  `}</Text>
-          {log.isLive
-            ? <Text color="yellow">{`\u25f7 running ${elapsed(state.nowMs, record.startedMs)}`}</Text>
-            : <Text color="green">{'\u25a0 ended'}</Text>}
+          {[record.perspective, record.model, `round ${record.rounds}`].map((part, index) => (
+            <Text key={`meta-${index}`}>
+              {index > 0 ? <Text dimColor>{' \u00b7 '}</Text> : null}
+              <Text>{part}</Text>
+            </Text>
+          ))}
         </Text>
-        <Text>
-          <Text color={MAGENTA_RGB}>{'\u2387 '}</Text>
-          <Text dimColor>{record.branch}</Text>
-        </Text>
-        <Text>
-          <Text color={VIOLET_RGB}>{'\u25b8 '}</Text>
-          <Text dimColor>{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text>
-        </Text>
+        <Text dimColor>{record.branch}</Text>
+        <Text dimColor>{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text>
         <Text dimColor>{'\u2500'.repeat(Math.max(0, columns))}</Text>
         {log.steps.map((step, index) => {
           const key = `step-${index}`
@@ -717,7 +709,7 @@ export const register: Register = (on, options) => {
           if (step.kind === 'say') {
             return (
               <Box key={key} flexDirection="row" marginTop={1} marginBottom={1}>
-                <Text color={VIOLET_RGB}>{'\u25cf '}</Text>
+                <Text dimColor>{'\u25cf '}</Text>
                 <Box flexDirection="column" flexShrink={1}>
                   {markdownBlocks(step.text).map((block, part) => <Markdown key={`${key}-${part}`} text={block} />)}
                 </Box>
@@ -730,8 +722,8 @@ export const register: Register = (on, options) => {
             return (
               <Text key={key}>
                 <Text color={color}>{`${glyph} `}</Text>
-                <Text color="cyan">{'\u270e '}</Text>
-                <Text bold={!isDone} color="cyan">{step.text}</Text>
+                <Text color={COUNCIL_RGB}>{'\u270e '}</Text>
+                <Text bold={!isDone}>{step.text}</Text>
               </Text>
             )
           }
