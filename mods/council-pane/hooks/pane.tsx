@@ -355,6 +355,11 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
   }
 }
 
+function elapsed(nowMs: number, startedMs: number): string {
+  const secs = Math.max(0, Math.floor((nowMs - startedMs) / 1000))
+  return secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`
+}
+
 // What the offer's buttons do: the run waits on these two file names.
 function retryPresses($: EngineInterface, runDir: string) {
   return {
@@ -613,8 +618,7 @@ export const register: Register = (on, options) => {
     const working = state.specialist
     if (working) {
       const ui = $.ui.resolve(e)
-      const secs = Math.max(0, Math.floor((state.nowMs - working.startedMs) / 1000))
-      const clock = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`
+      const clock = elapsed(state.nowMs, working.startedMs)
       return (
         <ui.Box key="specialist" flexDirection="row" marginTop={1}>
           {/* Only the step gives way when the band is narrow, as beside an open pane. */}
@@ -651,20 +655,44 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     const log = state.specialistLog
     if (e.requestId !== SPECIALIST_PANE || !log) return next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Markdown, Text } = $.ui.resolve(e)
+    const columns = e.props.bodyColumns
+    const { record } = log
     const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', 'yellow'] : step.state === 'failed' ? ['\u2717', 'red'] : ['\u2713', 'green'])
+    const status = log.isLive ? `running ${elapsed(state.nowMs, record.startedMs)}` : 'ended'
     return (
       <Box key="specialist" flexDirection="column">
-        <Text bold>{`${log.record.specialist} \u00b7 ${log.record.perspective} \u00b7 ${log.record.model} \u00b7 round ${log.record.rounds}${log.isLive ? '' : ' (ended)'}`}</Text>
-        <Text dimColor>{log.record.worktree}</Text>
+        <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={COUNCIL_RGB}>
+          <Text bold color="white" backgroundColor={COUNCIL_RGB}>{`SPECIALIST ${record.specialist}`}</Text>
+          <Text italic color="white" backgroundColor={COUNCIL_RGB}>{` ${record.perspective} \u00b7 ${record.model} \u00b7 round ${record.rounds} \u00b7 ${status}`}</Text>
+        </Box>
+        <Text dimColor>{`${record.branch}  ${record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}`}</Text>
         {log.steps.map((step, index) => {
           const key = `step-${index}`
-          if (step.kind === 'say') return <Box key={key} marginTop={1}><Text>{step.text}</Text></Box>
+          // Codex writes markdown; a paragraph break sets its words off from the commands.
+          if (step.kind === 'say') {
+            return (
+              <Box key={key} flexDirection="column" marginTop={1}>
+                {markdownBlocks(step.text).map((block, part) => <Markdown key={`${key}-${part}`} text={block} />)}
+              </Box>
+            )
+          }
           const [glyph, color] = mark(step)
+          const isDone = step.state === 'done'
           return (
             <Box key={key} flexDirection="row">
               <Text color={color}>{`${glyph} `}</Text>
-              <Text dimColor={step.state === 'done'}>{step.kind === 'run' ? `$ ${step.text}` : `\u270e ${step.text}`}</Text>
+              {step.kind === 'run' ? (
+                <Text wrap="truncate-end">
+                  <Text color={COUNCIL_RGB}>{'$ '}</Text>
+                  <Text dimColor={isDone} color={step.state === 'failed' ? 'red' : undefined}>{step.text.replace(/\s*\n\s*/g, ' ')}</Text>
+                </Text>
+              ) : (
+                <Text>
+                  <Text color="cyan">{'\u270e '}</Text>
+                  <Text bold={!isDone} color="cyan">{step.text}</Text>
+                </Text>
+              )}
             </Box>
           )
         })}
