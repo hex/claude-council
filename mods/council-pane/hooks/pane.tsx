@@ -9,7 +9,8 @@ import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, roundResult, runStamp, settledRuns, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, startQuestion, threadFrom,
-  type Roles, type RunRecord, type Specialist,
+  commitSubject, latestStep, ROUND_MS, specialistSteps,
+  type Roles, type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
@@ -31,9 +32,8 @@ const WAKE_WAIT_MS = 120_000
 // How often a run still going is asked whether its process is alive.
 const PID_CHECK_MS = 5_000
 const SPECIALIST_TOOL = 'specialist'
+const SPECIALIST_PANE = 'specialist'
 const RUNS_KEY = 'specialist-runs'
-// A round waits on Codex for as long as the engine lets a process run.
-const ROUND_MS = 600_000
 
 type PaneState = {
   root: string
@@ -60,7 +60,10 @@ type PaneState = {
   specialists: Specialist[]
   roles: Roles
   // The specialist round this session is waiting on; the band's subject.
-  specialist?: { record: RunRecord; startedMs: number }
+  specialist?: { record: RunRecord; startedMs: number; stateDir: string }
+  // What the last specialist round did, step by step; the pane's subject. It
+  // outlives the round so the pane can still be read after it ends.
+  specialistLog?: { record: RunRecord; steps: Step[]; isLive: boolean }
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -233,6 +236,25 @@ async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOpti
   }
 }
 
+// Reads the live round's event stream once a second, for the band and the pane.
+async function followSpecialist($: EngineInterface, state: PaneState): Promise<void> {
+  const working = state.specialist
+  if (!working) return
+  state.nowMs = await $.clock.now()
+  const steps = specialistSteps(await readText(files($), `${working.stateDir}/events.jsonl`), working.record.worktree)
+  state.specialistLog = { record: working.record, steps, isLive: true }
+  $.ui.invalidate('ui.render')
+}
+
+// The engine gave up on the round, but codex may still be writing to the
+// worktree: stop it and its children before anything reads the worktree.
+async function stopSpecialist($: EngineInterface, stateDir: string): Promise<void> {
+  const pid = (await readText(files($), `${stateDir}/pid`)).trim()
+  if (!/^\d+$/.test(pid)) return
+  await $.process.run(['pkill', '-TERM', '-P', pid])
+  await $.process.run(['kill', '-TERM', pid])
+}
+
 // What the offer's buttons do: the run waits on these two file names.
 function retryPresses($: EngineInterface, runDir: string) {
   return {
@@ -281,9 +303,7 @@ export const register: Register = (on, options) => {
     if (roster.specialists.length > 0) {
       await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
       // The band's clock moves only while a round runs.
-      $.clock.every(1000, () => {
-        if (state.specialist) void $.clock.now().then(now => { state.nowMs = now; $.ui.invalidate('ui.render') })
-      })
+      $.clock.every(1000, () => { void followSpecialist($, state) })
     }
     return next(e)
   })
@@ -352,7 +372,9 @@ export const register: Register = (on, options) => {
     const kv = (text: string): Record<string, string> =>
       Object.fromEntries(text.split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]))
     const stored = ((await $.store.get(RUNS_KEY)) ?? {}) as Record<string, RunRecord>
-    const runs = settledRuns(stored, state.specialist?.record.id)
+    const runs = settledRuns(stored, await $.clock.now())
+    // One round at a time across every session: they all share the store.
+    const live = Object.values(runs).find(r => r.state === 'running')
     const save = async (r: RunRecord) => { runs[r.id] = r; await $.store.set(RUNS_KEY, runs) }
     const ask = async (question: string, go: string, stop: string) => {
       try { return await $.ui.ask(question, { header: 'Specialist', options: [go, stop] }) } catch { return undefined }
@@ -361,27 +383,35 @@ export const register: Register = (on, options) => {
     const round = async (record: RunRecord, prompt: string, thread: string, commitMessage: string) => {
       const roundBase = (await sh(['head', record.worktree])).stdout.trim()
       const stateDir = `${record.worktree.replace(/\/[^/]+$/, '')}/.state/${record.id}`
-      await save({ ...record, state: 'running' })
-      state.specialist = { record, startedMs: await $.clock.now() }
+      const startedMs = await $.clock.now()
+      await save({ ...record, state: 'running', startedMs })
+      state.specialist = { record, startedMs, stateDir }
+      state.specialistLog = { record, steps: [], isLive: true }
       $.ui.invalidate('ui.render')
       let exitCode = 1
       let found = thread
+      let scriptError = ''
       try {
         const ran = await sh(['codex', record.worktree, stateDir, record.model, ...(thread ? [thread] : [])], { stdin: prompt, timeoutMs: ROUND_MS })
         const out = kv(ran.stdout)
         exitCode = ran.exitCode !== 0 ? ran.exitCode : Number(out.exit ?? 1)
         found = out.thread || thread
+        // The script itself failed before codex ran: its own message is the reason.
+        if (ran.exitCode !== 0) scriptError = ran.stderr.trim()
       } catch {
         // The engine rejects a process still running at its timeout.
         exitCode = 124
+        await stopSpecialist($, stateDir)
       } finally {
         state.specialist = undefined
+        const steps = specialistSteps(await readText(files($), `${stateDir}/events.jsonl`), record.worktree)
+        state.specialistLog = { record, steps, isLive: false }
         $.ui.invalidate('ui.render')
       }
       // A round cut off at the limit printed no thread id; its events file has it,
       // and a follow-up must resume that session, not open a new one.
       if (!found) found = threadFrom(await readText(files($), `${stateDir}/events.jsonl`))
-      const done: RunRecord = { ...record, thread: found, state: 'idle' }
+      const done: RunRecord = { ...record, thread: found, state: 'idle', startedMs }
       const commit = exitCode === 0 ? await sh(['commit', record.worktree, commitMessage]) : undefined
       const committed = commit !== undefined && kv(commit.stdout).committed === 'yes'
       const commitError = commit && commit.exitCode !== 0 ? commit.stderr.trim() || `commit exited ${commit.exitCode}` : ''
@@ -392,13 +422,12 @@ export const register: Register = (on, options) => {
         record: done, exitCode, committed, commitError,
         lastMessage: (await readText(files($), `${stateDir}/last-message.md`)).trim(),
         roundStat: section('round'), totalStat: section('total'), status: section('status'),
-        stderrTail: (await readText(files($), `${stateDir}/stderr.txt`)).split('\n').slice(-15).join('\n').trim(),
+        stderrTail: scriptError || (await readText(files($), `${stateDir}/stderr.txt`)).split('\n').slice(-15).join('\n').trim(),
       })
       return outcome.isError ? { result: outcome.result, isError: true as const } : { result: outcome.result }
     }
 
     if (call.kind === 'start') {
-      const live = state.specialist?.record
       if (live) return { deny: `${live.specialist} is still working on run ${live.id}` }
       const login = await $.process.run(['codex', 'login', 'status']).catch(() => undefined)
       if (!login || login.exitCode !== 0) return { deny: 'codex is not installed or not logged in; run `codex login`' }
@@ -417,9 +446,9 @@ export const register: Register = (on, options) => {
       const perspectivePrompt = state.roles[s.perspective]?.prompt ?? ''
       const record: RunRecord = {
         id: `${s.name}-${ts}`, specialist: s.name, model: s.model, perspective: s.perspective, prompt: perspectivePrompt,
-        repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 1, state: 'idle',
+        repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 1, state: 'idle', startedMs: 0,
       }
-      return await round(record, specialistPrompt(perspectivePrompt, call.task), '', `specialist ${s.name}: ${call.task.split('\n')[0]}`)
+      return await round(record, specialistPrompt(perspectivePrompt, call.task), '', commitSubject(s.name, call.task))
     }
 
     const record = runs[call.run]
@@ -427,6 +456,7 @@ export const register: Register = (on, options) => {
       const exists = record ? await $.fs.exists(record.worktree) : false
       const refusal = followUpRefusal(record, call.run, exists)
       if (refusal || !record) return { deny: refusal ?? `no run ${call.run}` }
+      if (live) return { deny: `${live.specialist} is still working on run ${live.id}` }
       const outcome = dialogOutcome(await ask(followUpQuestion(record, call.message), 'Send', "Don't send"), 'Send', "Don't send", `did not send this to ${record.specialist}`)
       if ('deny' in outcome) return { deny: outcome.deny }
       const next = { ...record, rounds: record.rounds + 1 }
@@ -435,7 +465,10 @@ export const register: Register = (on, options) => {
 
     if (!record || record.state === 'finished') return { deny: `no open run ${call.run}` }
     if (record.state === 'running') return { deny: `${record.specialist} is still working on run ${record.id}` }
-    const counts = kv((await sh(['counts', record.repo, record.branch, record.base])).stdout)
+    const counted = await sh(['counts', record.repo, record.branch, record.base])
+    // A branch deleted by hand has nothing to merge; discard still closes the run.
+    if (counted.exitCode !== 0 && call.finish === 'merge') return { result: `Run ${record.id} not finished: ${counted.stderr.trim()}`, isError: true }
+    const counts = kv(counted.stdout)
     const target = counts.target || 'a detached HEAD'
     const go = call.finish === 'merge' ? 'Merge' : 'Discard'
     const question = finishQuestion(record, call.finish, Number(counts.commits ?? 0), Number(counts.files ?? 0), target)
@@ -450,6 +483,7 @@ export const register: Register = (on, options) => {
     const why = finished.exitCode === 3 ? `merge conflicts, merge aborted; worktree and branch kept:\n${lines}`
       : finished.exitCode === 4 ? `your uncommitted changes touch the branch's files; commit or stash them first:\n${lines}`
       : finished.exitCode === 5 ? 'the repository is on a detached HEAD; check out a branch to merge into'
+      : finished.exitCode === 6 ? `git refused the merge:\n${finished.stderr.trim()}`
       : finished.stderr.trim() || 'finish failed'
     return { result: `Run ${record.id} not finished: ${why}`, isError: true }
   })
@@ -506,6 +540,8 @@ export const register: Register = (on, options) => {
             <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>SPECIALIST</ui.Text>
           </ui.Box>
           <ui.Text>{`  ${working.record.specialist} \u00b7 ${working.record.perspective} \u00b7 ${clock}`}</ui.Text>
+          <ui.Text dimColor>{`  ${latestStep(state.specialistLog?.steps ?? [])}  `}</ui.Text>
+          <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }) }} />
         </ui.Box>
       )
     }
@@ -521,6 +557,30 @@ export const register: Register = (on, options) => {
         <ui.Text>{`  ${progress.text}  `}</ui.Text>
         <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
       </ui.Box>
+    )
+  })
+
+  on('ui.render', { component: 'Pane' }, ($, e, next) => {
+    const log = state.specialistLog
+    if (e.requestId !== SPECIALIST_PANE || !log) return next(e)
+    const { Box, Text } = $.ui.resolve(e)
+    const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', 'yellow'] : step.state === 'failed' ? ['\u2717', 'red'] : ['\u2713', 'green'])
+    return (
+      <Box key="specialist" flexDirection="column">
+        <Text bold>{`${log.record.specialist} \u00b7 ${log.record.perspective} \u00b7 ${log.record.model} \u00b7 round ${log.record.rounds}${log.isLive ? '' : ' (ended)'}`}</Text>
+        <Text dimColor>{log.record.worktree}</Text>
+        {log.steps.map((step, index) => {
+          const key = `step-${index}`
+          if (step.kind === 'say') return <Box key={key} marginTop={1}><Text>{step.text}</Text></Box>
+          const [glyph, color] = mark(step)
+          return (
+            <Box key={key} flexDirection="row">
+              <Text color={color}>{`${glyph} `}</Text>
+              <Text dimColor={step.state === 'done'}>{step.kind === 'run' ? `$ ${step.text}` : `\u270e ${step.text}`}</Text>
+            </Box>
+          )
+        })}
+      </Box>
     )
   })
 

@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, settledRuns, threadFrom,
+  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, settledRuns, threadFrom, commitSubject, specialistSteps, latestStep,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -83,7 +83,7 @@ const sec = { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'a
 const record: RunRecord = {
   id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', perspective: 'security', prompt: 'You are a security-focused code reviewer.',
   repo: '/r/app', worktree: '/r/app.specialists/sec-20260923-151204', branch: 'specialist/sec/20260923-151204',
-  base: 'a1b2c3d', thread: '01a0ce2a-1d08-76c0-a6ef-8340b581212d', rounds: 1, state: 'idle',
+  base: 'a1b2c3d', thread: '01a0ce2a-1d08-76c0-a6ef-8340b581212d', rounds: 1, state: 'idle', startedMs: 0,
 }
 
 test('each call shape is recognised, and nothing else is', () => {
@@ -123,7 +123,7 @@ test('only the go label proceeds; Other text goes back to the model', () => {
 
 test('the prompt puts the perspective first and the ground rules last', () => {
   expect(specialistPrompt('You are a security-focused code reviewer.', 'harden login')).toBe(
-    'You are a security-focused code reviewer.\n\nTask:\nharden login\n\nWork only inside this directory. Run the tests you touch.',
+    'You are a security-focused code reviewer.\n\nTask:\nharden login\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
   )
 })
 
@@ -149,14 +149,15 @@ test('a round result carries what Claude needs to review', () => {
   expect(failed.result).toContain('Codex stderr (tail):\nboom')
 })
 
-test('a record left running by a reload or crash reads as idle; the live round stays running', () => {
-  const stale = { ...record, id: 'sec-1', state: 'running' as const }
-  const live = { ...record, id: 'sec-2', state: 'running' as const }
-  const done = { ...record, id: 'sec-3', state: 'finished' as const }
-  expect(settledRuns({ 'sec-1': stale, 'sec-2': live, 'sec-3': done }, 'sec-2')).toEqual({
-    'sec-1': { ...stale, state: 'idle' }, 'sec-2': live, 'sec-3': done,
+test('a running record is live for one round limit plus a minute after it started, whoever started it', () => {
+  const now = 1_000_000
+  const live = { ...record, id: 'sec-1', state: 'running' as const, startedMs: now - 600_000 }
+  const dead = { ...record, id: 'sec-2', state: 'running' as const, startedMs: now - 661_000 }
+  const unstamped = { ...record, id: 'sec-3', state: 'running' as const, startedMs: undefined as unknown as number }
+  const idle = { ...record, id: 'sec-4', state: 'idle' as const, startedMs: now - 700_000 }
+  expect(settledRuns({ 'sec-1': live, 'sec-2': dead, 'sec-3': unstamped, 'sec-4': idle }, now)).toEqual({
+    'sec-1': live, 'sec-2': { ...dead, state: 'idle' }, 'sec-3': { ...unstamped, state: 'idle' }, 'sec-4': idle,
   })
-  expect(settledRuns({ 'sec-1': stale }, undefined)).toEqual({ 'sec-1': { ...stale, state: 'idle' } })
 })
 
 test('a round whose commit was refused is an error that names the refusal, not "no changes"', () => {
@@ -178,4 +179,47 @@ test('the thread id is read from the first thread.started event, and only a UUID
   expect(threadFrom('{"type":"turn.started"}\n')).toBe('')
   expect(threadFrom('')).toBe('')
   expect(threadFrom('{"type":"thread.started","thread_id":"--last"}\n')).toBe('')
+})
+
+test('the commit subject is the first non-empty line of the task, cut at a word near 72 characters', () => {
+  expect(commitSubject('sec', 'harden login\nmore detail')).toBe('specialist sec: harden login')
+  expect(commitSubject('sec', '\n\n  harden login  ')).toBe('specialist sec: harden login')
+  expect(commitSubject('sec', 'In scripts/specialist.sh, make the start subcommand refuse a name that does not match the pattern')).toBe(
+    'specialist sec: In scripts/specialist.sh, make the start subcommand…',
+  )
+  expect(commitSubject('sec', 'x'.repeat(100))).toBe(`specialist sec: ${'x'.repeat(55)}…`)
+})
+
+const WT = '/r/app.specialists/sec-1'
+const events = [
+  '{"type":"thread.started","thread_id":"01a0ce2a-1d08-76c0-a6ef-8340b581212d"}',
+  '{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Skill descriptions were shortened"}}',
+  '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"I\u2019m checking the repo state.\\nThen the tests."}}',
+  '{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"/bin/zsh -lc \\"git status --short\\"","status":"in_progress"}}',
+  '{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"/bin/zsh -lc \\"git status --short\\"","status":"completed","exit_code":0}}',
+  '{"type":"item.started","item":{"id":"item_3","type":"file_change","changes":[{"path":"/r/app.specialists/sec-1/tests/a.bats","kind":"update"}],"status":"in_progress"}}',
+  '{"type":"item.completed","item":{"id":"item_3","type":"file_change","changes":[{"path":"/r/app.specialists/sec-1/tests/a.bats","kind":"update"}],"status":"completed"}}',
+  '{"type":"item.completed","item":{"id":"item_4","type":"command_execution","command":"/bin/zsh -lc \'bats tests/a.bats\'","status":"failed","exit_code":1}}',
+  '{"type":"item.started","item":{"id":"item_5","type":"command_execution","command":"/bin/zsh -lc \'bats tests/a.bats\'","status":"in_progress"}}',
+  '{"type":"item.started","item":{"id":"item_6","type":"comm',
+].join('\n')
+
+test('the event stream becomes one step per item, updated in place, with half-written lines skipped', () => {
+  expect(specialistSteps(events, WT)).toEqual([
+    { kind: 'say', text: 'I\u2019m checking the repo state.\nThen the tests.', state: 'done' },
+    { kind: 'run', text: 'git status --short', state: 'done' },
+    { kind: 'edit', text: 'tests/a.bats', state: 'done' },
+    { kind: 'run', text: 'bats tests/a.bats', state: 'failed' },
+    { kind: 'run', text: 'bats tests/a.bats', state: 'running' },
+  ])
+  expect(specialistSteps('', WT)).toEqual([])
+})
+
+test('the band shows the latest step in one short line', () => {
+  const steps = specialistSteps(events, WT)
+  expect(latestStep(steps)).toBe('$ bats tests/a.bats')
+  expect(latestStep(steps.slice(0, 1))).toBe('I\u2019m checking the repo state.')
+  expect(latestStep(steps.slice(0, 3))).toBe('\u270e tests/a.bats')
+  expect(latestStep([{ kind: 'run', text: 'x'.repeat(80), state: 'running' }])).toBe(`$ ${'x'.repeat(59)}…`)
+  expect(latestStep([])).toBe('')
 })

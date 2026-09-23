@@ -67,6 +67,9 @@ export type RunRecord = {
   id: string; specialist: string; model: string; perspective: string; prompt: string
   repo: string; worktree: string; branch: string; base: string; thread: string
   rounds: number; state: 'running' | 'idle' | 'finished'
+  // When the current or last round started; a running record older than one
+  // round limit has nobody waiting on it.
+  startedMs: number
 }
 
 export type SpecialistCall =
@@ -128,7 +131,7 @@ export function dialogOutcome(answer: string | undefined, go: string, stop: stri
 }
 
 export function specialistPrompt(perspectivePrompt: string, task: string): string {
-  return `${perspectivePrompt}\n\nTask:\n${task}\n\nWork only inside this directory. Run the tests you touch.`
+  return `${perspectivePrompt}\n\nTask:\n${task}\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.`
 }
 
 export function followUpRefusal(record: RunRecord | undefined, id: string, worktreeExists: boolean): string | undefined {
@@ -160,12 +163,15 @@ export function roundResult(r: {
   return { isError: false, result: [head, changes, `Specialist's summary:\n${r.lastMessage}`].join('\n\n') }
 }
 
-// Only the round this mod instance is waiting on is running. A record still
-// marked running after a reload or crash has nobody waiting on it, and would
-// otherwise refuse every start, follow-up and finish for good.
-export function settledRuns(runs: Record<string, RunRecord>, liveId: string | undefined): Record<string, RunRecord> {
+// The engine stops any process at ten minutes, so a record still marked
+// running a minute past that has nobody waiting on it: a reload or crash left
+// it. Every session shares the store, so age decides, not which session asks.
+export const ROUND_MS = 600_000
+const ROUND_SLACK_MS = 60_000
+export function settledRuns(runs: Record<string, RunRecord>, nowMs: number): Record<string, RunRecord> {
+  const isLive = (r: RunRecord) => typeof r.startedMs === 'number' && nowMs - r.startedMs <= ROUND_MS + ROUND_SLACK_MS
   return Object.fromEntries(
-    Object.entries(runs).map(([id, r]) => [id, r.state === 'running' && r.id !== liveId ? { ...r, state: 'idle' as const } : r]),
+    Object.entries(runs).map(([id, r]) => [id, r.state === 'running' && !isLive(r) ? { ...r, state: 'idle' as const } : r]),
   )
 }
 
@@ -179,4 +185,61 @@ export function threadFrom(events: string): string {
     return THREAD_STARTED.exec(line)?.[1] ?? ''
   }
   return ''
+}
+
+const SUBJECT_MAX = 72
+const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text)
+
+// A git subject line: the task's first real line, cut at a word so the whole
+// subject stays near 72 characters.
+export function commitSubject(name: string, task: string): string {
+  const prefix = `specialist ${name}: `
+  const line = task.split('\n').map(l => l.trim()).find(l => l !== '') ?? ''
+  const room = SUBJECT_MAX - prefix.length - 1
+  if (line.length <= room + 1) return prefix + line
+  const space = line.lastIndexOf(' ', room)
+  return `${prefix}${space > room / 2 ? line.slice(0, space) : line.slice(0, room)}…`
+}
+
+export type Step = { kind: 'say' | 'run' | 'edit'; text: string; state: 'running' | 'done' | 'failed' }
+
+// Codex wraps each command in the login shell: `/bin/zsh -lc "git status"`.
+const SHELL_WRAP = /^\/bin\/\w+ -lc (["'])([\s\S]*)\1$/
+
+// One step per Codex item, in first-seen order, each updated as its later
+// events arrive. The file is read while Codex writes it, so a half-written
+// last line is skipped rather than parsed.
+export function specialistSteps(events: string, worktree: string): Step[] {
+  const order: string[] = []
+  const byId = new Map<string, Step>()
+  for (const line of events.split('\n')) {
+    let event: { type?: string; item?: Record<string, unknown> }
+    try { event = JSON.parse(line) } catch { continue }
+    const item = event.item
+    if (!item || typeof item.id !== 'string') continue
+    const status = item.status === 'failed' ? 'failed' : event.type === 'item.completed' ? 'done' : 'running'
+    let step: Step | undefined
+    if (item.type === 'agent_message' && typeof item.text === 'string') step = { kind: 'say', text: item.text, state: 'done' }
+    if (item.type === 'command_execution' && typeof item.command === 'string') {
+      step = { kind: 'run', text: SHELL_WRAP.exec(item.command)?.[2] ?? item.command, state: status }
+    }
+    if (item.type === 'file_change' && Array.isArray(item.changes)) {
+      const paths = item.changes.map(c => String((c as { path?: unknown }).path ?? '')).map(p => p.startsWith(`${worktree}/`) ? p.slice(worktree.length + 1) : p)
+      step = { kind: 'edit', text: paths.join(', '), state: status }
+    }
+    if (!step) continue
+    if (!byId.has(item.id)) order.push(item.id)
+    byId.set(item.id, step)
+  }
+  return order.map(id => byId.get(id) as Step)
+}
+
+const BAND_STEP_MAX = 59
+
+export function latestStep(steps: Step[]): string {
+  const step = steps[steps.length - 1]
+  if (!step) return ''
+  if (step.kind === 'run') return `$ ${cut(step.text, BAND_STEP_MAX)}`
+  if (step.kind === 'edit') return `✎ ${cut(step.text, BAND_STEP_MAX)}`
+  return cut(step.text.split('\n')[0] ?? '', BAND_STEP_MAX + 2)
 }
