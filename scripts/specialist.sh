@@ -47,6 +47,7 @@ cmd_report() {
 
 cmd_counts() {
     local root="$1" branch="$2" base="$3"
+    git -C "$root" show-ref --verify --quiet "refs/heads/${branch}" || die "no branch ${branch}"
     printf 'commits=%s\nfiles=%s\ntarget=%s\n' \
         "$(git -C "$root" rev-list --count "${base}..${branch}")" \
         "$(git -C "$root" diff --name-only "$base" "$branch" | grep -c . || true)" \
@@ -57,11 +58,13 @@ remove_run() {
     local root="$1" worktree="$2" branch="$3"
     if [[ -d "$worktree" ]]; then git -C "$root" worktree remove --force "$worktree"; fi
     git -C "$root" worktree prune
-    git -C "$root" branch -D "$branch" >/dev/null
+    if git -C "$root" show-ref --verify --quiet "refs/heads/${branch}"; then
+        git -C "$root" branch -D "$branch" >/dev/null
+    fi
 }
 
 cmd_finish() {
-    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts
+    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal
     root="$(repo_root "$root")"
     if [[ "$how" == discard ]]; then
         remove_run "$root" "$worktree" "$branch"
@@ -72,7 +75,13 @@ cmd_finish() {
     touched="$(git -C "$root" diff --name-only "$(git -C "$root" merge-base HEAD "$branch")" "$branch")"
     dirty="$( { git -C "$root" diff --name-only; git -C "$root" diff --name-only --cached; } | sort -u | grep -Fxf <(printf '%s\n' "$touched") || true)"
     if [[ -n "$dirty" ]]; then while IFS= read -r f; do echo "dirty=$f"; done <<< "$dirty"; exit 4; fi
-    if ! git -C "$root" merge -q --no-ff --no-edit "$branch" >/dev/null 2>&1; then
+    if ! refusal="$(git -C "$root" merge -q --no-ff --no-edit "$branch" 2>&1)"; then
+        # git can refuse before it starts (an untracked file in the way): then
+        # there is no merge to abort, and its own message is the reason.
+        if ! git -C "$root" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+            printf '%s\n' "$refusal" >&2
+            exit 6
+        fi
         conflicts="$(git -C "$root" diff --name-only --diff-filter=U)"
         git -C "$root" merge --abort
         while IFS= read -r f; do [[ -n "$f" ]] && echo "conflict=$f"; done <<< "$conflicts"
@@ -83,15 +92,24 @@ cmd_finish() {
 }
 
 cmd_codex() {
-    local worktree="$1" state="$2" model="$3" thread="${4:-}" code=0 found
+    local worktree="$1" state="$2" model="$3" thread="${4:-}" code=0 found pid
     [[ -d "$worktree" ]] || die "no worktree at ${worktree}"
     mkdir -p "$state"
+    # Each round's files describe that round only.
+    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid"
     local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -o "${state}/last-message.md")
-    if [[ -n "$thread" ]]; then
-        (cd "$worktree" && codex exec resume "${flags[@]}" "$thread" -) > "${state}/events.jsonl" 2> "${state}/stderr.txt" || code=$?
-    else
-        (cd "$worktree" && codex exec "${flags[@]}" -) > "${state}/events.jsonl" 2> "${state}/stderr.txt" || code=$?
-    fi
+    local args=(exec "${flags[@]}" -)
+    if [[ -n "$thread" ]]; then args=(exec resume "${flags[@]}" "$thread" -); fi
+    # codex runs in the background so its pid can be recorded: whoever gives up
+    # on the round kills it by that pid. A background command reads /dev/null
+    # unless given stdin explicitly, so the prompt is handed over on fd 3.
+    cd "$worktree"
+    exec 3<&0
+    codex "${args[@]}" <&3 > "${state}/events.jsonl" 2> "${state}/stderr.txt" &
+    pid=$!
+    exec 3<&-
+    echo "$pid" > "${state}/pid"
+    wait "$pid" || code=$?
     # Only a UUID is kept: the id goes back to codex as an argument, where a
     # value starting with a dash would read as a flag.
     found="$(sed -n 's/.*"type":"thread.started","thread_id":"\([0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}\)".*/\1/p' "${state}/events.jsonl" | head -1)"

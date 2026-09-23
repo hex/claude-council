@@ -202,3 +202,58 @@ start_run() {
     [ "$status" -eq 0 ]
     [ "$output" = "$(printf 'thread=\nexit=0')" ]
 }
+
+@test "a merge git refuses before it starts reports git's reason, not a missing merge" {
+    start_run
+    echo 'b' > "$WT/src/b.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
+    echo 'untracked here' > "$REPO/src/b.txt"
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
+    [ "$status" -eq 6 ]
+    [[ "$output" == *"untracked working tree files would be overwritten"* ]]
+    [[ "$output" != *"MERGE_HEAD"* ]]
+    [ -d "$WT" ]
+    git -C "$REPO" rev-parse --verify -q "$BR" >/dev/null
+}
+
+@test "discard closes a run whose branch was deleted by hand" {
+    start_run
+    git -C "$REPO" worktree remove --force "$WT"
+    git -C "$REPO" branch -D "$BR" >/dev/null
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" discard
+    [ "$status" -eq 0 ]
+    [ "$output" = "finished=discard" ]
+}
+
+@test "counts fails loudly when the branch is gone" {
+    start_run
+    git -C "$REPO" worktree remove --force "$WT"
+    git -C "$REPO" branch -D "$BR" >/dev/null
+    run "$SPECIALIST" counts "$REPO" "$BR" "$BASE"
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: no branch ${BR}" ]
+}
+
+@test "codex clears the previous round's files and records the codex pid" {
+    start_run
+    mkdir -p "$STATE"
+    echo 'round 1 summary' > "$STATE/last-message.md"
+    echo 'round 1 noise' > "$STATE/stderr.txt"
+    mkdir -p "${BATS_TEST_TMPDIR}/bin"
+    printf '#!/bin/sh\necho $$ > "%s/seen-pid"\nexit 2\n' "$BATS_TEST_TMPDIR" > "${BATS_TEST_TMPDIR}/bin/codex"
+    chmod +x "${BATS_TEST_TMPDIR}/bin/codex"
+    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol <<< "task"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"exit=2"* ]]
+    [ ! -e "$STATE/last-message.md" ]
+    [ ! -s "$STATE/stderr.txt" ]
+    [ "$(cat "$STATE/pid")" = "$(cat "${BATS_TEST_TMPDIR}/seen-pid")" ]
+}
+
+@test "codex receives the prompt on stdin" {
+    start_run
+    mkdir -p "${BATS_TEST_TMPDIR}/bin"
+    printf '#!/bin/sh\ncat > "%s/seen-prompt"\n' "$BATS_TEST_TMPDIR" > "${BATS_TEST_TMPDIR}/bin/codex"
+    chmod +x "${BATS_TEST_TMPDIR}/bin/codex"
+    printf 'line one\nline two' | PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol >/dev/null
+    [ "$(cat "${BATS_TEST_TMPDIR}/seen-prompt")" = "$(printf 'line one\nline two')" ]
+}
