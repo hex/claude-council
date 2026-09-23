@@ -368,11 +368,14 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
 // it, then holds still for a moment before the next pass.
 function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string, frame?: number) {
   const cycle = label.length + 2 + SWEEP_PAUSE
+  const cells = chipCells(label, CHIP_STOPS, frame === undefined ? undefined : frame % cycle)
+  // A half circle in the last cell's colour rounds the right end.
   return (
     <ui.Box key={key} flexDirection="row" flexShrink={0}>
-      {chipCells(label, CHIP_STOPS, frame === undefined ? undefined : frame % cycle).map((cell, index) => (
+      {cells.map((cell, index) => (
         <ui.Text key={`${key}-${index}`} bold color={CHIP_TEXT} backgroundColor={cell.background}>{cell.text}</ui.Text>
       ))}
+      <ui.Text key={`${key}-cap`} color={cells[cells.length - 1]?.background}>{'\u25d7'}</ui.Text>
     </ui.Box>
   )
 }
