@@ -482,6 +482,7 @@ export const register: Register = (on, options) => {
     }
     const outcome = confirmOutcome(answer)
     if ('deny' in outcome) return { deny: outcome.deny }
+    if ('reply' in outcome) return { result: outcome.reply }
     await aimRun($, state, settings)
     const run = await $.process.run(['bash', script, ...parsed.args], { timeoutMs: RUN_TIMEOUT_MS })
     const saved = run.stdout.trim().split('\n').pop() ?? ''
@@ -541,6 +542,7 @@ export const register: Register = (on, options) => {
       const go = `Start ${s.name}`
       const outcome = dialogOutcome(await ask(startQuestion(s, call.task, top.stdout.trim(), dirty), go, "Don't start"), go, "Don't start", `did not start ${s.name}`)
       if ('deny' in outcome) return { deny: outcome.deny }
+      if ('reply' in outcome) return { result: outcome.reply }
       const ts = runStamp(new Date(await $.clock.now()))
       const started = await sh(['start', cwd, s.name, ts])
       if (started.exitCode !== 0) return { result: started.stderr.trim() || 'could not create the worktree', isError: true }
@@ -567,6 +569,7 @@ export const register: Register = (on, options) => {
       if (live) return { deny: `${live.specialist} is still working on run ${live.id}` }
       const outcome = dialogOutcome(await ask(followUpQuestion(record, call.message), 'Send', "Don't send"), 'Send', "Don't send", `did not send this to ${record.specialist}`)
       if ('deny' in outcome) return { deny: outcome.deny }
+      if ('reply' in outcome) return { result: outcome.reply }
       return await round(record, call.message, record.thread, `specialist ${record.specialist}: round ${record.rounds + 1}`)
     }
 
@@ -581,6 +584,7 @@ export const register: Register = (on, options) => {
     const question = finishQuestion(record, call.finish, Number(counts.commits ?? 0), Number(counts.files ?? 0), target)
     const outcome = dialogOutcome(await ask(question, go, 'Keep it'), go, 'Keep it', `kept run ${record.id}`)
     if ('deny' in outcome) return { deny: outcome.deny }
+    if ('reply' in outcome) return { result: outcome.reply }
     const finished = await sh(['finish', record.repo, record.worktree, record.branch, call.finish])
     if (finished.exitCode === 0) {
       await saveRun($, { ...record, state: 'finished' })

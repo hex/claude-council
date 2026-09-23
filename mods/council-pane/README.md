@@ -59,7 +59,7 @@ They show up in `/config`. Changing one reloads the mod.
 | `council_tool` | on | Registers `mcp__claude-council__ask` so the model can call the council as a tool. Each call asks you first. |
 | `specialist_1` to `specialist_4` | empty | One Codex specialist per row. See [Specialists](#specialists). |
 
-The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. Every call opens a dialog quoting the question and naming the providers, and nothing leaves the machine unless you choose `Send to the council`. `Don't send` or dismissing the dialog refuses the call. Anything you type under Other goes back to the model as the reason. A `claude -p` run has no one to ask and gets the same refusal.
+The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. Every call opens a dialog quoting the question and naming the providers, and nothing leaves the machine unless you choose `Send to the council`. `Don't send` or dismissing the dialog refuses the call. Anything you type under Other goes back to the model as a plain tool result, not a refusal, so it reads as your answer rather than an error. The specialist dialogs do the same. A `claude -p` run has no one to ask and gets the same refusal.
 
 ## Specialists
 

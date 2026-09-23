@@ -39,12 +39,13 @@ export function confirmQuestion(input: Record<string, unknown>): string {
 
 // Only the exact send label sends. `answer` is undefined when the dialog
 // rejected: dismissed, or a run with no one to ask. Free text typed under
-// Other goes back to the model, since it is usually an instruction.
-export function confirmOutcome(answer: string | undefined): { send: true } | { deny: string } {
+// Other goes back to the model as a plain result, not a refusal: it is
+// usually an instruction, and a refusal is drawn as an error.
+export function confirmOutcome(answer: string | undefined): { send: true } | { deny: string } | { reply: string } {
   if (answer === SEND_LABEL) return { send: true }
   if (answer === undefined) return { deny: 'The user was not asked (dialog dismissed or no one to ask), so nothing was sent to the council.' }
   if (answer === KEEP_LABEL) return { deny: 'The user chose not to send this to the council.' }
-  return { deny: `The user did not send this to the council and said: ${answer}` }
+  return { reply: `The user did not send this to the council and said: ${answer}` }
 }
 
 export function councilArgs(input: Record<string, unknown>): { args: string[] } | { deny: string } {
