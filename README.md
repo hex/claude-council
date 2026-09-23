@@ -905,8 +905,6 @@ bash scripts/query-council.sh --list-default-models
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design, data flow diagrams, and component details.
 
-The specialist worktree script accepts `start` names matching `^[a-z][a-z0-9-]*$`.
-
 ### Versioning
 
 Bump version in `.claude-plugin/plugin.json` on every release:
