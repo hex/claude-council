@@ -69,10 +69,11 @@ bats --verbose-run tests/cache.bats
 | `deadline.bats` | 9 tests | run_with_deadline: the caller's stdin reaches the command, the command's own status passes through, status 143 at the deadline whatever the command did with the signal (a CLI that exits 0 on SIGTERM), SIGKILL after the grace period for one that ignores it, the command's own children not holding the captured stdout, no watchdog outliving a fast call, nothing on stderr for a signal-ended job, 0 = unbounded, a non-integer deadline rejected |
 | `transcript-digest.bats` | 36 tests | session JSONL to markdown: the four-clause human-turn filter (a tool result, a cross-session peer message carrying another Claude's prose, and a compact summary all excluded), assistant replies interleaved in file order, thinking blocks and their signatures dropped, `--turns last:N` windowing, a bare session id refused with the lookup named rather than performed, AskUserQuestion exchanges emitted as question, options and pick (a decline stays a question, a pick does not count as a turn), and malformed records skipped, counted and named in the digest while a file with no readable record fails loudly |
 | `session-transcript.bats` | 4 tests | session id to transcript path: resolution by glob across project directories, a loud failure for an unknown id, a refusal when one id matches two files, and a non-uuid rejected before it reaches a path |
+| `specialist.bats` | 17 tests | the git side of specialists against real throwaway repositories under a path with a space: worktree and branch beside the repo from a subdirectory, a dirty tree reported, an existing branch refused with nothing created, outside a repository refused, one commit per round (none when nothing changed, a pre-commit hook's refusal surfacing as a failure), the round and total diff report, commit/file counts and merge target, merge with a merge commit then worktree and branch removed, a conflicting merge aborted with both kept, merge refused over uncommitted edits to the branch's files and on a detached `HEAD`, discard of a dirty worktree and of one already deleted by hand, and the Codex round refusing a missing worktree, reporting a missing `codex` as exit 127, and never passing on a thread id that is not a UUID |
 | `shards.bats` | 1 test | every bats file is named in the shard lists the Windows CI job runs from |
 | `tmpdir.bats` | 1 test | every temp file the scripts create honours `TMPDIR` |
 
-**Total: 720 tests** across 31 `.bats` files.
+**Total: 737 tests** across 32 `.bats` files.
 
 The bats suite does not cover `mods/`. The council-pane mod has its own checks:
 
@@ -80,6 +81,8 @@ The bats suite does not cover `mods/`. The council-pane mod has its own checks:
 (cd mods/council-pane && bun test && bunx tsc -p .)
 claude plugin validate .
 ```
+
+`tests/e2e/specialist-e2e.sh` runs a specialist end to end against the real, logged-in `codex`: a throwaway repository, one round that writes `answer.sh`, a resumed round that proves the sandbox reaches the network, and a merge after which the repository's own test passes. It spends a few cents of Codex usage, so the suite leaves it out; run it by hand (`SPECIALIST_E2E_MODEL` picks the model, default `gpt-6-sol`). `tests/e2e/specialist-e2e.expected.txt` is a recorded passing run.
 
 ### Hermetic CLI Fixture
 

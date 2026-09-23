@@ -3,5 +3,6 @@ jobs.bats
 pane-watcher.bats
 query-council.bats
 router-seats.bats
+specialist.bats
 stop-gate.bats
 tmpdir.bats

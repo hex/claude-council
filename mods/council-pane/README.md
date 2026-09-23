@@ -57,8 +57,33 @@ They show up in `/config`. Changing one reloads the mod.
 | `collapse_when_done` | on | Off keeps the full status list after a run. |
 | `wake_on_async_done` | off | Submits a prompt when a background job's result can be fetched. That starts a model turn and costs tokens. A job that fails wakes nobody. |
 | `council_tool` | on | Registers `mcp__claude-council__ask` so the model can call the council as a tool. Each call asks you first. |
+| `specialist_1` to `specialist_4` | empty | One Codex specialist per row. See [Specialists](#specialists). |
 
 The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. Every call opens a dialog quoting the question and naming the providers, and nothing leaves the machine unless you choose `Send to the council`. `Don't send` or dismissing the dialog refuses the call. Anything you type under Other goes back to the model as the reason. A `claude -p` run has no one to ask and gets the same refusal.
+
+## Specialists
+
+A specialist is a Codex agent that writes code for you on its own model, in its own git worktree. You name it, pick its model and the council perspective it works from, and say when it fits. Claude suggests one when a task matches, and nothing starts until you confirm.
+
+Each `/config` row holds one specialist:
+
+```
+sec = gpt-6-sol as security, when: auth, crypto, untrusted input
+```
+
+The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. The perspective is a key of `config/roles.json` (`security`, `performance`, `maintainability`, `devil`, `simplicity`, `scalability`, `dx`, `compliance`), and its prompt opens every task. The text after `when:` is what Claude matches tasks against, up to 200 characters. The mod ignores an empty row and skips a row that does not parse; the session log says which row and why. With at least one valid row the mod registers `mcp__claude-council__specialist`.
+
+The tool takes three calls, and each opens a dialog first:
+
+- Start, `{specialist, task}`: asks `Hand "<task>" to sec (security, gpt-6-sol)?` and names the commit it starts from. It warns when you have uncommitted changes, since the worktree starts from `HEAD` without them.
+- Follow-up, `{run, message}`: asks `Send to sec (run <id>)`. The message continues the same Codex session in the same worktree.
+- Finish, `{run, finish}`: asks `Merge <branch> (N commits, M files) into <branch>?` or `Discard run <id> and delete its branch?`
+
+Claude waits for each round. While one runs, a `SPECIALIST` band above the prompt shows the specialist, its perspective and the time so far. The result carries Codex's last message, the diff stat for the round and for the whole run, the branch and the worktree path. Claude reviews that and runs the tests in the worktree before asking you how to finish.
+
+Worktrees go beside the repository, in `../<repo>.specialists/<name>-<time>`, on a branch `specialist/<name>/<time>`. The mod commits each round's changes on that branch. Codex often commits its own work, and those commits stand. A merge is a `--no-ff` merge into the branch you have checked out. The mod refuses it when your uncommitted changes touch the files the branch changed, or when you are on a detached `HEAD`. It aborts a conflicting merge and keeps the worktree and branch. Merge and discard remove the worktree and the branch. Nothing else cleans them up.
+
+Network access is on inside the Codex sandbox. The worktree limits where a specialist can write, not what it can send: a specialist can read the worktree and reach the network, so it can send what it reads anywhere. Codex runs with your own `~/.codex/config.toml` and global instructions, so your extra writable roots, MCP servers and house rules apply to specialists too. The mod forwards no API keys; Codex uses its own login.
 
 ## Limits
 
@@ -68,6 +93,10 @@ The council sends your question to third-party providers, and a tool is easier f
 - The mod parses the synthesis out of Claude's reply, between the `## Synthesis` heading and the `Full output saved` line. If the council skill changes that format, the section stops appearing.
 - Answer bodies use Claude Code's own markdown styling. The Rich renderer's fitted tables and code highlighting are tmux only.
 - The mod cuts a single paragraph over 10,000 characters mid-text, because one `Markdown` element holds no more than that. A cut inside a code fence breaks the rendering of what follows.
+- A specialist round stops at ten minutes, the most the engine lets a process run. The worktree keeps what the round wrote. Send `continue` as a follow-up to resume the same Codex session.
+- One specialist round runs at a time in a session.
+- Nobody has measured yet whether pressing Esc during a specialist round stops Codex. Until then, check `pgrep -fl 'codex exec'` after an Esc.
+- Nobody has tested specialists on Windows.
 - The drawing has no automated test. The docs describe `claude plugin test`, but 2.1.278 does not have it. `bun test` covers the logic. Only a person looking at the pane checks the drawing.
 
 ## Development
