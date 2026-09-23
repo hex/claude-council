@@ -32,6 +32,16 @@ that did arrive included.
 
 Use the **Read tool** to read the output file path returned by Step 1.
 
+**If the file's first line is `<!-- council: round 1 was shown in the pane -->`**,
+the user already read every round-1 answer in the streaming pane. Do not
+reprint them. Instead, output one line per provider in round 1, taken from
+its `## ` header (name, role, model, and any fallback note) followed by
+`answered` or the `Error:` line under it. Then display VERBATIM the rest of
+the file from its `## Round 2` heading, or from `## Synthesis` when there is no
+round 2 (debate rebuttals never reach the pane), and continue with Step 3 under
+the `## Synthesis` header. Without that first line, display the whole file as
+below.
+
 **CRITICAL**: Display the file content EXACTLY as written. Do NOT:
 - Reformat or reinterpret any text
 - Add your own headers or structure

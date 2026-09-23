@@ -95,6 +95,9 @@ Delete the digest afterwards.
 ## Step 5: Show the responses, do not synthesize them
 
 Display every provider's response verbatim, labelled by provider and model.
+When the JSON's `metadata.pane_shown` is `true`, the user already read them in
+the streaming pane: give one line per provider (name, model, answered or its
+error) instead of reprinting the text.
 
 Then stop. Unlike `/ask`, do **not** write a synthesis: the conversation under
 review is your own, so a summary of the advice would be the reviewed party

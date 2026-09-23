@@ -488,6 +488,21 @@ setup_pane() {
     [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
 }
 
+@test "metadata: pane_shown is true when a pane streamed the run" {
+    setup_pane
+    write_stub gemini
+    run_council_with_pane --providers=gemini "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.metadata.pane_shown' 'true'
+}
+
+@test "metadata: pane_shown is false when no pane opened" {
+    write_stub gemini
+    run_council --no-cache --no-pane --providers=gemini "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.metadata.pane_shown' 'false'
+}
+
 @test "retry: an inherited COUNCIL_PANE_DIR that is not a watch dir is ignored" {
     # A leaked export naming some ordinary directory must not turn it into a
     # pane: nothing would be streamed into it and no watcher would ever answer

@@ -163,3 +163,22 @@ envelope_with_entry() {
     [ "$status" -eq 1 ]
     [ -z "$output" ]
 }
+
+@test "format-output: a pane-streamed run opens with the pane marker" {
+    local json
+    json=$(jq -n '{metadata: {quiet_mode: false, debate_mode: false, pane_shown: true},
+        round1: {testprov: {status: "success", model: "m1", response: "The actual answer"}}}')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "<!-- council: round 1 was shown in the pane -->" ]
+    [[ "$output" == *"The actual answer"* ]]
+}
+
+@test "format-output: a run without a pane carries no pane marker" {
+    local json
+    json=$(jq -n '{metadata: {quiet_mode: false, debate_mode: false, pane_shown: false},
+        round1: {testprov: {status: "success", model: "m1", response: "The actual answer"}}}')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"shown in the pane"* ]]
+}

@@ -122,6 +122,12 @@ format_output() {
         return 0
     fi
 
+    # An HTML comment, so it renders as nothing, telling the caller that round 1
+    # already streamed into a pane and need not be reprinted in the chat.
+    if [[ "$(echo "$json" | jq -r '.metadata.pane_shown // false')" == "true" ]]; then
+        echo "<!-- council: round 1 was shown in the pane -->"
+    fi
+
     # Get providers list from round1. Strip \r: jq's Windows build can
     # CRLF-translate its stdout when piped rather than attached to a real
     # console, and an unstripped \r riding along on the first provider name

@@ -997,6 +997,10 @@ if [[ -n "$ROLES" ]]; then
 else
     ROLES_JSON="null"
 fi
+# Whether a pane (tmux or the Claude Code mod) streamed round 1 as it arrived.
+# The caller uses it to avoid reprinting answers the user has already read.
+PANE_SHOWN=false
+[[ -n "${COUNCIL_PANE_DIR:-}" ]] && PANE_SHOWN=true
 # The prompt (large with file context) reaches jq as a raw string via STDIN,
 # not argv: -Rs slurps it to a JSON string exactly as --rawfile would, with no
 # argv-bounded path. See merge_result for the ARG_MAX rationale.
@@ -1005,6 +1009,7 @@ METADATA=$(printf '%s' "$PROMPT" | jq -Rs \
     --argjson roles_used "$ROLES_JSON" \
     --argjson debate_mode "$DEBATE_MODE" \
     --argjson quiet_mode "$QUIET_MODE" \
+    --argjson pane_shown "$PANE_SHOWN" \
     --arg output_path "$OUTPUT_PATH" \
     --argjson auto_context "$AUTO_CONTEXT" \
     --arg timestamp "$TIMESTAMP" \
@@ -1014,6 +1019,7 @@ METADATA=$(printf '%s' "$PROMPT" | jq -Rs \
         roles_used: $roles_used,
         debate_mode: $debate_mode,
         quiet_mode: $quiet_mode,
+        pane_shown: $pane_shown,
         output_path: (if $output_path == "" then null else $output_path end),
         auto_context: $auto_context,
         timestamp: $timestamp
