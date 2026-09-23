@@ -66,6 +66,7 @@ type PaneState = {
   specialistLog?: { record: RunRecord; steps: Step[]; isLive: boolean }
   // Runs whose end is being written up now, so one tick does not repeat another's.
   finishing: Set<string>
+  specialistError: string
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -222,6 +223,18 @@ async function aimRun($: EngineInterface, state: PaneState, settings: PaneOption
   await $.env.set('COUNCIL_MOD_PANE_DIR', host === 'mod' ? state.root : undefined)
 }
 
+// A background failure is logged once per distinct message, never dropped.
+async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>): Promise<void> {
+  try {
+    await work()
+    state.specialistError = ''
+  } catch (error) {
+    const message = `specialist: ${String(error)}`
+    if (message !== state.specialistError) $.ui.log(message)
+    state.specialistError = message
+  }
+}
+
 async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
   if (state.isPolling) return
   state.isPolling = true
@@ -273,8 +286,14 @@ async function finishRound($: EngineInterface, state: PaneState, record: RunReco
   if (state.finishing.has(record.id)) return
   state.finishing.add(record.id)
   try {
-    // Another session may have closed it already.
-    if ((await loadRuns($))[record.id]?.state !== 'running') return
+    // Another session may have closed it already: stop following it here too.
+    const stored = (await loadRuns($))[record.id]
+    if (stored?.state !== 'running') {
+      if (state.specialist?.record.id === record.id) state.specialist = undefined
+      if (state.specialistLog?.record.id === record.id) state.specialistLog = { ...state.specialistLog, record: stored ?? record, isLive: false }
+      $.ui.invalidate('ui.render')
+      return
+    }
     const stateDir = stateDirOf(record)
     const events = await readText(files($), `${stateDir}/events.jsonl`)
     const report = async () => {
@@ -318,6 +337,7 @@ async function followSpecialist($: EngineInterface, state: PaneState): Promise<v
   if (!working) return
   state.nowMs = await $.clock.now()
   const steps = specialistSteps(await readText(files($), `${working.stateDir}/events.jsonl`), working.record.worktree)
+  if (state.specialist !== working) return
   state.specialistLog = { record: working.record, steps, isLive: true }
   $.ui.invalidate('ui.render')
   const now = await roundState($, working.record)
@@ -367,7 +387,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set() }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), specialistError: '' }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -383,8 +403,8 @@ export const register: Register = (on, options) => {
     if (roster.specialists.length > 0) {
       await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
       // The band's clock moves only while a round runs.
-      $.clock.every(1000, () => { void followSpecialist($, state) })
-      await recoverRounds($, state)
+      $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })
+      await logFailure($, state, () => recoverRounds($, state))
     }
     return next(e)
   })
@@ -464,16 +484,19 @@ export const register: Register = (on, options) => {
     }
 
     // Starts a round and returns at once; followSpecialist closes it.
+    // The store says running only once the round's pid is on disk, so no
+    // session reads a round that has not launched yet as lost or ended. A
+    // round that fails to launch leaves the record as it was.
     const round = async (record: RunRecord, prompt: string, thread: string, subject: string) => {
       const roundBase = (await sh(['head', record.worktree])).stdout.trim()
-      const running: RunRecord = { ...record, state: 'running', startedMs: await $.clock.now(), roundBase, subject }
+      const running: RunRecord = { ...record, rounds: record.rounds + 1, state: 'running', startedMs: await $.clock.now(), roundBase, subject }
       const stateDir = stateDirOf(running)
-      await saveRun($, running)
       const launched = await sh(['codex', record.worktree, stateDir, record.model, ...(thread ? [thread] : [])], { stdin: prompt })
       if (launched.exitCode !== 0) {
-        await saveRun($, { ...record, state: 'idle' })
+        await saveRun($, record)
         return { result: `Run ${record.id}: the round did not start: ${launched.stderr.trim()}`, isError: true as const }
       }
+      await saveRun($, running)
       state.specialist = { record: running, startedMs: running.startedMs, stateDir }
       state.specialistLog = { record: running, steps: [], isLive: true }
       $.ui.invalidate('ui.render')
@@ -499,7 +522,7 @@ export const register: Register = (on, options) => {
       const perspectivePrompt = state.roles[s.perspective]?.prompt ?? ''
       const record: RunRecord = {
         id: `${s.name}-${ts}`, specialist: s.name, model: s.model, perspective: s.perspective, prompt: perspectivePrompt,
-        repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 1, state: 'idle', startedMs: 0, roundBase: '', subject: '',
+        repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 0, state: 'idle', startedMs: 0, roundBase: '', subject: '',
       }
       return await round(record, specialistPrompt(perspectivePrompt, call.task), '', commitSubject(s.name, call.task))
     }
@@ -518,8 +541,7 @@ export const register: Register = (on, options) => {
       if (live) return { deny: `${live.specialist} is still working on run ${live.id}` }
       const outcome = dialogOutcome(await ask(followUpQuestion(record, call.message), 'Send', "Don't send"), 'Send', "Don't send", `did not send this to ${record.specialist}`)
       if ('deny' in outcome) return { deny: outcome.deny }
-      const next = { ...record, rounds: record.rounds + 1 }
-      return await round(next, call.message, record.thread, `specialist ${record.specialist}: round ${next.rounds}`)
+      return await round(record, call.message, record.thread, `specialist ${record.specialist}: round ${record.rounds + 1}`)
     }
 
     if (!record || record.state === 'finished') return { deny: `no open run ${call.run}` }
