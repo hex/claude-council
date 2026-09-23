@@ -586,10 +586,12 @@ export const register: Register = (on, options) => {
     const outcome = dialogOutcome(await ask(question, go, 'Keep it'), go, 'Keep it', `kept run ${record.id}`)
     if ('deny' in outcome) return { deny: outcome.deny }
     if ('reply' in outcome) return { result: outcome.reply }
-    const finished = await sh(['finish', record.repo, record.worktree, record.branch, call.finish])
+    const current = (await loadRuns($))[record.id]
+    if (current?.state !== 'idle') return { deny: `run ${record.id} changed while the dialog was open` }
+    const finished = await sh(['finish', current.repo, current.worktree, current.branch, call.finish])
     if (finished.exitCode === 0) {
-      await saveRun($, { ...record, state: 'finished' })
-      return { result: `Run ${record.id}: ${call.finish === 'merge' ? `merged into ${target}` : 'discarded'}; worktree and branch removed.` }
+      await saveRun($, { ...current, state: 'finished' })
+      return { result: `Run ${current.id}: ${call.finish === 'merge' ? `merged into ${target}` : 'discarded'}; worktree and branch removed.` }
     }
     const lines = finished.stdout.trim()
     const why = finished.exitCode === 3 ? `merge conflicts, merge aborted; worktree and branch kept:\n${lines}`
@@ -597,7 +599,7 @@ export const register: Register = (on, options) => {
       : finished.exitCode === 5 ? 'the repository is on a detached HEAD; check out a branch to merge into'
       : finished.exitCode === 6 ? `git refused the merge:\n${finished.stderr.trim()}`
       : finished.stderr.trim() || 'finish failed'
-    return { result: `Run ${record.id} not finished: ${why}`, isError: true }
+    return { result: `Run ${current.id} not finished: ${why}`, isError: true }
   })
 
   on('command.run', { command: REOPEN_COMMAND }, async ($, e) => {
