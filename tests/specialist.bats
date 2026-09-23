@@ -86,3 +86,84 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     [[ "$output" == *"--- total"* ]]
     [[ "$output" == *"2 files changed"* ]]
 }
+
+start_run() {
+    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    WT="$(field worktree)"; BR="$(field branch)"; BASE="$(field base)"; STATE="$(field state)"
+}
+
+@test "counts reports commits, files and the merge target" {
+    start_run
+    echo 'b' > "$WT/src/b.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
+    echo 'c' > "$WT/src/c.txt"; "$SPECIALIST" commit "$WT" r2 >/dev/null
+    run "$SPECIALIST" counts "$REPO" "$BR" "$BASE"
+    [ "$output" = "$(printf 'commits=2\nfiles=2\ntarget=main')" ]
+}
+
+@test "merge brings the branch in with a merge commit, then removes worktree and branch" {
+    start_run
+    echo 'b' > "$WT/src/b.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
+    [ "$status" -eq 0 ]
+    [ "$output" = "finished=merge" ]
+    [ -f "$REPO/src/b.txt" ]
+    [ "$(git -C "$REPO" rev-list --parents -1 HEAD | wc -w | tr -d ' ')" = "3" ]
+    [ ! -d "$WT" ]
+    run git -C "$REPO" rev-parse --verify -q "$BR"
+    [ "$status" -ne 0 ]
+}
+
+@test "a conflicting merge is aborted and keeps worktree and branch" {
+    start_run
+    echo 'theirs' > "$WT/src/a.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
+    echo 'ours' > "$REPO/src/a.txt"; git -C "$REPO" commit -qam ours
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
+    [ "$status" -eq 3 ]
+    [ "$output" = "conflict=src/a.txt" ]
+    [ -z "$(git -C "$REPO" status --porcelain)" ]
+    [ -d "$WT" ]
+    git -C "$REPO" rev-parse --verify -q "$BR" >/dev/null
+}
+
+@test "merge is refused when the main tree has uncommitted changes to the branch's files" {
+    start_run
+    echo 'theirs' > "$WT/src/a.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
+    echo 'local edit' >> "$REPO/src/a.txt"
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
+    [ "$status" -eq 4 ]
+    [ "$output" = "dirty=src/a.txt" ]
+    [ -d "$WT" ]
+}
+
+@test "merge is refused on a detached HEAD; discard still works there" {
+    start_run
+    echo 'b' > "$WT/src/b.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
+    git -C "$REPO" checkout -q --detach
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
+    [ "$status" -eq 5 ]
+    [ "$output" = "detached=yes" ]
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" discard
+    [ "$status" -eq 0 ]
+    [ "$output" = "finished=discard" ]
+    [ ! -d "$WT" ]
+}
+
+@test "discard removes a dirty worktree and its unmerged branch" {
+    start_run
+    echo 'b' > "$WT/src/b.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
+    echo 'uncommitted' > "$WT/src/c.txt"
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" discard
+    [ "$status" -eq 0 ]
+    [ ! -d "$WT" ]
+    run git -C "$REPO" rev-parse --verify -q "$BR"
+    [ "$status" -ne 0 ]
+}
+
+@test "discard still deletes the branch when the worktree was removed by hand" {
+    start_run
+    rm -rf "$WT"
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" discard
+    [ "$status" -eq 0 ]
+    run git -C "$REPO" rev-parse --verify -q "$BR"
+    [ "$status" -ne 0 ]
+}
