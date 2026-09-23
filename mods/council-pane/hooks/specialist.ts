@@ -153,6 +153,7 @@ export function followUpRefusal(record: RunRecord | undefined, id: string, workt
   if (record.state === 'finished') return `run ${id} is finished; start a new one`
   if (record.state === 'running') return `${record.specialist} is still working on run ${id}`
   if (!worktreeExists) return `run ${id} has no worktree any more; start a new one`
+  if (!record.thread) return `run ${id} has no Codex thread to resume; start a new run`
   return undefined
 }
 
