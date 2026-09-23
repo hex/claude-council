@@ -167,3 +167,16 @@ start_run() {
     run git -C "$REPO" rev-parse --verify -q "$BR"
     [ "$status" -ne 0 ]
 }
+
+@test "codex refuses a missing worktree before starting anything" {
+    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol < /dev/null
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: no worktree at ${BATS_TEST_TMPDIR}/nope" ]
+}
+
+@test "codex reports a codex that is not installed as exit 127, not a crash" {
+    start_run
+    PATH="/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol <<< "task"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"exit=127"* ]]
+}

@@ -82,6 +82,20 @@ cmd_finish() {
     echo "finished=merge"
 }
 
+cmd_codex() {
+    local worktree="$1" state="$2" model="$3" thread="${4:-}" code=0 found
+    [[ -d "$worktree" ]] || die "no worktree at ${worktree}"
+    mkdir -p "$state"
+    local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -o "${state}/last-message.md")
+    if [[ -n "$thread" ]]; then
+        (cd "$worktree" && codex exec resume "${flags[@]}" "$thread" -) > "${state}/events.jsonl" 2> "${state}/stderr.txt" || code=$?
+    else
+        (cd "$worktree" && codex exec "${flags[@]}" -) > "${state}/events.jsonl" 2> "${state}/stderr.txt" || code=$?
+    fi
+    found="$(sed -n 's/.*"type":"thread.started","thread_id":"\([^"]*\)".*/\1/p' "${state}/events.jsonl" | head -1)"
+    printf 'thread=%s\nexit=%s\n' "${found:-$thread}" "$code"
+}
+
 main() {
     local sub="${1:-}"; shift || true
     case "$sub" in
@@ -91,6 +105,7 @@ main() {
         report) [[ $# -eq 3 ]] || die "usage: report <worktree> <round-base> <run-base>"; cmd_report "$@" ;;
         counts) [[ $# -eq 3 ]] || die "usage: counts <repo> <branch> <run-base>"; cmd_counts "$@" ;;
         finish) [[ $# -eq 4 ]] || die "usage: finish <repo> <worktree> <branch> merge|discard"; cmd_finish "$@" ;;
+        codex)  [[ $# -eq 3 || $# -eq 4 ]] || die "usage: codex <worktree> <state> <model> [thread]"; cmd_codex "$@" ;;
         *) die "unknown subcommand '${sub}'" ;;
     esac
 }
