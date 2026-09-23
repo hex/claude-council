@@ -6,7 +6,7 @@ export const TOOL_NAME = 'ask'
 export const TOOL_DESCRIPTION =
   'Ask the council of external AI models one question and get each answer back. ' +
   'Call this when the user asks for the council, or when a decision would benefit from outside perspectives. ' +
-  'The user is asked to confirm before anything is sent; a refusal comes back as the result, so do not retry it.'
+  'The user is asked to confirm before anything is sent; a refusal comes back as the result; do not retry unless the reply asks for a change.'
 
 export const TOOL_SCHEMA = {
   type: 'object',
