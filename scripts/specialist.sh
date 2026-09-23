@@ -12,6 +12,7 @@ repo_root() {
 
 cmd_start() {
     local dir="$1" name="$2" ts="$3" root parent base short home worktree branch state dirty
+    [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || die "invalid name '${name}': must match ^[a-z][a-z0-9-]*\$"
     root="$(repo_root "$dir")"
     parent="$(dirname "$root")"
     home="${parent}/$(basename "$root").specialists"
