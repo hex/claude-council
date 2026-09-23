@@ -15,6 +15,7 @@ import {
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
+import { chipCells } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 
 const PANE_ID = 'council'
@@ -23,6 +24,11 @@ const RUN_TIMEOUT_MS = 600_000
 // Claude's orange (#D97757): the council speaks inside Claude Code, and the
 // synthesis is Claude's own text. No provider's banner uses it.
 const COUNCIL_RGB = 'rgb(217,119,87)'
+const MAGENTA_RGB = 'rgb(196,72,128)'
+const VIOLET_RGB = 'rgb(124,77,196)'
+const CHIP_STOPS = [COUNCIL_RGB, MAGENTA_RGB, VIOLET_RGB]
+// Frames the chip holds still between two passes of its sweep.
+const SWEEP_PAUSE = 8
 const POLL_MS = 500
 // Ten frames a second: the spinner's pace in the tmux pane.
 const FRAME_MS = 100
@@ -67,6 +73,7 @@ type PaneState = {
   // Runs whose end is being written up now, so one tick does not repeat another's.
   finishing: Set<string>
   specialistError: string
+  specialistFrame: number
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -355,6 +362,19 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
   }
 }
 
+// The COUNCIL and SPECIALIST chip. Given a frame, a light band sweeps across
+// it, then holds still for a moment before the next pass.
+function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string, frame?: number) {
+  const cycle = label.length + 2 + SWEEP_PAUSE
+  return (
+    <ui.Box key={key} flexDirection="row" flexShrink={0}>
+      {chipCells(label, CHIP_STOPS, frame === undefined ? undefined : frame % cycle).map((cell, index) => (
+        <ui.Text key={`${key}-${index}`} bold color="white" backgroundColor={cell.background}>{cell.text}</ui.Text>
+      ))}
+    </ui.Box>
+  )
+}
+
 function elapsed(nowMs: number, startedMs: number): string {
   const secs = Math.max(0, Math.floor((nowMs - startedMs) / 1000))
   return secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`
@@ -392,7 +412,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), specialistError: '' }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), specialistError: '', specialistFrame: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -409,6 +429,11 @@ export const register: Register = (on, options) => {
       await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })
+      $.clock.every(FRAME_MS, () => {
+        if (!state.specialist) return
+        state.specialistFrame += 1
+        $.ui.invalidate('ui.render')
+      })
       await logFailure($, state, () => recoverRounds($, state))
     }
     return next(e)
@@ -596,9 +621,7 @@ export const register: Register = (on, options) => {
       const ui = $.ui.resolve(e)
       return (
         <ui.Box key="finished" flexDirection="row" marginTop={1}>
-          <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
-            <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>COUNCIL</ui.Text>
-          </ui.Box>
+          {chip(ui, 'chip', '\u2726 COUNCIL')}
           <ui.Text bold {...(finished.isFailure ? { color: 'red' } : {})}>{` ${finished.isFailure ? '\u2717' : '\u2713'} ${finished.text}  `}</ui.Text>
           <ui.Button key="finished:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
           <ui.Text>{' '}</ui.Text>
@@ -622,11 +645,13 @@ export const register: Register = (on, options) => {
       return (
         <ui.Box key="specialist" flexDirection="row" marginTop={1}>
           {/* Only the step gives way when the band is narrow, as beside an open pane. */}
-          <ui.Box flexDirection="row" flexShrink={0} paddingX={1} backgroundColor={COUNCIL_RGB}>
-            <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>SPECIALIST</ui.Text>
-          </ui.Box>
+          {chip(ui, 'chip', '\u2726 SPECIALIST', state.specialistFrame)}
           <ui.Box flexShrink={0}>
-            <ui.Text>{`  ${working.record.specialist} \u00b7 ${working.record.perspective} \u00b7 ${clock}`}</ui.Text>
+            <ui.Text>
+              <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
+              <ui.Text color={MAGENTA_RGB}>{`  \u25c6 ${working.record.perspective}`}</ui.Text>
+              <ui.Text color={COUNCIL_RGB}>{`  \u25f7 ${clock}`}</ui.Text>
+            </ui.Text>
           </ui.Box>
           <ui.Box flexGrow={1} flexShrink={1}>
             <ui.Text dimColor wrap="truncate-end">{`  ${latestStep(state.specialistLog?.steps ?? [])}  `}</ui.Text>
@@ -642,9 +667,7 @@ export const register: Register = (on, options) => {
     const ui = $.ui.resolve(e)
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
-        <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
-          <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>COUNCIL</ui.Text>
-        </ui.Box>
+        {chip(ui, 'chip', '\u2726 COUNCIL', state.frame)}
         <ui.Text color={COUNCIL_RGB}>{`  ${progress.bar}`}</ui.Text>
         <ui.Text>{`  ${progress.text}  `}</ui.Text>
         <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
@@ -655,45 +678,67 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
     const log = state.specialistLog
     if (e.requestId !== SPECIALIST_PANE || !log) return next(e)
-    const { Box, Markdown, Text } = $.ui.resolve(e)
+    const ui = $.ui.resolve(e)
+    const { Box, Markdown, Text } = ui
     const columns = e.props.bodyColumns
     const { record } = log
     const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', 'yellow'] : step.state === 'failed' ? ['\u2717', 'red'] : ['\u2713', 'green'])
-    const status = log.isLive ? `running ${elapsed(state.nowMs, record.startedMs)}` : 'ended'
     return (
       <Box key="specialist" flexDirection="column">
-        <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={COUNCIL_RGB}>
-          <Text bold color="white" backgroundColor={COUNCIL_RGB}>{`SPECIALIST ${record.specialist}`}</Text>
-          <Text italic color="white" backgroundColor={COUNCIL_RGB}>{` ${record.perspective} \u00b7 ${record.model} \u00b7 round ${record.rounds} \u00b7 ${status}`}</Text>
+        <Box flexDirection="row">
+          {chip(ui, 'chip', '\u2726 SPECIALIST', log.isLive ? state.specialistFrame : undefined)}
+          <Text bold>{`  ${record.specialist}`}</Text>
         </Box>
-        <Text dimColor>{`${record.branch}  ${record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}`}</Text>
+        <Text>
+          <Text color={MAGENTA_RGB}>{`\u25c6 ${record.perspective}  `}</Text>
+          <Text color={VIOLET_RGB}>{`\u25c8 ${record.model}  `}</Text>
+          <Text color={COUNCIL_RGB}>{`\u21bb round ${record.rounds}  `}</Text>
+          {log.isLive
+            ? <Text color="yellow">{`\u25f7 running ${elapsed(state.nowMs, record.startedMs)}`}</Text>
+            : <Text color="green">{'\u25a0 ended'}</Text>}
+        </Text>
+        <Text>
+          <Text color={MAGENTA_RGB}>{'\u2387 '}</Text>
+          <Text dimColor>{record.branch}</Text>
+        </Text>
+        <Text>
+          <Text color={VIOLET_RGB}>{'\u25b8 '}</Text>
+          <Text dimColor>{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text>
+        </Text>
+        <Text dimColor>{'\u2500'.repeat(Math.max(0, columns))}</Text>
         {log.steps.map((step, index) => {
           const key = `step-${index}`
           // Codex writes markdown; a paragraph break sets its words off from the commands.
           if (step.kind === 'say') {
             return (
-              <Box key={key} flexDirection="column" marginTop={1}>
-                {markdownBlocks(step.text).map((block, part) => <Markdown key={`${key}-${part}`} text={block} />)}
+              <Box key={key} flexDirection="row" marginTop={1} marginBottom={1}>
+                <Text color={VIOLET_RGB}>{'\u25cf '}</Text>
+                <Box flexDirection="column" flexShrink={1}>
+                  {markdownBlocks(step.text).map((block, part) => <Markdown key={`${key}-${part}`} text={block} />)}
+                </Box>
               </Box>
             )
           }
           const [glyph, color] = mark(step)
           const isDone = step.state === 'done'
+          if (step.kind === 'edit') {
+            return (
+              <Text key={key}>
+                <Text color={color}>{`${glyph} `}</Text>
+                <Text color="cyan">{'\u270e '}</Text>
+                <Text bold={!isDone} color="cyan">{step.text}</Text>
+              </Text>
+            )
+          }
+          const line = step.text.replace(/\s*\n\s*/g, ' ')
+          const program = line.split(' ')[0] ?? ''
           return (
-            <Box key={key} flexDirection="row">
+            <Text key={key} wrap="truncate-end">
               <Text color={color}>{`${glyph} `}</Text>
-              {step.kind === 'run' ? (
-                <Text wrap="truncate-end">
-                  <Text color={COUNCIL_RGB}>{'$ '}</Text>
-                  <Text dimColor={isDone} color={step.state === 'failed' ? 'red' : undefined}>{step.text.replace(/\s*\n\s*/g, ' ')}</Text>
-                </Text>
-              ) : (
-                <Text>
-                  <Text color="cyan">{'\u270e '}</Text>
-                  <Text bold={!isDone} color="cyan">{step.text}</Text>
-                </Text>
-              )}
-            </Box>
+              <Text color={COUNCIL_RGB}>{'$ '}</Text>
+              <Text bold color={step.state === 'failed' ? 'red' : undefined}>{program}</Text>
+              <Text dimColor={isDone} color={step.state === 'failed' ? 'red' : undefined}>{line.slice(program.length)}</Text>
+            </Text>
           )
         })}
       </Box>
