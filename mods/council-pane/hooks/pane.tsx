@@ -15,6 +15,7 @@ import {
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
+import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 
 const PANE_ID = 'council'
@@ -69,6 +70,7 @@ type PaneState = {
   // Runs whose end is being written up now, so one tick does not repeat another's.
   finishing: Set<string>
   specialistError: string
+  specialistFrame: number
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -359,12 +361,17 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
 
 // The COUNCIL and SPECIALIST chip: a darker segment with a star, then the
 // label, white on solid colour. Coloured cells draw alike in every terminal,
-// where end-cap glyphs do not.
-function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string) {
+// where end-cap glyphs do not. Given a frame, a highlight moves across the
+// label's letters.
+function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string, frame?: number) {
   return (
     <ui.Box key={key} flexDirection="row" flexShrink={0}>
       <ui.Text bold color="white" backgroundColor={CHIP_DARK_RGB}>{' \u2726 '}</ui.Text>
-      <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>{` ${label} `}</ui.Text>
+      <ui.Text backgroundColor={COUNCIL_RGB}>{' '}</ui.Text>
+      {shimmer(label, frame).map((letter, index) => (
+        <ui.Text key={`${key}-${index}`} bold color={letter.color} backgroundColor={COUNCIL_RGB}>{letter.text}</ui.Text>
+      ))}
+      <ui.Text backgroundColor={COUNCIL_RGB}>{' '}</ui.Text>
     </ui.Box>
   )
 }
@@ -401,7 +408,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), specialistError: '' }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), specialistError: '', specialistFrame: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -418,6 +425,12 @@ export const register: Register = (on, options) => {
       await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })
+      // The chip's shimmer moves only while a round runs.
+      $.clock.every(FRAME_MS, () => {
+        if (!state.specialist) return
+        state.specialistFrame += 1
+        $.ui.invalidate('ui.render')
+      })
       await logFailure($, state, () => recoverRounds($, state))
     }
     return next(e)
@@ -633,7 +646,7 @@ export const register: Register = (on, options) => {
       return (
         <ui.Box key="specialist" flexDirection="row" marginTop={1}>
           {/* Only the step gives way when the band is narrow, as beside an open pane. */}
-          {chip(ui, 'chip', 'SPECIALIST')}
+          {chip(ui, 'chip', 'SPECIALIST', state.specialistFrame)}
           <ui.Box flexShrink={0}>
             <ui.Text>
               <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
@@ -656,7 +669,7 @@ export const register: Register = (on, options) => {
     const ui = $.ui.resolve(e)
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
-        {chip(ui, 'chip', 'COUNCIL')}
+        {chip(ui, 'chip', 'COUNCIL', state.frame)}
         <ui.Text color={COUNCIL_RGB}>{`  ${progress.bar}`}</ui.Text>
         <ui.Text>{`  ${progress.text}  `}</ui.Text>
         <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
@@ -678,7 +691,7 @@ export const register: Register = (on, options) => {
         {/* A card, like a sidebar entry: who, how it stands, then where it works. */}
         <Box flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1} width={Math.max(20, columns - 2)}>
           <Box flexDirection="row" flexWrap="wrap">
-            {chip(ui, 'chip', 'SPECIALIST')}
+            {chip(ui, 'chip', 'SPECIALIST', log.isLive ? state.specialistFrame : undefined)}
             <Text>
               <Text bold>{`  ${record.specialist}`}</Text>
               <Text dimColor>{' \u00b7 '}</Text>
