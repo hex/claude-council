@@ -690,22 +690,25 @@ export const register: Register = (on, options) => {
       <Box key="specialist" flexDirection="column">
         {/* A card, like a sidebar entry: who, how it stands, then where it works. */}
         <Box flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1} width={Math.max(20, columns - 2)}>
-          <Box flexDirection="row" flexWrap="wrap">
+          {/* Each group is its own element, so a narrow pane wraps between
+              groups, never inside one. */}
+          <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
             {chip(ui, 'chip', 'SPECIALIST', log.isLive ? state.specialistFrame : undefined)}
-            <Text>
-              <Text bold>{`  ${record.specialist}`}</Text>
-              <Text dimColor>{' \u00b7 '}</Text>
-              <Text bold color={status.color}>{`${status.glyph} ${status.text}`}</Text>
-              <Text dimColor>{' \u00b7 '}</Text>
-              <Text>{`round ${record.rounds}`}</Text>
-              <Text dimColor>{' \u00b7 '}</Text>
-              <Text>{record.perspective}</Text>
-              <Text dimColor>{' \u00b7 '}</Text>
-              <Text color={MODEL_RGB}>{record.model}</Text>
-            </Text>
+            <Text bold>{record.specialist}</Text>
+            <Text bold color={status.color}>{`${status.glyph} ${status.text}`}</Text>
+            <Text dimColor>{`round ${record.rounds}`}</Text>
+            <Text dimColor>{record.perspective}</Text>
+            <Text color={MODEL_RGB}>{record.model}</Text>
           </Box>
-          <Text dimColor wrap="truncate-middle">{record.branch}</Text>
-          <Text dimColor wrap="truncate-middle">{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text>
+          {/* The worktree is cut from the left: its last part names the run. */}
+          <Box flexDirection="row">
+            <Text dimColor>{'branch    '}</Text>
+            <Box flexShrink={1}><Text dimColor wrap="truncate-start">{record.branch}</Text></Box>
+          </Box>
+          <Box flexDirection="row">
+            <Text dimColor>{'worktree  '}</Text>
+            <Box flexShrink={1}><Text dimColor wrap="truncate-start">{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text></Box>
+          </Box>
         </Box>
         <Text>
           <Text bold color={COUNCIL_RGB}>{' STEPS'}</Text>
