@@ -688,13 +688,13 @@ in the response header:
 
 | Provider | Default | Fallback |
 |---|---|---|
-| openai | `gpt-6-astra` | `gpt-5.6-sol` |
+| openai | `gpt-6-astra` | `gpt-6-sol` |
 | grok | `grok-latest` | `grok-4.6` |
 | gemini | `gemini-flash-latest` | `gemini-3.8-flash` |
 | perplexity | `sonar-reasoning-pro` | `sonar-pro` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
 | ollama | first local model (`OLLAMA_MODEL` to pin) | — |
-| openrouter | `anthropic/claude-fable-5.1` | — |
+| openrouter | `anthropic/claude-fable-5.1` | `anthropic/claude-opus-5.5` |
 
 The same substitution is also noted on stderr and folded into the synthesis,
 so it's visible even in quiet mode or a headless run. Setting `<PROVIDER>_MODEL`

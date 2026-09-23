@@ -119,7 +119,9 @@ mf() {
 
 @test "model_fallback_for: each API provider has its verified fallback" {
     mf 'model_fallback_for openai'
-    [ "$output" = "gpt-5.6-sol" ]
+    [ "$output" = "gpt-6-sol" ]
+    mf 'model_fallback_for openrouter'
+    [ "$output" = "anthropic/claude-opus-5.5" ]
     mf 'model_fallback_for grok'
     [ "$output" = "grok-4.6" ]
     mf 'model_fallback_for perplexity'
@@ -128,6 +130,14 @@ mf() {
     # A flash id, not another pro id: gemini's default is an alias, and the pro id
     # it currently serves would make the retry re-send the failed request.
     [ "$output" = "gemini-3.8-flash" ]
+}
+
+@test "model_fallback_for: a numbered router seat has no fallback" {
+    # A roster seat runs exactly the model its OPENROUTER_MODELS entry names;
+    # swapping in the single seat's fallback would relabel it as another model.
+    mf 'model_fallback_for openrouter-2'
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
 }
 
 @test "model_fallback_for: no provider degrades to the model it already prefers" {

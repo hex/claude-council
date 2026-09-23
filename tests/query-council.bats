@@ -362,7 +362,7 @@ EOF
         "$HOST_BASH" "$SCRIPT" --providers=codex --no-pane --no-auto-context --no-cache "q"
     [ "$status" -eq 0 ]
     assert_json_eq "$output" '.round1.codex.fallback' 'openai'
-    assert_json_eq "$output" '.round1.codex.model' 'gpt-5.6-sol'
+    assert_json_eq "$output" '.round1.codex.model' 'gpt-6-sol'
     assert_json_eq "$output" '.round1.codex.model_fallback' 'gpt-6-astra'
 }
 
