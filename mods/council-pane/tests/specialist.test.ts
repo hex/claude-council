@@ -122,7 +122,7 @@ test('only the go label proceeds; Other text goes back to the model', () => {
   expect(dialogOutcome('Start sec', 'Start sec', "Don't start", 'did not start sec')).toEqual({ go: true })
   expect(dialogOutcome("Don't start", 'Start sec', "Don't start", 'did not start sec')).toEqual({ deny: 'The user did not start sec.' })
   expect(dialogOutcome(undefined, 'Start sec', "Don't start", 'did not start sec')).toEqual({ deny: 'The user was not asked (dialog dismissed or no one to ask), so the user did not start sec.' })
-  expect(dialogOutcome('use perf instead', 'Start sec', "Don't start", 'did not start sec')).toEqual({ deny: 'The user did not start sec and said: use perf instead' })
+  expect(dialogOutcome('use perf instead', 'Start sec', "Don't start", 'did not start sec')).toEqual({ reply: 'The user did not start sec and said: use perf instead' })
 })
 
 test('the prompt puts the perspective first and the ground rules last', () => {

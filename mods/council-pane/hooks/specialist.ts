@@ -135,11 +135,13 @@ export function finishQuestion(record: RunRecord, finish: 'merge' | 'discard', c
     : `Discard run ${record.id} and delete its branch?`
 }
 
-export function dialogOutcome(answer: string | undefined, go: string, stop: string, refusal: string): { go: true } | { deny: string } {
+// Text typed under Other comes back as a reply, which the tool returns as a
+// plain result: a refusal is drawn as an error, and a typed answer is not one.
+export function dialogOutcome(answer: string | undefined, go: string, stop: string, refusal: string): { go: true } | { deny: string } | { reply: string } {
   if (answer === go) return { go: true }
   if (answer === undefined) return { deny: `The user was not asked (dialog dismissed or no one to ask), so the user ${refusal}.` }
   if (answer === stop) return { deny: `The user ${refusal}.` }
-  return { deny: `The user ${refusal} and said: ${answer}` }
+  return { reply: `The user ${refusal} and said: ${answer}` }
 }
 
 export function specialistPrompt(perspectivePrompt: string, task: string): string {

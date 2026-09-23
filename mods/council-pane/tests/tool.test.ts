@@ -42,5 +42,5 @@ test('only the send label sends; anything else is a refusal the model can read',
   expect(confirmOutcome(SEND_LABEL)).toEqual({ send: true })
   expect(confirmOutcome(KEEP_LABEL)).toEqual({ deny: 'The user chose not to send this to the council.' })
   expect(confirmOutcome(undefined)).toEqual({ deny: 'The user was not asked (dialog dismissed or no one to ask), so nothing was sent to the council.' })
-  expect(confirmOutcome('only ask gemini')).toEqual({ deny: 'The user did not send this to the council and said: only ask gemini' })
+  expect(confirmOutcome('only ask gemini')).toEqual({ reply: 'The user did not send this to the council and said: only ask gemini' })
 })
