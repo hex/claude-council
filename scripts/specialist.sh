@@ -61,10 +61,12 @@ remove_run() {
     if git -C "$root" show-ref --verify --quiet "refs/heads/${branch}"; then
         git -C "$root" branch -D "$branch" >/dev/null
     fi
+    rm -rf "$(dirname "$worktree")/.state/$(basename "$worktree")"
 }
 
 cmd_finish() {
     local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal
+    [[ "$worktree" == /* && "${worktree##*/}" =~ ^[a-z][a-z0-9-]*-[0-9]{8}-[0-9]{6}$ ]] || die "invalid worktree path '${worktree}': expected an absolute path ending in a run id"
     root="$(repo_root "$root")"
     if [[ "$how" == discard ]]; then
         remove_run "$root" "$worktree" "$branch"

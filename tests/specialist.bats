@@ -126,6 +126,7 @@ start_run() {
     [ -f "$REPO/src/b.txt" ]
     [ "$(git -C "$REPO" rev-list --parents -1 HEAD | wc -w | tr -d ' ')" = "3" ]
     [ ! -d "$WT" ]
+    [ ! -e "$STATE" ]
     run git -C "$REPO" rev-parse --verify -q "$BR"
     [ "$status" -ne 0 ]
 }
@@ -169,9 +170,23 @@ start_run() {
     start_run
     echo 'b' > "$WT/src/b.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
     echo 'uncommitted' > "$WT/src/c.txt"
+    run "$SPECIALIST" finish "$REPO" "" "$BR" discard
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: invalid worktree path '': expected an absolute path ending in a run id" ]
+    [ -d "$WT" ]
+    [ -d "$STATE" ]
+    git -C "$REPO" show-ref --verify --quiet "refs/heads/${BR}"
+    run "$SPECIALIST" finish "$REPO" "relative/sec-20260923-151204" "$BR" merge
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: invalid worktree path 'relative/sec-20260923-151204': expected an absolute path ending in a run id" ]
+    [ -d "$WT" ]
+    [ -d "$STATE" ]
+    git -C "$REPO" show-ref --verify --quiet "refs/heads/${BR}"
+    [ "$(git -C "$REPO" rev-parse HEAD)" = "$BASE" ]
     run "$SPECIALIST" finish "$REPO" "$WT" "$BR" discard
     [ "$status" -eq 0 ]
     [ ! -d "$WT" ]
+    [ ! -e "$STATE" ]
     run git -C "$REPO" rev-parse --verify -q "$BR"
     [ "$status" -ne 0 ]
 }
