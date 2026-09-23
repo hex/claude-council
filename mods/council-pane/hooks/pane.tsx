@@ -24,6 +24,7 @@ const RUN_TIMEOUT_MS = 600_000
 // synthesis is Claude's own text. No provider's banner uses it.
 const COUNCIL_RGB = 'rgb(217,119,87)'
 const MODEL_RGB = 'rgb(38,128,150)'
+const CHIP_DARK_RGB = 'rgb(191,96,60)'
 const POLL_MS = 500
 // Ten frames a second: the spinner's pace in the tmux pane.
 const FRAME_MS = 100
@@ -356,12 +357,14 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
   }
 }
 
-// The COUNCIL and SPECIALIST chip: white on one solid colour, which every
-// terminal and font draws alike, where end-cap glyphs do not.
+// The COUNCIL and SPECIALIST chip: a darker segment with a star, then the
+// label, white on solid colour. Coloured cells draw alike in every terminal,
+// where end-cap glyphs do not.
 function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string) {
   return (
-    <ui.Box key={key} flexDirection="row" flexShrink={0} paddingX={1} backgroundColor={COUNCIL_RGB}>
-      <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>{label}</ui.Text>
+    <ui.Box key={key} flexDirection="row" flexShrink={0}>
+      <ui.Text bold color="white" backgroundColor={CHIP_DARK_RGB}>{' \u2726 '}</ui.Text>
+      <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>{` ${label} `}</ui.Text>
     </ui.Box>
   )
 }
