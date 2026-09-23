@@ -26,7 +26,9 @@ const RUN_TIMEOUT_MS = 600_000
 const COUNCIL_RGB = 'rgb(217,119,87)'
 const MAGENTA_RGB = 'rgb(196,72,128)'
 const VIOLET_RGB = 'rgb(124,77,196)'
-const CHIP_STOPS = [COUNCIL_RGB, MAGENTA_RGB, VIOLET_RGB]
+const CHIP_STOPS = [COUNCIL_RGB, 'rgb(232,150,62)', 'rgb(240,190,70)']
+// Dark text reads on every shade of the chip, the yellow end included.
+const CHIP_TEXT = 'rgb(51,33,17)'
 // Frames the chip holds still between two passes of its sweep.
 const SWEEP_PAUSE = 8
 const POLL_MS = 500
@@ -362,14 +364,14 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
   }
 }
 
-// The COUNCIL and SPECIALIST chip. Given a frame, a light band sweeps across
+// The COUNCIL and SPECIALIST chip, orange into yellow. Given a frame, a light band sweeps across
 // it, then holds still for a moment before the next pass.
 function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string, frame?: number) {
   const cycle = label.length + 2 + SWEEP_PAUSE
   return (
     <ui.Box key={key} flexDirection="row" flexShrink={0}>
       {chipCells(label, CHIP_STOPS, frame === undefined ? undefined : frame % cycle).map((cell, index) => (
-        <ui.Text key={`${key}-${index}`} bold color="white" backgroundColor={cell.background}>{cell.text}</ui.Text>
+        <ui.Text key={`${key}-${index}`} bold color={CHIP_TEXT} backgroundColor={cell.background}>{cell.text}</ui.Text>
       ))}
     </ui.Box>
   )
