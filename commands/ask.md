@@ -320,8 +320,12 @@ synthesis happens when the result is fetched.
 `run-council.sh` verbatim, before the `--` separator — including `--debate`,
 `--roles=…`, `--no-cache`, `--file=…`, `--image=…`, `--quiet`, and `--no-pane`. The only
 command-layer flags to strip (never forward) are `--local`, `--agents`, and
-`--output` (handled in Steps 0, 1.5, and 4). For example, a `--debate --roles=…`
-query becomes:
+`--output` (handled in Steps 0, 1.5, and 4). Forward only what the user typed:
+never add `--no-pane`, `--quiet`, `--no-cache` or `--no-auto-context` yourself.
+Each one takes something away from the user (the streaming pane, the progress
+lines, a cached answer, the repo context), and the scripts already handle every
+case where the default cannot apply, such as a pane outside tmux. For example, a
+`--debate --roles=…` query becomes:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --debate --roles=security,performance --providers=<list> -- "question"

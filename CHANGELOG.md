@@ -4,6 +4,12 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixes
+- The model running `/claude-council:ask` no longer adds `--no-pane`, `--quiet`, `--no-cache` or `--no-auto-context` on its own; it forwards only what the user typed. `/claude-council:advise` streams into the pane like `ask` instead of always suppressing it.
+- When a pane streamed the answers, the chat no longer reprints them after the run: it shows one status line per provider, any debate rebuttals, and the synthesis. The transcript records this with an invisible first-line marker, and `/claude-council:result` follows the same rule.
+
 ## 2026.9.13
 
 ### Features

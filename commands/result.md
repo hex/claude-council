@@ -38,7 +38,9 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --result=<job-id>
 
 - **Exit 0**: stdout is the output file path. Read the file and display its
   content VERBATIM (same rules as the council-execution skill: no
-  reformatting, no summarizing). Then complete the synthesis under the
+  reformatting, no summarizing), except that a file opening with
+  `<!-- council: round 1 was shown in the pane -->` gets the short form the
+  council-execution skill describes for it. Then complete the synthesis under the
   `## Synthesis` header following `${CLAUDE_PLUGIN_ROOT}/prompts/synthesis.md`.
 - **Exit 2**: the job is still running. Tell the user and suggest re-running
   `/claude-council:result <job-id>` in a little while.

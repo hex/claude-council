@@ -827,6 +827,8 @@ export COUNCIL_RETRY_WAIT=45             # seconds the pane's retry offer stays 
 
 Per-call opt-out via `--no-pane`. iTerm2 features no-op silently outside iTerm2; pane no-ops outside tmux.
 
+When a pane (tmux or the one inside Claude Code) streamed the answers, the chat does not reprint them afterwards. It shows one status line per provider, any `--debate` rebuttals, and the synthesis. The saved transcript still holds every answer.
+
 #### Pane inside Claude Code (experimental)
 
 `mods/council-pane` is a Claude Code mod that draws the same pane inside Claude Code, without tmux. It ships with the plugin and loads when Claude Code runs with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`; mods are early access, so without that variable nothing changes. Its [README](mods/council-pane/README.md) lists the settings and the limits.
@@ -879,6 +881,7 @@ bash scripts/query-council.sh --list-default-models
     "roles_used": ["security", "performance"],
     "debate_mode": false,
     "quiet_mode": false,
+    "pane_shown": false,
     "timestamp": "2025-12-18T12:00:00Z"
   },
   "round1": {
