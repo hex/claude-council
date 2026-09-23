@@ -24,7 +24,7 @@ test('three stops meet at the middle cell', () => {
 test('the sweep lightens the cell it is on, less its neighbours, and leaves the rest', () => {
   const still = chipCells('ABCDEFGH', STOPS)
   const swept = chipCells('ABCDEFGH', STOPS, 4)
-  expect(swept[4]?.background).toBe('rgb(215,175,189)')
+  expect(swept[4]?.background).toBe('rgb(183,111,135)')
   expect(swept[3]?.background).not.toBe(still[3]?.background)
   expect(swept[5]?.background).not.toBe(still[5]?.background)
   expect(swept[0]?.background).toBe(still[0]?.background)

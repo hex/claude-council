@@ -24,8 +24,8 @@ const RUN_TIMEOUT_MS = 600_000
 // Claude's orange (#D97757): the council speaks inside Claude Code, and the
 // synthesis is Claude's own text. No provider's banner uses it.
 const COUNCIL_RGB = 'rgb(217,119,87)'
-const CHIP_STOPS = [COUNCIL_RGB, 'rgb(232,150,62)', 'rgb(240,190,70)']
-// Dark text reads on every shade of the chip, the yellow end included.
+const CHIP_STOPS = [COUNCIL_RGB, 'rgb(228,146,52)']
+// Dark text reads on every shade of the chip.
 const CHIP_TEXT = 'rgb(51,33,17)'
 // Frames the chip holds still between two passes of its sweep.
 const SWEEP_PAUSE = 8
@@ -362,18 +362,16 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
   }
 }
 
-// The COUNCIL and SPECIALIST chip, orange into yellow. Given a frame, a light band sweeps across
+// The COUNCIL and SPECIALIST chip, orange into amber. Given a frame, a light band sweeps across
 // it, then holds still for a moment before the next pass.
 function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string, frame?: number) {
   const cycle = label.length + 2 + SWEEP_PAUSE
   const cells = chipCells(label, CHIP_STOPS, frame === undefined ? undefined : frame % cycle)
-  // A half circle in the last cell's colour rounds the right end.
   return (
     <ui.Box key={key} flexDirection="row" flexShrink={0}>
       {cells.map((cell, index) => (
         <ui.Text key={`${key}-${index}`} bold color={CHIP_TEXT} backgroundColor={cell.background}>{cell.text}</ui.Text>
       ))}
-      <ui.Text key={`${key}-cap`} color={cells[cells.length - 1]?.background}>{'\u25d7'}</ui.Text>
     </ui.Box>
   )
 }
@@ -649,7 +647,7 @@ export const register: Register = (on, options) => {
               <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
               <ui.Text dimColor>{' \u00b7 '}</ui.Text>
               <ui.Text>{working.record.perspective}</ui.Text>
-              <ui.Text color="yellow">{`  \u25f7 ${clock}`}</ui.Text>
+              <ui.Text bold color={roundStatus(true, undefined, clock).color}>{`  \u25f7 ${clock}`}</ui.Text>
             </ui.Text>
           </ui.Box>
           <ui.Box flexGrow={1} flexShrink={1}>
@@ -685,24 +683,29 @@ export const register: Register = (on, options) => {
     const status = roundStatus(log.isLive, record.last, roundClock(record.startedMs, state.nowMs))
     return (
       <Box key="specialist" flexDirection="column">
-        <Box flexDirection="row" width={columns} justifyContent="space-between">
+        {/* A card, like a sidebar entry: who, how it stands, then where it works. */}
+        <Box flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1} width={Math.max(20, columns - 2)}>
           <Box flexDirection="row">
             {chip(ui, 'chip', '\u2726 SPECIALIST', log.isLive ? state.specialistFrame : undefined)}
             <Text bold>{`  ${record.specialist}`}</Text>
           </Box>
-          <Text bold color={status.color}>{`${status.glyph} ${status.text}`}</Text>
+          <Text>
+            <Text bold color={status.color}>{`${status.glyph} ${status.text}`}</Text>
+            <Text dimColor>{' \u00b7 '}</Text>
+            <Text>{`round ${record.rounds}`}</Text>
+          </Text>
+          <Text>
+            <Text>{record.perspective}</Text>
+            <Text dimColor>{' \u00b7 '}</Text>
+            <Text>{record.model}</Text>
+          </Text>
+          <Text dimColor wrap="truncate-middle">{`\u2442 ${record.branch}`}</Text>
+          <Text dimColor wrap="truncate-middle">{`\u25b8 ${record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}`}</Text>
         </Box>
         <Text>
-          {[record.perspective, record.model, `round ${record.rounds}`].map((part, index) => (
-            <Text key={`meta-${index}`}>
-              {index > 0 ? <Text dimColor>{' \u00b7 '}</Text> : null}
-              <Text>{part}</Text>
-            </Text>
-          ))}
+          <Text bold color={COUNCIL_RGB}>{' STEPS'}</Text>
+          <Text dimColor>{`  ${log.steps.filter(step => step.kind !== 'say').length}`}</Text>
         </Text>
-        <Text dimColor>{record.branch}</Text>
-        <Text dimColor>{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text>
-        <Text dimColor>{'\u2500'.repeat(Math.max(0, columns))}</Text>
         {log.steps.map((step, index) => {
           const key = `step-${index}`
           // Codex writes markdown; a paragraph break sets its words off from the commands.

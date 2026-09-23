@@ -269,7 +269,8 @@ export function roundClock(startedMs: number, nowMs: number): string {
 
 // The one coloured item in the pane's header: how the round stands.
 export function roundStatus(isLive: boolean, last: RunRecord['last'], clock: string): { glyph: string; text: string; color: string } {
-  if (isLive) return { glyph: '\u25f7', text: clock, color: 'yellow' }
+  // A dark amber: a terminal's own yellow is unreadable on a light background.
+  if (isLive) return { glyph: '\u25f7', text: clock, color: 'rgb(191,112,0)' }
   if (last?.isError) return { glyph: '\u2717', text: `failed ${clock}`, color: 'red' }
   return { glyph: '\u2713', text: `ended ${clock}`, color: 'green' }
 }

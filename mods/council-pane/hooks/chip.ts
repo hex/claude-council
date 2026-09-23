@@ -4,7 +4,7 @@
 export type ChipCell = { text: string; background: string }
 
 // How far the sweep's centre, and the cell either side of it, move toward white.
-const SWEEP = [0.6, 0.3]
+const SWEEP = [0.28, 0.12]
 
 const parse = (rgb: string) => (rgb.match(/\d+/g) ?? ['0', '0', '0']).map(Number)
 const mix = (a: number[], b: number[], t: number) => a.map((v, i) => v + ((b[i] ?? 0) - v) * t)
