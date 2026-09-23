@@ -65,7 +65,7 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     run "$SPECIALIST" start "$REPO" sec 20260923-151204
     [ "$status" -eq 1 ]
     [[ "$output" == *"already exists"* ]]
-    [ ! -d "${ROOT}/app.specialists/sec-20260923-151204" ]
+    [ ! -e "${ROOT}/app.specialists" ]
 }
 
 @test "start outside a git repository is refused" {
