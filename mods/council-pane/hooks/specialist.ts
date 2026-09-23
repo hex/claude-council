@@ -62,3 +62,96 @@ export function specialistSchema(list: Specialist[]): Record<string, unknown> {
     additionalProperties: false,
   }
 }
+
+export type RunRecord = {
+  id: string; specialist: string; model: string; perspective: string; prompt: string
+  repo: string; worktree: string; branch: string; base: string; thread: string
+  rounds: number; state: 'running' | 'idle' | 'finished'
+}
+
+export type SpecialistCall =
+  | { kind: 'start'; specialist: Specialist; task: string }
+  | { kind: 'followUp'; run: string; message: string }
+  | { kind: 'finish'; run: string; finish: 'merge' | 'discard' }
+
+const SHAPES = 'give one of {specialist, task}, {run, message} or {run, finish}'
+const QUOTED_MAX = 300
+const quote = (text: string) => (text.length > QUOTED_MAX ? `${text.slice(0, QUOTED_MAX)}…` : text)
+const filled = (value: unknown) => typeof value === 'string' && value.trim() !== ''
+
+export function specialistCall(input: Record<string, unknown>, list: Specialist[]): SpecialistCall | { deny: string } {
+  const { specialist, task, run, message, finish } = input
+  const has = (v: unknown) => v !== undefined
+  if (has(specialist) && !has(run) && !has(message) && !has(finish)) {
+    const found = list.find(s => s.name === specialist)
+    if (!found) return { deny: `no specialist named '${String(specialist)}'; configured: ${list.map(s => s.name).join(', ')}` }
+    if (!filled(task)) return { deny: 'task must be a non-empty string' }
+    return { kind: 'start', specialist: found, task: task as string }
+  }
+  if (has(run) && has(message) && !has(finish) && !has(specialist) && !has(task)) {
+    if (!filled(run) || !filled(message)) return { deny: 'run and message must be non-empty strings' }
+    return { kind: 'followUp', run: run as string, message: message as string }
+  }
+  if (has(run) && has(finish) && !has(message) && !has(specialist) && !has(task)) {
+    if (finish !== 'merge' && finish !== 'discard') return { deny: 'finish must be merge or discard' }
+    if (!filled(run)) return { deny: 'run must be a non-empty string' }
+    return { kind: 'finish', run: run as string, finish }
+  }
+  return { deny: SHAPES }
+}
+
+const two = (n: number) => String(n).padStart(2, '0')
+export function runStamp(date: Date): string {
+  return `${date.getFullYear()}${two(date.getMonth() + 1)}${two(date.getDate())}-${two(date.getHours())}${two(date.getMinutes())}${two(date.getSeconds())}`
+}
+
+export function startQuestion(s: Specialist, task: string, head: string, isDirty: boolean): string {
+  const dirty = isDirty ? ' Your uncommitted changes are not included.' : ''
+  return `Hand "${quote(task)}" to ${s.name} (${s.perspective}, ${s.model})? It works in a new worktree from HEAD ${head}.${dirty}`
+}
+
+export function followUpQuestion(record: RunRecord, message: string): string {
+  return `Send to ${record.specialist} (run ${record.id}): "${quote(message)}"?`
+}
+
+export function finishQuestion(record: RunRecord, finish: 'merge' | 'discard', commits: number, files: number, target: string): string {
+  return finish === 'merge'
+    ? `Merge ${record.branch} (${commits} commits, ${files} files) into ${target}?`
+    : `Discard run ${record.id} and delete its branch?`
+}
+
+export function dialogOutcome(answer: string | undefined, go: string, stop: string, refusal: string): { go: true } | { deny: string } {
+  if (answer === go) return { go: true }
+  if (answer === undefined) return { deny: `The user was not asked (dialog dismissed or no one to ask), so the user ${refusal}.` }
+  if (answer === stop) return { deny: `The user ${refusal}.` }
+  return { deny: `The user ${refusal} and said: ${answer}` }
+}
+
+export function specialistPrompt(perspectivePrompt: string, task: string): string {
+  return `${perspectivePrompt}\n\nTask:\n${task}\n\nWork only inside this directory. Run the tests you touch.`
+}
+
+export function followUpRefusal(record: RunRecord | undefined, id: string, worktreeExists: boolean): string | undefined {
+  if (!record) return `no run ${id}; start a new one`
+  if (record.state === 'finished') return `run ${id} is finished; start a new one`
+  if (record.state === 'running') return `${record.specialist} is still working on run ${id}`
+  if (!worktreeExists) return `run ${id} has no worktree any more; start a new one`
+  return undefined
+}
+
+export function roundResult(r: {
+  record: RunRecord; exitCode: number; lastMessage: string; roundStat: string; totalStat: string
+  committed: boolean; status: string; stderrTail: string
+}): { result: string; isError: boolean } {
+  const { record } = r
+  const head = `Run ${record.id} (${record.specialist}, round ${record.rounds}) ${r.exitCode === 0 ? 'finished' : 'failed'}.\nBranch: ${record.branch}\nWorktree: ${record.worktree}`
+  if (r.exitCode !== 0) {
+    const parts = [head, `Codex exited ${r.exitCode}; nothing was committed.`]
+    if (r.status) parts.push(`Uncommitted in the worktree:\n${r.status}`)
+    if (r.lastMessage) parts.push(`Specialist's last message:\n${r.lastMessage}`)
+    if (r.stderrTail) parts.push(`Codex stderr (tail):\n${r.stderrTail}`)
+    return { isError: true, result: parts.join('\n\n') }
+  }
+  const changes = r.committed || r.roundStat ? `This round:\n${r.roundStat}\nSince ${record.base}:\n${r.totalStat}` : 'No changes this round.'
+  return { isError: false, result: [head, changes, `Specialist's summary:\n${r.lastMessage}`].join('\n\n') }
+}
