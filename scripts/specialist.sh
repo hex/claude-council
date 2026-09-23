@@ -93,28 +93,30 @@ cmd_finish() {
 }
 
 cmd_codex() {
-    local worktree="$1" state="$2" model="$3" thread="${4:-}" code=0 found pid
+    local worktree="$1" state="$2" model="$3" thread="${4:-}"
     [[ -d "$worktree" ]] || die "no worktree at ${worktree}"
     mkdir -p "$state"
     # Each round's files describe that round only.
-    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid"
+    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/exit" "${state}/thread"
+    cat > "${state}/prompt.txt"
     local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -o "${state}/last-message.md")
     local args=(exec "${flags[@]}" -)
     if [[ -n "$thread" ]]; then args=(exec resume "${flags[@]}" "$thread" -); fi
-    # codex runs in the background so its pid can be recorded: whoever gives up
-    # on the round kills it by that pid. A background command reads /dev/null
-    # unless given stdin explicitly, so the prompt is handed over on fd 3.
-    cd "$worktree"
-    exec 3<&0
-    codex "${args[@]}" <&3 > "${state}/events.jsonl" 2> "${state}/stderr.txt" &
-    pid=$!
-    exec 3<&-
-    echo "$pid" > "${state}/pid"
-    wait "$pid" || code=$?
-    # Only a UUID is kept: the id goes back to codex as an argument, where a
-    # value starting with a dash would read as a flag.
-    found="$(sed -n 's/.*"type":"thread.started","thread_id":"\([0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}\)".*/\1/p' "${state}/events.jsonl" | head -1)"
-    printf 'thread=%s\nexit=%s\n' "${found:-$thread}" "$code"
+    # The round runs detached and this call returns at once: the caller follows
+    # it through the state dir. It holds none of this script's pipes, or a
+    # caller reading our output would wait for the whole round. The exit file
+    # is written last; its presence is what says the round is over.
+    (
+        code=0
+        cd "$worktree" && codex "${args[@]}" < "${state}/prompt.txt" > "${state}/events.jsonl" 2> "${state}/stderr.txt" || code=$?
+        # Only a UUID is kept: the id goes back to codex as an argument, where a
+        # value starting with a dash would read as a flag.
+        found="$(sed -n 's/.*"type":"thread.started","thread_id":"\([0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}\)".*/\1/p' "${state}/events.jsonl" 2>/dev/null | head -1)"
+        printf '%s' "${found:-$thread}" > "${state}/thread"
+        echo "$code" > "${state}/exit.tmp" && mv "${state}/exit.tmp" "${state}/exit"
+    ) < /dev/null > /dev/null 2>&1 &
+    echo "$!" > "${state}/pid"
+    echo "pid=$!"
 }
 
 main() {

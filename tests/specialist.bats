@@ -191,13 +191,6 @@ start_run() {
     [ "$output" = "specialist: no worktree at ${BATS_TEST_TMPDIR}/nope" ]
 }
 
-@test "codex reports a codex that is not installed as exit 127, not a crash" {
-    start_run
-    PATH="/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol <<< "task"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"exit=127"* ]]
-}
-
 @test "commit fails with the hook's message when the repository's pre-commit hook refuses" {
     start_run
     mkdir -p "$REPO/.git/hooks"
@@ -208,16 +201,6 @@ start_run() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"lint failed"* ]]
     [[ "$output" != *"committed="* ]]
-}
-
-@test "codex never passes a thread id that is not a UUID on to resume" {
-    start_run
-    mkdir -p "${BATS_TEST_TMPDIR}/bin"
-    printf '#!/bin/sh\necho %s\n' "'{\"type\":\"thread.started\",\"thread_id\":\"--dangerously-bypass-approvals-and-sandbox\"}'" > "${BATS_TEST_TMPDIR}/bin/codex"
-    chmod +x "${BATS_TEST_TMPDIR}/bin/codex"
-    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol <<< "task"
-    [ "$status" -eq 0 ]
-    [ "$output" = "$(printf 'thread=\nexit=0')" ]
 }
 
 @test "a merge git refuses before it starts reports git's reason, not a missing merge" {
@@ -250,27 +233,83 @@ start_run() {
     [ "$output" = "specialist: no branch ${BR}" ]
 }
 
-@test "codex clears the previous round's files and records the codex pid" {
+# A fake codex on PATH. Its body runs under /bin/sh with the round's argv.
+fake_codex() {
+    mkdir -p "${BATS_TEST_TMPDIR}/bin"
+    printf '#!/bin/sh\n%s\n' "$1" > "${BATS_TEST_TMPDIR}/bin/codex"
+    chmod +x "${BATS_TEST_TMPDIR}/bin/codex"
+}
+
+# Waits for the detached round to write its exit file: 100 ticks of 0.1 s.
+wait_round() {
+    local tick=0
+    while [ ! -f "$STATE/exit" ] && [ "$tick" -lt 100 ]; do sleep 0.1; tick=$((tick + 1)); done
+    [ -f "$STATE/exit" ]
+}
+
+launch() {
+    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol "$@" <<< "the task"
+}
+
+@test "codex returns at once with the round's pid, and the round writes its exit code when codex ends" {
+    start_run
+    fake_codex "while [ ! -f '${BATS_TEST_TMPDIR}/go' ]; do sleep 0.1; done"
+    launch
+    [ "$status" -eq 0 ]
+    [ "$output" = "pid=$(cat "$STATE/pid")" ]
+    kill -0 "$(cat "$STATE/pid")"
+    [ ! -e "$STATE/exit" ]
+    touch "${BATS_TEST_TMPDIR}/go"
+    wait_round
+    [ "$(cat "$STATE/exit")" = "0" ]
+}
+
+@test "a codex that is not installed ends the round with exit 127" {
+    start_run
+    launch
+    [ "$status" -eq 0 ]
+    wait_round
+    [ "$(cat "$STATE/exit")" = "127" ]
+}
+
+@test "the round keeps the thread id only when it is a UUID" {
+    start_run
+    fake_codex "echo '{\"type\":\"thread.started\",\"thread_id\":\"--dangerously-bypass-approvals-and-sandbox\"}'"
+    launch
+    wait_round
+    [ "$(cat "$STATE/thread")" = "" ]
+    rm -f "$STATE/exit"
+    fake_codex "echo '{\"type\":\"thread.started\",\"thread_id\":\"01a0ce2a-1d08-76c0-a6ef-8340b581212d\"}'"
+    launch
+    wait_round
+    [ "$(cat "$STATE/thread")" = "01a0ce2a-1d08-76c0-a6ef-8340b581212d" ]
+}
+
+@test "a follow-up round resumes the thread it is given" {
+    start_run
+    fake_codex "echo \"\$@\" > '${BATS_TEST_TMPDIR}/argv'"
+    launch 01a0ce2a-1d08-76c0-a6ef-8340b581212d
+    wait_round
+    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == "exec resume --json -m gpt-6-sol "*" 01a0ce2a-1d08-76c0-a6ef-8340b581212d -" ]]
+    [ "$(cat "$STATE/thread")" = "01a0ce2a-1d08-76c0-a6ef-8340b581212d" ]
+}
+
+@test "codex clears the previous round's files before it starts" {
     start_run
     mkdir -p "$STATE"
-    echo 'round 1 summary' > "$STATE/last-message.md"
-    echo 'round 1 noise' > "$STATE/stderr.txt"
-    mkdir -p "${BATS_TEST_TMPDIR}/bin"
-    printf '#!/bin/sh\necho $$ > "%s/seen-pid"\nexit 2\n' "$BATS_TEST_TMPDIR" > "${BATS_TEST_TMPDIR}/bin/codex"
-    chmod +x "${BATS_TEST_TMPDIR}/bin/codex"
-    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol <<< "task"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"exit=2"* ]]
-    [ ! -e "$STATE/last-message.md" ]
+    for f in last-message.md stderr.txt exit thread; do echo 'round 1' > "$STATE/$f"; done
+    fake_codex "while [ ! -f '${BATS_TEST_TMPDIR}/go' ]; do sleep 0.1; done"
+    launch
+    for f in last-message.md exit thread; do [ ! -e "$STATE/$f" ] || return 1; done
     [ ! -s "$STATE/stderr.txt" ]
-    [ "$(cat "$STATE/pid")" = "$(cat "${BATS_TEST_TMPDIR}/seen-pid")" ]
+    touch "${BATS_TEST_TMPDIR}/go"
+    wait_round
 }
 
 @test "codex receives the prompt on stdin" {
     start_run
-    mkdir -p "${BATS_TEST_TMPDIR}/bin"
-    printf '#!/bin/sh\ncat > "%s/seen-prompt"\n' "$BATS_TEST_TMPDIR" > "${BATS_TEST_TMPDIR}/bin/codex"
-    chmod +x "${BATS_TEST_TMPDIR}/bin/codex"
+    fake_codex "cat > '${BATS_TEST_TMPDIR}/seen-prompt'"
     printf 'line one\nline two' | PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol >/dev/null
+    wait_round
     [ "$(cat "${BATS_TEST_TMPDIR}/seen-prompt")" = "$(printf 'line one\nline two')" ]
 }
