@@ -92,7 +92,9 @@ cmd_codex() {
     else
         (cd "$worktree" && codex exec "${flags[@]}" -) > "${state}/events.jsonl" 2> "${state}/stderr.txt" || code=$?
     fi
-    found="$(sed -n 's/.*"type":"thread.started","thread_id":"\([^"]*\)".*/\1/p' "${state}/events.jsonl" | head -1)"
+    # Only a UUID is kept: the id goes back to codex as an argument, where a
+    # value starting with a dash would read as a flag.
+    found="$(sed -n 's/.*"type":"thread.started","thread_id":"\([0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}\)".*/\1/p' "${state}/events.jsonl" | head -1)"
     printf 'thread=%s\nexit=%s\n' "${found:-$thread}" "$code"
 }
 

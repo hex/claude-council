@@ -168,3 +168,15 @@ export function settledRuns(runs: Record<string, RunRecord>, liveId: string | un
     Object.entries(runs).map(([id, r]) => [id, r.state === 'running' && r.id !== liveId ? { ...r, state: 'idle' as const } : r]),
   )
 }
+
+const THREAD_STARTED = /"type":"thread\.started","thread_id":"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/
+
+// The Codex session a round opened, from its JSON event stream. A round cut off
+// at the time limit reports nothing, but its first event is already on disk.
+export function threadFrom(events: string): string {
+  for (const line of events.split('\n')) {
+    if (!line.includes('"thread.started"')) continue
+    return THREAD_STARTED.exec(line)?.[1] ?? ''
+  }
+  return ''
+}

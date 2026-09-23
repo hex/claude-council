@@ -8,7 +8,7 @@ import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } fro
 import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, roundResult, runStamp, settledRuns, specialistCall,
-  specialistDescription, specialistPrompt, specialistRoster, specialistSchema, startQuestion,
+  specialistDescription, specialistPrompt, specialistRoster, specialistSchema, startQuestion, threadFrom,
   type Roles, type RunRecord, type Specialist,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -378,6 +378,9 @@ export const register: Register = (on, options) => {
         state.specialist = undefined
         $.ui.invalidate('ui.render')
       }
+      // A round cut off at the limit printed no thread id; its events file has it,
+      // and a follow-up must resume that session, not open a new one.
+      if (!found) found = threadFrom(await readText(files($), `${stateDir}/events.jsonl`))
       const done: RunRecord = { ...record, thread: found, state: 'idle' }
       const commit = exitCode === 0 ? await sh(['commit', record.worktree, commitMessage]) : undefined
       const committed = commit !== undefined && kv(commit.stdout).committed === 'yes'

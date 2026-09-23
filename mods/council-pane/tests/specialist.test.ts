@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, settledRuns,
+  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, settledRuns, threadFrom,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -170,4 +170,12 @@ test('a round whose commit was refused is an error that names the refusal, not "
       `The round's commit failed; the changes are uncommitted in the worktree:\n M src/login.ts\n\ngit said:\npre-commit: lint failed\n\n` +
       "Specialist's summary:\nAdded a rate limit.",
   })
+})
+
+test('the thread id is read from the first thread.started event, and only a UUID counts', () => {
+  const events = '{"type":"thread.started","thread_id":"01a0ce2a-1d08-76c0-a6ef-8340b581212d"}\n{"type":"turn.started"}\n{"type":"thread.started","thread_id":"99999999-0000-0000-0000-000000000000"}\n'
+  expect(threadFrom(events)).toBe('01a0ce2a-1d08-76c0-a6ef-8340b581212d')
+  expect(threadFrom('{"type":"turn.started"}\n')).toBe('')
+  expect(threadFrom('')).toBe('')
+  expect(threadFrom('{"type":"thread.started","thread_id":"--last"}\n')).toBe('')
 })

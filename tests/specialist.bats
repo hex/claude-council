@@ -192,3 +192,13 @@ start_run() {
     [[ "$output" == *"lint failed"* ]]
     [[ "$output" != *"committed="* ]]
 }
+
+@test "codex never passes a thread id that is not a UUID on to resume" {
+    start_run
+    mkdir -p "${BATS_TEST_TMPDIR}/bin"
+    printf '#!/bin/sh\necho %s\n' "'{\"type\":\"thread.started\",\"thread_id\":\"--dangerously-bypass-approvals-and-sandbox\"}'" > "${BATS_TEST_TMPDIR}/bin/codex"
+    chmod +x "${BATS_TEST_TMPDIR}/bin/codex"
+    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol <<< "task"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$(printf 'thread=\nexit=0')" ]
+}
