@@ -66,19 +66,7 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     [ "$status" -eq 1 ]
     [[ "$output" == *"already exists"* ]]
     [ ! -d "${ROOT}/app.specialists/sec-20260923-151204" ]
-}
-
-@test "a failed worktree add leaves no run directories" {
-    git -C "$REPO" branch specialist/sec/20260923-151204
-    run "$SPECIALIST" start "$REPO" sec 20260923-151204
-    [ "$status" -eq 1 ]
-    [ "$output" = "fatal: a branch named 'specialist/sec/20260923-151204' already exists" ]
-    run ! test -e "${ROOT}/app.specialists"
-    [ "$status" -eq 1 ]
-    run ! test -e "${ROOT}/app.specialists/sec-20260923-151204"
-    [ "$status" -eq 1 ]
-    run ! test -e "${ROOT}/app.specialists/.state/sec-20260923-151204"
-    [ "$status" -eq 1 ]
+    [ ! -e "${ROOT}/app.specialists" ]
 }
 
 @test "start outside a git repository is refused" {
