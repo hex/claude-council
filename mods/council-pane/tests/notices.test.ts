@@ -61,28 +61,24 @@ test('runPid accepts a process id and nothing else', () => {
   expect(runPid('42; rm -rf /')).toBeUndefined()
 })
 
-test('progressBand fills by finished providers and names who is still out', () => {
-  // gemini + codex answered, grok errored, kimi querying: 3 of 4 finished = 6 of 8 cells.
+test('progressBand draws a thin line and the percent of providers finished, an error included', () => {
+  // gemini + codex answered, grok errored, kimi querying: 3 of 4 finished = 75%, 6 of 8 cells.
   expect(progressBand({ providers, isDone: false }, 10_000, 34_900)).toEqual({
-    bar: '\u2588\u2588\u2588\u2588\u2588\u2588\u2591\u2591',
-    text: '2 of 4 answered \u00b7 waiting on kimi \u00b7 24s',
+    bar: '\u2501\u2501\u2501\u2501\u2501\u2501\u2500\u2500',
+    text: '75% \u00b7 24s',
   })
 })
 
-test('progressBand names two providers still out, then a count', () => {
-  const out = ['a', 'b', 'c', 'd', 'e'].map(name => ({ name, state: 'querying' }))
-  expect(progressBand({ providers: [{ name: 'gemini', state: 'complete' }, ...out], isDone: false }, 0, 0)).toEqual({
-    bar: '\u2588\u2591\u2591\u2591\u2591\u2591\u2591\u2591',
-    text: '1 of 6 answered \u00b7 waiting on a, b +3 \u00b7 0s',
-  })
+test('progressBand rounds down, so the line is never full while a provider is out', () => {
+  const nine = Array.from({ length: 9 }, (_, i) => ({ name: `p${i}`, state: i < 3 ? 'complete' : 'querying' }))
+  expect(progressBand({ providers: nine, isDone: false }, 0, 19_000)).toEqual({ bar: '\u2501\u2501\u2500\u2500\u2500\u2500\u2500\u2500', text: '33% \u00b7 19s' })
+  const oneOut = nine.map((p, i) => ({ ...p, state: i < 8 ? 'complete' : 'querying' }))
+  expect(progressBand({ providers: oneOut, isDone: false }, 0, 0)).toEqual({ bar: '\u2501'.repeat(7) + '\u2500', text: '88% \u00b7 0s' })
 })
 
 test('progressBand starts empty and leaves the elapsed time out until a run is picked up', () => {
   const waiting = [{ name: 'gemini', state: 'pending' }, { name: 'openai', state: 'querying' }]
-  expect(progressBand({ providers: waiting, isDone: false }, undefined, 5_000)).toEqual({
-    bar: '\u2591'.repeat(8),
-    text: '0 of 2 answered \u00b7 waiting on gemini, openai',
-  })
+  expect(progressBand({ providers: waiting, isDone: false }, undefined, 5_000)).toEqual({ bar: '\u2500'.repeat(8), text: '0%' })
 })
 
 test('progressBand shows nothing once the run is done or before any provider is listed', () => {
@@ -91,5 +87,5 @@ test('progressBand shows nothing once the run is done or before any provider is 
 })
 
 test('progressBand never shows a negative time when the clock it is given lags the pickup', () => {
-  expect(progressBand({ providers, isDone: false }, 10_000, 9_000)?.text).toBe('2 of 4 answered · waiting on kimi · 0s')
+  expect(progressBand({ providers, isDone: false }, 10_000, 9_000)?.text).toBe('75% \u00b7 0s')
 })

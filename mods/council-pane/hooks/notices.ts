@@ -17,11 +17,10 @@ export function finishNotice({ providers }: RunProgress, jobId = ''): string {
 }
 
 const PROGRESS_CELLS = 8
-const NAMED_WAITING = 2
 
-// The band above the prompt while a run is live. The bar fills by providers
-// that are finished, an error included; the text counts answers and names who
-// is still out, since that is what a wait is spent wondering. `startedAtMs` is
+// The band above the prompt while a run is live: a thin line and a percent,
+// both counting providers that are finished, an error included. Both round
+// down, so neither reads full while a provider is still out. `startedAtMs` is
 // when the pane picked the run up; before that there is no elapsed time.
 export function progressBand(
   { providers, isDone }: RunProgress,
@@ -29,13 +28,10 @@ export function progressBand(
   nowMs: number,
 ): { bar: string; text: string } | undefined {
   if (isDone || providers.length === 0) return undefined
-  const finished = count(providers, 'complete', 'cached', 'error')
-  const filled = Math.floor((finished / providers.length) * PROGRESS_CELLS)
-  const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(PROGRESS_CELLS - filled)
-  const waiting = providers.filter(provider => !['complete', 'cached', 'error'].includes(provider.state)).map(provider => provider.name)
-  const named = waiting.slice(0, NAMED_WAITING).join(', ') + (waiting.length > NAMED_WAITING ? ` +${waiting.length - NAMED_WAITING}` : '')
-  const parts = [`${count(providers, 'complete', 'cached')} of ${providers.length} answered`]
-  if (waiting.length > 0) parts.push(`waiting on ${named}`)
+  const share = count(providers, 'complete', 'cached', 'error') / providers.length
+  const filled = Math.floor(share * PROGRESS_CELLS)
+  const bar = '\u2501'.repeat(filled) + '\u2500'.repeat(PROGRESS_CELLS - filled)
+  const parts = [`${Math.floor(share * 100)}%`]
   if (startedAtMs !== undefined) parts.push(`${Math.max(0, Math.floor((nowMs - startedAtMs) / 1000))}s`)
   return { bar, text: parts.join(' \u00b7 ') }
 }
