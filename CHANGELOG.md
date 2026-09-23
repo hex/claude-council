@@ -7,6 +7,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Features
+- While a council run is live, the band above the prompt shows its progress: a bar that fills as providers finish, how many have answered, who is still out and the seconds so far. It gives way to the retry offer and the finish notice.
 - The council tool (`council_tool` in `/config`) is on by default. Every call now opens a dialog that quotes the question and names the providers, and nothing leaves the machine until you choose `Send to the council`. Dismissing it, or a run with no one to ask, refuses the call. Needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`.
 
 ## 2026.9.14

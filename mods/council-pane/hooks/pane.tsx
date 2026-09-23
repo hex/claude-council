@@ -2,7 +2,7 @@
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import type { Elements, EngineInterface, Register } from 'claude-code'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
-import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice } from './notices'
+import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice, progressBand } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
@@ -43,6 +43,8 @@ type PaneState = {
   frame: number
   nowMs: number
   queryingSinceMs: Record<string, number>
+  // When the pane picked the live run up; the progress band's clock.
+  runStartedMs?: number
   // Each section's fitted body, for the width and text it was fitted to: a
   // frame redraws the tree, not the markdown, and a resize replaces the entry.
   fitted: Map<string, { columns: number; text: string; blocks: string[] }>
@@ -95,6 +97,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     return
   }
   const now = await $.clock.now()
+  state.nowMs = now
   if (state.finished && !noticeIsLive(state.finished, now)) {
     state.finished = undefined
     $.ui.invalidate('ui.render')
@@ -108,6 +111,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.synthesis = undefined
     state.finished = undefined
     state.queryingSinceMs = {}
+    state.runStartedMs = now
     state.fitted.clear()
     await $.ui.open({ id: PANE_ID, title: 'Council' })
   }
@@ -350,8 +354,20 @@ export const register: Register = (on, options) => {
         </ui.Box>
       )
     }
-    if (!retry || !runDir) return next(e)
-    return retryRow($.ui.resolve(e), retry, retryPresses($, runDir))
+    if (retry && runDir) return retryRow($.ui.resolve(e), retry, retryPresses($, runDir))
+    const progress = state.view ? progressBand(state.view, state.runStartedMs, state.nowMs) : undefined
+    if (!progress) return next(e)
+    const ui = $.ui.resolve(e)
+    return (
+      <ui.Box key="progress" flexDirection="row">
+        <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
+          <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>COUNCIL</ui.Text>
+        </ui.Box>
+        <ui.Text color={COUNCIL_RGB}>{`  ${progress.bar}`}</ui.Text>
+        <ui.Text>{`  ${progress.text}  `}</ui.Text>
+        <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
+      </ui.Box>
+    )
   })
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
