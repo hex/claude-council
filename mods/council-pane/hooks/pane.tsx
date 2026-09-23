@@ -536,12 +536,19 @@ export const register: Register = (on, options) => {
       const clock = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`
       return (
         <ui.Box key="specialist" flexDirection="row" marginTop={1}>
-          <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
+          {/* Only the step gives way when the band is narrow, as beside an open pane. */}
+          <ui.Box flexDirection="row" flexShrink={0} paddingX={1} backgroundColor={COUNCIL_RGB}>
             <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>SPECIALIST</ui.Text>
           </ui.Box>
-          <ui.Text>{`  ${working.record.specialist} \u00b7 ${working.record.perspective} \u00b7 ${clock}`}</ui.Text>
-          <ui.Text dimColor>{`  ${latestStep(state.specialistLog?.steps ?? [])}  `}</ui.Text>
-          <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }) }} />
+          <ui.Box flexShrink={0}>
+            <ui.Text>{`  ${working.record.specialist} \u00b7 ${working.record.perspective} \u00b7 ${clock}`}</ui.Text>
+          </ui.Box>
+          <ui.Box flexGrow={1} flexShrink={1}>
+            <ui.Text dimColor wrap="truncate-end">{`  ${latestStep(state.specialistLog?.steps ?? [])}  `}</ui.Text>
+          </ui.Box>
+          <ui.Box flexShrink={0}>
+            <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }) }} />
+          </ui.Box>
         </ui.Box>
       )
     }
