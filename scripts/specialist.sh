@@ -61,6 +61,7 @@ remove_run() {
     if git -C "$root" show-ref --verify --quiet "refs/heads/${branch}"; then
         git -C "$root" branch -D "$branch" >/dev/null
     fi
+    rm -rf "$(dirname "$worktree")/.state/$(basename "$worktree")"
 }
 
 cmd_finish() {

@@ -126,6 +126,7 @@ start_run() {
     [ -f "$REPO/src/b.txt" ]
     [ "$(git -C "$REPO" rev-list --parents -1 HEAD | wc -w | tr -d ' ')" = "3" ]
     [ ! -d "$WT" ]
+    [ ! -e "$STATE" ]
     run git -C "$REPO" rev-parse --verify -q "$BR"
     [ "$status" -ne 0 ]
 }
@@ -172,6 +173,7 @@ start_run() {
     run "$SPECIALIST" finish "$REPO" "$WT" "$BR" discard
     [ "$status" -eq 0 ]
     [ ! -d "$WT" ]
+    [ ! -e "$STATE" ]
     run git -C "$REPO" rev-parse --verify -q "$BR"
     [ "$status" -ne 0 ]
 }
