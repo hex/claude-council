@@ -522,7 +522,7 @@ export const register: Register = (on, options) => {
       const roundBase = (await sh(['head', record.worktree])).stdout.trim()
       const running: RunRecord = { ...record, rounds: record.rounds + 1, state: 'running', startedMs: await $.clock.now(), roundBase, subject }
       const stateDir = stateDirOf(running)
-      const launched = await sh(['codex', record.worktree, stateDir, record.model, ...(thread ? [thread] : [])], { stdin: prompt })
+      const launched = await sh(['codex', record.worktree, stateDir, record.model, record.effort ?? '', ...(thread ? [thread] : [])], { stdin: prompt })
       if (launched.exitCode !== 0) {
         await saveRun($, record)
         return { result: `Run ${record.id}: the round did not start: ${launched.stderr.trim()}`, isError: true as const }
@@ -553,7 +553,7 @@ export const register: Register = (on, options) => {
       const at = kv(started.stdout)
       const perspectivePrompt = state.roles[s.perspective]?.prompt ?? ''
       const record: RunRecord = {
-        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, perspective: s.perspective, prompt: perspectivePrompt,
+        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), perspective: s.perspective, prompt: perspectivePrompt,
         repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 0, state: 'idle', startedMs: 0, roundBase: '', subject: '',
       }
       return await round(record, specialistPrompt(perspectivePrompt, call.task), '', commitSubject(s.name, call.task))
