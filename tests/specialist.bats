@@ -314,12 +314,17 @@ launch() {
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" != *model_reasoning_effort* ]]
     # Short reasoning summaries give the pane something to show between commands.
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *' -c model_reasoning_summary="concise" '* ]]
+    # The last message is the report in the shape the pane parses. Codex runs in
+    # the worktree, so the schema path must be absolute.
+    schema="$(cd "$SCRIPTS_DIR" && pwd)/specialist-report.schema.json"
+    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *" --output-schema ${schema} "* ]]
     [ "$(cat "$STATE/thread")" = "01a0ce2a-1d08-76c0-a6ef-8340b581212d" ]
     # A row's effort reaches Codex as its reasoning effort.
     rm -f "$STATE/exit"
     EFFORT=high launch
     wait_round
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == "exec --json -m gpt-6-sol "*" -c model_reasoning_effort=\"high\" "*"-" ]]
+    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *" --output-schema ${schema} "* ]]
 }
 
 @test "codex clears the previous round's files before it starts" {

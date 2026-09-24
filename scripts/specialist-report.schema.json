@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "tests", "open_questions"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "What you did this round and why, in a few sentences."
+    },
+    "tests": {
+      "type": "array",
+      "description": "Each test command you ran this round, or meant to run and could not.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "result", "detail"],
+        "properties": {
+          "command": { "type": "string", "description": "The command, as you ran it." },
+          "result": {
+            "type": "string",
+            "enum": ["pass", "fail", "not_run"],
+            "description": "not_run: you meant to run it and could not."
+          },
+          "detail": {
+            "type": "string",
+            "description": "Counts, the first failure, or why it did not run."
+          }
+        }
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "description": "Decisions you need from the reviewer before the next round. Empty when there are none.",
+      "items": { "type": "string" }
+    }
+  }
+}
