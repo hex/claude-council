@@ -63,25 +63,25 @@
     "specialist_1": {
       "type": "string",
       "title": "Specialist 1",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. A Codex specialist that writes code in its own worktree: name = model as perspective, when: use-when, with an optional effort: minimal|low|medium|high|xhigh before when:. Example: sec = gpt-6-sol as security, effort: high, when: auth, crypto, untrusted input. Empty = unused.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this row holds what it saves. Empty = unused.",
       "default": ""
     },
     "specialist_2": {
       "type": "string",
       "title": "Specialist 2",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. A Codex specialist that writes code in its own worktree: name = model as perspective, when: use-when, with an optional effort: minimal|low|medium|high|xhigh before when:. Example: sec = gpt-6-sol as security, effort: high, when: auth, crypto, untrusted input. Empty = unused.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this row holds what it saves. Empty = unused.",
       "default": ""
     },
     "specialist_3": {
       "type": "string",
       "title": "Specialist 3",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. A Codex specialist that writes code in its own worktree: name = model as perspective, when: use-when, with an optional effort: minimal|low|medium|high|xhigh before when:. Example: sec = gpt-6-sol as security, effort: high, when: auth, crypto, untrusted input. Empty = unused.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this row holds what it saves. Empty = unused.",
       "default": ""
     },
     "specialist_4": {
       "type": "string",
       "title": "Specialist 4",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. A Codex specialist that writes code in its own worktree: name = model as perspective, when: use-when, with an optional effort: minimal|low|medium|high|xhigh before when:. Example: sec = gpt-6-sol as security, effort: high, when: auth, crypto, untrusted input. Empty = unused.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this row holds what it saves. Empty = unused.",
       "default": ""
     }
   }
