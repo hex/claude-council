@@ -7,7 +7,7 @@ export type Roles = Record<string, { name: string; prompt: string }>
 export type Specialist = { name: string; model: string; perspective: string; effort?: string; when: string }
 
 const ROW = /^\s*([^=\s]+)\s*=\s*(\S+)\s+as\s+([^,\s]+)\s*,(?:\s*effort:\s*([^,\s]*)\s*,)?\s*when:\s*(.+?)\s*$/
-export const EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh']
+const EFFORT = /^[a-z]+$/
 const NAME = /^[a-z][a-z0-9-]{0,23}$/
 const WHEN_MAX = 200
 const SHAPE = 'expected: name = model as perspective, when: use-when'
@@ -21,7 +21,7 @@ export function parseSpecialist(row: unknown, roles: Roles): Specialist | { erro
   const [, name = '', model = '', perspective = '', effort, when = ''] = match
   if (!NAME.test(name)) return { error: `name '${name}' must be lowercase letters, digits and dashes, starting with a letter` }
   if (!Object.hasOwn(roles, perspective)) return { error: `unknown perspective '${perspective}'` }
-  if (effort !== undefined && !EFFORTS.includes(effort)) return { error: `effort '${effort}' must be one of ${EFFORTS.join(', ')}` }
+  if (effort !== undefined && !EFFORT.test(effort)) return { error: `effort '${effort}' must be lowercase letters` }
   if (when.length > WHEN_MAX) return { error: `use-when is longer than ${WHEN_MAX} characters` }
   return effort === undefined ? { name, model, perspective, when } : { name, model, perspective, effort, when }
 }

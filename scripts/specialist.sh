@@ -146,8 +146,9 @@ cmd_finish() {
 
 cmd_codex() {
     local worktree="$1" state="$2" model="$3" effort="$4" thread="${5:-}"
-    # The effort goes into a -c value, so only Codex's own words get through.
-    [[ -z "$effort" || "$effort" =~ ^(minimal|low|medium|high|xhigh)$ ]] || die "invalid effort '${effort}': must be one of minimal, low, medium, high, xhigh"
+    # The effort goes into a -c value, so only a bare lowercase word gets through;
+    # which efforts a model offers is checked when the row is saved.
+    [[ -z "$effort" || "$effort" =~ ^[a-z]+$ ]] || die "invalid effort '${effort}': must be lowercase letters"
     [[ -d "$worktree" ]] || die "no worktree at ${worktree}"
     mkdir -p "$state"
     # Each round's files describe that round only.

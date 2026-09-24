@@ -30,6 +30,12 @@ test('a row may set the reasoning effort', () => {
   })
 })
 
+test('any lowercase effort parses; which ones a model offers is checked at Save', () => {
+  expect(parseSpecialist('sec = gpt-6-sol as security, effort: ultra, when: auth', roles)).toEqual({
+    name: 'sec', model: 'gpt-6-sol', perspective: 'security', effort: 'ultra', when: 'auth',
+  })
+})
+
 test('an empty or absent row is unused, not a problem', () => {
   expect(parseSpecialist('', roles)).toBeUndefined()
   expect(parseSpecialist('   ', roles)).toBeUndefined()
@@ -43,7 +49,7 @@ test('a bad row names what is wrong', () => {
   expect(parseSpecialist('sec = gpt-6-sol as security', roles)).toEqual({ error: 'expected: name = model as perspective, when: use-when' })
   expect(parseSpecialist(`sec = gpt-6-sol as security, when: ${'x'.repeat(201)}`, roles)).toEqual({ error: 'use-when is longer than 200 characters' })
   expect(parseSpecialist(42, roles)).toEqual({ error: 'expected: name = model as perspective, when: use-when' })
-  expect(parseSpecialist('sec = gpt-6-sol as security, effort: max, when: auth', roles)).toEqual({ error: "effort 'max' must be one of minimal, low, medium, high, xhigh" })
+  expect(parseSpecialist('sec = gpt-6-sol as security, effort: High, when: auth', roles)).toEqual({ error: "effort 'High' must be lowercase letters" })
 })
 
 test('the roster keeps valid rows in slot order and reports the rest', () => {
