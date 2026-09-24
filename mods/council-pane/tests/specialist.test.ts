@@ -2,7 +2,7 @@
 // ABOUTME: Expected values are literals; bad rows must produce a named problem, never vanish
 import { test, expect } from 'bun:test'
 import {
-  parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
+  parseSpecialist, specialistRoster, specialistRows, specialistDescription, specialistSchema,
   specialistCall, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
@@ -62,23 +62,35 @@ test('a bad row names what is wrong', () => {
   expect(parseSpecialist('sec = gpt-6-sol as security, effort: High, when: auth', roles)).toEqual({ error: "effort 'High' must be lowercase letters" })
 })
 
-test('the roster keeps valid rows in slot order and reports the rest', () => {
-  expect(specialistRoster({
-    specialist_1: 'sec = gpt-6-sol as security, when: auth',
-    specialist_2: 'sec = gpt-6-astra as performance, when: loops',
-    specialist_3: 'perf = gpt-6-astra as secrity, when: loops',
-    specialist_4: 'perf = gpt-6-astra as performance, when: loops',
-  }, roles)).toEqual({
+test('the roster reads the specialists list, keeps valid rows in order and reports the rest', () => {
+  const specialists = JSON.stringify([
+    'sec = gpt-6-sol as security, when: auth',
+    'sec = gpt-6-astra as performance, when: loops',
+    'perf = gpt-6-astra as secrity, when: loops',
+    'perf = gpt-6-astra as performance, when: loops',
+    'five = gpt-6-sol as security, when: a fifth one',
+  ])
+  expect(specialistRoster({ specialists }, roles)).toEqual({
     specialists: [
       { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth' },
       { name: 'perf', model: 'gpt-6-astra', perspective: 'performance', when: 'loops' },
+      { name: 'five', model: 'gpt-6-sol', perspective: 'security', when: 'a fifth one' },
     ],
     problems: [
-      "specialist_2 ignored: the name 'sec' is already used by specialist_1",
-      "specialist_3 ignored: unknown perspective 'secrity'",
+      "specialist 2 ignored: the name 'sec' is already used by specialist 1",
+      "specialist 3 ignored: unknown perspective 'secrity'",
     ],
   })
   expect(specialistRoster({}, roles)).toEqual({ specialists: [], problems: [] })
+  expect(specialistRoster({ specialists: '' }, roles)).toEqual({ specialists: [], problems: [] })
+})
+
+test('a specialists setting that is not a JSON list of strings is reported, never read as empty silently', () => {
+  expect(specialistRows({ specialists: 'nope' })).toEqual({ rows: [], problem: 'the specialists setting is not JSON: nope' })
+  expect(specialistRows({ specialists: '{"a":1}' })).toEqual({ rows: [], problem: 'the specialists setting must be a JSON list of rows' })
+  expect(specialistRows({ specialists: '["a", 2]' })).toEqual({ rows: [], problem: 'the specialists setting must be a JSON list of rows' })
+  expect(specialistRows({ specialists: '["a = b as c, when: d"]' })).toEqual({ rows: ['a = b as c, when: d'] })
+  expect(specialistRoster({ specialists: 'nope' }, roles)).toEqual({ specialists: [], problems: ['the specialists setting is not JSON: nope'] })
 })
 
 test('the description lists every specialist and what the user confirms', () => {

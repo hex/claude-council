@@ -57,7 +57,7 @@ They show up in `/config`. Changing one reloads the mod.
 | `collapse_when_done` | on | Off keeps the full status list after a run. |
 | `wake_on_async_done` | off | Submits a prompt when a background job's result can be fetched. That starts a model turn and costs tokens. A job that fails wakes nobody. |
 | `council_tool` | on | Registers `mcp__claude-council__ask` so the model can call the council as a tool. Each call asks you first. |
-| `specialist_1` to `specialist_4` | empty | One Codex specialist per row. Set up with `/specialists`. See [Specialists](#specialists). |
+| `specialists` | `[]` | Every Codex specialist, as a JSON list of rows. Hidden from the menu; set up with `/specialists`. See [Specialists](#specialists). |
 
 The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. Every call opens a dialog quoting the question and naming the providers, and nothing leaves the machine unless you choose `Send to the council`. `Don't send` or dismissing the dialog refuses the call. Anything you type under Other goes back to the model as a plain tool result, not a refusal, so it reads as your answer rather than an error. The specialist's finish dialog does the same. A `claude -p` run has no one to ask and gets the same refusal.
 
@@ -71,13 +71,13 @@ Run `/specialists` to set them up. It opens a screen with your specialists in an
 - The perspectives are the keys of `config/roles.json`, plus `custom`. A council perspective's prompt opens every task, and the form shows what it looks for. With `custom` you write your own instructions in a Focus field, and they open every task instead.
 - The efforts are the ones Codex offers for the chosen model, each with Codex's own description, plus `default`, which keeps your own Codex default. If you switch to a model that lacks the chosen effort, the effort goes back to `default` and the screen says so.
 
-Save checks the specialist against Codex's catalog and writes it to its `/config` row: the row you opened, or the first empty one for a new specialist. If a field is wrong, the screen names it and what it accepts, and writes nothing. The form marks unsaved changes. Opening another specialist or adding one over them asks first, and so does Remove, which empties the row. Discard changes drops your edits and keeps the screen open. Esc closes the screen and keeps a changed draft for the next `/specialists`. The screen opens at once and fills in the models when Codex answers; if Codex cannot list them, a Retry button asks again. Each save reloads the mod, so the transcript shows the engine's `options changed — reloaded` line. If `codex` is missing or logged out, the list and Remove still work, and Save shows Codex's error. On a phone, the screen asks you to use the terminal or the desktop app.
+Save checks the specialist against Codex's catalog and writes it into the list: in place of the one you opened, or at the end for a new one. You can keep as many as you like. If a field is wrong, the screen names it and what it accepts, and writes nothing. The form marks unsaved changes. Opening another specialist or adding one over them asks first, and so does Remove, which empties the row. Discard changes drops your edits and keeps the screen open. Esc closes the screen and keeps a changed draft for the next `/specialists`. The screen opens at once and fills in the models when Codex answers; if Codex cannot list them, a Retry button asks again. Each save reloads the mod, so the transcript shows the engine's `options changed — reloaded` line. If `codex` is missing or logged out, the list and Remove still work, and Save shows Codex's error. On a phone, the screen asks you to use the terminal or the desktop app.
 
 You can also describe one to Claude, for example "add a specialist for Postgres migrations on gpt-6-luna, high effort". Claude opens the same screen with the fields filled in, and the screen saves nothing until you press Save. This works with no specialists set up yet.
 
 ### Hand edits
 
-The screen writes each specialist as one `/config` row. You can also type a row yourself:
+The list lives in one settings field, `specialists`, which `/config` does not show. Each entry is one row:
 
 ```
 sec = gpt-6-sol as security, when: auth, crypto, untrusted input
@@ -85,7 +85,7 @@ sec = gpt-6-sol as security, effort: high, when: auth, crypto, untrusted input
 mig = gpt-6-luna as custom, focus: You review Postgres migrations for locks and rollbacks., when: schema changes
 ```
 
-The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. `effort:` is optional and must be one of the levels Codex offers for that model. `focus:` goes with `custom` only, up to 400 characters, and ends at the first `, when:`. Without it, your own Codex default applies. The text after `when:` is what Claude matches tasks against, up to 200 characters. `/config` refuses a row that would fail and shows why at the top of the screen. The check asks Codex for its catalog, so it takes about a second. At session start the mod skips a row that still does not parse, for example one written straight into `settings.json`, and the session log says which row and why. With at least one valid row the mod registers `mcp__claude-council__specialist`.
+The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. `effort:` is optional and must be one of the levels Codex offers for that model; without it, your own Codex default applies. `focus:` goes with `custom` only, up to 400 characters, and ends at the first `, when:`. The text after `when:` is what Claude matches tasks against, up to 200 characters. Setting the whole list by hand, as `/config specialists=[...]` with a JSON list of rows, goes through the same checks as a Save, and a refusal names the entry and the reason. The check asks Codex for its catalog, so it takes about a second. At session start the mod skips an entry that still does not parse, for example one written straight into `settings.json`, and the session log says which one and why. The mod registers `mcp__claude-council__specialist` in every session; with no specialists it only offers to set one up.
 
 The tool takes five calls. Only a finish opens a dialog:
 

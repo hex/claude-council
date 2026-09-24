@@ -60,29 +60,11 @@
       "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Let the model call the council as a tool. Every call first asks you to confirm, because the council sends the question to third-party providers.",
       "default": true
     },
-    "specialist_1": {
+    "specialists": {
       "type": "string",
-      "title": "Specialist 1",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this row holds what it saves. Empty = unused.",
-      "default": ""
-    },
-    "specialist_2": {
-      "type": "string",
-      "title": "Specialist 2",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this row holds what it saves. Empty = unused.",
-      "default": ""
-    },
-    "specialist_3": {
-      "type": "string",
-      "title": "Specialist 3",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this row holds what it saves. Empty = unused.",
-      "default": ""
-    },
-    "specialist_4": {
-      "type": "string",
-      "title": "Specialist 4",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this row holds what it saves. Empty = unused.",
-      "default": ""
+      "title": "Specialists",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this field holds what it saves, as a JSON list of rows, and /config does not show it.",
+      "default": "[]"
     }
   }
 }

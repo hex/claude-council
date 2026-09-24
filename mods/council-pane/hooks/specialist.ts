@@ -16,7 +16,8 @@ const EFFORT = /^[a-z]+$/
 const NAME = /^[a-z][a-z0-9-]{0,23}$/
 export const WHEN_MAX = 200
 const SHAPE = 'expected: name = model as perspective, when: use-when'
-export const SLOTS = ['specialist_1', 'specialist_2', 'specialist_3', 'specialist_4']
+// The one settings field that holds every specialist, as a JSON list of rows.
+export const LIST_FIELD = 'specialists'
 
 // One wording for a bad name, whether it came from a row or the setup screen's field.
 export function nameProblem(name: string): string | undefined {
@@ -41,19 +42,32 @@ export function parseSpecialist(row: unknown, roles: Roles): Specialist | { erro
   return { name, model, perspective, ...(effort === undefined ? {} : { effort }), ...(focus === undefined ? {} : { focus }), when }
 }
 
+// Reads the specialists list from the plugin's options; a value that is not a
+// JSON list of strings is a named problem, never an empty list in disguise.
+export function specialistRows(options: Record<string, unknown>): { rows: string[]; problem?: string } {
+  const value = options[LIST_FIELD]
+  if (value === undefined || (typeof value === 'string' && value.trim() === '')) return { rows: [] }
+  if (typeof value !== 'string') return { rows: [], problem: 'the specialists setting must be a JSON list of rows' }
+  let data: unknown
+  try { data = JSON.parse(value) } catch { return { rows: [], problem: `the specialists setting is not JSON: ${value}` } }
+  if (!Array.isArray(data) || data.some(row => typeof row !== 'string')) return { rows: [], problem: 'the specialists setting must be a JSON list of rows' }
+  return { rows: data as string[] }
+}
+
 export function specialistRoster(options: Record<string, unknown>, roles: Roles): { specialists: Specialist[]; problems: string[] } {
+  const { rows, problem } = specialistRows(options)
   const specialists: Specialist[] = []
-  const problems: string[] = []
-  const usedBy = new Map<string, string>()
-  for (const slot of SLOTS) {
-    const parsed = parseSpecialist(options[slot], roles)
-    if (parsed === undefined) continue
-    if ('error' in parsed) { problems.push(`${slot} ignored: ${parsed.error}`); continue }
+  const problems: string[] = problem ? [problem] : []
+  const usedBy = new Map<string, number>()
+  rows.forEach((row, index) => {
+    const parsed = parseSpecialist(row, roles)
+    if (parsed === undefined) return
+    if ('error' in parsed) { problems.push(`specialist ${index + 1} ignored: ${parsed.error}`); return }
     const earlier = usedBy.get(parsed.name)
-    if (earlier) { problems.push(`${slot} ignored: the name '${parsed.name}' is already used by ${earlier}`); continue }
-    usedBy.set(parsed.name, slot)
+    if (earlier !== undefined) { problems.push(`specialist ${index + 1} ignored: the name '${parsed.name}' is already used by specialist ${earlier + 1}`); return }
+    usedBy.set(parsed.name, index)
     specialists.push(parsed)
-  }
+  })
   return { specialists, problems }
 }
 

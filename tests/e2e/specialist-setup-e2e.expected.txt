@@ -1,5 +1,5 @@
 1. open /specialists
-2. add a draft in specialist_2
+2. add a new specialist
 3. fill the form
 4. save
 5. remove

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: End-to-end run of the /specialists screen in a real interactive Claude Code, driven through tmux
-# ABOUTME: Writes ~/.claude/settings.json and restores it on every exit; quit other Claude sessions first
+# ABOUTME: Writes the specialists field of ~/.claude/settings.json and puts it back on every exit
 
 set -euo pipefail
 
@@ -9,11 +9,25 @@ OUT="$(mktemp -d "${TMPDIR:-/tmp}/specialist-setup-e2e.XXXXXX")"
 SESSION=specialist-setup-e2e
 LOG="$OUT/debug.log"
 SETTINGS="$HOME/.claude/settings.json"
+# The plugin store is shared with every live session of the plugin; a draft
+# there is someone's unsaved work, and this run would type into it.
+for store in "$HOME"/.claude/plugins/store/claude-council_inline-*.json; do
+    [ -f "$store" ] || continue
+    if jq -e 'has("specialist-setup")' "$store" >/dev/null; then
+        echo "FAIL: a /specialists draft is open in $store; save or discard it first" >&2
+        exit 1
+    fi
+done
 cp "$SETTINGS" "$OUT/settings.before"
 
+# Puts back only the specialists field, so a live session's other settings
+# written meanwhile survive.
 restore() {
     tmux kill-session -t "$SESSION" 2>/dev/null || true
-    cp "$OUT/settings.before" "$SETTINGS"
+    local before
+    before="$(jq '.pluginConfigs["claude-council@inline"].options.specialists' "$OUT/settings.before")"
+    jq --argjson v "$before" 'if $v == null then del(.pluginConfigs["claude-council@inline"].options.specialists) else .pluginConfigs["claude-council@inline"].options.specialists = $v end' "$SETTINGS" > "$OUT/settings.restored"
+    cat "$OUT/settings.restored" > "$SETTINGS"
 }
 trap restore EXIT
 
@@ -21,7 +35,8 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # The engine drops keys sent faster than it draws; one second apiece is enough.
 key() { tmux send-keys -t "$SESSION" "$@"; sleep 1; }
 screen() { tmux capture-pane -p -t "$SESSION"; }
-row() { jq -r --arg s "$1" '.pluginConfigs["claude-council@inline"].options[$s] // ""' "$SETTINGS"; }
+# The specialists live in one hidden settings field, a JSON list of rows.
+rows() { jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$SETTINGS"; }
 
 wait_for() {
     local tick=0
@@ -56,10 +71,8 @@ pick() {
     key Enter
 }
 
-SLOT="$(jq -r '(.pluginConfigs["claude-council@inline"].options // {}) as $o
-    | ["specialist_1","specialist_2","specialist_3","specialist_4"]
-    | map(select(($o[.] // "") | test("^\\s*$"))) | first // ""' "$OUT/settings.before")"
-[ -n "$SLOT" ] || fail "all four specialist slots are in use; free one first"
+BEFORE="$(jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$OUT/settings.before")"
+INDEX="$(printf '%s' "$BEFORE" | jq 'length')"
 WANT="e2e = gpt-6-luna as security, effort: max, when: e2e check"
 
 tmux new-session -d -s "$SESSION" -x 160 -y 45 -c "$ROOT" \
@@ -71,7 +84,7 @@ tmux send-keys -t "$SESSION" -l '/specialists'; key Enter
 wait_for '+ Add'
 screen > "$OUT/1-open.txt"
 
-echo "2. add a draft in ${SLOT}"
+echo "2. add a new specialist"
 focus_on add; key Enter
 wait_for "NEW specialist"
 
@@ -86,14 +99,14 @@ echo "4. save"
 focus_on save; key Enter
 wait_for "Saved e2e."
 screen > "$OUT/4-saved.txt"
-[ "$(row "$SLOT")" = "$WANT" ] || fail "${SLOT} is '$(row "$SLOT")', expected '$WANT'"
+[ "$(rows | jq -r --argjson i "$INDEX" '.[$i]')" = "$WANT" ] || fail "specialist $((INDEX + 1)) is '$(rows | jq -r --argjson i "$INDEX" '.[$i]')', expected '$WANT'"
 
 echo "5. remove"
-focus_on "row:${SLOT}"; key Enter
+focus_on "row:${INDEX}"; key Enter
 focus_on remove; key Enter
 wait_for "Remove e2e?"
 focus_on confirm-yes; key Enter
 wait_for "Removed e2e."
-[ "$(row "$SLOT")" = "" ] || fail "${SLOT} is '$(row "$SLOT")' after remove"
+[ "$(rows | jq -c .)" = "$(printf '%s' "$BEFORE" | jq -c .)" ] || fail "the list is $(rows) after remove, expected $BEFORE"
 
 echo "PASS ($OUT)"
