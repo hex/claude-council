@@ -404,11 +404,12 @@ launch() {
         printf '#!/bin/sh\nexit %s\n' "$code" > "${BATS_TEST_TMPDIR}/bin/ps"
         chmod +x "${BATS_TEST_TMPDIR}/bin/ps"
         launch
-        local round_pid
+        local launch_status="$status" launch_output="$output" round_pid
         round_pid="$(cat "$STATE/pid")"
+        [ "$launch_status" -ne 0 ]
+        [ "$launch_output" = "specialist: could not record start time for round pid ${round_pid}" ]
+        run kill -0 "$round_pid"
         [ "$status" -ne 0 ]
-        [ "$output" = "specialist: could not record start time for round pid ${round_pid}" ]
-        ! kill -0 "$round_pid" 2>/dev/null
         [ ! -e "$STATE/codex-pid" ]
         [ ! -e "$STATE/start" ]
     done

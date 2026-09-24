@@ -9,7 +9,7 @@ import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, followUpRefusal, parseSpecialistReport, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
-  commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
+  commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type Roles, type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -302,9 +302,8 @@ async function roundState($: EngineInterface, state: PaneState, record: RunRecor
       const startPath = `${stateDir}/start`
       if (await $.fs.exists(startPath)) recordedIdentity = await $.fs.read(startPath)
       const alive = await $.process.run(['kill', '-0', pid], { env: { LC_ALL: 'C' } })
-      if (alive.exitCode === 0) presence = 'present'
-      else if (/no such process/i.test(alive.stderr)) presence = 'absent'
-      else failure = `kill -0 exited ${alive.exitCode}: ${alive.stderr.trim()}`
+      presence = roundProcessPresence(alive.exitCode, alive.stderr)
+      if (presence === 'unknown') failure = `kill -0 exited ${alive.exitCode}: ${alive.stderr.trim()}`
       if (presence === 'present' && recordedIdentity !== undefined) {
         const observed = await $.process.run(['ps', '-o', 'lstart=', '-p', pid], { env: { LC_ALL: 'C' } })
         if (observed.exitCode === 0) observedIdentity = observed.stdout

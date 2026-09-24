@@ -326,6 +326,13 @@ export function roundLiveness(exitText: string, identity: RoundProcessIdentity):
   return identity === 'gone' ? 'lost' : 'running'
 }
 
+export function roundProcessPresence(exitCode: number, stderr: string): 'present' | 'absent' | 'unknown' {
+  if (exitCode === 0) return 'present'
+  // The round subshell belongs to this user, so EPERM means its pid was reused.
+  if (/no such process|operation not permitted/i.test(stderr)) return 'absent'
+  return 'unknown'
+}
+
 export function roundProcessIdentity(
   recordedIdentity: string | undefined, observedIdentity: string | undefined, presence: 'present' | 'absent' | 'unknown',
 ): RoundProcessIdentity {

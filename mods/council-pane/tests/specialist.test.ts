@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
+  specialistCall, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -322,6 +322,13 @@ test('a round belongs only to the process whose start time was recorded', () => 
   expect(roundProcessIdentity(undefined, undefined, 'present')).toBe('same')
   expect(roundProcessIdentity(undefined, undefined, 'absent')).toBe('gone')
   expect(roundProcessIdentity(undefined, undefined, 'unknown')).toBe('unknown')
+})
+
+test('kill result distinguishes a missing or reused pid from a failed check', () => {
+  expect(roundProcessPresence(0, '')).toBe('present')
+  expect(roundProcessPresence(1, 'kill: 99999: No such process')).toBe('absent')
+  expect(roundProcessPresence(1, 'kill: 1: Operation not permitted')).toBe('absent')
+  expect(roundProcessPresence(1, 'kill: unexpected failure')).toBe('unknown')
 })
 
 test('the wake prompt names the run and how to fetch it, and carries none of the specialist\'s text', () => {
