@@ -194,15 +194,18 @@ test('a round result carries what Claude needs to review', () => {
 test('a schema-shaped report is rendered as summary, tests and open questions', () => {
   const lastMessage = JSON.stringify({
     summary: 'Added a rate limit to login.',
-    tests: [{ command: 'bun test', result: 'pass', detail: '12 pass' }, { command: 'bats tests/login.bats', result: 'not_run', detail: 'bats is not installed' }],
-    open_questions: ['Should the limit be per IP or per account?'],
+    tests: [{ command: 'bun test', result: 'pass', detail: 'line one\n  line two\r\nline three' }, { command: 'bats tests/login.bats', result: 'not_run', detail: 'bats is not installed' }],
+    open_questions: ['first\n\nsecond'],
   })
   const base = { record, lastMessage, roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '', exitCode: 0, commit: '31db1a2' }
-  expect(roundResult(base).result).toEndWith(
+  const result = roundResult(base).result
+  expect(result).toContain('\n- pass: bun test (line one line two line three)\n')
+  expect(result).toContain('\n- first second')
+  expect(result).toEndWith(
     "The specialist's own report (written before the tool committed):\n" +
     'Added a rate limit to login.\n\n' +
-    'Tests:\n- pass: bun test (12 pass)\n- not run: bats tests/login.bats (bats is not installed)\n\n' +
-    'Open questions:\n- Should the limit be per IP or per account?',
+    'Tests:\n- pass: bun test (line one line two line three)\n- not run: bats tests/login.bats (bats is not installed)\n\n' +
+    'Open questions:\n- first second',
   )
   const quiet = JSON.stringify({ summary: 'Renamed a helper.', tests: [{ command: 'bun test', result: 'fail', detail: '' }], open_questions: [] })
   expect(roundResult({ ...base, lastMessage: quiet }).result).toEndWith(

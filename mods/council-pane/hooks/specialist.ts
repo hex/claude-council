@@ -193,6 +193,7 @@ export function parseSpecialistReport(output: string): { round: string; total: s
 }
 
 const TEST_LABEL: Record<TestResult, string> = { pass: 'pass', fail: 'fail', not_run: 'not run' }
+const oneLine = (text: string) => text.replace(/[ \t\r\n]+/g, (space) => space.includes('\n') || space.includes('\r') ? ' ' : space).trim()
 
 // What the specialist said about its round, for Claude to review. A message
 // that is not a schema-shaped report is shown as written, and says so.
@@ -201,10 +202,10 @@ function reportText(lastMessage: string): string {
   const report = parseRoundReport(lastMessage)
   if (!report) return `It did not match the report schema; its last message as written:\n${lastMessage}`
   const tests = report.tests.length
-    ? `Tests:\n${report.tests.map((t) => `- ${TEST_LABEL[t.result]}: ${t.command}${t.detail ? ` (${t.detail})` : ''}`).join('\n')}`
+    ? `Tests:\n${report.tests.map((t) => `- ${TEST_LABEL[t.result]}: ${t.command}${t.detail ? ` (${oneLine(t.detail)})` : ''}`).join('\n')}`
     : 'Tests: none reported.'
   const questions = report.open_questions.length
-    ? `Open questions:\n${report.open_questions.map((q) => `- ${q}`).join('\n')}`
+    ? `Open questions:\n${report.open_questions.map((q) => `- ${oneLine(q)}`).join('\n')}`
     : 'Open questions: none.'
   return [report.summary, tests, questions].join('\n\n')
 }
