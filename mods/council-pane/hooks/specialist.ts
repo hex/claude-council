@@ -162,6 +162,36 @@ export function followUpRefusal(record: RunRecord | undefined, id: string, workt
 
 const OWN_REPORT = "The specialist's own report (written before the tool committed):"
 
+export type TestResult = 'pass' | 'fail' | 'not_run'
+export type RoundReport = { summary: string; tests: { command: string; result: TestResult; detail: string }[]; open_questions: string[] }
+
+const TEST_RESULTS: readonly string[] = ['pass', 'fail', 'not_run']
+const isString = (v: unknown): v is string => typeof v === 'string'
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+const hasKeys = (v: Record<string, unknown>, keys: string[]) => {
+  const own = Object.keys(v)
+  return own.length === keys.length && keys.every((k) => own.includes(k))
+}
+
+// The round's last message, in the shape scripts/specialist-report.schema.json
+// asks Codex for. The two describe one shape: change them together. Anything
+// else, including valid JSON of another shape, is undefined.
+export function parseRoundReport(text: string): RoundReport | undefined {
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  if (!isRecord(value) || !hasKeys(value, ['summary', 'tests', 'open_questions'])) return undefined
+  const { summary, tests, open_questions } = value
+  if (!isString(summary) || !Array.isArray(tests) || !Array.isArray(open_questions) || !open_questions.every(isString)) return undefined
+  const testOk = (t: unknown) => isRecord(t) && hasKeys(t, ['command', 'result', 'detail']) &&
+    isString(t.command) && isString(t.detail) && isString(t.result) && TEST_RESULTS.includes(t.result)
+  if (!tests.every(testOk)) return undefined
+  return value as RoundReport
+}
+
 export function parseSpecialistReport(output: string): { round: string; total: string; status: string } {
   const sections = { round: '', total: '', status: '' }
   const parts = output.split(/^--- (round|total|status)\n/gm)
@@ -169,6 +199,23 @@ export function parseSpecialistReport(output: string): { round: string; total: s
     sections[parts[i] as keyof typeof sections] = parts[i + 1]?.trimEnd() ?? ''
   }
   return sections
+}
+
+const TEST_LABEL: Record<TestResult, string> = { pass: 'pass', fail: 'fail', not_run: 'not run' }
+
+// What the specialist said about its round, for Claude to review. A message
+// that is not a schema-shaped report is shown as written, and says so.
+function reportText(lastMessage: string): string {
+  if (!lastMessage) return 'The specialist wrote no report.'
+  const report = parseRoundReport(lastMessage)
+  if (!report) return `It did not match the report schema; its last message as written:\n${lastMessage}`
+  const tests = report.tests.length
+    ? `Tests:\n${report.tests.map((t) => `- ${TEST_LABEL[t.result]}: ${t.command}${t.detail ? ` (${t.detail})` : ''}`).join('\n')}`
+    : 'Tests: none reported.'
+  const questions = report.open_questions.length
+    ? `Open questions:\n${report.open_questions.map((q) => `- ${q}`).join('\n')}`
+    : 'Open questions: none.'
+  return [report.summary, tests, questions].join('\n\n')
 }
 
 export function roundResult(r: {
@@ -187,14 +234,14 @@ export function roundResult(r: {
   }
   if (r.commitError) {
     const refused = `The round's commit failed; the changes are uncommitted in the worktree:\n${r.status}\n\ngit said:\n${r.commitError}`
-    return { isError: true, result: [head, refused, `${OWN_REPORT}\n${r.lastMessage}`].join('\n\n') }
+    return { isError: true, result: [head, refused, `${OWN_REPORT}\n${reportText(r.lastMessage)}`].join('\n\n') }
   }
-  if (!r.commit && !r.roundStat) return { isError: false, result: [head, 'No changes this round.', `${OWN_REPORT}\n${r.lastMessage}`].join('\n\n') }
+  if (!r.commit && !r.roundStat) return { isError: false, result: [head, 'No changes this round.', `${OWN_REPORT}\n${reportText(r.lastMessage)}`].join('\n\n') }
   // The specialist wrote its report before the tool committed, so it cannot
   // know the commit exists; the tool's own line settles it.
   const who = r.commit ? `The tool committed this round on the branch as ${r.commit}.` : 'The specialist committed this round itself.'
   const changes = `This round:\n${r.roundStat}\nSince ${record.base}:\n${r.totalStat}`
-  return { isError: false, result: [head, who, changes, `${OWN_REPORT}\n${r.lastMessage}`].join('\n\n') }
+  return { isError: false, result: [head, who, changes, `${OWN_REPORT}\n${reportText(r.lastMessage)}`].join('\n\n') }
 }
 
 const THREAD_STARTED = /"type":"thread\.started","thread_id":"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/
@@ -229,6 +276,15 @@ export type Step = { kind: 'think' | 'say' | 'run' | 'edit'; text: string; state
 // Codex wraps each command in the login shell: `/bin/zsh -lc "git status"`.
 const SHELL_WRAP = /^\/bin\/\w+ -lc (["'])([\s\S]*)\1$/
 
+// The round's closing message is the report as JSON; the pane shows what a
+// reader wants from it. The commands already show above it, so tests do not.
+function sayText(text: string): string {
+  const report = parseRoundReport(text)
+  if (!report) return text
+  if (!report.open_questions.length) return report.summary
+  return `${report.summary}\n\nOpen questions:\n${report.open_questions.map((q) => `- ${q}`).join('\n')}`
+}
+
 // One step per Codex item, in first-seen order, each updated as its later
 // events arrive. The file is read while Codex writes it, so a half-written
 // last line is skipped rather than parsed.
@@ -243,7 +299,7 @@ export function specialistSteps(events: string, worktree: string): Step[] {
     const status = item.status === 'failed' ? 'failed' : event.type === 'item.completed' ? 'done' : 'running'
     let step: Step | undefined
     if (item.type === 'reasoning' && typeof item.text === 'string') step = { kind: 'think', text: item.text.replace(/\*\*/g, '').trim(), state: 'done' }
-    if (item.type === 'agent_message' && typeof item.text === 'string') step = { kind: 'say', text: item.text, state: 'done' }
+    if (item.type === 'agent_message' && typeof item.text === 'string') step = { kind: 'say', text: sayText(item.text), state: 'done' }
     if (item.type === 'command_execution' && typeof item.command === 'string') {
       step = { kind: 'run', text: SHELL_WRAP.exec(item.command)?.[2] ?? item.command, state: status }
     }

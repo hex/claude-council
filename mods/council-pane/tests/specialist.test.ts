@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus,
+  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -159,6 +159,26 @@ test('report sections stay separate when a section is empty', () => {
   })
 })
 
+test('a round report is read only when it has exactly the schema\'s shape', () => {
+  const full = {
+    summary: 'Added a rate limit to login.',
+    tests: [{ command: 'bun test', result: 'pass', detail: '12 pass' }, { command: 'bats tests/login.bats', result: 'not_run', detail: 'bats is not installed' }],
+    open_questions: ['Should the limit be per IP or per account?'],
+  }
+  expect(parseRoundReport(JSON.stringify(full))).toEqual(full as never)
+  expect(parseRoundReport('{"summary":"Nothing to do.","tests":[],"open_questions":[]}')).toEqual({ summary: 'Nothing to do.', tests: [], open_questions: [] })
+  expect(parseRoundReport('')).toBeUndefined()
+  expect(parseRoundReport('Added a rate limit.')).toBeUndefined()
+  expect(parseRoundReport('["summary"]')).toBeUndefined()
+  expect(parseRoundReport('null')).toBeUndefined()
+  expect(parseRoundReport('{"summary":"x","tests":[]}')).toBeUndefined()
+  expect(parseRoundReport('{"summary":1,"tests":[],"open_questions":[]}')).toBeUndefined()
+  expect(parseRoundReport('{"summary":"x","tests":[],"open_questions":[3]}')).toBeUndefined()
+  expect(parseRoundReport('{"summary":"x","tests":[{"command":"bun test","result":"skipped","detail":""}],"open_questions":[]}')).toBeUndefined()
+  expect(parseRoundReport('{"summary":"x","tests":[{"command":"bun test","result":"pass"}],"open_questions":[]}')).toBeUndefined()
+  expect(parseRoundReport('{"summary":"x","tests":[],"open_questions":[],"files_changed":[]}')).toBeUndefined()
+})
+
 test('a round result carries what Claude needs to review', () => {
   const base = { record, lastMessage: 'Added a rate limit.', roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '' }
   expect(roundResult({ ...base, exitCode: 0, commit: '31db1a2' })).toEqual({
@@ -166,7 +186,8 @@ test('a round result carries what Claude needs to review', () => {
     result: `Run ${record.id} (sec, round 1) finished.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\n` +
       'The tool committed this round on the branch as 31db1a2.\n\n' +
       `This round:\n src/login.ts | 12 +++\nSince ${record.base}:\n src/login.ts | 12 +++\n\n` +
-      "The specialist's own report (written before the tool committed):\nAdded a rate limit.",
+      "The specialist's own report (written before the tool committed):\n" +
+      "It did not match the report schema; its last message as written:\nAdded a rate limit.",
   })
   expect(roundResult({ ...base, exitCode: 0, commit: '' }).result).toContain('The specialist committed this round itself.')
   expect(roundResult({ ...base, exitCode: 0, commit: '', roundStat: '', totalStat: '' }).result).toContain('No changes this round.')
@@ -175,6 +196,33 @@ test('a round result carries what Claude needs to review', () => {
   expect(failed.result).toContain('Codex exited 1; nothing was committed.')
   expect(failed.result).toContain('Uncommitted in the worktree:\n M src/login.ts')
   expect(failed.result).toContain('Codex stderr (tail):\nboom')
+})
+
+test('a schema-shaped report is rendered as summary, tests and open questions', () => {
+  const lastMessage = JSON.stringify({
+    summary: 'Added a rate limit to login.',
+    tests: [{ command: 'bun test', result: 'pass', detail: '12 pass' }, { command: 'bats tests/login.bats', result: 'not_run', detail: 'bats is not installed' }],
+    open_questions: ['Should the limit be per IP or per account?'],
+  })
+  const base = { record, lastMessage, roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '', exitCode: 0, commit: '31db1a2' }
+  expect(roundResult(base).result).toEndWith(
+    "The specialist's own report (written before the tool committed):\n" +
+    'Added a rate limit to login.\n\n' +
+    'Tests:\n- pass: bun test (12 pass)\n- not run: bats tests/login.bats (bats is not installed)\n\n' +
+    'Open questions:\n- Should the limit be per IP or per account?',
+  )
+  const quiet = JSON.stringify({ summary: 'Renamed a helper.', tests: [{ command: 'bun test', result: 'fail', detail: '' }], open_questions: [] })
+  expect(roundResult({ ...base, lastMessage: quiet }).result).toEndWith(
+    "The specialist's own report (written before the tool committed):\n" +
+    'Renamed a helper.\n\nTests:\n- fail: bun test\n\nOpen questions: none.',
+  )
+  const untested = JSON.stringify({ summary: 'Renamed a helper.', tests: [], open_questions: [] })
+  expect(roundResult({ ...base, lastMessage: untested }).result).toContain('Renamed a helper.\n\nTests: none reported.\n\nOpen questions: none.')
+  expect(roundResult({ ...base, lastMessage: '' }).result).toEndWith(
+    "The specialist's own report (written before the tool committed):\nThe specialist wrote no report.",
+  )
+  // A failed round's message may be cut short, so it stays as written.
+  expect(roundResult({ ...base, exitCode: 1, commit: '' }).result).toContain(`Specialist's last message:\n${lastMessage}`)
 })
 
 test('a round whose commit was refused is an error that names the refusal, not "no changes"', () => {
@@ -186,7 +234,8 @@ test('a round whose commit was refused is an error that names the refusal, not "
     isError: true,
     result: `Run ${record.id} (sec, round 1) finished.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\n` +
       `The round's commit failed; the changes are uncommitted in the worktree:\n M src/login.ts\n\ngit said:\npre-commit: lint failed\n\n` +
-      "The specialist's own report (written before the tool committed):\nAdded a rate limit.",
+      "The specialist's own report (written before the tool committed):\n" +
+      "It did not match the report schema; its last message as written:\nAdded a rate limit.",
   })
 })
 
@@ -232,6 +281,16 @@ test('the event stream becomes one step per item, updated in place, with half-wr
     { kind: 'run', text: 'bats tests/a.bats', state: 'running' },
   ])
   expect(specialistSteps('', WT)).toEqual([])
+})
+
+test('the closing report shows in the steps as its summary and open questions, not as JSON', () => {
+  const said = (report: object) => specialistSteps(JSON.stringify({ type: 'item.completed', item: { id: 'item_9', type: 'agent_message', text: JSON.stringify(report) } }), WT)
+  expect(said({ summary: 'Added a rate limit.', tests: [{ command: 'bun test', result: 'pass', detail: '' }], open_questions: [] })).toEqual([
+    { kind: 'say', text: 'Added a rate limit.', state: 'done' },
+  ])
+  expect(said({ summary: 'Added a rate limit.', tests: [], open_questions: ['Per IP or per account?', 'Which window?'] })).toEqual([
+    { kind: 'say', text: 'Added a rate limit.\n\nOpen questions:\n- Per IP or per account?\n- Which window?', state: 'done' },
+  ])
 })
 
 test('the band shows the latest step in one short line', () => {
