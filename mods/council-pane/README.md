@@ -73,7 +73,7 @@ Run `/specialists` to set them up. It opens a screen with your specialists in an
 
 Save checks the specialist against Codex's catalog and writes it to its `/config` row: the row you opened, or the first empty one for a new specialist. If a field is wrong, the screen names it and what it accepts, and writes nothing. The form marks unsaved changes. Opening another specialist or adding one over them asks first, and so does Remove, which empties the row. Discard changes drops your edits and keeps the screen open. Esc closes the screen and keeps a changed draft for the next `/specialists`. The screen opens at once and fills in the models when Codex answers; if Codex cannot list them, a Retry button asks again. Each save reloads the mod, so the transcript shows the engine's `options changed — reloaded` line. If `codex` is missing or logged out, the list and Remove still work, and Save shows Codex's error. On a phone, the screen asks you to use the terminal or the desktop app.
 
-You can also describe one to Claude, for example "add a specialist for Postgres migrations on gpt-6-luna, high effort". Claude opens the same screen with the fields filled in, and nothing is saved until you press Save. This works with no specialists set up yet.
+You can also describe one to Claude, for example "add a specialist for Postgres migrations on gpt-6-luna, high effort". Claude opens the same screen with the fields filled in, and the screen saves nothing until you press Save. This works with no specialists set up yet.
 
 ### Hand edits
 
