@@ -7,7 +7,7 @@ import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import {
-  dialogOutcome, finishQuestion, followUpRefusal, parseSpecialistReport, roundResult, runStamp, specialistCall,
+  dialogOutcome, finishQuestion, followUpRefusal, parseSpecialist, parseSpecialistReport, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
   commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type Roles, type RunRecord, type Specialist, type Step,
@@ -148,6 +148,18 @@ async function removeSetup($: EngineInterface, state: PaneState): Promise<void> 
   await keepSetup($, state, { catalog: setup.catalog, message: `removed ${slot}` })
   const written = await $.config.set({ key: `claude-council.${slot}`, value: '' })
   if (written.deny) await keepSetup($, state, { ...setup, message: written.deny })
+}
+
+// A row typed into /config by hand gets the same check as a Save; an empty row
+// or one session start would skip anyway is judged by parseSpecialist alone.
+async function handEditDenial($: EngineInterface, state: PaneState, slot: string, value: string, options: Record<string, unknown>): Promise<string | undefined> {
+  const parsed = parseSpecialist(value, state.roles)
+  if (!parsed) return undefined
+  if ('error' in parsed) return parsed.error
+  const catalog = await readCatalog($)
+  if ('error' in catalog) return `cannot check the model: ${catalog.error}`
+  const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '' }, slot, { roles: state.roles, models: catalog.models, options })
+  return 'error' in checked ? checked.error : undefined
 }
 
 async function closeSetup($: EngineInterface, state: PaneState): Promise<void> {
@@ -813,6 +825,15 @@ export const register: Register = (on, options) => {
 
   // Scrolling back down to the last rows follows new steps again; scrolling up
   // stops it, as the engine's own `end` does.
+  // The setup screen's own writes skip this hook (the engine does not run a
+  // plugin's hooks for its own $.config.set); hand edits in /config land here.
+  on('config.set', { key: /^claude-council\.specialist_[1-4]$/ }, async ($, e, next) => {
+    const value = typeof e.value === 'string' ? e.value : ''
+    if (value.trim() === '') return next(e)
+    const denial = await handEditDenial($, state, e.key.slice('claude-council.'.length), value, options)
+    return denial ? { deny: denial } : next(e)
+  })
+
   on('command.run', { command: SETUP_COMMAND }, async ($) => {
     const refused = await openSetup($, state, options)
     return { text: refused ? `The setup screen did not open: ${refused}` : 'Specialists: esc closes the screen.' }
