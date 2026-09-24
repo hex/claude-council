@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
+  specialistCall, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -65,7 +65,7 @@ test('the roster keeps valid rows in slot order and reports the rest', () => {
   expect(specialistRoster({}, roles)).toEqual({ specialists: [], problems: [] })
 })
 
-test('the description lists every specialist and the confirmation rule', () => {
+test('the description lists every specialist and what the user confirms', () => {
   const list = [
     { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth, crypto' },
     { name: 'perf', model: 'gpt-6-astra', perspective: 'performance', when: 'hot loops' },
@@ -77,7 +77,7 @@ test('the description lists every specialist and the confirmation rule', () => {
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
     'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +
-    'The user confirms before anything starts or is sent. A refusal comes back as the result; do not retry unless the reply asks for a change.',
+    'A start or follow-up runs at once; the user confirms every finish. A refusal comes back as the result; do not retry unless the reply asks for a change.',
   )
 })
 
@@ -112,15 +112,7 @@ test('runStamp is local time, zero padded', () => {
   expect(runStamp(new Date(2026, 8, 3, 7, 5, 9))).toBe('20260903-070509')
 })
 
-test('the start question names the specialist, the base and a dirty tree', () => {
-  expect(startQuestion(sec, 'harden login', 'a1b2c3d', false)).toBe('Hand "harden login" to sec (security, gpt-6-sol)? It works in a new worktree from HEAD a1b2c3d.')
-  expect(startQuestion(sec, 'x'.repeat(301), 'a1b2c3d', true)).toBe(
-    `Hand "${'x'.repeat(300)}…" to sec (security, gpt-6-sol)? It works in a new worktree from HEAD a1b2c3d. Your uncommitted changes are not included.`,
-  )
-})
-
-test('follow-up and finish questions', () => {
-  expect(followUpQuestion(record, 'fix x.ts:40')).toBe('Send to sec (run sec-20260923-151204): "fix x.ts:40"?')
+test('finish questions', () => {
   expect(finishQuestion(record, 'merge', 3, 4, 'main')).toBe('Merge specialist/sec/20260923-151204 (3 commits, 4 files) into main?')
   expect(finishQuestion(record, 'discard', 3, 4, 'main')).toBe('Discard run sec-20260923-151204 and delete its branch?')
 })
@@ -323,6 +315,12 @@ test('the wake prompt names the run and how to fetch it, and carries none of the
 test('a start or follow-up returns at once with where to look', () => {
   expect(startedReply(record)).toBe(
     'Run sec-20260923-151204 (sec, round 1) started in the background.\nBranch: specialist/sec/20260923-151204\nWorktree: /r/app.specialists/sec-20260923-151204\n\n' +
+    'A prompt arrives when the round ends; the band above the prompt shows its progress. Do not poll for it.',
+  )
+  // A start from a dirty tree says what the worktree lacks, so Claude can tell the user.
+  expect(startedReply(record, true)).toBe(
+    'Run sec-20260923-151204 (sec, round 1) started in the background.\nBranch: specialist/sec/20260923-151204\nWorktree: /r/app.specialists/sec-20260923-151204\n' +
+    'Your uncommitted changes are not in its worktree.\n\n' +
     'A prompt arrives when the round ends; the band above the prompt shows its progress. Do not poll for it.',
   )
 })

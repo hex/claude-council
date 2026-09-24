@@ -7,8 +7,8 @@ import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import {
-  dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, parseSpecialistReport, roundResult, runStamp, specialistCall,
-  specialistDescription, specialistPrompt, specialistRoster, specialistSchema, startQuestion, threadFrom,
+  dialogOutcome, finishQuestion, followUpRefusal, parseSpecialistReport, roundResult, runStamp, specialistCall,
+  specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
   commitSubject, latestStep, lostResult, roundLiveness, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type Roles, type RunRecord, type Specialist, type Step,
 } from './specialist'
@@ -518,7 +518,7 @@ export const register: Register = (on, options) => {
     // The store says running only once the round's pid is on disk, so no
     // session reads a round that has not launched yet as lost or ended. A
     // round that fails to launch leaves the record as it was.
-    const round = async (record: RunRecord, prompt: string, thread: string, subject: string) => {
+    const round = async (record: RunRecord, prompt: string, thread: string, subject: string, isDirty = false) => {
       const roundBase = (await sh(['head', record.worktree])).stdout.trim()
       const running: RunRecord = { ...record, rounds: record.rounds + 1, state: 'running', startedMs: await $.clock.now(), roundBase, subject }
       const stateDir = stateDirOf(running)
@@ -534,7 +534,7 @@ export const register: Register = (on, options) => {
       // An open pane follows the new round; a closed one refuses, and follows
       // once opened from the band.
       void $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })
-      return { result: startedReply(running) }
+      return { result: startedReply(running, isDirty) }
     }
 
     if (call.kind === 'start') {
@@ -546,10 +546,6 @@ export const register: Register = (on, options) => {
       if (top.exitCode !== 0) return { deny: `${cwd} is not inside a git repository with a commit` }
       const dirty = (await $.process.run(['git', '-C', cwd, 'status', '--porcelain'])).stdout.trim() !== ''
       const s = call.specialist
-      const go = `Start ${s.name}`
-      const outcome = dialogOutcome(await ask(startQuestion(s, call.task, top.stdout.trim(), dirty), go, "Don't start"), go, "Don't start", `did not start ${s.name}`)
-      if ('deny' in outcome) return { deny: outcome.deny }
-      if ('reply' in outcome) return { result: outcome.reply }
       const ts = runStamp(new Date(await $.clock.now()))
       const started = await sh(['start', cwd, s.name, ts])
       if (started.exitCode !== 0) return { result: started.stderr.trim() || 'could not create the worktree', isError: true }
@@ -559,7 +555,7 @@ export const register: Register = (on, options) => {
         id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), perspective: s.perspective, prompt: perspectivePrompt,
         repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 0, state: 'idle', startedMs: 0, roundBase: '', subject: '',
       }
-      return await round(record, specialistPrompt(perspectivePrompt, call.task), '', commitSubject(s.name, call.task))
+      return await round(record, specialistPrompt(perspectivePrompt, call.task), '', commitSubject(s.name, call.task), dirty)
     }
 
     const record = Object.hasOwn(runs, call.run) ? runs[call.run] : undefined
@@ -574,9 +570,6 @@ export const register: Register = (on, options) => {
       const refusal = followUpRefusal(record, call.run, exists)
       if (refusal || !record) return { deny: refusal ?? `no run ${call.run}` }
       if (live) return { deny: `${live.specialist} is still working on run ${live.id}` }
-      const outcome = dialogOutcome(await ask(followUpQuestion(record, call.message), 'Send', "Don't send"), 'Send', "Don't send", `did not send this to ${record.specialist}`)
-      if ('deny' in outcome) return { deny: outcome.deny }
-      if ('reply' in outcome) return { result: outcome.reply }
       return await round(record, call.message, record.thread, `specialist ${record.specialist}: round ${record.rounds + 1}`)
     }
 
