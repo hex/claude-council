@@ -32,6 +32,8 @@ const CHIP_DARK_RGB = 'rgb(191,96,60)'
 const POLL_MS = 500
 // Ten frames a second: the spinner's pace in the tmux pane.
 const FRAME_MS = 100
+// A second of frames for a just-opened pane to become scrollable.
+const PANE_FOLLOW_FRAMES = 10
 // The worker records its result seconds after .done; a worker killed outright
 // leaves its record at running, so the wait for it ends.
 const WAKE_WAIT_MS = 120_000
@@ -74,6 +76,9 @@ type PaneState = {
   finishing: Set<string>
   specialistError: string
   specialistFrame: number
+  // Frames left to retry following a just-opened pane: it becomes scrollable
+  // only once drawn, milliseconds after $.ui.open settles.
+  paneFollowFrames: number
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -356,9 +361,18 @@ async function followSpecialist($: EngineInterface, state: PaneState): Promise<v
 // Scrolls the specialist pane to its end, which the engine keeps up with as
 // steps arrive. A refusal is reported: to the transcript where the pane
 // should have followed, to the debug log where a closed pane is expected.
-async function followPaneEnd($: EngineInterface, when: string, to: 'transcript' | 'debug'): Promise<void> {
+async function followPaneEnd($: EngineInterface, when: string, to: 'transcript' | 'debug'): Promise<boolean> {
   const moved = await $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })
   if (moved.deny) $.ui.log(`specialist pane did not follow (${when}): ${moved.deny}`, { to })
+  return !moved.deny
+}
+
+// One try per frame after the pane opens; the last refusal is the one reported.
+async function followOpenedPane($: EngineInterface, state: PaneState): Promise<void> {
+  state.paneFollowFrames -= 1
+  const isLast = state.paneFollowFrames === 0
+  const moved = await followPaneEnd($, 'pane opened', isLast ? 'transcript' : 'debug')
+  if (moved) state.paneFollowFrames = 0
 }
 
 async function recoverRounds($: EngineInterface, state: PaneState): Promise<void> {
@@ -419,7 +433,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), specialistError: '', specialistFrame: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -440,6 +454,7 @@ export const register: Register = (on, options) => {
       $.clock.every(FRAME_MS, () => {
         if (!state.specialist) return
         state.specialistFrame += 1
+        if (state.paneFollowFrames > 0) void followOpenedPane($, state)
         $.ui.invalidate('ui.render')
       })
       await logFailure($, state, () => recoverRounds($, state))
@@ -667,7 +682,7 @@ export const register: Register = (on, options) => {
             <ui.Text dimColor wrap="truncate-end">{`  ${latestStep(state.specialistLog?.steps ?? [])}  `}</ui.Text>
           </ui.Box>
           <ui.Box flexShrink={0}>
-            <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }).then(() => followPaneEnd($, 'pane opened', 'transcript')) }} />
+            <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }).then(() => { state.paneFollowFrames = PANE_FOLLOW_FRAMES }) }} />
           </ui.Box>
         </ui.Box>
       )
