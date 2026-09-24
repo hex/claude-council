@@ -1,6 +1,6 @@
 // ABOUTME: Pure decisions for the specialist setup screen: Codex's model catalog, one validator, rows and drafts
 // ABOUTME: No engine calls here, so every rule runs under bun test
-import { parseSpecialist, SLOTS, type Roles } from './specialist'
+import { nameProblem, parseSpecialist, SLOTS, type Roles } from './specialist'
 
 export type CatalogModel = { slug: string; listed: boolean; efforts: string[] }
 export type Catalog = { models: CatalogModel[] } | { error: string }
@@ -34,6 +34,8 @@ export function rowText(f: Fields): string {
 // the row then goes through parseSpecialist, the same reader session start uses.
 export function checkSpecialist(f: Fields, slot: string, context: { roles: Roles; models: CatalogModel[]; options: Record<string, unknown> }): { row: string } | { error: string } {
   if (f.name.trim() === '') return { error: 'name is empty' }
+  const badName = nameProblem(f.name)
+  if (badName) return { error: badName }
   if (f.when.trim() === '') return { error: 'use-when is empty' }
   if (/[\r\n]/.test(f.when)) return { error: 'use-when must be one line' }
   const model = context.models.find(m => m.slug === f.model)
@@ -62,10 +64,12 @@ export type ListEntry = { slot: string; label: string; problem?: string }
 
 const rowOf = (options: Record<string, unknown>, slot: string) => (typeof options[slot] === 'string' ? (options[slot] as string) : '')
 
-export function draftFor(slot: string, options: Record<string, unknown>, roles: Roles): Draft {
+// A row that does not parse opens as a blank draft on the first listed model,
+// so the model the screen shows is the one a Save writes.
+export function draftFor(slot: string, options: Record<string, unknown>, roles: Roles, models: CatalogModel[]): Draft {
   const baseline = rowOf(options, slot)
   const parsed = parseSpecialist(baseline, roles)
-  if (!parsed || 'error' in parsed) return { slot, baseline, name: '', model: '', perspective: Object.keys(roles)[0] ?? '', effort: '', when: '' }
+  if (!parsed || 'error' in parsed) return { ...blankDraft(slot, models, roles), baseline }
   return { slot, baseline, name: parsed.name, model: parsed.model, perspective: parsed.perspective, effort: parsed.effort ?? '', when: parsed.when }
 }
 

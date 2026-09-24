@@ -14,13 +14,19 @@ const WHEN_MAX = 200
 const SHAPE = 'expected: name = model as perspective, when: use-when'
 export const SLOTS = ['specialist_1', 'specialist_2', 'specialist_3', 'specialist_4']
 
+// One wording for a bad name, whether it came from a row or the setup screen's field.
+export function nameProblem(name: string): string | undefined {
+  return NAME.test(name) ? undefined : `name '${name}' must be lowercase letters, digits and dashes, starting with a letter`
+}
+
 export function parseSpecialist(row: unknown, roles: Roles): Specialist | { error: string } | undefined {
   if (row === undefined || (typeof row === 'string' && row.trim() === '')) return undefined
   if (typeof row !== 'string') return { error: SHAPE }
   const match = ROW.exec(row)
   if (!match) return { error: SHAPE }
   const [, name = '', model = '', perspective = '', effort, when = ''] = match
-  if (!NAME.test(name)) return { error: `name '${name}' must be lowercase letters, digits and dashes, starting with a letter` }
+  const badName = nameProblem(name)
+  if (badName) return { error: badName }
   if (!Object.hasOwn(roles, perspective)) return { error: `unknown perspective '${perspective}'` }
   if (effort !== undefined && !EFFORT.test(effort)) return { error: `effort '${effort}' must be lowercase letters` }
   if (when.length > WHEN_MAX) return { error: `use-when is longer than ${WHEN_MAX} characters` }

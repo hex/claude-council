@@ -862,7 +862,7 @@ export const register: Register = (on, options) => {
       <Box key="setup" flexDirection="column">
         {listEntries(options, state.roles).map(entry => (
           <Button key={`row:${entry.slot}`} plain label={entry.problem ? `${entry.label}  (${entry.problem})` : entry.label}
-            onPress={() => { void keepSetup($, state, { ...setup, draft: draftFor(entry.slot, options, state.roles), message: '' }) }} />
+            onPress={() => { void keepSetup($, state, { ...setup, draft: draftFor(entry.slot, options, state.roles, models), message: '' }) }} />
         ))}
         <Button key="add" label="+ Add" onPress={() => {
           const slot = freeSlot(options)

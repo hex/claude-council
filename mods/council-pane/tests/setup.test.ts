@@ -2,6 +2,7 @@
 // ABOUTME: The catalog fixture is real `codex debug models` output, trimmed with jq to the fields read
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { parseSpecialist } from '../hooks/specialist'
 import { parseCatalog, rowText, checkSpecialist, freeSlot, draftFor, blankDraft, withModel, staleMessage, listEntries, type Fields } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
@@ -44,14 +45,16 @@ test('the row is written in the one shape parseSpecialist reads', () => {
 
 test('a use-when holding commas, colons or when: itself round-trips', () => {
   const when = 'auth, crypto: tokens, when: parsing untrusted input'
-  expect(checkSpecialist({ ...fields, when }, 'specialist_1', context)).toEqual({ row: `sec = gpt-6-sol as security, effort: high, when: ${when}` })
+  const checked = checkSpecialist({ ...fields, when }, 'specialist_1', context)
+  expect(checked).toEqual({ row: `sec = gpt-6-sol as security, effort: high, when: ${when}` })
+  expect(parseSpecialist('row' in checked ? checked.row : '', roles)).toEqual({ ...fields, when })
 })
 
 test('every field is checked, and the error names the field and what is allowed', () => {
   const check = (f: Partial<Fields>) => checkSpecialist({ ...fields, ...f }, 'specialist_1', context)
   expect(check({ name: '' })).toEqual({ error: 'name is empty' })
   expect(check({ name: 'Sec' })).toEqual({ error: "name 'Sec' must be lowercase letters, digits and dashes, starting with a letter" })
-  expect(check({ name: 'my spec' })).toEqual({ error: 'expected: name = model as perspective, when: use-when' })
+  expect(check({ name: 'my spec' })).toEqual({ error: "name 'my spec' must be lowercase letters, digits and dashes, starting with a letter" })
   expect(check({ model: 'gpt-6-soll' })).toEqual({ error: "model 'gpt-6-soll' is not in Codex's catalog: gpt-6-sol, gpt-6-astra, gpt-6-luna, gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, gpt-5.5" })
   expect(check({ perspective: 'secrity' })).toEqual({ error: "unknown perspective 'secrity'" })
   expect(check({ model: 'gpt-6-luna', effort: 'ultra' })).toEqual({ error: "effort 'ultra' is not offered by gpt-6-luna: low, medium, high, xhigh, max" })
@@ -77,10 +80,10 @@ test('adding takes the lowest empty slot, none when all four are used', () => {
   expect(freeSlot(full)).toBeUndefined()
 })
 
-test('editing a row starts from its fields; a row that does not parse starts blank but keeps its slot', () => {
+test('editing a row starts from its fields; a row that does not parse starts blank on the first listed model but keeps its slot', () => {
   const options = { specialist_1: 'sec = gpt-6-sol as security, effort: high, when: auth', specialist_2: 'broken row' }
-  expect(draftFor('specialist_1', options, roles)).toEqual({ slot: 'specialist_1', baseline: options.specialist_1, name: 'sec', model: 'gpt-6-sol', perspective: 'security', effort: 'high', when: 'auth' })
-  expect(draftFor('specialist_2', options, roles)).toEqual({ slot: 'specialist_2', baseline: 'broken row', name: '', model: '', perspective: 'security', effort: '', when: '' })
+  expect(draftFor('specialist_1', options, roles, models)).toEqual({ slot: 'specialist_1', baseline: options.specialist_1, name: 'sec', model: 'gpt-6-sol', perspective: 'security', effort: 'high', when: 'auth' })
+  expect(draftFor('specialist_2', options, roles, models)).toEqual({ slot: 'specialist_2', baseline: 'broken row', name: '', model: 'gpt-6-sol', perspective: 'security', effort: '', when: '' })
 })
 
 test('a blank draft picks the first listed model and the first perspective, and takes a prefill', () => {
@@ -95,7 +98,7 @@ test('switching to a model that lacks the chosen effort resets it and says so', 
 })
 
 test('a draft whose slot changed meanwhile is flagged', () => {
-  const draft = draftFor('specialist_1', { specialist_1: 'a = gpt-6-sol as security, when: w' }, roles)
+  const draft = draftFor('specialist_1', { specialist_1: 'a = gpt-6-sol as security, when: w' }, roles, models)
   expect(staleMessage(draft, { specialist_1: 'a = gpt-6-sol as security, when: w' })).toBeUndefined()
   expect(staleMessage(draft, { specialist_1: 'b = gpt-6-sol as security, when: w' })).toBe('specialist_1 changed while you edited; reloaded it')
 })
