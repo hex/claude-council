@@ -324,6 +324,12 @@ export function roundLiveness(exitText: string, isProcessAlive: boolean): 'runni
   return isProcessAlive ? 'running' : 'lost'
 }
 
+export function roundProcessAlive(recordedIdentity: string | undefined, observedIdentity: string | undefined): boolean {
+  const recorded = recordedIdentity?.trim()
+  const observed = observedIdentity?.trim()
+  return recorded !== undefined && recorded !== '' && recorded === observed
+}
+
 // A fixed-width m:ss clock, so the line it sits on does not shift each second.
 export function roundClock(startedMs: number, nowMs: number): string {
   const secs = Math.max(0, Math.floor((nowMs - startedMs) / 1000))

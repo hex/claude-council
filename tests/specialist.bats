@@ -378,11 +378,14 @@ launch() {
     start_run
     fake_codex "while [ ! -f '${BATS_TEST_TMPDIR}/go' ]; do sleep 0.1; done"
     launch
-    [ "$status" -eq 0 ]
-    [ "$output" = "pid=$(cat "$STATE/pid")" ]
-    kill -0 "$(cat "$STATE/pid")"
-    [ ! -e "$STATE/exit" ]
+    local round_pid recorded_start observed_start
+    round_pid="$(cat "$STATE/pid")"
+    recorded_start="$(cat "$STATE/start")"
+    observed_start="$(ps -o lstart= -p "$round_pid" 2>/dev/null)" || observed_start=""
     touch "${BATS_TEST_TMPDIR}/go"
+    [ "$status" -eq 0 ]
+    [ "$output" = "pid=$round_pid" ]
+    [ "$recorded_start" = "$observed_start" ]
     wait_round
     [ "$(cat "$STATE/exit")" = "0" ]
 }

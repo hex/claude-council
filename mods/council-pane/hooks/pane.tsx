@@ -9,7 +9,7 @@ import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, followUpRefusal, parseSpecialistReport, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
-  commitSubject, latestStep, lostResult, roundLiveness, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
+  commitSubject, latestStep, lostResult, roundLiveness, roundProcessAlive, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type Roles, type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -288,7 +288,9 @@ async function saveRun($: EngineInterface, record: RunRecord): Promise<void> {
 async function roundState($: EngineInterface, record: RunRecord): Promise<'running' | 'ended' | 'lost'> {
   const stateDir = stateDirOf(record)
   const pid = (await readText(files($), `${stateDir}/pid`)).trim()
-  const isAlive = /^\d+$/.test(pid) && (await $.process.run(['kill', '-0', pid])).exitCode === 0
+  const recordedIdentity = await readText(files($), `${stateDir}/start`)
+  const observed = /^\d+$/.test(pid) ? await $.process.run(['ps', '-o', 'lstart=', '-p', pid]).catch(() => undefined) : undefined
+  const isAlive = roundProcessAlive(recordedIdentity, observed?.exitCode === 0 ? observed.stdout : undefined)
   return roundLiveness(await readText(files($), `${stateDir}/exit`), isAlive)
 }
 

@@ -89,6 +89,8 @@ To carry gitignored local files into a new specialist worktree, list their relat
 
 Network access is on inside the Codex sandbox. The worktree limits where a specialist can write, not what it can send: a specialist can read the worktree and reach the network, so it can send what it reads anywhere. Codex runs with your own `~/.codex/config.toml` and global instructions, so your extra writable roots, MCP servers and house rules apply to specialists too. The mod forwards no API keys; Codex uses its own login.
 
+The mod identifies a running round by the detached round subshell's pid and process start time. If the start time is missing or differs from the live process, it treats a round without an exit file as lost. Codex's pid is kept separately for stopping Codex; its exit does not mean the round subshell has finished writing the result.
+
 ## Limits
 
 - A run that is killed outright writes no `.done`. The mod checks the run's pid every five seconds and, once the process is gone, shows `stopped before it finished` and moves on.
