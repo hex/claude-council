@@ -47,7 +47,8 @@ export function specialistDescription(list: Specialist[]): string {
   return (
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     `Specialists: ${roster}. ` +
-    'Suggest one when a task matches its use-when. Start with {specialist, task}; send review feedback with {run, message}; ' +
+    'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
+    'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
     'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +

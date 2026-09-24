@@ -73,7 +73,8 @@ test('the description lists every specialist and what the user confirms', () => 
   expect(specialistDescription(list)).toBe(
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     'Specialists: sec (security, gpt-6-sol), use when: auth, crypto; perf (performance, gpt-6-astra), use when: hot loops. ' +
-    'Suggest one when a task matches its use-when. Start with {specialist, task}; send review feedback with {run, message}; ' +
+    'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
+    'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
     'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +
