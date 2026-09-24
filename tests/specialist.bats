@@ -123,17 +123,34 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 }
 
 @test "start accepts a name with a hyphen" {
-    run "$SPECIALIST" start "$REPO" sec-2 20260923-151204
+    [ ! -e "$REPO/.worktreeinclude" ]
+    run /bin/bash "$SPECIALIST" start "$REPO" sec-2 20260923-151204
     [ "$status" -eq 0 ]
+    [ "$(field repo)" = "$REPO" ]
+    [ "$(field worktree)" = "${ROOT}/app.specialists/sec-2-20260923-151204" ]
     [ "$(field branch)" = "specialist/sec-2/20260923-151204" ]
+    [ "$(field base)" = "$(git -C "$REPO" rev-parse HEAD)" ]
+    [ "$(field short)" = "$(git -C "$REPO" rev-parse --short=7 HEAD)" ]
+    [ "$(field state)" = "${ROOT}/app.specialists/.state/sec-2-20260923-151204" ]
+    [ "$(field dirty)" = "no" ]
     [ -d "$(field state)" ]
 }
 
 @test "start reports a dirty main tree" {
+    printf '# comment\n\n# another comment\n' > "$REPO/.worktreeinclude"
+    git -C "$REPO" add .worktreeinclude
+    git -C "$REPO" commit -qm includes
     echo 'two' >> "$REPO/src/a.txt"
-    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    run /bin/bash "$SPECIALIST" start "$REPO" sec 20260923-151204
     [ "$status" -eq 0 ]
+    [ "$(field repo)" = "$REPO" ]
+    [ "$(field worktree)" = "${ROOT}/app.specialists/sec-20260923-151204" ]
+    [ "$(field branch)" = "specialist/sec/20260923-151204" ]
+    [ "$(field base)" = "$(git -C "$REPO" rev-parse HEAD)" ]
+    [ "$(field short)" = "$(git -C "$REPO" rev-parse --short=7 HEAD)" ]
+    [ "$(field state)" = "${ROOT}/app.specialists/.state/sec-20260923-151204" ]
     [ "$(field dirty)" = "yes" ]
+    [ -d "$(field state)" ]
 }
 
 @test "start fails with git's message when the branch already exists, and creates nothing" {
