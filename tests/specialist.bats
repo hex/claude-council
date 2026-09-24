@@ -20,6 +20,10 @@ setup() {
     git -C "$REPO" add -A && git -C "$REPO" commit -qm init
 }
 
+teardown() {
+    if [ -d "${BATS_TEST_TMPDIR}/bin" ]; then touch "${BATS_TEST_TMPDIR}/go"; fi
+}
+
 field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 
 @test "start creates the worktree and branch beside the repo, even from a subdirectory and a path with spaces" {
@@ -379,12 +383,36 @@ launch() {
     fake_codex "while [ ! -f '${BATS_TEST_TMPDIR}/go' ]; do sleep 0.1; done"
     launch
     [ "$status" -eq 0 ]
-    [ "$output" = "pid=$(cat "$STATE/pid")" ]
-    kill -0 "$(cat "$STATE/pid")"
+    local round_pid recorded_start observed_start
+    round_pid="$(cat "$STATE/pid")"
+    recorded_start="$(cat "$STATE/start")"
+    observed_start="$(LC_ALL=C ps -o lstart= -p "$round_pid")"
+    [ "$output" = "pid=$round_pid" ]
+    kill -0 "$round_pid"
     [ ! -e "$STATE/exit" ]
+    [ -n "$recorded_start" ]
+    [ "$recorded_start" = "$observed_start" ]
     touch "${BATS_TEST_TMPDIR}/go"
     wait_round
     [ "$(cat "$STATE/exit")" = "0" ]
+}
+
+@test "codex launch stops the round when its start time cannot be recorded" {
+    start_run
+    mkdir -p "${BATS_TEST_TMPDIR}/bin"
+    for code in 42 0; do
+        printf '#!/bin/sh\nexit %s\n' "$code" > "${BATS_TEST_TMPDIR}/bin/ps"
+        chmod +x "${BATS_TEST_TMPDIR}/bin/ps"
+        launch
+        local launch_status="$status" launch_output="$output" round_pid
+        round_pid="$(cat "$STATE/pid")"
+        [ "$launch_status" -ne 0 ]
+        [ "$launch_output" = "specialist: could not record start time for round pid ${round_pid}" ]
+        run kill -0 "$round_pid"
+        [ "$status" -ne 0 ]
+        [ ! -e "$STATE/codex-pid" ]
+        [ ! -e "$STATE/start" ]
+    done
 }
 
 @test "a codex that is not installed ends the round with exit 127" {
