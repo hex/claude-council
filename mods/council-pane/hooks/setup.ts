@@ -54,3 +54,43 @@ export function checkSpecialist(f: Fields, slot: string, context: { roles: Roles
 export function freeSlot(options: Record<string, unknown>): string | undefined {
   return SLOTS.find(slot => typeof options[slot] !== 'string' || (options[slot] as string).trim() === '')
 }
+
+// baseline: the slot's row text when editing started, to spot a change made meanwhile.
+export type Draft = Fields & { slot: string; baseline: string }
+export type SetupState = { draft?: Draft; catalog: Catalog; message: string }
+export type ListEntry = { slot: string; label: string; problem?: string }
+
+const rowOf = (options: Record<string, unknown>, slot: string) => (typeof options[slot] === 'string' ? (options[slot] as string) : '')
+
+export function draftFor(slot: string, options: Record<string, unknown>, roles: Roles): Draft {
+  const baseline = rowOf(options, slot)
+  const parsed = parseSpecialist(baseline, roles)
+  if (!parsed || 'error' in parsed) return { slot, baseline, name: '', model: '', perspective: Object.keys(roles)[0] ?? '', effort: '', when: '' }
+  return { slot, baseline, name: parsed.name, model: parsed.model, perspective: parsed.perspective, effort: parsed.effort ?? '', when: parsed.when }
+}
+
+export function blankDraft(slot: string, models: CatalogModel[], roles: Roles, prefill: Partial<Fields> = {}): Draft {
+  const model = models.find(m => m.listed)?.slug ?? ''
+  return { slot, baseline: '', name: '', model, perspective: Object.keys(roles)[0] ?? '', effort: '', when: '', ...prefill }
+}
+
+export function withModel(draft: Draft, slug: string, models: CatalogModel[]): { draft: Draft; message: string } {
+  const offered = models.find(m => m.slug === slug)?.efforts ?? []
+  if (draft.effort === '' || offered.includes(draft.effort)) return { draft: { ...draft, model: slug }, message: '' }
+  return { draft: { ...draft, model: slug, effort: '' }, message: `${slug} does not offer effort '${draft.effort}'; effort is back to your Codex default` }
+}
+
+export function staleMessage(draft: Draft, options: Record<string, unknown>): string | undefined {
+  return rowOf(options, draft.slot) === draft.baseline ? undefined : `${draft.slot} changed while you edited; reloaded it`
+}
+
+export function listEntries(options: Record<string, unknown>, roles: Roles): ListEntry[] {
+  const entries: ListEntry[] = []
+  for (const slot of SLOTS) {
+    const parsed = parseSpecialist(options[slot], roles)
+    if (parsed === undefined) continue
+    if ('error' in parsed) { entries.push({ slot, label: `${slot}: ${rowOf(options, slot)}`, problem: parsed.error }); continue }
+    entries.push({ slot, label: [parsed.name, parsed.model, parsed.perspective, parsed.effort ?? 'default', parsed.when].join('  ') })
+  }
+  return entries
+}

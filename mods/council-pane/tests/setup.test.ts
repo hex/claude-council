@@ -2,7 +2,7 @@
 // ABOUTME: The catalog fixture is real `codex debug models` output, trimmed with jq to the fields read
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { parseCatalog, rowText, checkSpecialist, freeSlot, type Fields } from '../hooks/setup'
+import { parseCatalog, rowText, checkSpecialist, freeSlot, draftFor, blankDraft, withModel, staleMessage, listEntries, type Fields } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -75,4 +75,34 @@ test('adding takes the lowest empty slot, none when all four are used', () => {
   expect(freeSlot({ specialist_1: 'a = m as security, when: w', specialist_2: '  ' })).toBe('specialist_2')
   const full = { specialist_1: 'x', specialist_2: 'x', specialist_3: 'x', specialist_4: 'x' }
   expect(freeSlot(full)).toBeUndefined()
+})
+
+test('editing a row starts from its fields; a row that does not parse starts blank but keeps its slot', () => {
+  const options = { specialist_1: 'sec = gpt-6-sol as security, effort: high, when: auth', specialist_2: 'broken row' }
+  expect(draftFor('specialist_1', options, roles)).toEqual({ slot: 'specialist_1', baseline: options.specialist_1, name: 'sec', model: 'gpt-6-sol', perspective: 'security', effort: 'high', when: 'auth' })
+  expect(draftFor('specialist_2', options, roles)).toEqual({ slot: 'specialist_2', baseline: 'broken row', name: '', model: '', perspective: 'security', effort: '', when: '' })
+})
+
+test('a blank draft picks the first listed model and the first perspective, and takes a prefill', () => {
+  expect(blankDraft('specialist_3', models, roles)).toEqual({ slot: 'specialist_3', baseline: '', name: '', model: 'gpt-6-sol', perspective: 'security', effort: '', when: '' })
+  expect(blankDraft('specialist_3', models, roles, { name: 'perf', perspective: 'performance', when: 'hot loops' }).name).toBe('perf')
+})
+
+test('switching to a model that lacks the chosen effort resets it and says so', () => {
+  const draft = { ...blankDraft('specialist_1', models, roles), effort: 'ultra' }
+  expect(withModel(draft, 'gpt-6-luna', models)).toEqual({ draft: { ...draft, model: 'gpt-6-luna', effort: '' }, message: "gpt-6-luna does not offer effort 'ultra'; effort is back to your Codex default" })
+  expect(withModel({ ...draft, effort: 'high' }, 'gpt-6-luna', models)).toEqual({ draft: { ...draft, model: 'gpt-6-luna', effort: 'high' }, message: '' })
+})
+
+test('a draft whose slot changed meanwhile is flagged', () => {
+  const draft = draftFor('specialist_1', { specialist_1: 'a = gpt-6-sol as security, when: w' }, roles)
+  expect(staleMessage(draft, { specialist_1: 'a = gpt-6-sol as security, when: w' })).toBeUndefined()
+  expect(staleMessage(draft, { specialist_1: 'b = gpt-6-sol as security, when: w' })).toBe('specialist_1 changed while you edited; reloaded it')
+})
+
+test('the list shows every non-empty row, a broken one with its problem', () => {
+  expect(listEntries({ specialist_1: 'sec = gpt-6-sol as security, effort: high, when: auth', specialist_3: 'broken row' }, roles)).toEqual([
+    { slot: 'specialist_1', label: 'sec  gpt-6-sol  security  high  auth' },
+    { slot: 'specialist_3', label: 'specialist_3: broken row', problem: 'expected: name = model as perspective, when: use-when' },
+  ])
 })
