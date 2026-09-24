@@ -1,6 +1,7 @@
 // ABOUTME: Pure decisions for the specialist tool: rows, call shapes, dialog text, prompts, results
 // ABOUTME: No engine calls here, so every rule runs under bun test
 import { spinner } from './view'
+import type { Fields } from './setup'
 
 export type Roles = Record<string, { name: string; prompt: string }>
 // effort is Codex's reasoning effort; without it the user's own Codex default applies.
@@ -48,6 +49,7 @@ export function specialistDescription(list: Specialist[]): string {
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     `Specialists: ${roster}. ` +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
+    'When no specialist fits and the user wants one, offer to set one up with {setup: {name, perspective, when}}; it opens a screen and nothing is saved until the user presses Save. ' +
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
@@ -66,6 +68,12 @@ export function specialistSchema(list: Specialist[]): Record<string, unknown> {
       message: { type: 'string', description: 'Follow-up: feedback for the specialist, e.g. a failing test.' },
       finish: { type: 'string', enum: ['merge', 'discard'] },
       result: { type: 'boolean', description: 'Fetch the last round\'s result: {run, result: true}, after the prompt saying the round ended.' },
+      setup: {
+        type: 'object',
+        description: 'Open the setup screen prefilled with a proposed specialist; the user saves it.',
+        properties: Object.fromEntries(SETUP_FIELDS.map(field => [field, { type: 'string' }])),
+        additionalProperties: false,
+      },
     },
     additionalProperties: false,
   }
@@ -89,13 +97,23 @@ export type SpecialistCall =
   | { kind: 'followUp'; run: string; message: string }
   | { kind: 'finish'; run: string; finish: 'merge' | 'discard' }
   | { kind: 'result'; run: string }
+  | { kind: 'setup'; fields: Partial<Fields> }
 
-const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}'
+const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
+const SETUP_FIELDS = ['name', 'model', 'perspective', 'effort', 'when']
 const filled = (value: unknown) => typeof value === 'string' && value.trim() !== ''
 
 export function specialistCall(input: Record<string, unknown>, list: Specialist[]): SpecialistCall | { deny: string } {
   const { specialist, task, run, message, finish, result } = input
   const has = (v: unknown) => v !== undefined
+  if (has(input.setup)) {
+    if (has(specialist) || has(task) || has(run) || has(message) || has(finish) || has(result)) return { deny: SHAPES }
+    const fields = input.setup
+    const isFields = typeof fields === 'object' && fields !== null && !Array.isArray(fields) &&
+      Object.entries(fields).every(([key, value]) => SETUP_FIELDS.includes(key) && typeof value === 'string')
+    if (!isFields) return { deny: `setup fields must be strings: ${SETUP_FIELDS.join(', ')}` }
+    return { kind: 'setup', fields: fields as Partial<Fields> }
+  }
   if (has(result)) {
     if (result !== true || !filled(run) || has(specialist) || has(task) || has(message) || has(finish)) return { deny: SHAPES }
     return { kind: 'result', run: run as string }

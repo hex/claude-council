@@ -628,6 +628,11 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: /^mcp__claude-council__specialist$/ }, async ($, e) => {
     const call = specialistCall(e as unknown as Record<string, unknown>, state.specialists)
     if ('deny' in call) return { deny: call.deny }
+    // Claude proposes, the user saves: the screen opens prefilled and nothing is written here.
+    if (call.kind === 'setup') {
+      const refused = await openSetup($, state, options, call.fields)
+      return refused ? { deny: `the setup screen did not open: ${refused}` } : { result: 'Opened the setup screen; nothing is saved until the user presses Save.' }
+    }
     const sh = (args: string[], init?: { stdin?: string }) => specialistRun($, args, init)
     const kv = keyValues
     // One round at a time across every session: they all share the store. A

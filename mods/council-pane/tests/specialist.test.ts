@@ -80,6 +80,7 @@ test('the description lists every specialist and what the user confirms', () => 
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     'Specialists: sec (security, gpt-6-sol), use when: auth, crypto; perf (performance, gpt-6-astra), use when: hot loops. ' +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
+    'When no specialist fits and the user wants one, offer to set one up with {setup: {name, perspective, when}}; it opens a screen and nothing is saved until the user presses Save. ' +
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
@@ -93,9 +94,12 @@ test('the schema limits specialist to the configured names', () => {
   expect(schema.properties.specialist).toEqual({ type: 'string', enum: ['sec'] })
   expect(schema.properties.finish).toEqual({ type: 'string', enum: ['merge', 'discard'] })
   expect(schema.additionalProperties).toBe(false)
+  expect(schema.properties.setup.additionalProperties).toBe(false)
+  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'perspective', 'effort', 'when'])
 })
 
 const sec = { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth' }
+const SHAPES_TEXT = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
 const record: RunRecord = {
   id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', perspective: 'security', prompt: 'You are a security-focused code reviewer.',
   repo: '/r/app', worktree: '/r/app.specialists/sec-20260923-151204', branch: 'specialist/sec/20260923-151204',
@@ -108,11 +112,17 @@ test('each call shape is recognised, and nothing else is', () => {
   expect(specialistCall({ run: 'sec-1', finish: 'discard' }, [sec])).toEqual({ kind: 'finish', run: 'sec-1', finish: 'discard' })
   expect(specialistCall({ specialist: 'nope', task: 't' }, [sec])).toEqual({ deny: "no specialist named 'nope'; configured: sec" })
   expect(specialistCall({ specialist: 'sec', task: '  ' }, [sec])).toEqual({ deny: 'task must be a non-empty string' })
-  expect(specialistCall({ run: 'sec-1', message: 'm', finish: 'merge' }, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}' })
+  expect(specialistCall({ run: 'sec-1', message: 'm', finish: 'merge' }, [sec])).toEqual({ deny: SHAPES_TEXT })
   expect(specialistCall({ run: 'sec-1', finish: 'keep' }, [sec])).toEqual({ deny: 'finish must be merge or discard' })
-  expect(specialistCall({}, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}' })
+  expect(specialistCall({}, [sec])).toEqual({ deny: SHAPES_TEXT })
   expect(specialistCall({ run: 'sec-1', result: true }, [sec])).toEqual({ kind: 'result', run: 'sec-1' })
-  expect(specialistCall({ run: 'sec-1', result: true, message: 'm' }, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}' })
+  expect(specialistCall({ run: 'sec-1', result: true, message: 'm' }, [sec])).toEqual({ deny: SHAPES_TEXT })
+  expect(specialistCall({ setup: { name: 'perf', perspective: 'performance', when: 'hot loops' } }, [sec])).toEqual({ kind: 'setup', fields: { name: 'perf', perspective: 'performance', when: 'hot loops' } })
+  expect(specialistCall({ setup: {} }, [sec])).toEqual({ kind: 'setup', fields: {} })
+  expect(specialistCall({ setup: { name: 3 } }, [sec])).toEqual({ deny: 'setup fields must be strings: name, model, perspective, effort, when' })
+  expect(specialistCall({ setup: { colour: 'red' } }, [sec])).toEqual({ deny: 'setup fields must be strings: name, model, perspective, effort, when' })
+  expect(specialistCall({ setup: 'perf' }, [sec])).toEqual({ deny: 'setup fields must be strings: name, model, perspective, effort, when' })
+  expect(specialistCall({ setup: {}, run: 'x' }, [sec])).toEqual({ deny: SHAPES_TEXT })
 })
 
 test('runStamp is local time, zero padded', () => {
