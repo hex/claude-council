@@ -63,7 +63,7 @@ The council sends your question to third-party providers, and a tool is easier f
 
 ## Specialists
 
-A specialist is a Codex agent that writes code for you on its own model, in its own git worktree. You name it, pick its model and the council perspective it works from, and say when it fits. Claude suggests one when a task matches. A start runs at once; only a finish asks you first.
+A specialist is a Codex agent that writes code for you on its own model, in its own git worktree. You name it, pick its model and the council perspective it works from, and say when it fits. Claude offers one when a task matches and starts it only once you ask or agree. The start itself opens no dialog; only a finish asks you first.
 
 Each `/config` row holds one specialist:
 
