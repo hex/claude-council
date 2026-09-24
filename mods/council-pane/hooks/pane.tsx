@@ -245,7 +245,7 @@ async function handEditDenial($: EngineInterface, state: PaneState, slot: string
   if ('error' in parsed) return parsed.error
   const catalog = await readCatalog($)
   if ('error' in catalog) return `cannot check the model: ${catalog.error}`
-  const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '' }, slot, { roles: state.roles, models: catalog.models, options })
+  const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '', focus: parsed.focus ?? '' }, slot, { roles: state.roles, models: catalog.models, options })
   return 'error' in checked ? checked.error : undefined
 }
 
@@ -646,8 +646,9 @@ export const register: Register = (on, options) => {
     // An open setup screen was drawn by the reloaded module before the roles
     // and the store were read; draw it again with them.
     $.ui.invalidate('ui.render')
+    // Registered with no specialists too, so a user can ask Claude to set the first one up.
+    await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
     if (roster.specialists.length > 0) {
-      await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })
       // The chip's shimmer moves only while a round runs.
@@ -778,7 +779,8 @@ export const register: Register = (on, options) => {
       const started = await sh(['start', cwd, s.name, ts])
       if (started.exitCode !== 0) return { result: started.stderr.trim() || 'could not create the worktree', isError: true }
       const at = kv(started.stdout)
-      const perspectivePrompt = state.roles[s.perspective]?.prompt ?? ''
+      // A custom specialist's own instructions stand where a council role's prompt would.
+      const perspectivePrompt = s.focus ?? state.roles[s.perspective]?.prompt ?? ''
       const record: RunRecord = {
         id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), perspective: s.perspective, prompt: perspectivePrompt,
         repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 0, state: 'idle', startedMs: 0, roundBase: '', subject: '',
@@ -990,8 +992,9 @@ export const register: Register = (on, options) => {
                   <Button key="retry" label="Retry" onPress={press(() => loadCatalog($, state))} />
                 </Box>
               ) : null}
-              <Select key="perspective" label="Perspective  " value={draft.perspective} options={Object.keys(state.roles).map(value => ({ value }))} onSelect={(v: string) => edit({ perspective: v })} />
+              <Select key="perspective" label="Perspective  " value={draft.perspective} options={editor.perspectiveOptions} onSelect={(v: string) => edit({ perspective: v })} />
               {editor.perspectiveHelp ? help('perspective-help', editor.perspectiveHelp) : null}
+              {editor.showFocus ? <Input key="focus" label="Focus        " placeholder="what it should look for, in your words" value={draft.focus} onInput={(v: string) => edit({ focus: v })} onSubmit={(v: string) => edit({ focus: v })} /> : null}
               <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
               {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
               <Input key="when" label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => edit({ when: v })} />
@@ -1022,7 +1025,7 @@ export const register: Register = (on, options) => {
             <Text key="text" wrap="wrap">{` ${view.status.text}`}</Text>
           </Box>
         ) : null}
-        <Text key="keys" dimColor wrap="truncate-end">{'Tab next · Shift+Tab back · Esc closes, your draft is kept'}</Text>
+        <Text key="keys" dimColor wrap="truncate-end">{'Tab next · Shift+Tab back · ↓ opens a list, Enter picks · Esc closes, draft kept'}</Text>
       </Box>
     )
   })

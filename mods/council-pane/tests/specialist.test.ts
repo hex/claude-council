@@ -36,6 +36,16 @@ test('any lowercase effort parses; which ones a model offers is checked at Save'
   })
 })
 
+test('a custom perspective carries its own instructions in a focus clause', () => {
+  expect(parseSpecialist('mig = gpt-6-luna as custom, effort: high, focus: You review Postgres migrations, locks and rollbacks., when: schema, migrations', roles)).toEqual({
+    name: 'mig', model: 'gpt-6-luna', perspective: 'custom', effort: 'high', focus: 'You review Postgres migrations, locks and rollbacks.', when: 'schema, migrations',
+  })
+  expect(parseSpecialist('mig = gpt-6-luna as custom, focus: Locks., when: w', roles)).toEqual({ name: 'mig', model: 'gpt-6-luna', perspective: 'custom', focus: 'Locks.', when: 'w' })
+  expect(parseSpecialist('mig = gpt-6-luna as custom, when: w', roles)).toEqual({ error: 'a custom perspective needs focus: with its instructions' })
+  expect(parseSpecialist('sec = gpt-6-sol as security, focus: Locks., when: w', roles)).toEqual({ error: 'focus: goes only with the custom perspective' })
+  expect(parseSpecialist(`mig = gpt-6-luna as custom, focus: ${'x'.repeat(401)}, when: w`, roles)).toEqual({ error: 'focus is longer than 400 characters' })
+})
+
 test('an empty or absent row is unused, not a problem', () => {
   expect(parseSpecialist('', roles)).toBeUndefined()
   expect(parseSpecialist('   ', roles)).toBeUndefined()
@@ -80,7 +90,7 @@ test('the description lists every specialist and what the user confirms', () => 
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     'Specialists: sec (security, gpt-6-sol), use when: auth, crypto; perf (performance, gpt-6-astra), use when: hot loops. ' +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
-    'When no specialist fits and the user wants one, offer to set one up with {setup: {name, perspective, when}}; it opens a screen and nothing is saved until the user presses Save. ' +
+    'When no specialist fits and the user wants one, or the user describes one, call {setup: {name, model, perspective, effort, focus, when}}; it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
@@ -89,13 +99,25 @@ test('the description lists every specialist and what the user confirms', () => 
   )
 })
 
+test('with no specialists the tool only offers to set one up', () => {
+  expect(specialistDescription([])).toBe(
+    'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
+    'When the user asks for one, call {setup: {name, model, perspective, effort, focus, when}} with what they described; ' +
+    'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
+    'perspective is a council role or custom, and custom takes focus: the instructions in the user\'s words.',
+  )
+  const schema = specialistSchema([]) as any
+  expect(Object.keys(schema.properties)).toEqual(['setup'])
+  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'perspective', 'effort', 'focus', 'when'])
+})
+
 test('the schema limits specialist to the configured names', () => {
   const schema = specialistSchema([{ name: 'sec', model: 'm', perspective: 'security', when: 'w' }]) as any
   expect(schema.properties.specialist).toEqual({ type: 'string', enum: ['sec'] })
   expect(schema.properties.finish).toEqual({ type: 'string', enum: ['merge', 'discard'] })
   expect(schema.additionalProperties).toBe(false)
   expect(schema.properties.setup.additionalProperties).toBe(false)
-  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'perspective', 'effort', 'when'])
+  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'perspective', 'effort', 'focus', 'when'])
 })
 
 const sec = { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth' }
@@ -119,9 +141,9 @@ test('each call shape is recognised, and nothing else is', () => {
   expect(specialistCall({ run: 'sec-1', result: true, message: 'm' }, [sec])).toEqual({ deny: SHAPES_TEXT })
   expect(specialistCall({ setup: { name: 'perf', perspective: 'performance', when: 'hot loops' } }, [sec])).toEqual({ kind: 'setup', fields: { name: 'perf', perspective: 'performance', when: 'hot loops' } })
   expect(specialistCall({ setup: {} }, [sec])).toEqual({ kind: 'setup', fields: {} })
-  expect(specialistCall({ setup: { name: 3 } }, [sec])).toEqual({ deny: 'setup fields must be strings: name, model, perspective, effort, when' })
-  expect(specialistCall({ setup: { colour: 'red' } }, [sec])).toEqual({ deny: 'setup fields must be strings: name, model, perspective, effort, when' })
-  expect(specialistCall({ setup: 'perf' }, [sec])).toEqual({ deny: 'setup fields must be strings: name, model, perspective, effort, when' })
+  expect(specialistCall({ setup: { name: 3 } }, [sec])).toEqual({ deny: 'setup fields must be strings: name, model, perspective, effort, focus, when' })
+  expect(specialistCall({ setup: { colour: 'red' } }, [sec])).toEqual({ deny: 'setup fields must be strings: name, model, perspective, effort, focus, when' })
+  expect(specialistCall({ setup: 'perf' }, [sec])).toEqual({ deny: 'setup fields must be strings: name, model, perspective, effort, focus, when' })
   expect(specialistCall({ setup: {}, run: 'x' }, [sec])).toEqual({ deny: SHAPES_TEXT })
 })
 

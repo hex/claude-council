@@ -5,9 +5,13 @@ import type { Fields } from './setup'
 
 export type Roles = Record<string, { name: string; prompt: string }>
 // effort is Codex's reasoning effort; without it the user's own Codex default applies.
-export type Specialist = { name: string; model: string; perspective: string; effort?: string; when: string }
+// focus is the user's own instructions, present exactly when the perspective is custom.
+export type Specialist = { name: string; model: string; perspective: string; effort?: string; focus?: string; when: string }
 
-const ROW = /^\s*([^=\s]+)\s*=\s*(\S+)\s+as\s+([^,\s]+)\s*,(?:\s*effort:\s*([^,\s]*)\s*,)?\s*when:\s*(.+?)\s*$/
+// focus may hold commas; it ends at the first ", when:".
+const ROW = /^\s*([^=\s]+)\s*=\s*(\S+)\s+as\s+([^,\s]+)\s*,(?:\s*effort:\s*([^,\s]*)\s*,)?(?:\s*focus:\s*(.+?)\s*,)?\s*when:\s*(.+?)\s*$/
+export const CUSTOM = 'custom'
+export const FOCUS_MAX = 400
 const EFFORT = /^[a-z]+$/
 const NAME = /^[a-z][a-z0-9-]{0,23}$/
 export const WHEN_MAX = 200
@@ -24,13 +28,17 @@ export function parseSpecialist(row: unknown, roles: Roles): Specialist | { erro
   if (typeof row !== 'string') return { error: SHAPE }
   const match = ROW.exec(row)
   if (!match) return { error: SHAPE }
-  const [, name = '', model = '', perspective = '', effort, when = ''] = match
+  const [, name = '', model = '', perspective = '', effort, focus, when = ''] = match
   const badName = nameProblem(name)
   if (badName) return { error: badName }
-  if (!Object.hasOwn(roles, perspective)) return { error: `unknown perspective '${perspective}'` }
+  const isCustom = perspective === CUSTOM
+  if (!isCustom && !Object.hasOwn(roles, perspective)) return { error: `unknown perspective '${perspective}'` }
+  if (isCustom && focus === undefined) return { error: 'a custom perspective needs focus: with its instructions' }
+  if (!isCustom && focus !== undefined) return { error: 'focus: goes only with the custom perspective' }
+  if (focus !== undefined && focus.length > FOCUS_MAX) return { error: `focus is longer than ${FOCUS_MAX} characters` }
   if (effort !== undefined && !EFFORT.test(effort)) return { error: `effort '${effort}' must be lowercase letters` }
   if (when.length > WHEN_MAX) return { error: `use-when is longer than ${WHEN_MAX} characters` }
-  return effort === undefined ? { name, model, perspective, when } : { name, model, perspective, effort, when }
+  return { name, model, perspective, ...(effort === undefined ? {} : { effort }), ...(focus === undefined ? {} : { focus }), when }
 }
 
 export function specialistRoster(options: Record<string, unknown>, roles: Roles): { specialists: Specialist[]; problems: string[] } {
@@ -50,12 +58,20 @@ export function specialistRoster(options: Record<string, unknown>, roles: Roles)
 }
 
 export function specialistDescription(list: Specialist[]): string {
+  if (list.length === 0) {
+    return (
+      'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
+      `When the user asks for one, call {setup: {${SETUP_FIELDS.join(', ')}}} with what they described; ` +
+      'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
+      'perspective is a council role or custom, and custom takes focus: the instructions in the user\'s words.'
+    )
+  }
   const roster = list.map(s => `${s.name} (${s.perspective}, ${s.model}), use when: ${s.when}`).join('; ')
   return (
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     `Specialists: ${roster}. ` +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
-    'When no specialist fits and the user wants one, offer to set one up with {setup: {name, perspective, when}}; it opens a screen and nothing is saved until the user presses Save. ' +
+    `When no specialist fits and the user wants one, or the user describes one, call {setup: {${SETUP_FIELDS.join(', ')}}}; it opens a screen with those fields filled in and nothing is saved until the user presses Save. ` +
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
@@ -65,6 +81,14 @@ export function specialistDescription(list: Specialist[]): string {
 }
 
 export function specialistSchema(list: Specialist[]): Record<string, unknown> {
+  const setup = {
+    type: 'object',
+    description: 'Open the setup screen prefilled with a proposed specialist; the user saves it.',
+    properties: Object.fromEntries(SETUP_FIELDS.map(field => [field, { type: 'string' }])),
+    additionalProperties: false,
+  }
+  // With no specialists there is nothing to start; setting one up is the only call.
+  if (list.length === 0) return { type: 'object', properties: { setup }, additionalProperties: false }
   return {
     type: 'object',
     properties: {
@@ -74,12 +98,7 @@ export function specialistSchema(list: Specialist[]): Record<string, unknown> {
       message: { type: 'string', description: 'Follow-up: feedback for the specialist, e.g. a failing test.' },
       finish: { type: 'string', enum: ['merge', 'discard'] },
       result: { type: 'boolean', description: 'Fetch the last round\'s result: {run, result: true}, after the prompt saying the round ended.' },
-      setup: {
-        type: 'object',
-        description: 'Open the setup screen prefilled with a proposed specialist; the user saves it.',
-        properties: Object.fromEntries(SETUP_FIELDS.map(field => [field, { type: 'string' }])),
-        additionalProperties: false,
-      },
+      setup,
     },
     additionalProperties: false,
   }
@@ -106,7 +125,7 @@ export type SpecialistCall =
   | { kind: 'setup'; fields: Partial<Fields> }
 
 const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
-const SETUP_FIELDS = ['name', 'model', 'perspective', 'effort', 'when']
+const SETUP_FIELDS = ['name', 'model', 'perspective', 'effort', 'focus', 'when']
 const filled = (value: unknown) => typeof value === 'string' && value.trim() !== ''
 
 export function specialistCall(input: Record<string, unknown>, list: Specialist[]): SpecialistCall | { deny: string } {

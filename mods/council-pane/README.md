@@ -68,12 +68,12 @@ A specialist is a Codex agent that writes code for you on its own model, in its 
 Run `/specialists` to set them up. It opens a screen with your specialists in an orange frame, two lines each: the name, model, perspective and effort, then the use-when. Pick one to edit it in the form below, or add a new one. You type the name and the use-when, and pick the model, the perspective and the effort from lists:
 
 - The models come from `codex debug models`. Listed models come first, and hidden ones carry `(hidden)`.
-- The perspectives are the keys of `config/roles.json`. The perspective's prompt opens every task, and the form shows what it looks for.
+- The perspectives are the keys of `config/roles.json`, plus `custom`. A council perspective's prompt opens every task, and the form shows what it looks for. With `custom` you write your own instructions in a Focus field, and they open every task instead.
 - The efforts are the ones Codex offers for the chosen model, each with Codex's own description, plus `default`, which keeps your own Codex default. If you switch to a model that lacks the chosen effort, the effort goes back to `default` and the screen says so.
 
 Save checks the specialist against Codex's catalog and writes it to its `/config` row: the row you opened, or the first empty one for a new specialist. If a field is wrong, the screen names it and what it accepts, and writes nothing. The form marks unsaved changes. Opening another specialist or adding one over them asks first, and so does Remove, which empties the row. Discard changes drops your edits and keeps the screen open. Esc closes the screen and keeps a changed draft for the next `/specialists`. The screen opens at once and fills in the models when Codex answers; if Codex cannot list them, a Retry button asks again. Each save reloads the mod, so the transcript shows the engine's `options changed — reloaded` line. If `codex` is missing or logged out, the list and Remove still work, and Save shows Codex's error. On a phone, the screen asks you to use the terminal or the desktop app.
 
-When no specialist fits a task and you want one, Claude can open the same screen with a name, a perspective and a use-when filled in. The screen saves nothing until you press Save.
+You can also describe one to Claude, for example "add a specialist for Postgres migrations on gpt-6-luna, high effort". Claude opens the same screen with the fields filled in, and nothing is saved until you press Save. This works with no specialists set up yet.
 
 ### Hand edits
 
@@ -82,9 +82,10 @@ The screen writes each specialist as one `/config` row. You can also type a row 
 ```
 sec = gpt-6-sol as security, when: auth, crypto, untrusted input
 sec = gpt-6-sol as security, effort: high, when: auth, crypto, untrusted input
+mig = gpt-6-luna as custom, focus: You review Postgres migrations for locks and rollbacks., when: schema changes
 ```
 
-The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. `effort:` is optional and must be one of the levels Codex offers for that model. Without it, your own Codex default applies. The text after `when:` is what Claude matches tasks against, up to 200 characters. `/config` refuses a row that would fail and shows why at the top of the screen. The check asks Codex for its catalog, so it takes about a second. At session start the mod skips a row that still does not parse, for example one written straight into `settings.json`, and the session log says which row and why. With at least one valid row the mod registers `mcp__claude-council__specialist`.
+The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. `effort:` is optional and must be one of the levels Codex offers for that model. `focus:` goes with `custom` only, up to 400 characters, and ends at the first `, when:`. Without it, your own Codex default applies. The text after `when:` is what Claude matches tasks against, up to 200 characters. `/config` refuses a row that would fail and shows why at the top of the screen. The check asks Codex for its catalog, so it takes about a second. At session start the mod skips a row that still does not parse, for example one written straight into `settings.json`, and the session log says which row and why. With at least one valid row the mod registers `mcp__claude-council__specialist`.
 
 The tool takes five calls. Only a finish opens a dialog:
 
@@ -92,7 +93,7 @@ The tool takes five calls. Only a finish opens a dialog:
 - Follow-up, `{run, message}`: continues the same Codex session in the same worktree.
 - Finish, `{run, finish}`: asks `Merge <branch> (N commits, M files) into <branch>?` or `Discard run <id> and delete its branch?`
 - Result, `{run, result: true}`: returns the last round's result.
-- Setup, `{setup: {name, model, perspective, effort, when}}`, every field optional: opens the setup screen with those fields filled in. The screen saves nothing until you press Save.
+- Setup, `{setup: {name, model, perspective, effort, focus, when}}`, every field optional: opens the setup screen with those fields filled in. The screen saves nothing until you press Save. With no specialists set up, this is the only call the tool takes.
 
 A round runs in the background: start and follow-up return at once, and you can keep talking to Claude. When the round ends, the mod commits it and submits a prompt asking Claude to fetch the result and review it. The prompt carries only the run id; the specialist's own words reach Claude as a tool result. While a round runs, a `SPECIALIST` band above the prompt shows the specialist, its model, the time so far and its latest step: the command it runs, the file it edits, or the first line of what it says. `o · open pane` opens a pane that lists every step of the round under a header naming the specialist, its model, the round and its time: Codex's messages as markdown, its short reasoning summaries in dim italics, each command on one line, and each edited file, with a mark for each command and edit that is running, done or failed. While the round runs, a spinner and its time close the list, so the pane moves even while Codex only thinks. The pane follows new steps; scrolling up stops that, and scrolling back to the bottom resumes it. The pane keeps the last round after it ends. Codex ends each round with a report in the shape of `scripts/specialist-report.schema.json`: a summary, each test command it ran with pass, fail or not run, and its open questions. The pane shows the summary and questions. The result carries that report, the diff stat for the round and for the whole run, the branch and the worktree path. A last message that is not such a report reaches Claude as written, marked as off-schema. Claude reviews that and runs the tests in the worktree before asking you how to finish.
 

@@ -1,6 +1,6 @@
 // ABOUTME: Pure decisions for the specialist setup screen: Codex's model catalog, one validator, rows and drafts
 // ABOUTME: No engine calls here, so every rule runs under bun test
-import { nameProblem, parseSpecialist, SLOTS, WHEN_MAX, type Roles } from './specialist'
+import { CUSTOM, nameProblem, parseSpecialist, SLOTS, WHEN_MAX, type Roles } from './specialist'
 
 // effortHelp is Codex's own one-line description of each effort; defaultEffort
 // is what the model uses when nothing sets one.
@@ -35,10 +35,12 @@ export function parseCatalog(run: { exitCode: number; stdout: string; stderr: st
   return { models }
 }
 
-export type Fields = { name: string; model: string; perspective: string; effort: string; when: string }
+// focus is written into the row only for the custom perspective.
+export type Fields = { name: string; model: string; perspective: string; effort: string; focus: string; when: string }
 
 export function rowText(f: Fields): string {
-  return `${f.name} = ${f.model} as ${f.perspective}, ${f.effort ? `effort: ${f.effort}, ` : ''}when: ${f.when}`
+  const focus = f.perspective === CUSTOM ? `focus: ${f.focus}, ` : ''
+  return `${f.name} = ${f.model} as ${f.perspective}, ${f.effort ? `effort: ${f.effort}, ` : ''}${focus}when: ${f.when}`
 }
 
 // The fields a user types are checked here first, so each error names its field;
@@ -49,6 +51,11 @@ export function checkSpecialist(f: Fields, slot: string, context: { roles: Roles
   if (badName) return { error: badName }
   if (f.when.trim() === '') return { error: 'use-when is empty' }
   if (/[\r\n]/.test(f.when)) return { error: 'use-when must be one line' }
+  if (f.perspective === CUSTOM) {
+    if (f.focus.trim() === '') return { error: 'focus is empty: write what this specialist should look for' }
+    if (/[\r\n]/.test(f.focus)) return { error: 'focus must be one line' }
+    if (f.focus.includes('when:')) return { error: "focus cannot contain 'when:'" }
+  }
   const model = context.models.find(m => m.slug === f.model)
   if (!model) return { error: `model '${f.model}' is not in Codex's catalog: ${context.models.filter(m => m.listed).map(m => m.slug).join(', ')}` }
   if (f.effort && !model.efforts.includes(f.effort)) return { error: `effort '${f.effort}' is not offered by ${model.slug}: ${model.efforts.join(', ')}` }
@@ -83,12 +90,12 @@ export function draftFor(slot: string, options: Record<string, unknown>, roles: 
   const baseline = rowOf(options, slot)
   const parsed = parseSpecialist(baseline, roles)
   if (!parsed || 'error' in parsed) return { ...blankDraft(slot, models, roles), baseline }
-  return { slot, baseline, name: parsed.name, model: parsed.model, perspective: parsed.perspective, effort: parsed.effort ?? '', when: parsed.when }
+  return { slot, baseline, name: parsed.name, model: parsed.model, perspective: parsed.perspective, effort: parsed.effort ?? '', focus: parsed.focus ?? '', when: parsed.when }
 }
 
 export function blankDraft(slot: string, models: CatalogModel[], roles: Roles, prefill: Partial<Fields> = {}): Draft {
   const model = models.find(m => m.listed)?.slug ?? ''
-  return { slot, baseline: '', name: '', model, perspective: Object.keys(roles)[0] ?? '', effort: '', when: '', ...prefill }
+  return { slot, baseline: '', name: '', model, perspective: Object.keys(roles)[0] ?? '', effort: '', focus: '', when: '', ...prefill }
 }
 
 export function withModel(draft: Draft, slug: string, models: CatalogModel[]): { draft: Draft; message: string } {
@@ -107,7 +114,8 @@ export type RosterEntry = { slot: string; name: string; model: string; detail: s
 export type EditorView = {
   title: string; unsaved: boolean; removable: boolean; discardLabel: string
   models: 'loading' | 'failed' | 'ready'
-  modelOptions: Option[]; effortOptions: Option[]
+  modelOptions: Option[]; effortOptions: Option[]; perspectiveOptions: Option[]
+  showFocus: boolean
   perspectiveHelp: string; effortHelp: string; whenCount: string
 }
 export type SetupView = {
@@ -125,6 +133,7 @@ const option = (value: string, label = value): Option => ({ value, label })
 // The perspective's own prompt says what it looks for; its first sentence is
 // only "You are ...", so the second one is shown when there is one.
 function perspectiveHelp(roles: Roles, perspective: string): string {
+  if (perspective === CUSTOM) return 'Your own instructions, written below, open every task.'
   const prompt = Object.hasOwn(roles, perspective) ? roles[perspective]?.prompt ?? '' : ''
   const sentences = prompt.split(/(?<=\.)\s+/).filter(Boolean)
   return sentences[1] ?? sentences[0] ?? ''
@@ -139,7 +148,7 @@ export function isDirty(draft: Draft, roles: Roles): boolean {
   const saved = parseSpecialist(draft.baseline, roles)
   if (!saved || 'error' in saved) return draft.name.trim() !== '' || draft.when.trim() !== ''
   return saved.name !== draft.name || saved.model !== draft.model || saved.perspective !== draft.perspective ||
-    (saved.effort ?? '') !== draft.effort || saved.when !== draft.when
+    (saved.effort ?? '') !== draft.effort || (saved.focus ?? '') !== draft.focus || saved.when !== draft.when
 }
 
 function editorView(draft: Draft, catalog: CatalogState, roles: Roles, options: Record<string, unknown>): EditorView {
@@ -157,6 +166,8 @@ function editorView(draft: Draft, catalog: CatalogState, roles: Roles, options: 
     discardLabel: removable ? 'Discard changes' : 'Cancel adding',
     models: 'loading' in catalog ? 'loading' : 'error' in catalog ? 'failed' : 'ready',
     modelOptions: 'models' in catalog ? listed.map(m => option(m.slug, m.listed ? m.slug : `${m.slug} (hidden)`)) : [option(draft.model)],
+    perspectiveOptions: [...Object.keys(roles), CUSTOM].map(p => option(p)),
+    showFocus: draft.perspective === CUSTOM,
     effortOptions: [option('default'), ...(model ? model.efforts : draft.effort ? [draft.effort] : []).map(e => option(e))],
     perspectiveHelp: perspectiveHelp(roles, draft.perspective),
     effortHelp,

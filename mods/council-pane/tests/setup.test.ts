@@ -43,7 +43,7 @@ const roles = {
 }
 const catalog = parseCatalog(ok(catalogText))
 const models = 'models' in catalog ? catalog.models : []
-const fields: Fields = { name: 'sec', model: 'gpt-6-sol', perspective: 'security', effort: 'high', when: 'auth, crypto' }
+const fields: Fields = { name: 'sec', model: 'gpt-6-sol', perspective: 'security', effort: 'high', focus: '', when: 'auth, crypto' }
 const context = { roles, models, options: {} }
 
 test('the row is written in the one shape parseSpecialist reads', () => {
@@ -55,7 +55,8 @@ test('a use-when holding commas, colons or when: itself round-trips', () => {
   const when = 'auth, crypto: tokens, when: parsing untrusted input'
   const checked = checkSpecialist({ ...fields, when }, 'specialist_1', context)
   expect(checked).toEqual({ row: `sec = gpt-6-sol as security, effort: high, when: ${when}` })
-  expect(parseSpecialist('row' in checked ? checked.row : '', roles)).toEqual({ ...fields, when })
+  const { focus: _unused, ...rest } = fields
+  expect(parseSpecialist('row' in checked ? checked.row : '', roles)).toEqual({ ...rest, when })
 })
 
 test('every field is checked, and the error names the field and what is allowed', () => {
@@ -90,12 +91,12 @@ test('adding takes the lowest empty slot, none when all four are used', () => {
 
 test('editing a row starts from its fields; a row that does not parse starts blank on the first listed model but keeps its slot', () => {
   const options = { specialist_1: 'sec = gpt-6-sol as security, effort: high, when: auth', specialist_2: 'broken row' }
-  expect(draftFor('specialist_1', options, roles, models)).toEqual({ slot: 'specialist_1', baseline: options.specialist_1, name: 'sec', model: 'gpt-6-sol', perspective: 'security', effort: 'high', when: 'auth' })
-  expect(draftFor('specialist_2', options, roles, models)).toEqual({ slot: 'specialist_2', baseline: 'broken row', name: '', model: 'gpt-6-sol', perspective: 'security', effort: '', when: '' })
+  expect(draftFor('specialist_1', options, roles, models)).toEqual({ slot: 'specialist_1', baseline: options.specialist_1, name: 'sec', model: 'gpt-6-sol', perspective: 'security', effort: 'high', focus: '', when: 'auth' })
+  expect(draftFor('specialist_2', options, roles, models)).toEqual({ slot: 'specialist_2', baseline: 'broken row', name: '', model: 'gpt-6-sol', perspective: 'security', effort: '', focus: '', when: '' })
 })
 
 test('a blank draft picks the first listed model and the first perspective, and takes a prefill', () => {
-  expect(blankDraft('specialist_3', models, roles)).toEqual({ slot: 'specialist_3', baseline: '', name: '', model: 'gpt-6-sol', perspective: 'security', effort: '', when: '' })
+  expect(blankDraft('specialist_3', models, roles)).toEqual({ slot: 'specialist_3', baseline: '', name: '', model: 'gpt-6-sol', perspective: 'security', effort: '', focus: '', when: '' })
   expect(blankDraft('specialist_3', models, roles, { name: 'perf', perspective: 'performance', when: 'hot loops' }).name).toBe('perf')
 })
 
@@ -193,4 +194,27 @@ test('confirmations ask in words that name the specialist', () => {
   expect(setupView({ ...ready, draft, confirm: { kind: 'remove' } }, two, allRoles).confirm).toEqual({ text: 'Remove sec? Claude can no longer offer it.', yes: 'Remove sec', no: 'Keep it' })
   expect(setupView({ ...ready, draft, confirm: { kind: 'switch', slot: 'specialist_2' } }, two, allRoles).confirm).toEqual({ text: 'sec has unsaved changes.', yes: 'Discard and open perf', no: 'Keep editing' })
   expect(setupView({ ...ready, draft, confirm: { kind: 'switch', slot: 'new' } }, two, allRoles).confirm).toEqual({ text: 'sec has unsaved changes.', yes: 'Discard and add new', no: 'Keep editing' })
+})
+
+test('a custom specialist writes its focus into the row and round-trips', () => {
+  const custom: Fields = { ...fields, name: 'mig', perspective: 'custom', focus: 'You review Postgres migrations, locks and rollbacks.', when: 'schema, migrations' }
+  expect(rowText(custom)).toBe('mig = gpt-6-sol as custom, effort: high, focus: You review Postgres migrations, locks and rollbacks., when: schema, migrations')
+  const checked = checkSpecialist(custom, 'specialist_1', context)
+  expect(checked).toEqual({ row: rowText(custom) })
+  expect(parseSpecialist(rowText(custom), roles)).toEqual({ name: 'mig', model: 'gpt-6-sol', perspective: 'custom', effort: 'high', focus: custom.focus, when: 'schema, migrations' })
+  expect(checkSpecialist({ ...custom, focus: '' }, 'specialist_1', context)).toEqual({ error: 'focus is empty: write what this specialist should look for' })
+  expect(checkSpecialist({ ...custom, focus: 'a\nb' }, 'specialist_1', context)).toEqual({ error: 'focus must be one line' })
+  expect(checkSpecialist({ ...custom, focus: 'check it, when: always' }, 'specialist_1', context)).toEqual({ error: "focus cannot contain 'when:'" })
+  expect(rowText({ ...fields, focus: 'ignored' })).toBe('sec = gpt-6-sol as security, effort: high, when: auth, crypto')
+})
+
+test('the editor offers custom after the council roles and asks for the focus only then', () => {
+  const draft = draftFor('specialist_1', two, allRoles, models)
+  const view = setupView({ ...ready, draft }, two, allRoles)
+  expect(view.editor?.perspectiveOptions.map(o => o.value)).toEqual(['security', 'performance', 'custom'])
+  expect(view.editor?.showFocus).toBe(false)
+  const custom = setupView({ ...ready, draft: { ...draft, perspective: 'custom', focus: 'Locks.' } }, two, allRoles)
+  expect(custom.editor).toMatchObject({ showFocus: true, perspectiveHelp: 'Your own instructions, written below, open every task.', unsaved: true })
+  const row = { specialist_1: 'mig = gpt-6-sol as custom, focus: Locks and rollbacks., when: schema' }
+  expect(setupView(ready, row, allRoles).roster[0]?.detail).toBe('custom · effort default')
 })
