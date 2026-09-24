@@ -10,8 +10,33 @@ repo_root() {
     git -C "$1" rev-parse --show-toplevel 2>/dev/null || die "$1 is not inside a git repository"
 }
 
+check_worktree_destination() {
+    local worktree="$1" entry="$2" remaining="$2" prefix="" part
+    while [[ -n "$remaining" ]]; do
+        part="${remaining%%/*}"
+        if [[ "$remaining" == */* ]]; then remaining="${remaining#*/}"; else remaining=""; fi
+        if [[ -n "$part" && "$part" != . ]]; then
+            prefix="${prefix:+$prefix/}$part"
+            [[ ! -L "$worktree/$prefix" ]] || die "symlink in worktree destination for '${entry}': ${prefix}"
+        fi
+    done
+}
+
+check_include_source() {
+    local root="$1" entry="$2" remaining="$2" prefix="" part
+    while [[ "$remaining" == */* ]]; do
+        part="${remaining%%/*}"
+        remaining="${remaining#*/}"
+        if [[ -n "$part" && "$part" != . ]]; then
+            prefix="${prefix:+$prefix/}$part"
+            [[ ! -L "$root/$prefix" ]] || die "symlink in .worktreeinclude source for '${entry}': ${prefix}"
+        fi
+    done
+}
+
 cmd_start() {
-    local dir="$1" name="$2" ts="$3" root parent base short home worktree branch state dirty
+    local dir="$1" name="$2" ts="$3" root parent base short home worktree branch state dirty entry raw remaining part normalized source destination child i count=0
+    local -a includes
     [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || die "invalid name '${name}': must match ^[a-z][a-z0-9-]*\$"
     root="$(repo_root "$dir")"
     parent="$(dirname "$root")"
@@ -22,7 +47,47 @@ cmd_start() {
     base="$(git -C "$root" rev-parse HEAD)"
     short="$(git -C "$root" rev-parse --short=7 HEAD)"
     if [[ -n "$(git -C "$root" status --porcelain)" ]]; then dirty=yes; else dirty=no; fi
+    if [[ -f "$root/.worktreeinclude" ]]; then
+        while IFS= read -r entry || [[ -n "$entry" ]]; do
+            entry="${entry%$'\r'}"
+            [[ -z "$entry" || "$entry" == \#* ]] && continue
+            [[ "$entry" != /* && "/$entry/" != */../* ]] || die "invalid .worktreeinclude path '${entry}': must be relative and contain no '..' component"
+            raw="$entry"
+            remaining="$entry"
+            normalized=""
+            while [[ -n "$remaining" ]]; do
+                part="${remaining%%/*}"
+                if [[ "$remaining" == */* ]]; then remaining="${remaining#*/}"; else remaining=""; fi
+                [[ -z "$part" || "$part" == . ]] || normalized="${normalized:+$normalized/}$part"
+            done
+            [[ -n "$normalized" ]] || die "invalid .worktreeinclude path '${raw}': must name a file or directory"
+            entry="$normalized"
+            check_include_source "$root" "$entry"
+            includes[$count]="$entry"
+            count=$((count + 1))
+        done < "$root/.worktreeinclude"
+    fi
     git -C "$root" worktree add -q -b "$branch" "$worktree" "$base" >&2 || exit 1
+    i=0
+    while (( i < count )); do
+        entry="${includes[$i]}"
+        source="$root/$entry"
+        if [[ -e "$source" || -L "$source" ]]; then
+            check_worktree_destination "$worktree" "$entry"
+            destination="$worktree/$entry"
+            mkdir -p "$(dirname "$destination")"
+            if [[ -d "$source" && ! -L "$source" ]]; then
+                while IFS= read -r -d '' child; do
+                    check_worktree_destination "$worktree" "$entry${child#"$source"}"
+                done < <(find "$source" -print0)
+                mkdir -p "$destination"
+                cp -R -P "$source/." "$destination"
+            else
+                cp -R -P "$source" "$destination"
+            fi
+        fi
+        i=$((i + 1))
+    done
     mkdir -p "$state"
     printf 'repo=%s\nworktree=%s\nbranch=%s\nbase=%s\nshort=%s\nstate=%s\ndirty=%s\n' \
         "$root" "$worktree" "$branch" "$base" "$short" "$state" "$dirty"

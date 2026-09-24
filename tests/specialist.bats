@@ -23,6 +23,14 @@ setup() {
 field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 
 @test "start creates the worktree and branch beside the repo, even from a subdirectory and a path with spaces" {
+    printf 'ignored.txt\r\n# comment\n\nmissing.txt\nignored-dir' > "$REPO/.worktreeinclude"
+    printf 'file contents\n' > "$REPO/ignored.txt"
+    mkdir -p "$REPO/ignored-dir/nested"
+    printf 'directory contents\n' > "$REPO/ignored-dir/nested/file.txt"
+    ln -s nested/file.txt "$REPO/ignored-dir/link"
+    printf 'ignored.txt\nignored-dir/\n' > "$REPO/.gitignore"
+    git -C "$REPO" add .worktreeinclude .gitignore
+    git -C "$REPO" commit -qm includes
     run "$SPECIALIST" start "$REPO/src" sec 20260923-151204
     [ "$status" -eq 0 ]
     [ "$(field repo)" = "$REPO" ]
@@ -34,6 +42,61 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     [ "$(field dirty)" = "no" ]
     [ -d "$(field state)" ]
     [ "$(git -C "$(field worktree)" rev-parse --abbrev-ref HEAD)" = "specialist/sec/20260923-151204" ]
+    [ "$(cat "$(field worktree)/ignored.txt")" = 'file contents' ]
+    [ "$(cat "$(field worktree)/ignored-dir/nested/file.txt")" = 'directory contents' ]
+    [ -L "$(field worktree)/ignored-dir/link" ]
+    [ "$(readlink "$(field worktree)/ignored-dir/link")" = 'nested/file.txt' ]
+    [ ! -e "$(field worktree)/missing.txt" ]
+}
+
+@test "start rejects unsafe include entries before creating a worktree or branch" {
+    for entry in '/tmp/secret' 'src/../secret'; do
+        printf 'src/a.txt\n%s\n' "$entry" > "$REPO/.worktreeinclude"
+        run "$SPECIALIST" start "$REPO" sec 20260923-151204
+        [ "$status" -eq 1 ] || return 1
+        [ "$output" = "specialist: invalid .worktreeinclude path '${entry}': must be relative and contain no '..' component" ] || return 1
+        [ ! -e "${ROOT}/app.specialists" ] || return 1
+        [ -z "$(git -C "$REPO" branch --list 'specialist/*')" ] || return 1
+    done
+}
+
+@test "start refuses a tracked symlink in an include destination parent" {
+    ln -s "$ROOT" "$REPO/shared"
+    git -C "$REPO" add shared
+    git -C "$REPO" commit -qm link
+    rm "$REPO/shared"
+    mkdir "$REPO/shared"
+    printf 'private\n' > "$REPO/shared/file.txt"
+    printf 'shared/file.txt\n' > "$REPO/.worktreeinclude"
+    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: symlink in worktree destination for 'shared/file.txt': shared" ]
+    [ ! -e "$ROOT/file.txt" ]
+}
+
+@test "start refuses a tracked symlink within an included directory" {
+    mkdir "$REPO/shared"
+    ln -s "$ROOT/outside.txt" "$REPO/shared/file.txt"
+    git -C "$REPO" add shared
+    git -C "$REPO" commit -qm link
+    rm "$REPO/shared/file.txt"
+    printf 'private\n' > "$REPO/shared/file.txt"
+    printf 'shared\n' > "$REPO/.worktreeinclude"
+    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: symlink in worktree destination for 'shared/file.txt': shared/file.txt" ]
+    [ ! -e "$ROOT/outside.txt" ]
+}
+
+@test "start does not follow a symlink in an include source parent" {
+    mkdir "$ROOT/external"
+    printf 'private\n' > "$ROOT/external/file.txt"
+    ln -s "$ROOT/external" "$REPO/shared"
+    printf 'shared/file.txt\n' > "$REPO/.worktreeinclude"
+    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: symlink in .worktreeinclude source for 'shared/file.txt': shared" ]
+    [ ! -e "${ROOT}/app.specialists" ]
 }
 
 @test "start rejects invalid names before creating a worktree or branch" {

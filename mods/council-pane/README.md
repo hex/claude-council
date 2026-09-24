@@ -84,6 +84,8 @@ A round runs in the background: start and follow-up return at once, and you can 
 
 Worktrees go beside the repository, in `../<repo>.specialists/<name>-<time>`, on a branch `specialist/<name>/<time>`. The mod commits each round's changes on that branch, with the task's first line as the subject. The prompt asks Codex not to commit, so each round lands as one commit the mod made and its diff is exactly what that round changed. A merge is a `--no-ff` merge into the branch you have checked out. The mod refuses it when your uncommitted changes touch the files the branch changed, or when you are on a detached `HEAD`. It aborts a conflicting merge and keeps the worktree and branch. When git refuses to start the merge, for example over an untracked file in the way, the result carries git's own message. Merge and discard remove the worktree and the branch. Nothing else cleans them up.
 
+To carry gitignored local files into a new specialist worktree, list their relative paths in the repository root's `.worktreeinclude`, one per line. Blank lines and lines starting with `#` are ignored; missing paths are skipped. This repository lists `.claude/types` so the pane's TypeScript check can use locally generated plugin types.
+
 Network access is on inside the Codex sandbox. The worktree limits where a specialist can write, not what it can send: a specialist can read the worktree and reach the network, so it can send what it reads anywhere. Codex runs with your own `~/.codex/config.toml` and global instructions, so your extra writable roots, MCP servers and house rules apply to specialists too. The mod forwards no API keys; Codex uses its own login.
 
 ## Limits
