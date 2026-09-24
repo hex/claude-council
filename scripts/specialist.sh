@@ -50,7 +50,7 @@ cmd_start() {
                 if [[ "$entry" == "$link" || "$entry" == "$link/"* || "$link" == "$entry/"* ]]; then
                     die "symlink in worktree destination for '${entry}': ${link}"
                 fi
-            done
+            done || exit 1
             includes[$count]="$entry"
             count=$((count + 1))
         done < "$root/.worktreeinclude"
