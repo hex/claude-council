@@ -702,7 +702,9 @@ export const register: Register = (on, options) => {
             <Text dimColor>{record.perspective}</Text>
             <Text color={MODEL_RGB}>{record.model}</Text>
           </Box>
-          <Text dimColor>{'\u2500'.repeat(cardWidth - 4)}</Text>
+          {/* A line exactly as wide as the card wraps to an empty second line
+              without truncate. */}
+          <Text dimColor wrap="truncate">{'\u2500'.repeat(cardWidth - 4)}</Text>
           {/* The worktree is cut from the left: its last part names the run. */}
           <Box flexDirection="row">
             <Text dimColor>{'branch    '}</Text>
