@@ -189,12 +189,22 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     round2="$("$SPECIALIST" head "$wt")"
     echo 'more' > "$wt/src/c.txt"
     "$SPECIALIST" commit "$wt" "round 2" >/dev/null
-    run "$SPECIALIST" report "$wt" "$round2" "$base"
+    echo 'dirty' >> "$wt/src/a.txt"
+    run env COLUMNS=80 "$SPECIALIST" report "$wt" "$round2" "$base"
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "--- round" ]
-    [[ "${lines[1]}" == *"src/c.txt"* ]]
-    [[ "$output" == *"--- total"* ]]
-    [[ "$output" == *"2 files changed"* ]]
+    expected="$(cat <<'EOF'
+--- round
+ src/c.txt | 1 +
+ 1 file changed, 1 insertion(+)
+--- total
+ src/b.txt | 1 +
+ src/c.txt | 1 +
+ 2 files changed, 2 insertions(+)
+--- status
+ M src/a.txt
+EOF
+)"
+    [ "$output" = "$expected" ]
 }
 
 start_run() {
