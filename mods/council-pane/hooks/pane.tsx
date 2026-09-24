@@ -17,6 +17,7 @@ import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
+import { blankDraft, draftFor, freeSlot, checkSpecialist, listEntries, parseCatalog, staleMessage, withModel, type Fields, type SetupState } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -42,6 +43,9 @@ const PID_CHECK_MS = 5_000
 const SPECIALIST_TOOL = 'specialist'
 const SPECIALIST_PANE = 'specialist'
 const RUNS_KEY = 'specialist-runs'
+const SETUP_PANE = 'specialist-setup'
+const SETUP_KEY = 'specialist-setup'
+const SETUP_COMMAND = 'specialists'
 
 type PaneState = {
   root: string
@@ -80,6 +84,8 @@ type PaneState = {
   // Frames left to retry following a just-opened pane: it becomes scrollable
   // only once drawn, milliseconds after $.ui.open settles.
   paneFollowFrames: number
+  // The setup screen's draft and catalog, mirrored from $.store so a reload redraws it.
+  setup?: SetupState
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -90,6 +96,63 @@ function files($: EngineInterface): Files {
     read: path => $.fs.read(path),
     list: dir => $.fs.list(dir),
   }
+}
+
+// The model and effort lists come from Codex itself, read when the setup
+// screen opens; a failure is kept as the catalog's error, never an empty list.
+async function readCatalog($: EngineInterface) {
+  const run = await $.process.run(['codex', 'debug', 'models'], { timeoutMs: 15_000 })
+    .catch((err: unknown) => ({ exitCode: 127, stdout: '', stderr: String(err) }))
+  return parseCatalog(run)
+}
+
+async function keepSetup($: EngineInterface, state: PaneState, setup: SetupState | undefined): Promise<void> {
+  state.setup = setup
+  if (setup) await $.store.set(SETUP_KEY, setup)
+  else await $.store.delete(SETUP_KEY)
+  $.ui.invalidate('ui.render')
+}
+
+// Returns why the screen did not open, or undefined once it is open. A prefill
+// comes from Claude's {setup} call and starts a new row in the first free slot.
+async function openSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>, prefill?: Partial<Fields>): Promise<string | undefined> {
+  const catalog = await readCatalog($)
+  const models = 'models' in catalog ? catalog.models : []
+  let draft = state.setup?.draft
+  if (prefill) {
+    const slot = freeSlot(options)
+    if (!slot) return 'all 4 slots are in use; the user can edit one with /specialists'
+    draft = blankDraft(slot, models, state.roles, prefill)
+  }
+  await keepSetup($, state, { draft, catalog, message: 'error' in catalog ? catalog.error : '' })
+  try { await $.ui.open({ id: SETUP_PANE, title: 'Specialists', focus: true, closeOnEscape: true }) } catch (err) { return String(err) }
+  return undefined
+}
+
+async function saveSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
+  const setup = state.setup
+  if (!setup?.draft) return
+  if ('error' in setup.catalog) { await keepSetup($, state, { ...setup, message: `cannot check the model: ${setup.catalog.error}` }); return }
+  const checked = checkSpecialist(setup.draft, setup.draft.slot, { roles: state.roles, models: setup.catalog.models, options })
+  if ('error' in checked) { await keepSetup($, state, { ...setup, message: checked.error }); return }
+  // Kept first: the write reloads this module, and the reload redraws from the store.
+  await keepSetup($, state, { catalog: setup.catalog, message: `saved ${setup.draft.slot}` })
+  const written = await $.config.set({ key: `claude-council.${setup.draft.slot}`, value: checked.row })
+  if (written.deny) await keepSetup($, state, { ...setup, message: written.deny })
+}
+
+async function removeSetup($: EngineInterface, state: PaneState): Promise<void> {
+  const setup = state.setup
+  const slot = setup?.draft?.slot
+  if (!setup || !slot) return
+  await keepSetup($, state, { catalog: setup.catalog, message: `removed ${slot}` })
+  const written = await $.config.set({ key: `claude-council.${slot}`, value: '' })
+  if (written.deny) await keepSetup($, state, { ...setup, message: written.deny })
+}
+
+async function closeSetup($: EngineInterface, state: PaneState): Promise<void> {
+  await keepSetup($, state, undefined)
+  await $.ui.close({ id: SETUP_PANE })
 }
 
 // Submits the wake prompt once the job's record says completed. A job that
@@ -472,6 +535,7 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
+    await $.command.register({ name: SETUP_COMMAND, description: 'Add, edit or remove specialists', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     // Perspectives come from the council's own roles file, so one definition
     // serves both; a row naming a missing one is reported, never dropped quietly.
@@ -481,6 +545,13 @@ export const register: Register = (on, options) => {
     for (const problem of roster.problems) $.ui.log(problem)
     state.specialists = roster.specialists
     state.roles = roles
+    // A Save reloads this module; the screen's draft comes back from the store.
+    const kept = (await $.store.get(SETUP_KEY)) as SetupState | undefined
+    const stale = kept?.draft ? staleMessage(kept.draft, options) : undefined
+    state.setup = kept && stale ? { catalog: kept.catalog, message: stale } : kept
+    // An open setup screen was drawn by the reloaded module before the roles
+    // and the store were read; draw it again with them.
+    $.ui.invalidate('ui.render')
     if (roster.specialists.length > 0) {
       await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
       // The band's clock moves only while a round runs.
@@ -737,6 +808,63 @@ export const register: Register = (on, options) => {
 
   // Scrolling back down to the last rows follows new steps again; scrolling up
   // stops it, as the engine's own `end` does.
+  on('command.run', { command: SETUP_COMMAND }, async ($) => {
+    const refused = await openSetup($, state, options)
+    return { text: refused ? `The setup screen did not open: ${refused}` : 'Specialists: esc closes the screen.' }
+  })
+
+  // Closing the screen drops its draft, so the next open starts from the list.
+  on('ui.close', { id: SETUP_PANE }, async ($, e, next) => {
+    if (e.origin.kind === 'person') await keepSetup($, state, undefined)
+    return next(e)
+  })
+
+  on('ui.render', { component: 'Pane' }, ($, e, next) => {
+    if (e.requestId !== SETUP_PANE) return next(e)
+    const ui = $.ui.resolve(e)
+    if (!('Input' in ui)) return <ui.Text key="setup-mobile">Specialists are set up in the terminal or desktop app.</ui.Text>
+    const { Box, Text, Input, Select, Button } = ui
+    const setup: SetupState = state.setup ?? { catalog: { error: 'not loaded' }, message: '' }
+    const models = 'models' in setup.catalog ? setup.catalog.models : []
+    const draft = setup.draft
+    const edit = (patch: Partial<Fields>) => { if (draft) void keepSetup($, state, { ...setup, draft: { ...draft, ...patch }, message: '' }) }
+    const modelOptions = models.length
+      ? [...models.filter(m => m.listed), ...models.filter(m => !m.listed)].map(m => ({ value: m.slug, label: m.listed ? m.slug : `${m.slug} (hidden)` }))
+      : [{ value: draft?.model || 'none', label: draft?.model || 'no catalog' }]
+    const efforts = models.find(m => m.slug === draft?.model)?.efforts ?? []
+    return (
+      <Box key="setup" flexDirection="column">
+        {listEntries(options, state.roles).map(entry => (
+          <Button key={`row:${entry.slot}`} plain label={entry.problem ? `${entry.label}  (${entry.problem})` : entry.label}
+            onPress={() => { void keepSetup($, state, { ...setup, draft: draftFor(entry.slot, options, state.roles), message: '' }) }} />
+        ))}
+        <Button key="add" label="+ Add" onPress={() => {
+          const slot = freeSlot(options)
+          void keepSetup($, state, slot ? { ...setup, draft: blankDraft(slot, models, state.roles), message: '' } : { ...setup, message: 'all 4 slots are in use' })
+        }} />
+        {draft ? (
+          <Box key="form" flexDirection="column" marginTop={1}>
+            <Text dimColor>{draft.slot}</Text>
+            <Input key="name" label="Name         " value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => edit({ name: v })} />
+            <Select key="model" label="Model        " value={draft.model || modelOptions[0]?.value} options={modelOptions}
+              onSelect={(v: string) => { const picked = withModel(draft, v, models); void keepSetup($, state, { ...setup, draft: picked.draft, message: picked.message }) }} />
+            <Select key="perspective" label="Perspective  " value={draft.perspective} options={Object.keys(state.roles).map(value => ({ value }))} onSelect={(v: string) => edit({ perspective: v })} />
+            <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={['default', ...efforts].map(value => ({ value }))} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
+            <Input key="when" label="Use when     " value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => edit({ when: v })} />
+            <Box key="actions" flexDirection="row">
+              <Button key="save" label="Save" onPress={() => { void saveSetup($, state, options) }} />
+              <Text>{' '}</Text>
+              {draft.baseline ? <Button key="remove" label="Remove" onPress={() => { void removeSetup($, state) }} /> : null}
+              <Text>{' '}</Text>
+              <Button key="cancel" label="Cancel" onPress={() => { void closeSetup($, state) }} />
+            </Box>
+          </Box>
+        ) : null}
+        {setup.message ? <Text key="message" color="yellow">{setup.message}</Text> : null}
+      </Box>
+    )
+  })
+
   on('ui.scroll', { requestId: SPECIALIST_PANE }, async ($, e, next) => {
     const moved = await next(e)
     if (!moved.deny && landsAtEnd(e)) await followPaneEnd($, 'scrolled to the bottom', 'transcript')
