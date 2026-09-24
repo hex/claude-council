@@ -660,6 +660,7 @@ export const register: Register = (on, options) => {
             <ui.Text>
               <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
               <ui.Text dimColor>{`  ${working.record.perspective}`}</ui.Text>
+              <ui.Text color={MODEL_RGB}>{`  ${working.record.model}`}</ui.Text>
               <ui.Text bold color={roundStatus(true, undefined, clock).color}>{`  \u25cf ${clock}`}</ui.Text>
             </ui.Text>
           </ui.Box>
