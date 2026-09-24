@@ -95,6 +95,9 @@ type PaneState = {
   paneFollowFrames: number
   // The setup screen's draft and catalog, mirrored from $.store so a reload redraws it.
   setup?: SetupState
+  // Bumped after each Enter in a setup field: the engine empties a submitted
+  // Input, and a field under a new key draws its value again.
+  inputEpoch: number
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -171,6 +174,14 @@ async function setupAction($: EngineInterface, state: PaneState, work: () => Pro
 async function editSetup($: EngineInterface, state: PaneState, patch: Partial<Fields>): Promise<void> {
   const setup = state.setup
   if (setup?.draft) await keepSetup($, state, { ...setup, draft: { ...setup.draft, ...patch }, status: undefined, confirm: undefined })
+}
+
+// Enter in a setup field keeps what was typed and moves on to the next control.
+async function submitField($: EngineInterface, state: PaneState, patch: Partial<Fields>, next: string): Promise<void> {
+  await editSetup($, state, patch)
+  state.inputEpoch += 1
+  $.ui.invalidate('ui.render')
+  await $.ui.focus({ requestId: SETUP_PANE, key: next })
 }
 
 async function pickModel($: EngineInterface, state: PaneState, slug: string): Promise<void> {
@@ -631,7 +642,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -984,7 +995,7 @@ export const register: Register = (on, options) => {
               {editor.unsaved ? <Text key="unsaved" color={COUNCIL_RGB}>{'  unsaved changes'}</Text> : null}
             </Box>
             <Box key="editor" flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1}>
-              <Input key="name" label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => edit({ name: v })} />
+              <Input key={`name.${state.inputEpoch}`} label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, 'model')) }} />
               <Select key="model" label="Model        " value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
                 onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
               {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
@@ -996,10 +1007,10 @@ export const register: Register = (on, options) => {
               ) : null}
               <Select key="perspective" label="Perspective  " value={draft.perspective} options={editor.perspectiveOptions} onSelect={(v: string) => edit({ perspective: v })} />
               {editor.perspectiveHelp ? help('perspective-help', editor.perspectiveHelp) : null}
-              {editor.showFocus ? <Input key="focus" label="Focus        " placeholder="what it should look for, in your words" value={draft.focus} onInput={(v: string) => edit({ focus: v })} onSubmit={(v: string) => edit({ focus: v })} /> : null}
+              {editor.showFocus ? <Input key={`focus.${state.inputEpoch}`} label="Focus        " placeholder="what it should look for, in your words" value={draft.focus} onInput={(v: string) => edit({ focus: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { focus: v }, 'effort')) }} /> : null}
               <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
               {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
-              <Input key="when" label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => edit({ when: v })} />
+              <Input key={`when.${state.inputEpoch}`} label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, 'save')) }} />
               {help('when-count', `${editor.whenCount} characters`)}
               <Box key="actions" flexDirection="row">
                 <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />

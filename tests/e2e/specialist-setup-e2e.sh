@@ -46,7 +46,8 @@ wait_for() {
 }
 
 # The focus ring is not visible in a plain capture; the debug log names each move.
-focused() { grep "ui.focus Pane specialist-setup" "$LOG" | tail -1 | sed -n "s/.*onto claude-council's \(.*\): moved.*/\1/p"; }
+# Text fields carry an epoch suffix (name.3) that changes after each Enter.
+focused() { grep "ui.focus Pane specialist-setup" "$LOG" | tail -1 | sed -n "s/.*onto claude-council's \(.*\): moved.*/\1/p" | sed 's/\.[0-9]*$//'; }
 focus_on() {
     local tries=0
     until [ "$(focused)" = "$1" ]; do
