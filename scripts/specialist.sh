@@ -102,7 +102,7 @@ cmd_codex() {
     # Each round's files describe that round only.
     rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/codex-pid" "${state}/exit" "${state}/thread"
     cat > "${state}/prompt.txt"
-    local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -o "${state}/last-message.md")
+    local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'model_reasoning_summary="concise"' -o "${state}/last-message.md")
     if [[ -n "$effort" ]]; then flags+=(-c "model_reasoning_effort=\"${effort}\""); fi
     local args=(exec "${flags[@]}" -)
     if [[ -n "$thread" ]]; then args=(exec resume "${flags[@]}" "$thread" -); fi

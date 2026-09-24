@@ -211,6 +211,7 @@ const WT = '/r/app.specialists/sec-1'
 const events = [
   '{"type":"thread.started","thread_id":"01a0ce2a-1d08-76c0-a6ef-8340b581212d"}',
   '{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Skill descriptions were shortened"}}',
+  '{"type":"item.completed","item":{"id":"item_r","type":"reasoning","text":"**Checking the repo**"}}',
   '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"I\u2019m checking the repo state.\\nThen the tests."}}',
   '{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"/bin/zsh -lc \\"git status --short\\"","status":"in_progress"}}',
   '{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"/bin/zsh -lc \\"git status --short\\"","status":"completed","exit_code":0}}',
@@ -223,6 +224,7 @@ const events = [
 
 test('the event stream becomes one step per item, updated in place, with half-written lines skipped', () => {
   expect(specialistSteps(events, WT)).toEqual([
+    { kind: 'think', text: 'Checking the repo', state: 'done' },
     { kind: 'say', text: 'I\u2019m checking the repo state.\nThen the tests.', state: 'done' },
     { kind: 'run', text: 'git status --short', state: 'done' },
     { kind: 'edit', text: 'tests/a.bats', state: 'done' },
@@ -235,8 +237,9 @@ test('the event stream becomes one step per item, updated in place, with half-wr
 test('the band shows the latest step in one short line', () => {
   const steps = specialistSteps(events, WT)
   expect(latestStep(steps)).toBe('$ bats tests/a.bats')
-  expect(latestStep(steps.slice(0, 1))).toBe('I\u2019m checking the repo state.')
-  expect(latestStep(steps.slice(0, 3))).toBe('\u270e tests/a.bats')
+  expect(latestStep(steps.slice(0, 1))).toBe('Checking the repo')
+  expect(latestStep(steps.slice(0, 2))).toBe('I\u2019m checking the repo state.')
+  expect(latestStep(steps.slice(0, 4))).toBe('\u270e tests/a.bats')
   expect(latestStep([{ kind: 'run', text: 'x'.repeat(80), state: 'running' }])).toBe(`$ ${'x'.repeat(59)}…`)
   expect(latestStep([])).toBe('')
 })

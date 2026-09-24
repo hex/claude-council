@@ -720,7 +720,7 @@ export const register: Register = (on, options) => {
         </Box>
         <Text>
           <Text bold color={COUNCIL_RGB}>{' STEPS'}</Text>
-          <Text dimColor>{`  ${log.steps.filter(step => step.kind !== 'say').length}`}</Text>
+          <Text dimColor>{`  ${log.steps.filter(step => step.kind === 'run' || step.kind === 'edit').length}`}</Text>
         </Text>
         {log.steps.map((step, index) => {
           const key = `step-${index}`
@@ -735,6 +735,7 @@ export const register: Register = (on, options) => {
               </Box>
             )
           }
+          if (step.kind === 'think') return <Text key={key} dimColor italic>{`  ${step.text}`}</Text>
           const [glyph, color] = mark(step)
           const isDone = step.state === 'done'
           if (step.kind === 'edit') {
