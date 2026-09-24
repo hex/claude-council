@@ -223,7 +223,8 @@ export function commitSubject(name: string, task: string): string {
   return `${prefix}${space > room / 2 ? line.slice(0, space) : line.slice(0, room)}…`
 }
 
-export type Step = { kind: 'say' | 'run' | 'edit'; text: string; state: 'running' | 'done' | 'failed' }
+// think is a short reasoning summary, Codex's own bold title for what it is working out.
+export type Step = { kind: 'think' | 'say' | 'run' | 'edit'; text: string; state: 'running' | 'done' | 'failed' }
 
 // Codex wraps each command in the login shell: `/bin/zsh -lc "git status"`.
 const SHELL_WRAP = /^\/bin\/\w+ -lc (["'])([\s\S]*)\1$/
@@ -241,6 +242,7 @@ export function specialistSteps(events: string, worktree: string): Step[] {
     if (!item || typeof item.id !== 'string') continue
     const status = item.status === 'failed' ? 'failed' : event.type === 'item.completed' ? 'done' : 'running'
     let step: Step | undefined
+    if (item.type === 'reasoning' && typeof item.text === 'string') step = { kind: 'think', text: item.text.replace(/\*\*/g, '').trim(), state: 'done' }
     if (item.type === 'agent_message' && typeof item.text === 'string') step = { kind: 'say', text: item.text, state: 'done' }
     if (item.type === 'command_execution' && typeof item.command === 'string') {
       step = { kind: 'run', text: SHELL_WRAP.exec(item.command)?.[2] ?? item.command, state: status }

@@ -312,6 +312,8 @@ launch() {
     wait_round
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == "exec resume --json -m gpt-6-sol "*" 01a0ce2a-1d08-76c0-a6ef-8340b581212d -" ]]
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" != *model_reasoning_effort* ]]
+    # Short reasoning summaries give the pane something to show between commands.
+    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *' -c model_reasoning_summary="concise" '* ]]
     [ "$(cat "$STATE/thread")" = "01a0ce2a-1d08-76c0-a6ef-8340b581212d" ]
     # A row's effort reaches Codex as its reasoning effort.
     rm -f "$STATE/exit"
