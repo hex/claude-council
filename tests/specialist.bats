@@ -205,6 +205,13 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 EOF
 )"
     [ "$output" = "$expected" ]
+    status_section="$(printf '%s\n' "$output" | sed -n '/^--- status$/,$p')"
+    expected_status="$(cat <<'EOF'
+--- status
+ M src/a.txt
+EOF
+)"
+    [ "$status_section" = "$expected_status" ]
 }
 
 start_run() {
