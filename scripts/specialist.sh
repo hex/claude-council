@@ -100,7 +100,9 @@ cmd_codex() {
     # Each round's files describe that round only.
     rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/codex-pid" "${state}/exit" "${state}/thread"
     cat > "${state}/prompt.txt"
-    local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -o "${state}/last-message.md")
+    # mcp_servers={} keeps the user's own MCP servers out of a round: none of
+    # them serve the task, and each would start with every round.
+    local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'mcp_servers={}' -o "${state}/last-message.md")
     local args=(exec "${flags[@]}" -)
     if [[ -n "$thread" ]]; then args=(exec resume "${flags[@]}" "$thread" -); fi
     # The round runs detached and this call returns at once: the caller follows
