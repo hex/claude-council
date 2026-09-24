@@ -65,13 +65,13 @@ The council sends your question to third-party providers, and a tool is easier f
 
 A specialist is a Codex agent that writes code for you on its own model, in its own git worktree. You name it, pick its model and the council perspective it works from, and say when it fits. Claude offers one when a task matches and starts it only once you ask or agree. The start itself opens no dialog; only a finish asks you first.
 
-Run `/specialists` to set them up. It opens a screen with your specialists listed in full and a form under them. You type the name and the use-when, and pick the model, the perspective and the effort from lists:
+Run `/specialists` to set them up. It opens a screen with your specialists in an orange frame, two lines each: the name, model, perspective and effort, then the use-when. Pick one to edit it in the form below, or add a new one. You type the name and the use-when, and pick the model, the perspective and the effort from lists:
 
 - The models come from `codex debug models`. Listed models come first, and hidden ones carry `(hidden)`.
-- The perspectives are the keys of `config/roles.json`. The perspective's prompt opens every task.
-- The efforts are the ones Codex offers for the chosen model, plus `default`, which keeps your own Codex default. If you switch to a model that lacks the chosen effort, the effort goes back to `default` and the screen says so.
+- The perspectives are the keys of `config/roles.json`. The perspective's prompt opens every task, and the form shows what it looks for.
+- The efforts are the ones Codex offers for the chosen model, each with Codex's own description, plus `default`, which keeps your own Codex default. If you switch to a model that lacks the chosen effort, the effort goes back to `default` and the screen says so.
 
-Save checks the specialist against Codex's catalog and writes it to its `/config` row: the row you opened, or the first empty one for a new specialist. If a field is wrong, the screen names it and what it accepts, and writes nothing. Remove empties the row. Cancel or Esc closes the screen and drops what you typed. Each save reloads the mod, so the transcript shows the engine's `options changed — reloaded` line. If `codex` is missing or logged out, the list and Remove still work, and Save shows Codex's error. On a phone, the screen asks you to use the terminal or the desktop app.
+Save checks the specialist against Codex's catalog and writes it to its `/config` row: the row you opened, or the first empty one for a new specialist. If a field is wrong, the screen names it and what it accepts, and writes nothing. The form marks unsaved changes. Opening another specialist or adding one over them asks first, and so does Remove, which empties the row. Discard changes drops your edits and keeps the screen open. Esc closes the screen and keeps a changed draft for the next `/specialists`. The screen opens at once and fills in the models when Codex answers; if Codex cannot list them, a Retry button asks again. Each save reloads the mod, so the transcript shows the engine's `options changed — reloaded` line. If `codex` is missing or logged out, the list and Remove still work, and Save shows Codex's error. On a phone, the screen asks you to use the terminal or the desktop app.
 
 When no specialist fits a task and you want one, Claude can open the same screen with a name, a perspective and a use-when filled in. The screen saves nothing until you press Save.
 

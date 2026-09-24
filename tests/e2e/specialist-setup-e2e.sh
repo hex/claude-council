@@ -40,11 +40,11 @@ focus_on() {
     done
 }
 
-# An open Select draws its highlighted option in reverse video: read it from the
-# escape codes and move until it is the one wanted.
+# An open Select draws its highlighted option in reverse video (SGR 7): read it
+# from the escape codes and move until it is the one wanted.
 highlighted() {
-    tmux capture-pane -e -p -t "$SESSION" | sed 's/\x1b\[[0-9;]*m/<E>/g' \
-        | grep -o '<E><E>  [a-z0-9.-]*<E>' | head -1 | sed 's/<E>//g; s/^  //'
+    tmux capture-pane -e -p -t "$SESSION" | LC_ALL=C sed 's/\x1b\[7m/<R>/g; s/\x1b\[[0-9;]*m/<E>/g' \
+        | LC_ALL=C grep -o '<R>  [a-z0-9.-][a-z0-9.-]*' | head -1 | sed 's/^<R>  //'
 }
 pick() {
     local moves=0
@@ -73,7 +73,7 @@ screen > "$OUT/1-open.txt"
 
 echo "2. add a draft in ${SLOT}"
 focus_on add; key Enter
-wait_for "$SLOT"
+wait_for "NEW specialist"
 
 echo "3. fill the form"
 focus_on name; tmux send-keys -t "$SESSION" -l e2e; sleep 1
@@ -84,14 +84,16 @@ screen > "$OUT/3-filled.txt"
 
 echo "4. save"
 focus_on save; key Enter
-wait_for "saved ${SLOT}"
+wait_for "Saved e2e."
 screen > "$OUT/4-saved.txt"
 [ "$(row "$SLOT")" = "$WANT" ] || fail "${SLOT} is '$(row "$SLOT")', expected '$WANT'"
 
 echo "5. remove"
 focus_on "row:${SLOT}"; key Enter
 focus_on remove; key Enter
-wait_for "removed ${SLOT}"
+wait_for "Remove e2e?"
+focus_on confirm-yes; key Enter
+wait_for "Removed e2e."
 [ "$(row "$SLOT")" = "" ] || fail "${SLOT} is '$(row "$SLOT")' after remove"
 
 echo "PASS ($OUT)"

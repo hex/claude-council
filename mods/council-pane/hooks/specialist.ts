@@ -10,7 +10,7 @@ export type Specialist = { name: string; model: string; perspective: string; eff
 const ROW = /^\s*([^=\s]+)\s*=\s*(\S+)\s+as\s+([^,\s]+)\s*,(?:\s*effort:\s*([^,\s]*)\s*,)?\s*when:\s*(.+?)\s*$/
 const EFFORT = /^[a-z]+$/
 const NAME = /^[a-z][a-z0-9-]{0,23}$/
-const WHEN_MAX = 200
+export const WHEN_MAX = 200
 const SHAPE = 'expected: name = model as perspective, when: use-when'
 export const SLOTS = ['specialist_1', 'specialist_2', 'specialist_3', 'specialist_4']
 

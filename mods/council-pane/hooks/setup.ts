@@ -1,9 +1,13 @@
 // ABOUTME: Pure decisions for the specialist setup screen: Codex's model catalog, one validator, rows and drafts
 // ABOUTME: No engine calls here, so every rule runs under bun test
-import { nameProblem, parseSpecialist, SLOTS, type Roles } from './specialist'
+import { nameProblem, parseSpecialist, SLOTS, WHEN_MAX, type Roles } from './specialist'
 
-export type CatalogModel = { slug: string; listed: boolean; efforts: string[] }
+// effortHelp is Codex's own one-line description of each effort; defaultEffort
+// is what the model uses when nothing sets one.
+export type CatalogModel = { slug: string; listed: boolean; efforts: string[]; effortHelp: Record<string, string>; defaultEffort: string }
 export type Catalog = { models: CatalogModel[] } | { error: string }
+// The screen opens before the catalog arrives, so loading is a state of its own.
+export type CatalogState = Catalog | { loading: true }
 
 const CATALOG = 'codex debug models'
 
@@ -18,8 +22,15 @@ export function parseCatalog(run: { exitCode: number; stdout: string; stderr: st
     if (typeof entry.slug !== 'string' || entry.slug === '') return { error: `${CATALOG}: a model has no slug` }
     const levels = entry.supported_reasoning_levels
     if (!Array.isArray(levels)) return { error: `${CATALOG}: model '${entry.slug}' has no supported_reasoning_levels` }
-    const efforts = levels.map(level => (level as { effort?: unknown }).effort).filter((e): e is string => typeof e === 'string')
-    models.push({ slug: entry.slug, listed: entry.visibility === 'list', efforts })
+    const efforts: string[] = []
+    const effortHelp: Record<string, string> = {}
+    for (const level of levels as { effort?: unknown; description?: unknown }[]) {
+      if (typeof level.effort !== 'string') continue
+      efforts.push(level.effort)
+      if (typeof level.description === 'string') effortHelp[level.effort] = level.description
+    }
+    const defaultEffort = typeof entry.default_reasoning_level === 'string' ? entry.default_reasoning_level : ''
+    models.push({ slug: entry.slug, listed: entry.visibility === 'list', efforts, effortHelp, defaultEffort })
   }
   return { models }
 }
@@ -59,8 +70,10 @@ export function freeSlot(options: Record<string, unknown>): string | undefined {
 
 // baseline: the slot's row text when editing started, to spot a change made meanwhile.
 export type Draft = Fields & { slot: string; baseline: string }
-export type SetupState = { draft?: Draft; catalog: Catalog; message: string }
-export type ListEntry = { slot: string; label: string; problem?: string }
+export type Status = { kind: 'saved' | 'error' | 'note'; text: string }
+// A question the screen asks inline before an action it cannot undo.
+export type Confirm = { kind: 'remove' } | { kind: 'switch'; slot: string | 'new' }
+export type SetupState = { draft?: Draft; catalog: CatalogState; status?: Status; confirm?: Confirm }
 
 const rowOf = (options: Record<string, unknown>, slot: string) => (typeof options[slot] === 'string' ? (options[slot] as string) : '')
 
@@ -88,13 +101,94 @@ export function staleMessage(draft: Draft, options: Record<string, unknown>): st
   return rowOf(options, draft.slot) === draft.baseline ? undefined : `${draft.slot} changed while you edited; reloaded it`
 }
 
-export function listEntries(options: Record<string, unknown>, roles: Roles): ListEntry[] {
-  const entries: ListEntry[] = []
+
+export type Option = { value: string; label: string }
+export type RosterEntry = { slot: string; name: string; model: string; detail: string; when: string; problem?: string; editing: boolean }
+export type EditorView = {
+  title: string; unsaved: boolean; removable: boolean; discardLabel: string
+  models: 'loading' | 'failed' | 'ready'
+  modelOptions: Option[]; effortOptions: Option[]
+  perspectiveHelp: string; effortHelp: string; whenCount: string
+}
+export type SetupView = {
+  header: string
+  roster: RosterEntry[]
+  empty?: string
+  add: { kind: 'add' } | { kind: 'full'; text: string }
+  editor?: EditorView
+  confirm?: { text: string; yes: string; no: string }
+  status?: Status
+}
+
+const option = (value: string, label = value): Option => ({ value, label })
+
+// The perspective's own prompt says what it looks for; its first sentence is
+// only "You are ...", so the second one is shown when there is one.
+function perspectiveHelp(roles: Roles, perspective: string): string {
+  const prompt = Object.hasOwn(roles, perspective) ? roles[perspective]?.prompt ?? '' : ''
+  const sentences = prompt.split(/(?<=\.)\s+/).filter(Boolean)
+  return sentences[1] ?? sentences[0] ?? ''
+}
+
+function savedName(options: Record<string, unknown>, slot: string, roles: Roles): string | undefined {
+  const parsed = parseSpecialist(options[slot], roles)
+  return parsed && !('error' in parsed) ? parsed.name : undefined
+}
+
+export function isDirty(draft: Draft, roles: Roles): boolean {
+  const saved = parseSpecialist(draft.baseline, roles)
+  if (!saved || 'error' in saved) return draft.name.trim() !== '' || draft.when.trim() !== ''
+  return saved.name !== draft.name || saved.model !== draft.model || saved.perspective !== draft.perspective ||
+    (saved.effort ?? '') !== draft.effort || saved.when !== draft.when
+}
+
+function editorView(draft: Draft, catalog: CatalogState, roles: Roles, options: Record<string, unknown>): EditorView {
+  const models = 'models' in catalog ? catalog.models : []
+  const model = models.find(m => m.slug === draft.model)
+  const listed = [...models.filter(m => m.listed), ...models.filter(m => !m.listed)]
+  const removable = draft.baseline.trim() !== ''
+  const name = savedName(options, draft.slot, roles)
+  let effortHelp = ''
+  if (model) effortHelp = draft.effort ? model.effortHelp[draft.effort] ?? '' : `Your Codex config decides; this model's own default is ${model.defaultEffort}`
+  return {
+    title: removable ? `EDIT ${name ?? draft.slot}` : 'NEW specialist',
+    unsaved: isDirty(draft, roles),
+    removable,
+    discardLabel: removable ? 'Discard changes' : 'Cancel adding',
+    models: 'loading' in catalog ? 'loading' : 'error' in catalog ? 'failed' : 'ready',
+    modelOptions: 'models' in catalog ? listed.map(m => option(m.slug, m.listed ? m.slug : `${m.slug} (hidden)`)) : [option(draft.model)],
+    effortOptions: [option('default'), ...(model ? model.efforts : draft.effort ? [draft.effort] : []).map(e => option(e))],
+    perspectiveHelp: perspectiveHelp(roles, draft.perspective),
+    effortHelp,
+    whenCount: `${draft.when.length}/${WHEN_MAX}`,
+  }
+}
+
+function confirmView(setup: SetupState, options: Record<string, unknown>, roles: Roles): SetupView['confirm'] {
+  const { confirm, draft } = setup
+  if (!confirm || !draft) return undefined
+  const current = savedName(options, draft.slot, roles) ?? (draft.name || 'this draft')
+  if (confirm.kind === 'remove') return { text: `Remove ${current}? Claude can no longer offer it.`, yes: `Remove ${current}`, no: 'Keep it' }
+  const target = confirm.slot === 'new' ? 'add new' : `open ${savedName(options, confirm.slot, roles) ?? confirm.slot}`
+  return { text: `${current} has unsaved changes.`, yes: `Discard and ${target}`, no: 'Keep editing' }
+}
+
+export function setupView(setup: SetupState, options: Record<string, unknown>, roles: Roles): SetupView {
+  const roster: RosterEntry[] = []
   for (const slot of SLOTS) {
     const parsed = parseSpecialist(options[slot], roles)
     if (parsed === undefined) continue
-    if ('error' in parsed) { entries.push({ slot, label: `${slot}: ${rowOf(options, slot)}`, problem: parsed.error }); continue }
-    entries.push({ slot, label: [parsed.name, parsed.model, parsed.perspective, parsed.effort ?? 'default', parsed.when].join('  ') })
+    const editing = setup.draft?.slot === slot
+    if ('error' in parsed) { roster.push({ slot, name: slot, model: '', detail: rowOf(options, slot), when: '', problem: parsed.error, editing }); continue }
+    roster.push({ slot, name: parsed.name, model: parsed.model, detail: `${parsed.perspective} · effort ${parsed.effort ?? 'default'}`, when: parsed.when, editing })
   }
-  return entries
+  return {
+    header: `SPECIALISTS ${roster.length} of ${SLOTS.length}`,
+    roster,
+    ...(roster.length === 0 ? { empty: 'No specialists yet. Add one, and Claude offers it when a task matches its use-when.' } : {}),
+    add: freeSlot(options) ? { kind: 'add' } : { kind: 'full', text: `All ${SLOTS.length} slots are in use. Edit or remove one to add another.` },
+    ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, roles, options) } : {}),
+    ...(setup.confirm ? { confirm: confirmView(setup, options, roles) } : {}),
+    ...(setup.status ? { status: setup.status } : {}),
+  }
 }

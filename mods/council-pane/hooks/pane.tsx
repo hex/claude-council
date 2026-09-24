@@ -17,7 +17,7 @@ import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
-import { blankDraft, draftFor, freeSlot, checkSpecialist, listEntries, parseCatalog, staleMessage, withModel, type Fields, type SetupState } from './setup'
+import { blankDraft, draftFor, freeSlot, checkSpecialist, isDirty, parseCatalog, setupView, staleMessage, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -46,6 +46,12 @@ const RUNS_KEY = 'specialist-runs'
 const SETUP_PANE = 'specialist-setup'
 const SETUP_KEY = 'specialist-setup'
 const SETUP_COMMAND = 'specialists'
+// Filled status labels carry white letters, so each background is dark enough
+// for white on a light or a dark terminal.
+const STATUS_RGB: Record<Status['kind'], string> = { saved: 'rgb(46,120,72)', error: 'rgb(178,58,52)', note: 'rgb(150,100,20)' }
+const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: ' ERROR ', note: ' NOTE ' }
+// Help lines start under the field values: the labels are 13 wide plus ': '.
+const HELP_INDENT = ' '.repeat(15)
 // A /config row of this plugin is named `claude-council.<field>`.
 const ROW_PREFIX = 'claude-council.'
 
@@ -100,8 +106,8 @@ function files($: EngineInterface): Files {
   }
 }
 
-// The model and effort lists come from Codex itself, read when the setup
-// screen opens; a failure is kept as the catalog's error, never an empty list.
+// The model and effort lists come from Codex itself; a failure is kept as the
+// catalog's error, never an empty list.
 async function readCatalog($: EngineInterface) {
   const run = await $.process.run(['codex', 'debug', 'models'], { timeoutMs: 15_000 })
     .catch((err: unknown) => ({ exitCode: 127, stdout: '', stderr: String(err) }))
@@ -115,19 +121,39 @@ async function keepSetup($: EngineInterface, state: PaneState, setup: SetupState
   $.ui.invalidate('ui.render')
 }
 
-// Returns why the screen did not open, or undefined once it is open. A prefill
-// comes from Claude's {setup} call and starts a new row in the first free slot.
-async function openSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>, prefill?: Partial<Fields>): Promise<string | undefined> {
+const currentSetup = (state: PaneState): SetupState => state.setup ?? { catalog: { loading: true } }
+const modelsOf = (setup: SetupState) => ('models' in setup.catalog ? setup.catalog.models : [])
+
+// Asks Codex for its models and fills them in; a new draft that opened before
+// they arrived takes the first listed model.
+async function loadCatalog($: EngineInterface, state: PaneState): Promise<void> {
+  await keepSetup($, state, { ...currentSetup(state), catalog: { loading: true } })
   const catalog = await readCatalog($)
-  const models = 'models' in catalog ? catalog.models : []
-  let draft = state.setup?.draft
+  const setup = currentSetup(state)
+  const first = 'models' in catalog ? catalog.models.find(m => m.listed)?.slug : undefined
+  const draft = setup.draft && !setup.draft.model && first ? { ...setup.draft, model: first } : setup.draft
+  await keepSetup($, state, { ...setup, catalog, draft })
+}
+
+// Returns why the screen did not open, or undefined once it is open. It opens
+// at once and the catalog fills in after. A prefill comes from Claude's {setup}
+// call and starts a new row in the first free slot.
+async function openSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>, prefill?: Partial<Fields>): Promise<string | undefined> {
+  // Only a draft with changes survives to the next open; an untouched one would
+  // reopen the form for nothing.
+  const kept = state.setup?.draft && isDirty(state.setup.draft, state.roles) ? state.setup.draft : undefined
+  let draft = kept
+  let status: Status | undefined
   if (prefill) {
     const slot = freeSlot(options)
     if (!slot) return 'all 4 slots are in use; the user can edit one with /specialists'
-    draft = blankDraft(slot, models, state.roles, prefill)
+    draft = blankDraft(slot, [], state.roles, prefill)
+  } else if (kept) {
+    status = { kind: 'note', text: 'Your unsaved draft is back.' }
   }
-  await keepSetup($, state, { draft, catalog, message: 'error' in catalog ? catalog.error : '' })
+  await keepSetup($, state, { catalog: { loading: true }, draft, status })
   try { await $.ui.open({ id: SETUP_PANE, title: 'Specialists', focus: true, closeOnEscape: true }) } catch (err) { return String(err) }
+  await loadCatalog($, state)
   return undefined
 }
 
@@ -137,65 +163,78 @@ async function setupAction($: EngineInterface, state: PaneState, work: () => Pro
   try {
     await work()
   } catch (error) {
-    const setup = state.setup ?? { catalog: { error: 'not loaded' }, message: '' }
-    await keepSetup($, state, { ...setup, message: String(error) }).catch(() => $.ui.log(`specialists: ${String(error)}`))
+    await keepSetup($, state, { ...currentSetup(state), status: { kind: 'error', text: String(error) } })
+      .catch(() => $.ui.log(`specialists: ${String(error)}`))
   }
 }
 
 // Field edits read the draft at press time, so two quick edits both land.
 async function editSetup($: EngineInterface, state: PaneState, patch: Partial<Fields>): Promise<void> {
   const setup = state.setup
-  if (setup?.draft) await keepSetup($, state, { ...setup, draft: { ...setup.draft, ...patch }, message: '' })
+  if (setup?.draft) await keepSetup($, state, { ...setup, draft: { ...setup.draft, ...patch }, status: undefined, confirm: undefined })
 }
 
 async function pickModel($: EngineInterface, state: PaneState, slug: string): Promise<void> {
   const setup = state.setup
   if (!setup?.draft) return
-  const picked = withModel(setup.draft, slug, 'models' in setup.catalog ? setup.catalog.models : [])
-  await keepSetup($, state, { ...setup, draft: picked.draft, message: picked.message })
+  const picked = withModel(setup.draft, slug, modelsOf(setup))
+  await keepSetup($, state, { ...setup, draft: picked.draft, status: picked.message ? { kind: 'note', text: picked.message } : undefined })
 }
 
-async function openRow($: EngineInterface, state: PaneState, options: Record<string, unknown>, slot: string): Promise<void> {
-  const setup = state.setup ?? { catalog: { error: 'not loaded' }, message: '' }
-  const models = 'models' in setup.catalog ? setup.catalog.models : []
-  await keepSetup($, state, { ...setup, draft: draftFor(slot, options, state.roles, models), message: '' })
-}
-
-async function addRow($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
-  const setup = state.setup ?? { catalog: { error: 'not loaded' }, message: '' }
-  const slot = freeSlot(options)
-  if (!slot) { await keepSetup($, state, { ...setup, message: 'all 4 slots are in use' }); return }
-  await keepSetup($, state, { ...setup, draft: blankDraft(slot, 'models' in setup.catalog ? setup.catalog.models : [], state.roles), message: '' })
+// Opening another row, or a new one, over unsaved edits asks first.
+async function openRow($: EngineInterface, state: PaneState, options: Record<string, unknown>, target: string | 'new', force = false): Promise<void> {
+  const setup = currentSetup(state)
+  if (!force && setup.draft && setup.draft.slot !== target && isDirty(setup.draft, state.roles)) {
+    await keepSetup($, state, { ...setup, confirm: { kind: 'switch', slot: target } })
+    return
+  }
+  const slot = target === 'new' ? freeSlot(options) : target
+  if (!slot) { await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'note', text: 'All 4 slots are in use.' } }); return }
+  const draft = target === 'new' ? blankDraft(slot, modelsOf(setup), state.roles) : draftFor(slot, options, state.roles, modelsOf(setup))
+  await keepSetup($, state, { ...setup, draft, confirm: undefined, status: undefined })
 }
 
 // The write reloads this module and the reload redraws from the store, so the
 // store is cleared first; a write that fails puts the draft back with the reason.
 async function writeRow($: EngineInterface, state: PaneState, setup: SetupState, slot: string, value: string, done: string): Promise<void> {
-  await keepSetup($, state, { catalog: setup.catalog, message: done })
+  await keepSetup($, state, { catalog: setup.catalog, status: { kind: 'saved', text: done } })
   let written: { deny?: string }
   try {
     written = await $.config.set({ key: `${ROW_PREFIX}${slot}`, value })
   } catch (error) {
-    await keepSetup($, state, { ...setup, message: String(error) })
+    await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: String(error) } })
     return
   }
-  if (written.deny) await keepSetup($, state, { ...setup, message: written.deny })
+  if (written.deny) await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: written.deny } })
 }
 
 async function saveSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
   const setup = state.setup
   if (!setup?.draft) return
-  if ('error' in setup.catalog) { await keepSetup($, state, { ...setup, message: `cannot check the model: ${setup.catalog.error}` }); return }
+  if ('loading' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'note', text: 'Models are still loading; Save again in a moment.' } }); return }
+  if ('error' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: `Cannot check the model: ${setup.catalog.error}` } }); return }
   const checked = checkSpecialist(setup.draft, setup.draft.slot, { roles: state.roles, models: setup.catalog.models, options })
-  if ('error' in checked) { await keepSetup($, state, { ...setup, message: checked.error }); return }
-  await writeRow($, state, setup, setup.draft.slot, checked.row, `saved ${setup.draft.slot}`)
+  if ('error' in checked) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: checked.error } }); return }
+  await writeRow($, state, setup, setup.draft.slot, checked.row, `Saved ${setup.draft.name}.`)
 }
 
-async function removeSetup($: EngineInterface, state: PaneState): Promise<void> {
+// The confirm row's yes: remove, or drop the unsaved draft and open the target.
+async function confirmSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
   const setup = state.setup
-  const slot = setup?.draft?.slot
-  if (!setup || !slot) return
-  await writeRow($, state, setup, slot, '', `removed ${slot}`)
+  const confirm = setup?.confirm
+  if (!setup?.draft || !confirm) return
+  if (confirm.kind === 'switch') { await openRow($, state, options, confirm.slot, true); return }
+  const name = draftFor(setup.draft.slot, options, state.roles, []).name || setup.draft.slot
+  await writeRow($, state, setup, setup.draft.slot, '', `Removed ${name}.`)
+}
+
+async function askSetup($: EngineInterface, state: PaneState, confirm: SetupState['confirm']): Promise<void> {
+  await keepSetup($, state, { ...currentSetup(state), confirm })
+}
+
+// Drops the draft; the screen stays open on the roster.
+async function discardSetup($: EngineInterface, state: PaneState): Promise<void> {
+  await keepSetup($, state, { catalog: currentSetup(state).catalog })
 }
 
 // A row typed into /config by hand gets the same check as a Save; an empty row
@@ -208,11 +247,6 @@ async function handEditDenial($: EngineInterface, state: PaneState, slot: string
   if ('error' in catalog) return `cannot check the model: ${catalog.error}`
   const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '' }, slot, { roles: state.roles, models: catalog.models, options })
   return 'error' in checked ? checked.error : undefined
-}
-
-async function closeSetup($: EngineInterface, state: PaneState): Promise<void> {
-  await keepSetup($, state, undefined)
-  await $.ui.close({ id: SETUP_PANE })
 }
 
 // Submits the wake prompt once the job's record says completed. A job that
@@ -608,7 +642,7 @@ export const register: Register = (on, options) => {
     // A Save reloads this module; the screen's draft comes back from the store.
     const kept = (await $.store.get(SETUP_KEY)) as SetupState | undefined
     const stale = kept?.draft ? staleMessage(kept.draft, options) : undefined
-    state.setup = kept && stale ? { catalog: kept.catalog, message: stale } : kept
+    state.setup = kept && stale ? { catalog: kept.catalog, status: { kind: 'note', text: stale } } : kept
     // An open setup screen was drawn by the reloaded module before the roles
     // and the store were read; draw it again with them.
     $.ui.invalidate('ui.render')
@@ -887,9 +921,11 @@ export const register: Register = (on, options) => {
     return { text: refused ? `The setup screen did not open: ${refused}` : 'Specialists: esc closes the screen.' }
   })
 
-  // Closing the screen drops its draft, so the next open starts from the list.
+  // Closing the screen keeps a draft only when it holds changes; an untouched
+  // one would reopen the form for nothing.
   on('ui.close', { id: SETUP_PANE }, async ($, e, next) => {
-    if (e.origin.kind === 'person') await keepSetup($, state, undefined)
+    const draft = state.setup?.draft
+    if (e.origin.kind === 'person' && !(draft && isDirty(draft, state.roles))) await keepSetup($, state, undefined)
     return next(e)
   })
 
@@ -898,40 +934,95 @@ export const register: Register = (on, options) => {
     const ui = $.ui.resolve(e)
     if (!('Input' in ui)) return <ui.Text key="setup-mobile">Specialists are set up in the terminal or desktop app.</ui.Text>
     const { Box, Text, Input, Select, Button } = ui
-    const setup: SetupState = state.setup ?? { catalog: { error: 'not loaded' }, message: '' }
-    const models = 'models' in setup.catalog ? setup.catalog.models : []
+    const setup = currentSetup(state)
+    const view = setupView(setup, options, state.roles)
     const draft = setup.draft
+    const editor = view.editor
+    const width = Math.max(30, e.props.bodyColumns - 2)
+    const press = (work: () => Promise<void>) => () => { void setupAction($, state, work) }
     const edit = (patch: Partial<Fields>) => { void setupAction($, state, () => editSetup($, state, patch)) }
-    const modelOptions = models.length
-      ? [...models.filter(m => m.listed), ...models.filter(m => !m.listed)].map(m => ({ value: m.slug, label: m.listed ? m.slug : `${m.slug} (hidden)` }))
-      : [{ value: draft?.model || 'none', label: draft?.model || 'no catalog' }]
-    const efforts = models.find(m => m.slug === draft?.model)?.efforts ?? []
+    // A help line sits under the values and keeps to one row: a pane taller than
+    // the terminal hands the keyboard back to the prompt.
+    const help = (key: string, text: string) => (
+      <Box key={key} flexDirection="row">
+        <Box key="indent" width={HELP_INDENT.length} flexShrink={0}><Text key="pad">{HELP_INDENT}</Text></Box>
+        <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
+      </Box>
+    )
     return (
-      <Box key="setup" flexDirection="column">
-        {listEntries(options, state.roles).map(entry => (
-          <Button key={`row:${entry.slot}`} plain label={entry.problem ? `${entry.label}  (${entry.problem})` : entry.label}
-            onPress={() => { void setupAction($, state, () => openRow($, state, options, entry.slot)) }} />
-        ))}
-        <Button key="add" label="+ Add" onPress={() => { void setupAction($, state, () => addRow($, state, options)) }} />
-        {draft ? (
-          <Box key="form" flexDirection="column" marginTop={1}>
-            <Text dimColor>{draft.slot}</Text>
-            <Input key="name" label="Name         " value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => edit({ name: v })} />
-            <Select key="model" label="Model        " value={draft.model || modelOptions[0]?.value} options={modelOptions}
-              onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
-            <Select key="perspective" label="Perspective  " value={draft.perspective} options={Object.keys(state.roles).map(value => ({ value }))} onSelect={(v: string) => edit({ perspective: v })} />
-            <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={['default', ...efforts].map(value => ({ value }))} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
-            <Input key="when" label="Use when     " value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => edit({ when: v })} />
-            <Box key="actions" flexDirection="row">
-              <Button key="save" label="Save" onPress={() => { void setupAction($, state, () => saveSetup($, state, options)) }} />
-              <Text>{' '}</Text>
-              {draft.baseline ? <Button key="remove" label="Remove" onPress={() => { void setupAction($, state, () => removeSetup($, state)) }} /> : null}
-              <Text>{' '}</Text>
-              <Button key="cancel" label="Cancel" onPress={() => { void setupAction($, state, () => closeSetup($, state)) }} />
+      <Box key="setup" flexDirection="column" width={width}>
+        {/* The roster: one frame, two lines per specialist, the one being edited marked. */}
+        <Text key="roster-chip" bold color="white" backgroundColor={COUNCIL_RGB}>{` ${view.header} `}</Text>
+        <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1}>
+          {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
+          {view.roster.map(entry => (
+            <Box key={`entry:${entry.slot}`} flexDirection="column">
+              <Box key="line" flexDirection="row">
+                <Button key={`row:${entry.slot}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.slot))} />
+                <Text key="model" color={MODEL_RGB}>{entry.model ? `  ${entry.model}` : ''}</Text>
+                <Text key="detail" dimColor wrap="truncate-end">{`  ${entry.detail}`}</Text>
+                {entry.editing ? <Text key="gap">{'  '}</Text> : null}
+                {entry.editing ? <Text key="editing" bold color="white" backgroundColor={COUNCIL_RGB}>{' EDITING '}</Text> : null}
+              </Box>
+              {entry.problem
+                ? <Text key="problem" color={STATUS_RGB.error} wrap="wrap">{`  ${entry.problem}`}</Text>
+                : <Text key="when" dimColor wrap="wrap">{`  when: ${entry.when}`}</Text>}
+            </Box>
+          ))}
+          {view.add.kind === 'add'
+            ? <Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} />
+            : <Text key="full" dimColor wrap="wrap">{view.add.text}</Text>}
+        </Box>
+        {editor && draft ? (
+          <Box key="editor-wrap" flexDirection="column" marginTop={1}>
+            <Box key="editor-head" flexDirection="row">
+              <Text key="editor-chip" bold color="white" backgroundColor={COUNCIL_RGB}>{` ${editor.title} `}</Text>
+              {editor.unsaved ? <Text key="unsaved" color={COUNCIL_RGB}>{'  unsaved changes'}</Text> : null}
+            </Box>
+            <Box key="editor" flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1}>
+              <Input key="name" label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => edit({ name: v })} />
+              <Select key="model" label="Model        " value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
+                onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
+              {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
+              {editor.models === 'failed' ? (
+                <Box key="models-failed" flexDirection="row">
+                  <Text key="failed" color={STATUS_RGB.error}>{`${HELP_INDENT}could not load models  `}</Text>
+                  <Button key="retry" label="Retry" onPress={press(() => loadCatalog($, state))} />
+                </Box>
+              ) : null}
+              <Select key="perspective" label="Perspective  " value={draft.perspective} options={Object.keys(state.roles).map(value => ({ value }))} onSelect={(v: string) => edit({ perspective: v })} />
+              {editor.perspectiveHelp ? help('perspective-help', editor.perspectiveHelp) : null}
+              <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
+              {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
+              <Input key="when" label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => edit({ when: v })} />
+              {help('when-count', `${editor.whenCount} characters`)}
+              <Box key="actions" flexDirection="row">
+                <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
+                <Text key="gap-1">{'  '}</Text>
+                {editor.removable ? <Button key="remove" label="Remove" onPress={press(() => askSetup($, state, { kind: 'remove' }))} /> : null}
+                {editor.removable ? <Text key="gap-2">{'  '}</Text> : null}
+                <Button key="discard" label={editor.discardLabel} onPress={press(() => discardSetup($, state))} />
+              </Box>
             </Box>
           </Box>
         ) : null}
-        {setup.message ? <Text key="message" color="yellow">{setup.message}</Text> : null}
+        {view.confirm ? (
+          <Box key="confirm" flexDirection="column" marginTop={1}>
+            <Text key="question" bold wrap="wrap">{view.confirm.text}</Text>
+            <Box key="answers" flexDirection="row">
+              <Button key="confirm-yes" label={view.confirm.yes} onPress={press(() => confirmSetup($, state, options))} />
+              <Text key="gap">{'  '}</Text>
+              <Button key="confirm-no" label={view.confirm.no} onPress={press(() => askSetup($, state, undefined))} />
+            </Box>
+          </Box>
+        ) : null}
+        {view.status ? (
+          <Box key="status" flexDirection="row" marginTop={1}>
+            <Text key="label" bold color="white" backgroundColor={STATUS_RGB[view.status.kind]}>{STATUS_LABEL[view.status.kind]}</Text>
+            <Text key="text" wrap="wrap">{` ${view.status.text}`}</Text>
+          </Box>
+        ) : null}
+        <Text key="keys" dimColor wrap="truncate-end">{'Tab next · Shift+Tab back · Esc closes, your draft is kept'}</Text>
       </Box>
     )
   })
