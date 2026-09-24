@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport,
+  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -328,6 +328,13 @@ test('a round whose process vanished without an exit code is reported as stopped
     isError: true,
     result: `Run ${record.id} (sec, round 1) stopped before it finished: its process is gone and left no exit code.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\nUncommitted in the worktree:\n M src/login.ts`,
   })
+})
+
+test('the working line turns with each frame and counts the round\'s time', () => {
+  expect(workingLine(0, 0, 102_000)).toBe('\u280b working  1:42')
+  expect(workingLine(2, 0, 102_000)).toBe('\u2839 working  1:42')
+  // Ten frames make one turn.
+  expect(workingLine(12, 1_000, 4_000)).toBe('\u2839 working  0:03')
 })
 
 test('roundClock counts m:ss, and h:mm:ss past an hour', () => {
