@@ -274,7 +274,7 @@ export function commitSubject(name: string, task: string): string {
 // think is a short reasoning summary, Codex's own bold title for what it is working out.
 export type Step = { kind: 'think' | 'say' | 'run' | 'edit'; text: string; state: 'running' | 'done' | 'failed' }
 
-// Codex wraps each command in the login shell: `/bin/zsh -lc "git status"`.
+// Codex runs a quoted command or a single unquoted token through the login shell.
 const SHELL_WRAP = /^\/bin\/\w+ -lc (?:(["'])([\s\S]*)\1|([^\s"']+))$/
 
 // The round's closing message is the report as JSON; the pane shows what a
