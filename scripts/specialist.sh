@@ -12,8 +12,24 @@ repo_root() {
     git -C "$1" rev-parse --show-toplevel 2>/dev/null || die "$1 is not inside a git repository"
 }
 
+parse_include_path() {
+    local root="$1" raw="$2" remaining="$2" part path=""
+    [[ "$raw" != /* && "/$raw/" != */../* ]] || die "invalid .worktreeinclude path '${raw}': must be relative and contain no '..' component"
+    while [[ -n "$remaining" ]]; do
+        part="${remaining%%/*}"
+        if [[ "$remaining" == */* ]]; then remaining="${remaining#*/}"; else remaining=""; fi
+        if [[ -n "$part" && "$part" != . ]]; then
+            [[ -z "$path" || ! -L "$root/$path" ]] || die "symlink in .worktreeinclude source for '${raw}': ${path}"
+            path="${path:+$path/}$part"
+        fi
+    done
+    [[ -n "$path" ]] || die "invalid .worktreeinclude path '${raw}': must name a file or directory"
+    REPLY="$path"
+}
+
 cmd_start() {
-    local dir="$1" name="$2" ts="$3" root parent base short home worktree branch state dirty
+    local dir="$1" name="$2" ts="$3" root parent base short home worktree branch state dirty entry source destination tree_entry link i count=0
+    local -a includes
     [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || die "invalid name '${name}': must match ^[a-z][a-z0-9-]*\$"
     root="$(repo_root "$dir")"
     parent="$(dirname "$root")"
@@ -24,7 +40,40 @@ cmd_start() {
     base="$(git -C "$root" rev-parse HEAD)"
     short="$(git -C "$root" rev-parse --short=7 HEAD)"
     if [[ -n "$(git -C "$root" status --porcelain)" ]]; then dirty=yes; else dirty=no; fi
+    if [[ -f "$root/.worktreeinclude" ]]; then
+        while IFS= read -r entry || [[ -n "$entry" ]]; do
+            entry="${entry%$'\r'}"
+            [[ -z "$entry" || "$entry" == \#* ]] && continue
+            parse_include_path "$root" "$entry"
+            entry="$REPLY"
+            git -C "$root" ls-tree -r -z "$base" | while IFS= read -r -d '' tree_entry; do
+                [[ "${tree_entry%% *}" == 120000 ]] || continue
+                link="${tree_entry#*$'\t'}"
+                if [[ "$entry" == "$link" || "$entry" == "$link/"* || "$link" == "$entry/"* ]]; then
+                    die "symlink in worktree destination for '${entry}': ${link}"
+                fi
+            done || exit 1
+            includes[$count]="$entry"
+            count=$((count + 1))
+        done < "$root/.worktreeinclude"
+    fi
     git -C "$root" worktree add -q -b "$branch" "$worktree" "$base" >&2 || exit 1
+    i=0
+    while (( i < count )); do
+        entry="${includes[$i]}"
+        source="$root/$entry"
+        if [[ -e "$source" || -L "$source" ]]; then
+            destination="$worktree/$entry"
+            mkdir -p "$(dirname "$destination")"
+            if [[ -d "$source" && ! -L "$source" ]]; then
+                mkdir -p "$destination"
+                cp -R -P "$source/." "$destination"
+            else
+                cp -R -P "$source" "$destination"
+            fi
+        fi
+        i=$((i + 1))
+    done
     mkdir -p "$state"
     printf 'repo=%s\nworktree=%s\nbranch=%s\nbase=%s\nshort=%s\nstate=%s\ndirty=%s\n' \
         "$root" "$worktree" "$branch" "$base" "$short" "$state" "$dirty"
