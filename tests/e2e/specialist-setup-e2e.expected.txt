@@ -1,0 +1,6 @@
+1. open /specialists
+2. add a draft in specialist_2
+3. fill the form
+4. save
+5. remove
+PASS ($OUT)
