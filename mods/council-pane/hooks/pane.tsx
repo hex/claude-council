@@ -9,7 +9,7 @@ import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, followUpRefusal, parseSpecialistReport, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
-  commitSubject, latestStep, lostResult, roundLiveness, roundProcessAlive, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
+  commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type Roles, type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -74,6 +74,7 @@ type PaneState = {
   specialistLog?: { record: RunRecord; steps: Step[]; isLive: boolean }
   // Runs whose end is being written up now, so one tick does not repeat another's.
   finishing: Set<string>
+  identityFailures: Set<string>
   specialistError: string
   specialistFrame: number
   // Frames left to retry following a just-opened pane: it becomes scrollable
@@ -285,13 +286,46 @@ async function saveRun($: EngineInterface, record: RunRecord): Promise<void> {
   await $.store.set(RUNS_KEY, runs)
 }
 
-async function roundState($: EngineInterface, record: RunRecord): Promise<'running' | 'ended' | 'lost'> {
+async function roundState($: EngineInterface, state: PaneState, record: RunRecord): Promise<'running' | 'ended' | 'lost'> {
   const stateDir = stateDirOf(record)
+  const exitPath = `${stateDir}/exit`
+  const exitText = await readText(files($), exitPath)
+  if (exitText.trim() !== '') return 'ended'
   const pid = (await readText(files($), `${stateDir}/pid`)).trim()
-  const recordedIdentity = await readText(files($), `${stateDir}/start`)
-  const observed = /^\d+$/.test(pid) ? await $.process.run(['ps', '-o', 'lstart=', '-p', pid]).catch(() => undefined) : undefined
-  const isAlive = roundProcessAlive(recordedIdentity, observed?.exitCode === 0 ? observed.stdout : undefined)
-  return roundLiveness(await readText(files($), `${stateDir}/exit`), isAlive)
+  let presence: 'present' | 'absent' | 'unknown' = 'unknown'
+  let recordedIdentity: string | undefined
+  let observedIdentity: string | undefined
+  let failure = ''
+  if (!/^\d+$/.test(pid)) failure = `invalid round pid ${JSON.stringify(pid)}`
+  else {
+    try {
+      const startPath = `${stateDir}/start`
+      if (await $.fs.exists(startPath)) recordedIdentity = await $.fs.read(startPath)
+      const alive = await $.process.run(['kill', '-0', pid], { env: { LC_ALL: 'C' } })
+      if (alive.exitCode === 0) presence = 'present'
+      else if (/no such process/i.test(alive.stderr)) presence = 'absent'
+      else failure = `kill -0 exited ${alive.exitCode}: ${alive.stderr.trim()}`
+      if (presence === 'present' && recordedIdentity !== undefined) {
+        const observed = await $.process.run(['ps', '-o', 'lstart=', '-p', pid], { env: { LC_ALL: 'C' } })
+        if (observed.exitCode === 0) observedIdentity = observed.stdout
+        else failure = `ps exited ${observed.exitCode}: ${observed.stderr.trim()}`
+      }
+    } catch (error) {
+      presence = 'unknown'
+      failure = `identity check failed: ${String(error)}`
+    }
+  }
+  const identity = roundProcessIdentity(recordedIdentity, observedIdentity, presence)
+  if (identity === 'unknown') {
+    const reason = failure || (recordedIdentity?.trim() === '' ? 'recorded start time is empty' : 'ps start time is empty or unparseable')
+    const message = `specialist round ${record.id} pid ${pid}: ${reason}`
+    const key = `${record.id}:${pid}`
+    if (!state.identityFailures.has(key)) {
+      $.ui.log(message)
+      state.identityFailures.add(key)
+    }
+  }
+  return roundLiveness(await readText(files($), exitPath), identity)
 }
 
 // Closes a round that ended: commits it, keeps its result on the record for
@@ -354,7 +388,7 @@ async function followSpecialist($: EngineInterface, state: PaneState): Promise<v
   if (state.specialist !== working) return
   state.specialistLog = { record: working.record, steps, isLive: true }
   $.ui.invalidate('ui.render')
-  const now = await roundState($, working.record)
+  const now = await roundState($, state, working.record)
   if (now !== 'running') await finishRound($, state, working.record, now)
 }
 
@@ -380,7 +414,7 @@ async function followOpenedPane($: EngineInterface, state: PaneState): Promise<v
 async function recoverRounds($: EngineInterface, state: PaneState): Promise<void> {
   for (const record of Object.values(await loadRuns($))) {
     if (record.state !== 'running') continue
-    const now = await roundState($, record)
+    const now = await roundState($, state, record)
     if (now === 'running') state.specialist = { record, startedMs: record.startedMs, stateDir: stateDirOf(record) }
     else await finishRound($, state, record, now)
   }
@@ -435,7 +469,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -530,7 +564,7 @@ export const register: Register = (on, options) => {
     // round that ended with nobody following it is closed first.
     for (const r of Object.values(await loadRuns($))) {
       if (r.state !== 'running') continue
-      const now = await roundState($, r)
+      const now = await roundState($, state, r)
       if (now !== 'running') await finishRound($, state, r, now)
     }
     const runs = await loadRuns($)

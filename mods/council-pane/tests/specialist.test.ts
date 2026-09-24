@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessAlive, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
+  specialistCall, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -301,20 +301,27 @@ test('the band shows the latest step in one short line', () => {
 })
 
 test('a round is running while its process lives and has written no exit code', () => {
-  expect(roundLiveness('', true)).toBe('running')
-  expect(roundLiveness('0\n', true)).toBe('ended')
-  expect(roundLiveness('1', false)).toBe('ended')
-  expect(roundLiveness('', false)).toBe('lost')
+  expect(roundLiveness('', 'same')).toBe('running')
+  expect(roundLiveness('', 'unknown')).toBe('running')
+  expect(roundLiveness('', 'gone')).toBe('lost')
+  expect(roundLiveness('0\n', 'gone')).toBe('ended')
+  expect(roundLiveness('1', 'unknown')).toBe('ended')
 })
 
 test('a round belongs only to the process whose start time was recorded', () => {
   const started = 'Wed Sep 24 12:34:56 2026'
-  expect(roundProcessAlive(`${started}\n`, `  ${started}\n`)).toBe(true)
-  expect(roundProcessAlive(started, 'Wed Sep 24 12:35:01 2026')).toBe(false)
-  expect(roundProcessAlive('', started)).toBe(false)
-  expect(roundProcessAlive(undefined, started)).toBe(false)
-  expect(roundProcessAlive(started, '')).toBe(false)
-  expect(roundProcessAlive(started, undefined)).toBe(false)
+  expect(roundProcessIdentity(`${started}\n`, `  ${started}\n`, 'present')).toBe('same')
+  expect(roundProcessIdentity(started, 'Wed Sep 24 12:35:01 2026', 'present')).toBe('gone')
+  expect(roundProcessIdentity(started, undefined, 'absent')).toBe('gone')
+  expect(roundProcessIdentity(started, undefined, 'present')).toBe('unknown')
+  expect(roundProcessIdentity(started, ' ', 'present')).toBe('unknown')
+  expect(roundProcessIdentity('', started, 'present')).toBe('unknown')
+  expect(roundProcessIdentity(started, 'unreadable output', 'present')).toBe('unknown')
+  expect(roundProcessIdentity(started, started, 'unknown')).toBe('unknown')
+  expect(roundProcessIdentity('Wed Sep 24  12:34:56 2026', started, 'present')).toBe('same')
+  expect(roundProcessIdentity(undefined, undefined, 'present')).toBe('same')
+  expect(roundProcessIdentity(undefined, undefined, 'absent')).toBe('gone')
+  expect(roundProcessIdentity(undefined, undefined, 'unknown')).toBe('unknown')
 })
 
 test('the wake prompt names the run and how to fetch it, and carries none of the specialist\'s text', () => {

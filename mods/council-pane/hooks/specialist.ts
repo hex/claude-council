@@ -319,15 +319,24 @@ export function latestStep(steps: Step[]): string {
 
 // A round is over once its exit file exists; a process gone without one was
 // killed, and nothing will ever finish it.
-export function roundLiveness(exitText: string, isProcessAlive: boolean): 'running' | 'ended' | 'lost' {
+export type RoundProcessIdentity = 'same' | 'gone' | 'unknown'
+
+export function roundLiveness(exitText: string, identity: RoundProcessIdentity): 'running' | 'ended' | 'lost' {
   if (exitText.trim() !== '') return 'ended'
-  return isProcessAlive ? 'running' : 'lost'
+  return identity === 'gone' ? 'lost' : 'running'
 }
 
-export function roundProcessAlive(recordedIdentity: string | undefined, observedIdentity: string | undefined): boolean {
-  const recorded = recordedIdentity?.trim()
-  const observed = observedIdentity?.trim()
-  return recorded !== undefined && recorded !== '' && recorded === observed
+export function roundProcessIdentity(
+  recordedIdentity: string | undefined, observedIdentity: string | undefined, presence: 'present' | 'absent' | 'unknown',
+): RoundProcessIdentity {
+  if (presence === 'absent') return 'gone'
+  if (presence === 'unknown') return 'unknown'
+  if (recordedIdentity === undefined) return 'same'
+  const recorded = recordedIdentity.trim().replace(/\s+/g, ' ')
+  const observed = observedIdentity?.trim().replace(/\s+/g, ' ')
+  const startTime = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}$/
+  if (!startTime.test(recorded) || observed === undefined || !startTime.test(observed)) return 'unknown'
+  return recorded === observed ? 'same' : 'gone'
 }
 
 // A fixed-width m:ss clock, so the line it sits on does not shift each second.

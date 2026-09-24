@@ -151,7 +151,7 @@ cmd_codex() {
     [[ -d "$worktree" ]] || die "no worktree at ${worktree}"
     mkdir -p "$state"
     # Each round's files describe that round only.
-    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/codex-pid" "${state}/exit" "${state}/thread"
+    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/start.tmp" "${state}/codex-pid" "${state}/exit" "${state}/thread"
     cat > "${state}/prompt.txt"
     local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'model_reasoning_summary="concise"' --output-schema "${SCRIPT_DIR}/specialist-report.schema.json" -o "${state}/last-message.md")
     if [[ -n "$effort" ]]; then flags+=(-c "model_reasoning_effort=\"${effort}\""); fi
@@ -162,6 +162,7 @@ cmd_codex() {
     # caller reading our output would wait for the whole round. The exit file
     # is written last; its presence is what says the round is over.
     (
+        while [[ ! -f "${state}/start" ]]; do sleep 0.01; done
         code=0
         # Codex's own pid is the one to kill to stop a round: this subshell
         # then still writes the exit file, so the round reports how it ended.
@@ -178,9 +179,18 @@ cmd_codex() {
         printf '%s' "${found:-$thread}" > "${state}/thread"
         echo "$code" > "${state}/exit.tmp" && mv "${state}/exit.tmp" "${state}/exit"
     ) < /dev/null > /dev/null 2>&1 &
-    echo "$!" > "${state}/pid"
-    ps -o lstart= -p "$!" > "${state}/start" 2>/dev/null || : > "${state}/start"
-    echo "pid=$!"
+    local round_pid="$!"
+    if echo "$round_pid" > "${state}/pid" \
+        && LC_ALL=C ps -o lstart= -p "$round_pid" > "${state}/start.tmp" 2>/dev/null \
+        && grep -q '[^[:space:]]' "${state}/start.tmp" \
+        && mv "${state}/start.tmp" "${state}/start"; then
+        echo "pid=$round_pid"
+    else
+        kill "$round_pid" 2>/dev/null || true
+        wait "$round_pid" 2>/dev/null || true
+        rm -f "${state}/start.tmp"
+        die "could not record start time for round pid ${round_pid}"
+    fi
 }
 
 main() {
