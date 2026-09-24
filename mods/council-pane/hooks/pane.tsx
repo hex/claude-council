@@ -46,6 +46,8 @@ const RUNS_KEY = 'specialist-runs'
 const SETUP_PANE = 'specialist-setup'
 const SETUP_KEY = 'specialist-setup'
 const SETUP_COMMAND = 'specialists'
+// A /config row of this plugin is named `claude-council.<field>`.
+const ROW_PREFIX = 'claude-council.'
 
 type PaneState = {
   root: string
@@ -129,25 +131,71 @@ async function openSetup($: EngineInterface, state: PaneState, options: Record<s
   return undefined
 }
 
+// Runs one press of the setup screen; a failure shows under the form instead
+// of vanishing with the press, and the log keeps it if even that fails.
+async function setupAction($: EngineInterface, state: PaneState, work: () => Promise<void>): Promise<void> {
+  try {
+    await work()
+  } catch (error) {
+    const setup = state.setup ?? { catalog: { error: 'not loaded' }, message: '' }
+    await keepSetup($, state, { ...setup, message: String(error) }).catch(() => $.ui.log(`specialists: ${String(error)}`))
+  }
+}
+
+// Field edits read the draft at press time, so two quick edits both land.
+async function editSetup($: EngineInterface, state: PaneState, patch: Partial<Fields>): Promise<void> {
+  const setup = state.setup
+  if (setup?.draft) await keepSetup($, state, { ...setup, draft: { ...setup.draft, ...patch }, message: '' })
+}
+
+async function pickModel($: EngineInterface, state: PaneState, slug: string): Promise<void> {
+  const setup = state.setup
+  if (!setup?.draft) return
+  const picked = withModel(setup.draft, slug, 'models' in setup.catalog ? setup.catalog.models : [])
+  await keepSetup($, state, { ...setup, draft: picked.draft, message: picked.message })
+}
+
+async function openRow($: EngineInterface, state: PaneState, options: Record<string, unknown>, slot: string): Promise<void> {
+  const setup = state.setup ?? { catalog: { error: 'not loaded' }, message: '' }
+  const models = 'models' in setup.catalog ? setup.catalog.models : []
+  await keepSetup($, state, { ...setup, draft: draftFor(slot, options, state.roles, models), message: '' })
+}
+
+async function addRow($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
+  const setup = state.setup ?? { catalog: { error: 'not loaded' }, message: '' }
+  const slot = freeSlot(options)
+  if (!slot) { await keepSetup($, state, { ...setup, message: 'all 4 slots are in use' }); return }
+  await keepSetup($, state, { ...setup, draft: blankDraft(slot, 'models' in setup.catalog ? setup.catalog.models : [], state.roles), message: '' })
+}
+
+// The write reloads this module and the reload redraws from the store, so the
+// store is cleared first; a write that fails puts the draft back with the reason.
+async function writeRow($: EngineInterface, state: PaneState, setup: SetupState, slot: string, value: string, done: string): Promise<void> {
+  await keepSetup($, state, { catalog: setup.catalog, message: done })
+  let written: { deny?: string }
+  try {
+    written = await $.config.set({ key: `${ROW_PREFIX}${slot}`, value })
+  } catch (error) {
+    await keepSetup($, state, { ...setup, message: String(error) })
+    return
+  }
+  if (written.deny) await keepSetup($, state, { ...setup, message: written.deny })
+}
+
 async function saveSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
   const setup = state.setup
   if (!setup?.draft) return
   if ('error' in setup.catalog) { await keepSetup($, state, { ...setup, message: `cannot check the model: ${setup.catalog.error}` }); return }
   const checked = checkSpecialist(setup.draft, setup.draft.slot, { roles: state.roles, models: setup.catalog.models, options })
   if ('error' in checked) { await keepSetup($, state, { ...setup, message: checked.error }); return }
-  // Kept first: the write reloads this module, and the reload redraws from the store.
-  await keepSetup($, state, { catalog: setup.catalog, message: `saved ${setup.draft.slot}` })
-  const written = await $.config.set({ key: `claude-council.${setup.draft.slot}`, value: checked.row })
-  if (written.deny) await keepSetup($, state, { ...setup, message: written.deny })
+  await writeRow($, state, setup, setup.draft.slot, checked.row, `saved ${setup.draft.slot}`)
 }
 
 async function removeSetup($: EngineInterface, state: PaneState): Promise<void> {
   const setup = state.setup
   const slot = setup?.draft?.slot
   if (!setup || !slot) return
-  await keepSetup($, state, { catalog: setup.catalog, message: `removed ${slot}` })
-  const written = await $.config.set({ key: `claude-council.${slot}`, value: '' })
-  if (written.deny) await keepSetup($, state, { ...setup, message: written.deny })
+  await writeRow($, state, setup, slot, '', `removed ${slot}`)
 }
 
 // A row typed into /config by hand gets the same check as a Save; an empty row
@@ -830,7 +878,7 @@ export const register: Register = (on, options) => {
   on('config.set', { key: /^claude-council\.specialist_[1-4]$/ }, async ($, e, next) => {
     const value = typeof e.value === 'string' ? e.value : ''
     if (value.trim() === '') return next(e)
-    const denial = await handEditDenial($, state, e.key.slice('claude-council.'.length), value, options)
+    const denial = await handEditDenial($, state, e.key.slice(ROW_PREFIX.length), value, options)
     return denial ? { deny: denial } : next(e)
   })
 
@@ -853,7 +901,7 @@ export const register: Register = (on, options) => {
     const setup: SetupState = state.setup ?? { catalog: { error: 'not loaded' }, message: '' }
     const models = 'models' in setup.catalog ? setup.catalog.models : []
     const draft = setup.draft
-    const edit = (patch: Partial<Fields>) => { if (draft) void keepSetup($, state, { ...setup, draft: { ...draft, ...patch }, message: '' }) }
+    const edit = (patch: Partial<Fields>) => { void setupAction($, state, () => editSetup($, state, patch)) }
     const modelOptions = models.length
       ? [...models.filter(m => m.listed), ...models.filter(m => !m.listed)].map(m => ({ value: m.slug, label: m.listed ? m.slug : `${m.slug} (hidden)` }))
       : [{ value: draft?.model || 'none', label: draft?.model || 'no catalog' }]
@@ -862,27 +910,24 @@ export const register: Register = (on, options) => {
       <Box key="setup" flexDirection="column">
         {listEntries(options, state.roles).map(entry => (
           <Button key={`row:${entry.slot}`} plain label={entry.problem ? `${entry.label}  (${entry.problem})` : entry.label}
-            onPress={() => { void keepSetup($, state, { ...setup, draft: draftFor(entry.slot, options, state.roles, models), message: '' }) }} />
+            onPress={() => { void setupAction($, state, () => openRow($, state, options, entry.slot)) }} />
         ))}
-        <Button key="add" label="+ Add" onPress={() => {
-          const slot = freeSlot(options)
-          void keepSetup($, state, slot ? { ...setup, draft: blankDraft(slot, models, state.roles), message: '' } : { ...setup, message: 'all 4 slots are in use' })
-        }} />
+        <Button key="add" label="+ Add" onPress={() => { void setupAction($, state, () => addRow($, state, options)) }} />
         {draft ? (
           <Box key="form" flexDirection="column" marginTop={1}>
             <Text dimColor>{draft.slot}</Text>
             <Input key="name" label="Name         " value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => edit({ name: v })} />
             <Select key="model" label="Model        " value={draft.model || modelOptions[0]?.value} options={modelOptions}
-              onSelect={(v: string) => { const picked = withModel(draft, v, models); void keepSetup($, state, { ...setup, draft: picked.draft, message: picked.message }) }} />
+              onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
             <Select key="perspective" label="Perspective  " value={draft.perspective} options={Object.keys(state.roles).map(value => ({ value }))} onSelect={(v: string) => edit({ perspective: v })} />
             <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={['default', ...efforts].map(value => ({ value }))} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
             <Input key="when" label="Use when     " value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => edit({ when: v })} />
             <Box key="actions" flexDirection="row">
-              <Button key="save" label="Save" onPress={() => { void saveSetup($, state, options) }} />
+              <Button key="save" label="Save" onPress={() => { void setupAction($, state, () => saveSetup($, state, options)) }} />
               <Text>{' '}</Text>
-              {draft.baseline ? <Button key="remove" label="Remove" onPress={() => { void removeSetup($, state) }} /> : null}
+              {draft.baseline ? <Button key="remove" label="Remove" onPress={() => { void setupAction($, state, () => removeSetup($, state)) }} /> : null}
               <Text>{' '}</Text>
-              <Button key="cancel" label="Cancel" onPress={() => { void closeSetup($, state) }} />
+              <Button key="cancel" label="Cancel" onPress={() => { void setupAction($, state, () => closeSetup($, state)) }} />
             </Box>
           </Box>
         ) : null}
