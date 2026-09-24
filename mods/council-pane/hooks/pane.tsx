@@ -25,6 +25,9 @@ const RUN_TIMEOUT_MS = 600_000
 // synthesis is Claude's own text. No provider's banner uses it.
 const COUNCIL_RGB = 'rgb(217,119,87)'
 const MODEL_RGB = 'rgb(38,128,150)'
+// Mid tones, readable on a light and a dark background alike.
+const BRANCH_RGB = 'rgb(96,140,72)'
+const WORKTREE_RGB = 'rgb(112,120,160)'
 const CHIP_DARK_RGB = 'rgb(191,96,60)'
 const POLL_MS = 500
 // Ten frames a second: the spinner's pace in the tmux pane.
@@ -704,15 +707,15 @@ export const register: Register = (on, options) => {
           </Box>
           {/* A line exactly as wide as the card wraps to an empty second line
               without truncate. */}
-          <Text dimColor wrap="truncate">{'\u2500'.repeat(cardWidth - 4)}</Text>
+          <Text color={COUNCIL_RGB} dimColor wrap="truncate">{'\u2500'.repeat(cardWidth - 4)}</Text>
           {/* The worktree is cut from the left: its last part names the run. */}
           <Box flexDirection="row">
             <Text dimColor>{'branch    '}</Text>
-            <Box flexShrink={1}><Text dimColor wrap="truncate-start">{record.branch}</Text></Box>
+            <Box flexShrink={1}><Text color={BRANCH_RGB} wrap="truncate-start">{record.branch}</Text></Box>
           </Box>
           <Box flexDirection="row">
             <Text dimColor>{'worktree  '}</Text>
-            <Box flexShrink={1}><Text dimColor wrap="truncate-start">{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text></Box>
+            <Box flexShrink={1}><Text color={WORKTREE_RGB} wrap="truncate-start">{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text></Box>
           </Box>
         </Box>
         <Text>
