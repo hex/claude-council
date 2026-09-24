@@ -51,7 +51,7 @@ export function specialistDescription(list: Specialist[]): string {
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
     'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +
-    'The user confirms before anything starts or is sent. A refusal comes back as the result; do not retry unless the reply asks for a change.'
+    'A start or follow-up runs at once; the user confirms every finish. A refusal comes back as the result; do not retry unless the reply asks for a change.'
   )
 }
 
@@ -90,8 +90,6 @@ export type SpecialistCall =
   | { kind: 'result'; run: string }
 
 const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}'
-const QUOTED_MAX = 300
-const quote = (text: string) => (text.length > QUOTED_MAX ? `${text.slice(0, QUOTED_MAX)}…` : text)
 const filled = (value: unknown) => typeof value === 'string' && value.trim() !== ''
 
 export function specialistCall(input: Record<string, unknown>, list: Specialist[]): SpecialistCall | { deny: string } {
@@ -122,15 +120,6 @@ export function specialistCall(input: Record<string, unknown>, list: Specialist[
 const two = (n: number) => String(n).padStart(2, '0')
 export function runStamp(date: Date): string {
   return `${date.getFullYear()}${two(date.getMonth() + 1)}${two(date.getDate())}-${two(date.getHours())}${two(date.getMinutes())}${two(date.getSeconds())}`
-}
-
-export function startQuestion(s: Specialist, task: string, head: string, isDirty: boolean): string {
-  const dirty = isDirty ? ' Your uncommitted changes are not included.' : ''
-  return `Hand "${quote(task)}" to ${s.name} (${s.perspective}, ${s.model})? It works in a new worktree from HEAD ${head}.${dirty}`
-}
-
-export function followUpQuestion(record: RunRecord, message: string): string {
-  return `Send to ${record.specialist} (run ${record.id}): "${quote(message)}"?`
 }
 
 export function finishQuestion(record: RunRecord, finish: 'merge' | 'discard', commits: number, files: number, target: string): string {
@@ -371,8 +360,9 @@ export function specialistWake(record: RunRecord): string {
     `Fetch its result with mcp__claude-council__specialist {"run": "${record.id}", "result": true}, review it, and ask the user before any follow-up or finish.`
 }
 
-export function startedReply(record: RunRecord): string {
-  return `Run ${record.id} (${record.specialist}, round ${record.rounds}) started in the background.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\n` +
+export function startedReply(record: RunRecord, isDirty = false): string {
+  const dirty = isDirty ? 'Your uncommitted changes are not in its worktree.\n' : ''
+  return `Run ${record.id} (${record.specialist}, round ${record.rounds}) started in the background.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n${dirty}\n` +
     'A prompt arrives when the round ends; the band above the prompt shows its progress. Do not poll for it.'
 }
 
