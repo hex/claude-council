@@ -267,6 +267,8 @@ const events = [
   '{"type":"item.started","item":{"id":"item_3","type":"file_change","changes":[{"path":"/r/app.specialists/sec-1/tests/a.bats","kind":"update"}],"status":"in_progress"}}',
   '{"type":"item.completed","item":{"id":"item_3","type":"file_change","changes":[{"path":"/r/app.specialists/sec-1/tests/a.bats","kind":"update"}],"status":"completed"}}',
   '{"type":"item.completed","item":{"id":"item_4","type":"command_execution","command":"/bin/zsh -lc \'bats tests/a.bats\'","status":"failed","exit_code":1}}',
+  '{"type":"item.completed","item":{"id":"item_7","type":"command_execution","command":"/bin/zsh -lc pwd","status":"completed","exit_code":0}}',
+  '{"type":"item.completed","item":{"id":"item_8","type":"command_execution","command":"/bin/zsh -lc ls -la","status":"completed","exit_code":0}}',
   '{"type":"item.started","item":{"id":"item_5","type":"command_execution","command":"/bin/zsh -lc \'bats tests/a.bats\'","status":"in_progress"}}',
   '{"type":"item.started","item":{"id":"item_6","type":"comm',
 ].join('\n')
@@ -278,6 +280,8 @@ test('the event stream becomes one step per item, updated in place, with half-wr
     { kind: 'run', text: 'git status --short', state: 'done' },
     { kind: 'edit', text: 'tests/a.bats', state: 'done' },
     { kind: 'run', text: 'bats tests/a.bats', state: 'failed' },
+    { kind: 'run', text: 'pwd', state: 'done' },
+    { kind: 'run', text: '/bin/zsh -lc ls -la', state: 'done' },
     { kind: 'run', text: 'bats tests/a.bats', state: 'running' },
   ])
   expect(specialistSteps('', WT)).toEqual([])

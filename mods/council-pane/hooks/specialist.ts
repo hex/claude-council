@@ -274,8 +274,8 @@ export function commitSubject(name: string, task: string): string {
 // think is a short reasoning summary, Codex's own bold title for what it is working out.
 export type Step = { kind: 'think' | 'say' | 'run' | 'edit'; text: string; state: 'running' | 'done' | 'failed' }
 
-// Codex wraps each command in the login shell: `/bin/zsh -lc "git status"`.
-const SHELL_WRAP = /^\/bin\/\w+ -lc (["'])([\s\S]*)\1$/
+// Codex runs a quoted command or a single unquoted token through the login shell.
+const SHELL_WRAP = /^\/bin\/\w+ -lc (?:(["'])([\s\S]*)\1|([^\s"']+))$/
 
 // The round's closing message is the report as JSON; the pane shows what a
 // reader wants from it. The commands already show above it, so tests do not.
@@ -302,7 +302,8 @@ export function specialistSteps(events: string, worktree: string): Step[] {
     if (item.type === 'reasoning' && typeof item.text === 'string') step = { kind: 'think', text: item.text.replace(/\*\*/g, '').trim(), state: 'done' }
     if (item.type === 'agent_message' && typeof item.text === 'string') step = { kind: 'say', text: sayText(item.text), state: 'done' }
     if (item.type === 'command_execution' && typeof item.command === 'string') {
-      step = { kind: 'run', text: SHELL_WRAP.exec(item.command)?.[2] ?? item.command, state: status }
+      const match = SHELL_WRAP.exec(item.command)
+      step = { kind: 'run', text: match?.[2] ?? match?.[3] ?? item.command, state: status }
     }
     if (item.type === 'file_change' && Array.isArray(item.changes)) {
       const paths = item.changes.map(c => String((c as { path?: unknown }).path ?? '')).map(p => p.startsWith(`${worktree}/`) ? p.slice(worktree.length + 1) : p)
