@@ -69,9 +69,10 @@ Each `/config` row holds one specialist:
 
 ```
 sec = gpt-6-sol as security, when: auth, crypto, untrusted input
+sec = gpt-6-sol as security, effort: high, when: auth, crypto, untrusted input
 ```
 
-The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. The perspective is a key of `config/roles.json` (`security`, `performance`, `maintainability`, `devil`, `simplicity`, `scalability`, `dx`, `compliance`), and its prompt opens every task. The text after `when:` is what Claude matches tasks against, up to 200 characters. The mod ignores an empty row and skips a row that does not parse; the session log says which row and why. With at least one valid row the mod registers `mcp__claude-council__specialist`.
+The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. `effort:` is optional and sets Codex's reasoning effort for every round of that specialist: `minimal`, `low`, `medium`, `high` or `xhigh`. Without it, your own Codex default applies. The perspective is a key of `config/roles.json` (`security`, `performance`, `maintainability`, `devil`, `simplicity`, `scalability`, `dx`, `compliance`), and its prompt opens every task. The text after `when:` is what Claude matches tasks against, up to 200 characters. The mod ignores an empty row and skips a row that does not parse; the session log says which row and why. With at least one valid row the mod registers `mcp__claude-council__specialist`.
 
 The tool takes four calls. The first three open a dialog first:
 

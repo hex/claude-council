@@ -201,9 +201,14 @@ start_run() {
 }
 
 @test "codex refuses a missing worktree before starting anything" {
-    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol < /dev/null
+    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol '' < /dev/null
     [ "$status" -eq 1 ]
     [ "$output" = "specialist: no worktree at ${BATS_TEST_TMPDIR}/nope" ]
+    # The effort goes into a -c value, so only Codex's own words get through.
+    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol 'high" -c x="y' < /dev/null
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: invalid effort 'high\" -c x=\"y': must be one of minimal, low, medium, high, xhigh" ]
+    [ ! -e "${BATS_TEST_TMPDIR}/state" ]
 }
 
 @test "commit fails with the hook's message when the repository's pre-commit hook refuses" {
@@ -263,7 +268,7 @@ wait_round() {
 }
 
 launch() {
-    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol "$@" <<< "the task"
+    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol "${EFFORT:-}" "$@" <<< "the task"
 }
 
 @test "codex returns at once with the round's pid, and the round writes its exit code when codex ends" {
@@ -306,7 +311,13 @@ launch() {
     launch 01a0ce2a-1d08-76c0-a6ef-8340b581212d
     wait_round
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == "exec resume --json -m gpt-6-sol "*" 01a0ce2a-1d08-76c0-a6ef-8340b581212d -" ]]
+    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" != *model_reasoning_effort* ]]
     [ "$(cat "$STATE/thread")" = "01a0ce2a-1d08-76c0-a6ef-8340b581212d" ]
+    # A row's effort reaches Codex as its reasoning effort.
+    rm -f "$STATE/exit"
+    EFFORT=high launch
+    wait_round
+    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == "exec --json -m gpt-6-sol "*" -c model_reasoning_effort=\"high\" "*"-" ]]
 }
 
 @test "codex clears the previous round's files before it starts" {
@@ -345,7 +356,7 @@ launch() {
 @test "codex receives the prompt on stdin" {
     start_run
     fake_codex "cat > '${BATS_TEST_TMPDIR}/seen-prompt'"
-    printf 'line one\nline two' | PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol >/dev/null
+    printf 'line one\nline two' | PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol '' >/dev/null
     wait_round
     [ "$(cat "${BATS_TEST_TMPDIR}/seen-prompt")" = "$(printf 'line one\nline two')" ]
 }

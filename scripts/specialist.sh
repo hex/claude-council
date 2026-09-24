@@ -94,13 +94,16 @@ cmd_finish() {
 }
 
 cmd_codex() {
-    local worktree="$1" state="$2" model="$3" thread="${4:-}"
+    local worktree="$1" state="$2" model="$3" effort="$4" thread="${5:-}"
+    # The effort goes into a -c value, so only Codex's own words get through.
+    [[ -z "$effort" || "$effort" =~ ^(minimal|low|medium|high|xhigh)$ ]] || die "invalid effort '${effort}': must be one of minimal, low, medium, high, xhigh"
     [[ -d "$worktree" ]] || die "no worktree at ${worktree}"
     mkdir -p "$state"
     # Each round's files describe that round only.
     rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/codex-pid" "${state}/exit" "${state}/thread"
     cat > "${state}/prompt.txt"
     local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -o "${state}/last-message.md")
+    if [[ -n "$effort" ]]; then flags+=(-c "model_reasoning_effort=\"${effort}\""); fi
     local args=(exec "${flags[@]}" -)
     if [[ -n "$thread" ]]; then args=(exec resume "${flags[@]}" "$thread" -); fi
     # The round runs detached and this call returns at once: the caller follows
@@ -137,7 +140,7 @@ main() {
         report) [[ $# -eq 3 ]] || die "usage: report <worktree> <round-base> <run-base>"; cmd_report "$@" ;;
         counts) [[ $# -eq 3 ]] || die "usage: counts <repo> <branch> <run-base>"; cmd_counts "$@" ;;
         finish) [[ $# -eq 4 ]] || die "usage: finish <repo> <worktree> <branch> merge|discard"; cmd_finish "$@" ;;
-        codex)  [[ $# -eq 3 || $# -eq 4 ]] || die "usage: codex <worktree> <state> <model> [thread]"; cmd_codex "$@" ;;
+        codex)  [[ $# -eq 4 || $# -eq 5 ]] || die "usage: codex <worktree> <state> <model> <effort|''> [thread]"; cmd_codex "$@" ;;
         *) die "unknown subcommand '${sub}'" ;;
     esac
 }
