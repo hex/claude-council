@@ -32,6 +32,7 @@ export type Section =
 const STATE_COLORS: Record<string, string> = { querying: 'yellow', complete: 'green', cached: 'cyan', error: 'red' }
 const NEUTRAL_RGB = '113;113;122'
 const SPINNER = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f']
+export const spinner = (frame: number) => SPINNER[frame % SPINNER.length] ?? '\u25cf'
 
 const jumpKey = (name: string) => `jump:${name}`
 
@@ -123,7 +124,7 @@ export function paneSections(
   const vendor = (name: string) => `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`
   const glyph = (state: string) => {
     if (state === 'error') return '\u2717'
-    return state === 'querying' ? (SPINNER[frame % SPINNER.length] ?? '\u25cf') : '\u25cf'
+    return state === 'querying' ? spinner(frame) : '\u25cf'
   }
   // A querying provider's time runs from when the pane first saw it, in whole tenths.
   const elapsed = (name: string) => {

@@ -1,5 +1,6 @@
 // ABOUTME: Pure decisions for the specialist tool: rows, call shapes, dialog text, prompts, results
 // ABOUTME: No engine calls here, so every rule runs under bun test
+import { spinner } from './view'
 
 export type Roles = Record<string, { name: string; prompt: string }>
 // effort is Codex's reasoning effort; without it the user's own Codex default applies.
@@ -338,6 +339,12 @@ export function roundClock(startedMs: number, nowMs: number): string {
   const mins = Math.floor((secs % 3600) / 60)
   const ss = String(secs % 60).padStart(2, '0')
   return hours > 0 ? `${hours}:${String(mins).padStart(2, '0')}:${ss}` : `${mins}:${ss}`
+}
+
+// The pane's last line while a round runs, so it moves even while Codex
+// thinks and no step is running.
+export function workingLine(frame: number, startedMs: number, nowMs: number): string {
+  return `${spinner(frame)} working  ${roundClock(startedMs, nowMs)}`
 }
 
 // The one coloured item in the pane's header: how the round stands.
