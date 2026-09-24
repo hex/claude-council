@@ -758,7 +758,7 @@ export const register: Register = (on, options) => {
             </Text>
           )
         })}
-        {log.isLive && <Text color={status.color}>{workingLine(state.specialistFrame, record.startedMs, state.nowMs)}</Text>}
+        {log.isLive && <Text dimColor>{workingLine(state.specialistFrame, record.startedMs, state.nowMs)}</Text>}
       </Box>
     )
   })
