@@ -758,7 +758,12 @@ export const register: Register = (on, options) => {
             </Text>
           )
         })}
-        {log.isLive && <Text dimColor>{workingLine(state.specialistFrame, record.startedMs, state.nowMs)}</Text>}
+        {/* A message already ends in a blank line; margins do not collapse. */}
+        {log.isLive && (
+          <Box marginTop={log.steps.at(-1)?.kind === 'say' ? 0 : 1}>
+            <Text dimColor>{workingLine(state.specialistFrame, record.startedMs, state.nowMs)}</Text>
+          </Box>
+        )}
       </Box>
     )
   })
