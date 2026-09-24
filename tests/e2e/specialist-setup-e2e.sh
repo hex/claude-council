@@ -13,7 +13,7 @@ SETTINGS="$HOME/.claude/settings.json"
 # there is someone's unsaved work, and this run would type into it.
 for store in "$HOME"/.claude/plugins/store/claude-council_inline-*.json; do
     [ -f "$store" ] || continue
-    if jq -e 'has("specialist-setup")' "$store" >/dev/null; then
+    if jq -e '.["specialist-setup"].draft != null' "$store" >/dev/null; then
         echo "FAIL: a /specialists draft is open in $store; save or discard it first" >&2
         exit 1
     fi
