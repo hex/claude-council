@@ -652,8 +652,7 @@ export const register: Register = (on, options) => {
           <ui.Box flexShrink={0}>
             <ui.Text>
               <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
-              <ui.Text dimColor>{' \u00b7 '}</ui.Text>
-              <ui.Text>{working.record.perspective}</ui.Text>
+              <ui.Text dimColor>{`  ${working.record.perspective}`}</ui.Text>
               <ui.Text bold color={roundStatus(true, undefined, clock).color}>{`  \u25cf ${clock}`}</ui.Text>
             </ui.Text>
           </ui.Box>
@@ -688,10 +687,11 @@ export const register: Register = (on, options) => {
     const { record } = log
     const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', 'yellow'] : step.state === 'failed' ? ['\u2717', 'red'] : ['\u2713', 'green'])
     const status = roundStatus(log.isLive, record.last, roundClock(record.startedMs, state.nowMs))
+    const cardWidth = Math.max(20, columns - 2)
     return (
       <Box key="specialist" flexDirection="column">
         {/* A card, like a sidebar entry: who, how it stands, then where it works. */}
-        <Box flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1} width={Math.max(20, columns - 2)}>
+        <Box flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1} width={cardWidth}>
           {/* Each group is its own element, so a narrow pane wraps between
               groups, never inside one. */}
           <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
@@ -702,6 +702,7 @@ export const register: Register = (on, options) => {
             <Text dimColor>{record.perspective}</Text>
             <Text color={MODEL_RGB}>{record.model}</Text>
           </Box>
+          <Text dimColor>{'\u2500'.repeat(cardWidth - 4)}</Text>
           {/* The worktree is cut from the left: its last part names the run. */}
           <Box flexDirection="row">
             <Text dimColor>{'branch    '}</Text>
