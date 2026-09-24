@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus,
+  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -138,6 +138,18 @@ test('a follow-up needs a live run with its worktree', () => {
   expect(followUpRefusal(record, record.id, false)).toBe(`run ${record.id} has no worktree any more; start a new one`)
   expect(followUpRefusal({ ...record, thread: '' }, record.id, true)).toBe(`run ${record.id} has no Codex thread to resume; start a new one`)
   expect(followUpRefusal(record, record.id, true)).toBeUndefined()
+})
+
+test('report sections stay separate when a section is empty', () => {
+  expect(parseSpecialistReport('--- round\n--- total\n src/login.ts | 12 +++\n--- status\n')).toEqual({
+    round: '', total: ' src/login.ts | 12 +++', status: '',
+  })
+  expect(parseSpecialistReport('--- round\n src/login.ts | 12 +++\n--- total\n src/login.ts | 12 +++\n--- status\n M src/login.ts\n')).toEqual({
+    round: ' src/login.ts | 12 +++', total: ' src/login.ts | 12 +++', status: ' M src/login.ts',
+  })
+  expect(parseSpecialistReport('--- round\n src/login.ts | 12 +++\n--- total\n--- status\n M src/login.ts\n')).toEqual({
+    round: ' src/login.ts | 12 +++', total: '', status: ' M src/login.ts',
+  })
 })
 
 test('a round result carries what Claude needs to review', () => {

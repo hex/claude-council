@@ -7,7 +7,7 @@ import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import {
-  dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, roundResult, runStamp, specialistCall,
+  dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, parseSpecialistReport, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, startQuestion, threadFrom,
   commitSubject, latestStep, lostResult, roundLiveness, specialistSteps, specialistWake, startedReply, roundClock, roundStatus,
   type Roles, type RunRecord, type Specialist, type Step,
@@ -302,12 +302,12 @@ async function finishRound($: EngineInterface, state: PaneState, record: RunReco
     const events = await readText(files($), `${stateDir}/events.jsonl`)
     const report = async () => {
       const text = (await specialistRun($, ['report', record.worktree, record.roundBase, record.base])).stdout
-      return (name: string) => text.split(`--- ${name}\n`)[1]?.split('\n--- ')[0]?.trimEnd() ?? ''
+      return parseSpecialistReport(text)
     }
     let thread = record.thread
     let outcome: { result: string; isError: boolean }
     if (how === 'lost') {
-      outcome = lostResult(record, (await report())('status'))
+      outcome = lostResult(record, (await report()).status)
     } else {
       const exitCode = Number((await readText(files($), `${stateDir}/exit`)).trim())
       thread = (await readText(files($), `${stateDir}/thread`)).trim() || threadFrom(events) || record.thread
@@ -319,7 +319,7 @@ async function finishRound($: EngineInterface, state: PaneState, record: RunReco
       outcome = roundResult({
         record, exitCode, commit: committed, commitError,
         lastMessage: (await readText(files($), `${stateDir}/last-message.md`)).trim(),
-        roundStat: section('round'), totalStat: section('total'), status: section('status'),
+        roundStat: section.round, totalStat: section.total, status: section.status,
         stderrTail: (await readText(files($), `${stateDir}/stderr.txt`)).split('\n').slice(-15).join('\n').trim(),
       })
     }

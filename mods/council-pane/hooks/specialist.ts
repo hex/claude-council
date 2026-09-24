@@ -159,6 +159,15 @@ export function followUpRefusal(record: RunRecord | undefined, id: string, workt
 
 const OWN_REPORT = "The specialist's own report (written before the tool committed):"
 
+export function parseSpecialistReport(output: string): { round: string; total: string; status: string } {
+  const sections = { round: '', total: '', status: '' }
+  const parts = output.split(/^--- (round|total|status)\n/gm)
+  for (let i = 1; i < parts.length; i += 2) {
+    sections[parts[i] as keyof typeof sections] = parts[i + 1]?.trimEnd() ?? ''
+  }
+  return sections
+}
+
 export function roundResult(r: {
   record: RunRecord; exitCode: number; lastMessage: string; roundStat: string; totalStat: string
   // The short sha of the commit the tool made for this round; '' when it made none.
