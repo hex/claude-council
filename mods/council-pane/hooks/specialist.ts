@@ -3,65 +3,76 @@
 import { spinner } from './view'
 import type { Fields } from './setup'
 
-export type Roles = Record<string, { name: string; prompt: string }>
 // effort is Codex's reasoning effort; without it the user's own Codex default applies.
-// focus is the user's own instructions, present exactly when the perspective is custom.
-export type Specialist = { name: string; model: string; perspective: string; effort?: string; focus?: string; when: string }
+// instructions open every task the specialist starts; without them it just follows the task.
+export type Specialist = { name: string; model: string; effort?: string; when: string; instructions?: string }
 
-// focus may hold commas; it ends at the first ", when:".
-const ROW = /^\s*([^=\s]+)\s*=\s*(\S+)\s+as\s+([^,\s]+)\s*,(?:\s*effort:\s*([^,\s]*)\s*,)?(?:\s*focus:\s*(.+?)\s*,)?\s*when:\s*(.+?)\s*$/
-export const CUSTOM = 'custom'
-export const FOCUS_MAX = 400
+export const INSTRUCTIONS_MAX = 400
 const EFFORT = /^[a-z]+$/
 const NAME = /^[a-z][a-z0-9-]{0,23}$/
 export const WHEN_MAX = 200
-const SHAPE = 'expected: name = model as perspective, when: use-when'
-// The one settings field that holds every specialist, as a JSON list of rows.
+const FIELDS = ['name', 'model', 'effort', 'when', 'instructions']
+const SHAPE = 'a specialist must be a JSON object with name, model and when'
+// The one settings field that holds every specialist, as a JSON list of objects.
 export const LIST_FIELD = 'specialists'
 
-// One wording for a bad name, whether it came from a row or the setup screen's field.
+// One wording for a bad name, whether it came from the list or the setup screen's field.
 export function nameProblem(name: string): string | undefined {
   return NAME.test(name) ? undefined : `name '${name}' must be lowercase letters, digits and dashes, starting with a letter`
 }
 
-export function parseSpecialist(row: unknown, roles: Roles): Specialist | { error: string } | undefined {
-  if (row === undefined || (typeof row === 'string' && row.trim() === '')) return undefined
-  if (typeof row !== 'string') return { error: SHAPE }
-  const match = ROW.exec(row)
-  if (!match) return { error: SHAPE }
-  const [, name = '', model = '', perspective = '', effort, focus, when = ''] = match
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+// A field a person or another version wrote by hand must say what is wrong
+// with it; a misspelt key would otherwise be dropped without a word.
+function textField(entry: Record<string, unknown>, field: string, isRequired: boolean): string | undefined | { error: string } {
+  const value = entry[field]
+  if (value === undefined) return isRequired ? { error: `${field} is missing` } : undefined
+  return typeof value === 'string' ? value : { error: `${field} must be a string` }
+}
+
+export function parseSpecialist(entry: unknown): Specialist | { error: string } {
+  if (!isRecord(entry)) return { error: SHAPE }
+  const unknown = Object.keys(entry).find(key => !FIELDS.includes(key))
+  if (unknown !== undefined) return { error: `unknown field '${unknown}'` }
+  const read: Record<string, string | undefined> = {}
+  for (const field of FIELDS) {
+    const value = textField(entry, field, field === 'name' || field === 'model' || field === 'when')
+    if (typeof value === 'object') return value
+    read[field] = value
+  }
+  const { name = '', model = '', effort, when = '', instructions } = read
   const badName = nameProblem(name)
   if (badName) return { error: badName }
-  const isCustom = perspective === CUSTOM
-  if (!isCustom && !Object.hasOwn(roles, perspective)) return { error: `unknown perspective '${perspective}'` }
-  if (isCustom && focus === undefined) return { error: 'a custom perspective needs focus: with its instructions' }
-  if (!isCustom && focus !== undefined) return { error: 'focus: goes only with the custom perspective' }
-  if (focus !== undefined && focus.length > FOCUS_MAX) return { error: `focus is longer than ${FOCUS_MAX} characters` }
-  if (effort !== undefined && !EFFORT.test(effort)) return { error: `effort '${effort}' must be lowercase letters` }
+  if (model.trim() === '') return { error: 'model is empty' }
+  if (when.trim() === '') return { error: 'use-when is empty' }
   if (when.length > WHEN_MAX) return { error: `use-when is longer than ${WHEN_MAX} characters` }
-  return { name, model, perspective, ...(effort === undefined ? {} : { effort }), ...(focus === undefined ? {} : { focus }), when }
+  if (effort !== undefined && !EFFORT.test(effort)) return { error: `effort '${effort}' must be lowercase letters` }
+  if (instructions !== undefined && instructions.length > INSTRUCTIONS_MAX) return { error: `instructions are longer than ${INSTRUCTIONS_MAX} characters` }
+  const hasInstructions = instructions !== undefined && instructions.trim() !== ''
+  return { name, model, ...(effort === undefined ? {} : { effort }), when, ...(hasInstructions ? { instructions } : {}) }
 }
 
 // Reads the specialists list from the plugin's options; a value that is not a
-// JSON list of strings is a named problem, never an empty list in disguise.
-export function specialistRows(options: Record<string, unknown>): { rows: string[]; problem?: string } {
+// JSON list is a named problem, never an empty list in disguise. Each entry is
+// checked by parseSpecialist, so a bad one is reported by its place.
+export function specialistEntries(options: Record<string, unknown>): { entries: unknown[]; problem?: string } {
   const value = options[LIST_FIELD]
-  if (value === undefined || (typeof value === 'string' && value.trim() === '')) return { rows: [] }
-  if (typeof value !== 'string') return { rows: [], problem: 'the specialists setting must be a JSON list of rows' }
+  if (value === undefined || (typeof value === 'string' && value.trim() === '')) return { entries: [] }
+  if (typeof value !== 'string') return { entries: [], problem: 'the specialists setting must be a JSON list' }
   let data: unknown
-  try { data = JSON.parse(value) } catch { return { rows: [], problem: `the specialists setting is not JSON: ${value}` } }
-  if (!Array.isArray(data) || data.some(row => typeof row !== 'string')) return { rows: [], problem: 'the specialists setting must be a JSON list of rows' }
-  return { rows: data as string[] }
+  try { data = JSON.parse(value) } catch { return { entries: [], problem: `the specialists setting is not JSON: ${value}` } }
+  if (!Array.isArray(data)) return { entries: [], problem: 'the specialists setting must be a JSON list' }
+  return { entries: data }
 }
 
-export function specialistRoster(options: Record<string, unknown>, roles: Roles): { specialists: Specialist[]; problems: string[] } {
-  const { rows, problem } = specialistRows(options)
+export function specialistRoster(options: Record<string, unknown>): { specialists: Specialist[]; problems: string[] } {
+  const { entries, problem } = specialistEntries(options)
   const specialists: Specialist[] = []
   const problems: string[] = problem ? [problem] : []
   const usedBy = new Map<string, number>()
-  rows.forEach((row, index) => {
-    const parsed = parseSpecialist(row, roles)
-    if (parsed === undefined) return
+  entries.forEach((entry, index) => {
+    const parsed = parseSpecialist(entry)
     if ('error' in parsed) { problems.push(`specialist ${index + 1} ignored: ${parsed.error}`); return }
     const earlier = usedBy.get(parsed.name)
     if (earlier !== undefined) { problems.push(`specialist ${index + 1} ignored: the name '${parsed.name}' is already used by specialist ${earlier + 1}`); return }
@@ -71,21 +82,25 @@ export function specialistRoster(options: Record<string, unknown>, roles: Roles)
   return { specialists, problems }
 }
 
+// Without this Claude fills instructions in on its own, and they open every task.
+const INSTRUCTIONS_HINT = 'instructions is optional: what the specialist is told before each task, in the user\'s words; leave it out unless the user gave some.'
+
 export function specialistDescription(list: Specialist[]): string {
   if (list.length === 0) {
     return (
       'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
       `When the user asks for one, call {setup: {${SETUP_FIELDS.join(', ')}}} with what they described; ` +
       'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
-      'perspective is a council role or custom, and custom takes focus: the instructions in the user\'s words.'
+      INSTRUCTIONS_HINT
     )
   }
-  const roster = list.map(s => `${s.name} (${s.perspective}, ${s.model}), use when: ${s.when}`).join('; ')
+  const roster = list.map(s => `${s.name} (${s.model}), use when: ${s.when}`).join('; ')
   return (
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     `Specialists: ${roster}. ` +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
     `When no specialist fits and the user wants one, or the user describes one, call {setup: {${SETUP_FIELDS.join(', ')}}}; it opens a screen with those fields filled in and nothing is saved until the user presses Save. ` +
+    `${INSTRUCTIONS_HINT} ` +
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
@@ -119,7 +134,9 @@ export function specialistSchema(list: Specialist[]): Record<string, unknown> {
 }
 
 export type RunRecord = {
-  id: string; specialist: string; model: string; effort?: string; perspective: string; prompt: string
+  id: string; specialist: string; model: string; effort?: string
+  // The instructions the run started with; '' when it had none.
+  prompt: string
   repo: string; worktree: string; branch: string; base: string; thread: string
   rounds: number; state: 'running' | 'idle' | 'finished'
   // When the current or last round started; the band's clock.
@@ -139,7 +156,7 @@ export type SpecialistCall =
   | { kind: 'setup'; fields: Partial<Fields> }
 
 const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
-const SETUP_FIELDS = ['name', 'model', 'perspective', 'effort', 'focus', 'when']
+const SETUP_FIELDS = ['name', 'model', 'effort', 'when', 'instructions']
 const filled = (value: unknown) => typeof value === 'string' && value.trim() !== ''
 
 export function specialistCall(input: Record<string, unknown>, list: Specialist[]): SpecialistCall | { deny: string } {
@@ -195,8 +212,9 @@ export function dialogOutcome(answer: string | undefined, go: string, stop: stri
   return { reply: `The user ${refusal} and said: ${answer}` }
 }
 
-export function specialistPrompt(perspectivePrompt: string, task: string): string {
-  return `${perspectivePrompt}\n\nTask:\n${task}\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.`
+export function specialistPrompt(instructions: string, task: string): string {
+  const opening = instructions.trim() === '' ? '' : `${instructions}\n\n`
+  return `${opening}Task:\n${task}\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.`
 }
 
 export function followUpRefusal(record: RunRecord | undefined, id: string, worktreeExists: boolean): string | undefined {
@@ -215,7 +233,6 @@ export type RoundReport = { summary: string; tests: { command: string; result: T
 
 const TEST_RESULTS: readonly string[] = ['pass', 'fail', 'not_run']
 const isString = (v: unknown): v is string => typeof v === 'string'
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const hasKeys = (v: Record<string, unknown>, keys: string[]) => {
   const own = Object.keys(v)
   return own.length === keys.length && keys.every((k) => own.includes(k))

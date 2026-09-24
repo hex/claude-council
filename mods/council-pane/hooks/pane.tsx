@@ -7,17 +7,17 @@ import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import {
-  dialogOutcome, finishQuestion, followUpRefusal, LIST_FIELD, parseSpecialist, parseSpecialistReport, specialistRows, roundResult, runStamp, specialistCall,
+  dialogOutcome, finishQuestion, followUpRefusal, LIST_FIELD, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
   commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
-  type Roles, type RunRecord, type Specialist, type Step,
+  type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
-import { blankDraft, draftFor, dropRow, putRow, checkSpecialist, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, putEntry, checkSpecialist, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -79,7 +79,6 @@ type PaneState = {
   // frame redraws the tree, not the markdown, and a resize replaces the entry.
   fitted: Map<string, { columns: number; text: string; blocks: string[] }>
   specialists: Specialist[]
-  roles: Roles
   // The specialist round this session is waiting on; the band's subject.
   specialist?: { record: RunRecord; startedMs: number; stateDir: string }
   // What the last specialist round did, step by step; the pane's subject. It
@@ -145,11 +144,11 @@ async function loadCatalog($: EngineInterface, state: PaneState): Promise<void> 
 async function openSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>, prefill?: Partial<Fields>): Promise<string | undefined> {
   // Only a draft with changes survives to the next open; an untouched one would
   // reopen the form for nothing.
-  const kept = state.setup?.draft && isDirty(state.setup.draft, state.roles) ? state.setup.draft : undefined
+  const kept = state.setup?.draft && isDirty(state.setup.draft) ? state.setup.draft : undefined
   let draft = kept
   let status: Status | undefined
   if (prefill) {
-    draft = blankDraft(specialistRows(options).rows.length, [], state.roles, prefill)
+    draft = blankDraft(specialistEntries(options).entries.length, [], prefill)
   } else if (kept) {
     status = { kind: 'note', text: 'Your unsaved draft is back.' }
   }
@@ -177,11 +176,14 @@ async function editSetup($: EngineInterface, state: PaneState, patch: Partial<Fi
 }
 
 // Enter in a setup field keeps what was typed and moves on to the next control.
-async function submitField($: EngineInterface, state: PaneState, patch: Partial<Fields>, next: string): Promise<void> {
+// An Input's key carries the epoch, so a next Input is named by its field and
+// gets the epoch this submit moves to.
+async function submitField($: EngineInterface, state: PaneState, patch: Partial<Fields>, next: { control: string } | { input: keyof Fields }): Promise<void> {
   await editSetup($, state, patch)
   state.inputEpoch += 1
   $.ui.invalidate('ui.render')
-  await $.ui.focus({ requestId: SETUP_PANE, key: next })
+  const key = 'control' in next ? next.control : `${next.input}.${state.inputEpoch}`
+  await $.ui.focus({ requestId: SETUP_PANE, key })
 }
 
 async function pickModel($: EngineInterface, state: PaneState, slug: string): Promise<void> {
@@ -194,22 +196,22 @@ async function pickModel($: EngineInterface, state: PaneState, slug: string): Pr
 // Opening another row, or a new one, over unsaved edits asks first.
 async function openRow($: EngineInterface, state: PaneState, options: Record<string, unknown>, target: number | 'new', force = false): Promise<void> {
   const setup = currentSetup(state)
-  if (!force && setup.draft && setup.draft.index !== target && isDirty(setup.draft, state.roles)) {
+  if (!force && setup.draft && setup.draft.index !== target && isDirty(setup.draft)) {
     await keepSetup($, state, { ...setup, confirm: { kind: 'switch', target } })
     return
   }
-  const rows = specialistRows(options).rows
-  const draft = target === 'new' ? blankDraft(rows.length, modelsOf(setup), state.roles) : draftFor(target, rows, state.roles, modelsOf(setup))
+  const entries = specialistEntries(options).entries
+  const draft = target === 'new' ? blankDraft(entries.length, modelsOf(setup)) : draftFor(target, entries, modelsOf(setup))
   await keepSetup($, state, { ...setup, draft, confirm: undefined, status: undefined })
 }
 
 // The write reloads this module and the reload redraws from the store, so the
 // store is cleared first; a write that fails puts the draft back with the reason.
-async function writeRows($: EngineInterface, state: PaneState, setup: SetupState, rows: string[], done: string): Promise<void> {
+async function writeEntries($: EngineInterface, state: PaneState, setup: SetupState, entries: unknown[], done: string): Promise<void> {
   await keepSetup($, state, { catalog: setup.catalog, status: { kind: 'saved', text: done } })
   let written: { deny?: string }
   try {
-    written = await $.config.set({ key: LIST_KEY, value: JSON.stringify(rows) })
+    written = await $.config.set({ key: LIST_KEY, value: JSON.stringify(entries) })
   } catch (error) {
     await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: String(error) } })
     return
@@ -222,10 +224,10 @@ async function saveSetup($: EngineInterface, state: PaneState, options: Record<s
   if (!setup?.draft) return
   if ('loading' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'note', text: 'Models are still loading; Save again in a moment.' } }); return }
   if ('error' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: `Cannot check the model: ${setup.catalog.error}` } }); return }
-  const rows = specialistRows(options).rows
-  const checked = checkSpecialist(setup.draft, setup.draft.index, { roles: state.roles, models: setup.catalog.models, rows })
+  const entries = specialistEntries(options).entries
+  const checked = checkSpecialist(setup.draft, setup.draft.index, { models: setup.catalog.models, entries })
   if ('error' in checked) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: checked.error } }); return }
-  await writeRows($, state, setup, putRow(rows, setup.draft.index, checked.row), `Saved ${setup.draft.name}.`)
+  await writeEntries($, state, setup, putEntry(entries, setup.draft.index, checked.entry), `Saved ${setup.draft.name}.`)
 }
 
 // The confirm row's yes: remove, or drop the unsaved draft and open the target.
@@ -234,9 +236,9 @@ async function confirmSetup($: EngineInterface, state: PaneState, options: Recor
   const confirm = setup?.confirm
   if (!setup?.draft || !confirm) return
   if (confirm.kind === 'switch') { await openRow($, state, options, confirm.target, true); return }
-  const rows = specialistRows(options).rows
-  const name = draftFor(setup.draft.index, rows, state.roles, []).name || `specialist ${setup.draft.index + 1}`
-  await writeRows($, state, setup, dropRow(rows, setup.draft.index), `Removed ${name}.`)
+  const entries = specialistEntries(options).entries
+  const name = draftFor(setup.draft.index, entries, []).name || `specialist ${setup.draft.index + 1}`
+  await writeEntries($, state, setup, dropEntry(entries, setup.draft.index), `Removed ${name}.`)
 }
 
 async function askSetup($: EngineInterface, state: PaneState, confirm: SetupState['confirm']): Promise<void> {
@@ -249,18 +251,17 @@ async function discardSetup($: EngineInterface, state: PaneState): Promise<void>
 }
 
 // A list set by hand (`/config specialists=...`) gets the same checks as a
-// Save, row by row; the first problem is the refusal.
+// Save, entry by entry; the first problem is the refusal.
 async function handEditDenial($: EngineInterface, state: PaneState, value: string): Promise<string | undefined> {
-  const { rows, problem } = specialistRows({ [LIST_FIELD]: value })
+  const { entries, problem } = specialistEntries({ [LIST_FIELD]: value })
   if (problem) return problem
-  if (rows.length === 0) return undefined
+  if (entries.length === 0) return undefined
   const catalog = await readCatalog($)
   if ('error' in catalog) return `cannot check the models: ${catalog.error}`
-  for (const [index, row] of rows.entries()) {
-    const parsed = parseSpecialist(row, state.roles)
-    if (!parsed) continue
+  for (const [index, entry] of entries.entries()) {
+    const parsed = parseSpecialist(entry)
     if ('error' in parsed) return `specialist ${index + 1}: ${parsed.error}`
-    const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '', focus: parsed.focus ?? '' }, index, { roles: state.roles, models: catalog.models, rows })
+    const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '', instructions: parsed.instructions ?? '' }, index, { models: catalog.models, entries })
     if ('error' in checked) return `specialist ${index + 1}: ${checked.error}`
   }
   return undefined
@@ -642,24 +643,20 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     await $.command.register({ name: SETUP_COMMAND, description: 'Add, edit or remove specialists', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
-    // Perspectives come from the council's own roles file, so one definition
-    // serves both; a row naming a missing one is reported, never dropped quietly.
-    const rolesText = await readText(files($), `${$.plugin.root}/config/roles.json`)
-    const roles: Roles = rolesText ? (JSON.parse(rolesText).roles ?? {}) : {}
-    const roster = specialistRoster(options, roles)
+    // An entry that does not parse is reported, never dropped quietly.
+    const roster = specialistRoster(options)
     for (const problem of roster.problems) $.ui.log(problem)
     state.specialists = roster.specialists
-    state.roles = roles
     // A Save reloads this module; the screen's draft comes back from the store.
-    state.setup = restoreSetup(await $.store.get(SETUP_KEY), specialistRows(options).rows)
-    // An open setup screen was drawn by the reloaded module before the roles
-    // and the store were read; draw it again with them.
+    state.setup = restoreSetup(await $.store.get(SETUP_KEY), specialistEntries(options).entries)
+    // An open setup screen was drawn by the reloaded module before the store
+    // was read; draw it again with it.
     $.ui.invalidate('ui.render')
     // Registered with no specialists too, so a user can ask Claude to set the first one up.
     await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
@@ -796,13 +793,12 @@ export const register: Register = (on, options) => {
       const started = await sh(['start', cwd, s.name, ts])
       if (started.exitCode !== 0) return { result: started.stderr.trim() || 'could not create the worktree', isError: true }
       const at = kv(started.stdout)
-      // A custom specialist's own instructions stand where a council role's prompt would.
-      const perspectivePrompt = s.focus ?? state.roles[s.perspective]?.prompt ?? ''
+      const instructions = s.instructions ?? ''
       const record: RunRecord = {
-        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), perspective: s.perspective, prompt: perspectivePrompt,
+        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), prompt: instructions,
         repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 0, state: 'idle', startedMs: 0, roundBase: '', subject: '',
       }
-      return await round(record, specialistPrompt(perspectivePrompt, call.task), '', commitSubject(s.name, call.task), dirty)
+      return await round(record, specialistPrompt(instructions, call.task), '', commitSubject(s.name, call.task), dirty)
     }
 
     const record = Object.hasOwn(runs, call.run) ? runs[call.run] : undefined
@@ -942,7 +938,7 @@ export const register: Register = (on, options) => {
   // one would reopen the form for nothing.
   on('ui.close', { id: SETUP_PANE }, async ($, e, next) => {
     const draft = state.setup?.draft
-    if (e.origin.kind === 'person' && !(draft && isDirty(draft, state.roles))) await keepSetup($, state, undefined)
+    if (e.origin.kind === 'person' && !(draft && isDirty(draft))) await keepSetup($, state, undefined)
     return next(e)
   })
 
@@ -952,7 +948,7 @@ export const register: Register = (on, options) => {
     if (!('Input' in ui)) return <ui.Text key="setup-mobile">Specialists are set up in the terminal or desktop app.</ui.Text>
     const { Box, Text, Input, Select, Button } = ui
     const setup = currentSetup(state)
-    const view = setupView(setup, specialistRows(options).rows, state.roles)
+    const view = setupView(setup, specialistEntries(options).entries)
     const draft = setup.draft
     const editor = view.editor
     const width = Math.max(30, e.props.bodyColumns - 2)
@@ -995,7 +991,7 @@ export const register: Register = (on, options) => {
               {editor.unsaved ? <Text key="unsaved" color={COUNCIL_RGB}>{'  unsaved changes'}</Text> : null}
             </Box>
             <Box key="editor" flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1}>
-              <Input key={`name.${state.inputEpoch}`} label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, 'model')) }} />
+              <Input key={`name.${state.inputEpoch}`} label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />
               <Select key="model" label="Model        " value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
                 onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
               {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
@@ -1005,13 +1001,12 @@ export const register: Register = (on, options) => {
                   <Button key="retry" label="Retry" onPress={press(() => loadCatalog($, state))} />
                 </Box>
               ) : null}
-              <Select key="perspective" label="Perspective  " value={draft.perspective} options={editor.perspectiveOptions} onSelect={(v: string) => edit({ perspective: v })} />
-              {editor.perspectiveHelp ? help('perspective-help', editor.perspectiveHelp) : null}
-              {editor.showFocus ? <Input key={`focus.${state.inputEpoch}`} label="Focus        " placeholder="what it should look for, in your words" value={draft.focus} onInput={(v: string) => edit({ focus: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { focus: v }, 'effort')) }} /> : null}
               <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
               {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
-              <Input key={`when.${state.inputEpoch}`} label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, 'save')) }} />
-              {help('when-count', `${editor.whenCount} characters`)}
+              <Input key={`when.${state.inputEpoch}`} label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />
+              {help('when-help', editor.whenHelp)}
+              <Input key={`instructions.${state.inputEpoch}`} label="Instructions " placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />
+              {help('instructions-help', editor.instructionsHelp)}
               <Box key="actions" flexDirection="row">
                 <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
                 <Text key="gap-1">{'  '}</Text>
@@ -1070,7 +1065,6 @@ export const register: Register = (on, options) => {
             <Text bold>{record.specialist}</Text>
             <Text bold color={status.color}>{`${status.glyph} ${status.text}`}</Text>
             <Text dimColor>{`round ${record.rounds}`}</Text>
-            <Text dimColor>{record.perspective}</Text>
             <Text color={MODEL_RGB}>{record.model}</Text>
           </Box>
           {/* A line exactly as wide as the card wraps to an empty second line

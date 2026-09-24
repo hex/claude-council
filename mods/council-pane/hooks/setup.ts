@@ -1,6 +1,6 @@
-// ABOUTME: Pure decisions for the specialist setup screen: Codex's model catalog, one validator, rows and drafts
+// ABOUTME: Pure decisions for the specialist setup screen: Codex's model catalog, one validator, entries and drafts
 // ABOUTME: No engine calls here, so every rule runs under bun test
-import { CUSTOM, nameProblem, parseSpecialist, WHEN_MAX, type Roles } from './specialist'
+import { nameProblem, parseSpecialist, WHEN_MAX, type Specialist } from './specialist'
 
 // effortHelp is Codex's own one-line description of each effort; defaultEffort
 // is what the model uses when nothing sets one.
@@ -35,72 +35,73 @@ export function parseCatalog(run: { exitCode: number; stdout: string; stderr: st
   return { models }
 }
 
-// focus is written into the row only for the custom perspective.
-export type Fields = { name: string; model: string; perspective: string; effort: string; focus: string; when: string }
+// The form's fields as typed; a blank effort or instructions is left out of the entry.
+export type Fields = { name: string; model: string; effort: string; when: string; instructions: string }
 
-export function rowText(f: Fields): string {
-  const focus = f.perspective === CUSTOM ? `focus: ${f.focus}, ` : ''
-  return `${f.name} = ${f.model} as ${f.perspective}, ${f.effort ? `effort: ${f.effort}, ` : ''}${focus}when: ${f.when}`
+function entryOf(f: Fields): Specialist {
+  return { name: f.name, model: f.model, ...(f.effort ? { effort: f.effort } : {}), when: f.when, ...(f.instructions.trim() ? { instructions: f.instructions } : {}) }
+}
+
+// The stored entry as text, so a draft can tell whether it changed meanwhile.
+function entryKey(entry: unknown): string {
+  return entry === undefined ? '' : JSON.stringify(entry)
 }
 
 // The fields a user types are checked here first, so each error names its field;
-// the row then goes through parseSpecialist, the same reader session start uses.
-export function checkSpecialist(f: Fields, index: number, context: { roles: Roles; models: CatalogModel[]; rows: string[] }): { row: string } | { error: string } {
+// the entry then goes through parseSpecialist, the same reader session start uses.
+export function checkSpecialist(f: Fields, index: number, context: { models: CatalogModel[]; entries: unknown[] }): { entry: Specialist } | { error: string } {
   if (f.name.trim() === '') return { error: 'name is empty' }
   const badName = nameProblem(f.name)
   if (badName) return { error: badName }
   if (f.when.trim() === '') return { error: 'use-when is empty' }
+  // The form's inputs hold one line, so a hand-set entry keeps to one too.
   if (/[\r\n]/.test(f.when)) return { error: 'use-when must be one line' }
-  if (f.perspective === CUSTOM) {
-    if (f.focus.trim() === '') return { error: 'focus is empty: write what this specialist should look for' }
-    if (/[\r\n]/.test(f.focus)) return { error: 'focus must be one line' }
-    if (f.focus.includes('when:')) return { error: "focus cannot contain 'when:'" }
-  }
+  if (/[\r\n]/.test(f.instructions)) return { error: 'instructions must be one line' }
   const model = context.models.find(m => m.slug === f.model)
   if (!model) return { error: `model '${f.model}' is not in Codex's catalog: ${context.models.filter(m => m.listed).map(m => m.slug).join(', ')}` }
   if (f.effort && !model.efforts.includes(f.effort)) return { error: `effort '${f.effort}' is not offered by ${model.slug}: ${model.efforts.join(', ')}` }
-  const row = rowText(f)
-  const parsed = parseSpecialist(row, context.roles)
-  if (parsed === undefined) return { error: 'the row is empty' }
+  const parsed = parseSpecialist(entryOf(f))
   if ('error' in parsed) return parsed
-  const taken = context.rows.findIndex((other, at) => {
+  const taken = context.entries.findIndex((other, at) => {
     if (at === index) return false
-    const theirs = parseSpecialist(other, context.roles)
-    return theirs !== undefined && !('error' in theirs) && theirs.name === parsed.name
+    const theirs = parseSpecialist(other)
+    return !('error' in theirs) && theirs.name === parsed.name
   })
   if (taken !== -1) return { error: `name '${parsed.name}' is already used by specialist ${taken + 1}` }
-  return { row }
+  return { entry: parsed }
 }
 
-// A save puts the row at its index, which one past the end appends; a remove drops it.
-export function putRow(rows: string[], index: number, row: string): string[] {
-  return index >= rows.length ? [...rows, row] : rows.map((existing, at) => (at === index ? row : existing))
+// A save puts the entry at its index, which one past the end appends; a remove drops it.
+export function putEntry<T>(entries: T[], index: number, entry: T): T[] {
+  return index >= entries.length ? [...entries, entry] : entries.map((existing, at) => (at === index ? entry : existing))
 }
 
-export function dropRow(rows: string[], index: number): string[] {
-  return rows.filter((_, at) => at !== index)
+export function dropEntry<T>(entries: T[], index: number): T[] {
+  return entries.filter((_, at) => at !== index)
 }
 
-// index: the row's place in the list, or the list's length for a new one.
-// baseline: the row's text when editing started, to spot a change made meanwhile.
+// index: the entry's place in the list, or the list's length for a new one.
+// baseline: the stored entry as JSON when editing started, to spot a change made meanwhile.
 export type Draft = Fields & { index: number; baseline: string }
 export type Status = { kind: 'saved' | 'error' | 'note'; text: string }
 // A question the screen asks inline before an action it cannot undo.
 export type Confirm = { kind: 'remove' } | { kind: 'switch'; target: number | 'new' }
 export type SetupState = { draft?: Draft; catalog: CatalogState; status?: Status; confirm?: Confirm }
 
-// A row that does not parse opens as a blank draft on the first listed model,
+const fieldsOf = (s: Specialist): Fields => ({ name: s.name, model: s.model, effort: s.effort ?? '', when: s.when, instructions: s.instructions ?? '' })
+
+// An entry that does not parse opens as a blank draft on the first listed model,
 // so the model the screen shows is the one a Save writes.
-export function draftFor(index: number, rows: string[], roles: Roles, models: CatalogModel[]): Draft {
-  const baseline = rows[index] ?? ''
-  const parsed = parseSpecialist(baseline, roles)
-  if (!parsed || 'error' in parsed) return { ...blankDraft(index, models, roles), baseline }
-  return { index, baseline, name: parsed.name, model: parsed.model, perspective: parsed.perspective, effort: parsed.effort ?? '', focus: parsed.focus ?? '', when: parsed.when }
+export function draftFor(index: number, entries: unknown[], models: CatalogModel[]): Draft {
+  const baseline = entryKey(entries[index])
+  const parsed = parseSpecialist(entries[index])
+  if ('error' in parsed) return { ...blankDraft(index, models), baseline }
+  return { index, baseline, ...fieldsOf(parsed) }
 }
 
-export function blankDraft(index: number, models: CatalogModel[], roles: Roles, prefill: Partial<Fields> = {}): Draft {
+export function blankDraft(index: number, models: CatalogModel[], prefill: Partial<Fields> = {}): Draft {
   const model = models.find(m => m.listed)?.slug ?? ''
-  return { index, baseline: '', name: '', model, perspective: Object.keys(roles)[0] ?? '', effort: '', focus: '', when: '', ...prefill }
+  return { index, baseline: '', name: '', model, effort: '', when: '', instructions: '', ...prefill }
 }
 
 export function withModel(draft: Draft, slug: string, models: CatalogModel[]): { draft: Draft; message: string } {
@@ -109,8 +110,8 @@ export function withModel(draft: Draft, slug: string, models: CatalogModel[]): {
   return { draft: { ...draft, model: slug, effort: '' }, message: `${slug} does not offer effort '${draft.effort}'; effort is back to your Codex default` }
 }
 
-export function staleMessage(draft: Draft, rows: string[]): string | undefined {
-  return (rows[draft.index] ?? '') === draft.baseline ? undefined : 'The specialists changed while you edited; your draft was set aside.'
+export function staleMessage(draft: Draft, entries: unknown[]): string | undefined {
+  return entryKey(entries[draft.index]) === draft.baseline ? undefined : 'The specialists changed while you edited; your draft was set aside.'
 }
 
 
@@ -119,9 +120,8 @@ export type RosterEntry = { index: number; name: string; model: string; detail: 
 export type EditorView = {
   title: string; unsaved: boolean; removable: boolean; discardLabel: string
   models: 'loading' | 'failed' | 'ready'
-  modelOptions: Option[]; effortOptions: Option[]; perspectiveOptions: Option[]
-  showFocus: boolean
-  perspectiveHelp: string; effortHelp: string; whenCount: string
+  modelOptions: Option[]; effortOptions: Option[]
+  effortHelp: string; whenHelp: string; instructionsHelp: string
 }
 export type SetupView = {
   header: string
@@ -134,82 +134,81 @@ export type SetupView = {
 
 const option = (value: string, label = value): Option => ({ value, label })
 
-// The perspective's own prompt says what it looks for; its first sentence is
-// only "You are ...", so the second one is shown when there is one.
-function perspectiveHelp(roles: Roles, perspective: string): string {
-  if (perspective === CUSTOM) return 'Your own instructions, written below, open every task.'
-  const prompt = Object.hasOwn(roles, perspective) ? roles[perspective]?.prompt ?? '' : ''
-  const sentences = prompt.split(/(?<=\.)\s+/).filter(Boolean)
-  return sentences[1] ?? sentences[0] ?? ''
+function savedName(entries: unknown[], index: number): string | undefined {
+  const parsed = parseSpecialist(entries[index])
+  return 'error' in parsed ? undefined : parsed.name
 }
 
-function savedName(rows: string[], index: number, roles: Roles): string | undefined {
-  const parsed = parseSpecialist(rows[index], roles)
-  return parsed && !('error' in parsed) ? parsed.name : undefined
+// The saved side of a draft, read back from its baseline; undefined for a new
+// draft or one whose entry did not parse.
+function savedFields(draft: Draft): Fields | undefined {
+  if (draft.baseline === '') return undefined
+  let entry: unknown
+  try { entry = JSON.parse(draft.baseline) } catch { return undefined }
+  const parsed = parseSpecialist(entry)
+  return 'error' in parsed ? undefined : fieldsOf(parsed)
 }
 
-export function isDirty(draft: Draft, roles: Roles): boolean {
-  const saved = parseSpecialist(draft.baseline, roles)
-  if (!saved || 'error' in saved) return draft.name.trim() !== '' || draft.when.trim() !== ''
-  return saved.name !== draft.name || saved.model !== draft.model || saved.perspective !== draft.perspective ||
-    (saved.effort ?? '') !== draft.effort || (saved.focus ?? '') !== draft.focus || saved.when !== draft.when
+export function isDirty(draft: Draft): boolean {
+  const saved = savedFields(draft)
+  if (!saved) return draft.name.trim() !== '' || draft.when.trim() !== '' || draft.instructions.trim() !== ''
+  return saved.name !== draft.name || saved.model !== draft.model || saved.effort !== draft.effort ||
+    saved.when !== draft.when || saved.instructions !== draft.instructions
 }
 
-function editorView(draft: Draft, catalog: CatalogState, roles: Roles, rows: string[]): EditorView {
+function editorView(draft: Draft, catalog: CatalogState, entries: unknown[]): EditorView {
   const models = 'models' in catalog ? catalog.models : []
   const model = models.find(m => m.slug === draft.model)
   const listed = [...models.filter(m => m.listed), ...models.filter(m => !m.listed)]
   const removable = draft.baseline.trim() !== ''
-  const name = savedName(rows, draft.index, roles)
+  const name = savedName(entries, draft.index)
   let effortHelp = ''
   if (model) effortHelp = draft.effort ? model.effortHelp[draft.effort] ?? '' : `Your Codex config decides; this model's own default is ${model.defaultEffort}`
   return {
     title: removable ? `EDIT ${name ?? `specialist ${draft.index + 1}`}` : 'NEW specialist',
-    unsaved: isDirty(draft, roles),
+    unsaved: isDirty(draft),
     removable,
     discardLabel: removable ? 'Discard changes' : 'Cancel adding',
     models: 'loading' in catalog ? 'loading' : 'error' in catalog ? 'failed' : 'ready',
     modelOptions: 'models' in catalog ? listed.map(m => option(m.slug, m.listed ? m.slug : `${m.slug} (hidden)`)) : [option(draft.model)],
-    perspectiveOptions: [...Object.keys(roles), CUSTOM].map(p => option(p)),
-    showFocus: draft.perspective === CUSTOM,
     effortOptions: [option('default'), ...(model ? model.efforts : draft.effort ? [draft.effort] : []).map(e => option(e))],
-    perspectiveHelp: perspectiveHelp(roles, draft.perspective),
     effortHelp,
-    whenCount: `${draft.when.length}/${WHEN_MAX}`,
+    whenHelp: `${draft.when.length}/${WHEN_MAX} · Claude reads this to decide when to offer this specialist.`,
+    instructionsHelp: 'Sent to the specialist before each new task. Blank means it just follows the task.',
   }
 }
 
-function confirmView(setup: SetupState, rows: string[], roles: Roles): SetupView['confirm'] {
+function confirmView(setup: SetupState, entries: unknown[]): SetupView['confirm'] {
   const { confirm, draft } = setup
   if (!confirm || !draft) return undefined
-  const current = savedName(rows, draft.index, roles) ?? (draft.name || 'this draft')
+  const current = savedName(entries, draft.index) ?? (draft.name || 'this draft')
   if (confirm.kind === 'remove') return { text: `Remove ${current}? Claude can no longer offer it.`, yes: `Remove ${current}`, no: 'Keep it' }
-  const target = confirm.target === 'new' ? 'add new' : `open ${savedName(rows, confirm.target, roles) ?? `specialist ${confirm.target + 1}`}`
+  const target = confirm.target === 'new' ? 'add new' : `open ${savedName(entries, confirm.target) ?? `specialist ${confirm.target + 1}`}`
   return { text: `${current} has unsaved changes.`, yes: `Discard and ${target}`, no: 'Keep editing' }
 }
 
-export function setupView(setup: SetupState, rows: string[], roles: Roles): SetupView {
+export function setupView(setup: SetupState, entries: unknown[]): SetupView {
   const roster: RosterEntry[] = []
-  rows.forEach((row, index) => {
-    const parsed = parseSpecialist(row, roles)
-    if (parsed === undefined) return
+  entries.forEach((entry, index) => {
+    const parsed = parseSpecialist(entry)
     const editing = setup.draft?.index === index
-    if ('error' in parsed) { roster.push({ index, name: `specialist ${index + 1}`, model: '', detail: row, when: '', problem: parsed.error, editing }); return }
-    roster.push({ index, name: parsed.name, model: parsed.model, detail: `${parsed.perspective} · effort ${parsed.effort ?? 'default'}`, when: parsed.when, editing })
+    if ('error' in parsed) { roster.push({ index, name: `specialist ${index + 1}`, model: '', detail: entryKey(entry), when: '', problem: parsed.error, editing }); return }
+    const instructions = parsed.instructions ? ` · instructions: ${parsed.instructions}` : ''
+    roster.push({ index, name: parsed.name, model: parsed.model, detail: `effort ${parsed.effort ?? 'default'}${instructions}`, when: parsed.when, editing })
   })
   return {
     header: `SPECIALISTS ${roster.length}`,
     roster,
     ...(roster.length === 0 ? { empty: 'No specialists yet. Add one, and Claude offers it when a task matches its use-when.' } : {}),
-    ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, roles, rows) } : {}),
-    ...(setup.confirm ? { confirm: confirmView(setup, rows, roles) } : {}),
+    ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, entries) } : {}),
+    ...(setup.confirm ? { confirm: confirmView(setup, entries) } : {}),
     ...(setup.status ? { status: setup.status } : {}),
   }
 }
 
 const SET_ASIDE: Status = { kind: 'note', text: 'An earlier draft could not be read and was set aside.' }
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const DRAFT_TEXT = ['baseline', 'name', 'model', 'perspective', 'effort', 'focus', 'when'] as const
+const DRAFT_TEXT = ['baseline', 'name', 'model', 'effort', 'when', 'instructions'] as const
 
 function readCatalogState(v: unknown): CatalogState | undefined {
   if (!isRecord(v)) return undefined
@@ -240,14 +239,14 @@ function readConfirm(v: unknown): Confirm | undefined {
 // The screen's state comes back from the plugin store after every reload. It
 // crosses a boundary there (another version of the plugin may have written it),
 // so it is read field by field; what does not fit is set aside with a note.
-export function restoreSetup(value: unknown, rows: string[]): SetupState | undefined {
+export function restoreSetup(value: unknown, entries: unknown[]): SetupState | undefined {
   if (value === undefined || value === null) return undefined
   if (!isRecord(value)) return { catalog: { loading: true }, status: SET_ASIDE }
   const catalog = readCatalogState(value.catalog)
   const draft = value.draft === undefined ? undefined : readDraft(value.draft)
   if (!catalog || (value.draft !== undefined && !draft)) return { catalog: { loading: true }, status: SET_ASIDE }
   if (draft) {
-    const stale = staleMessage(draft, rows)
+    const stale = staleMessage(draft, entries)
     if (stale) return { catalog, status: { kind: 'note', text: stale } }
   }
   const status = readStatus(value.status)

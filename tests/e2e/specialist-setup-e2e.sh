@@ -35,8 +35,8 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # The engine drops keys sent faster than it draws; one second apiece is enough.
 key() { tmux send-keys -t "$SESSION" "$@"; sleep 1; }
 screen() { tmux capture-pane -p -t "$SESSION"; }
-# The specialists live in one hidden settings field, a JSON list of rows.
-rows() { jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$SETTINGS"; }
+# The specialists live in one hidden settings field, a JSON list of objects.
+entries() { jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$SETTINGS"; }
 
 wait_for() {
     local tick=0
@@ -74,7 +74,7 @@ pick() {
 
 BEFORE="$(jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$OUT/settings.before")"
 INDEX="$(printf '%s' "$BEFORE" | jq 'length')"
-WANT="e2e = gpt-6-luna as security, effort: max, when: e2e check"
+WANT='{"effort":"max","instructions":"say e2e first","model":"gpt-6-luna","name":"e2e","when":"e2e check"}'
 
 tmux new-session -d -s "$SESSION" -x 160 -y 45 -c "$ROOT" \
     "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 $HOME/.local/bin/claude --plugin-dir $ROOT --debug-file $LOG"
@@ -94,13 +94,15 @@ focus_on name; tmux send-keys -t "$SESSION" -l e2e; sleep 1
 focus_on model; pick gpt-6-luna
 focus_on effort; pick max
 focus_on when; tmux send-keys -t "$SESSION" -l 'e2e check'; sleep 1
+focus_on instructions; tmux send-keys -t "$SESSION" -l 'say e2e first'; sleep 1
 screen > "$OUT/3-filled.txt"
 
 echo "4. save"
 focus_on save; key Enter
 wait_for "Saved e2e."
 screen > "$OUT/4-saved.txt"
-[ "$(rows | jq -r --argjson i "$INDEX" '.[$i]')" = "$WANT" ] || fail "specialist $((INDEX + 1)) is '$(rows | jq -r --argjson i "$INDEX" '.[$i]')', expected '$WANT'"
+GOT="$(entries | jq -cS --argjson i "$INDEX" '.[$i]')"
+[ "$GOT" = "$WANT" ] || fail "specialist $((INDEX + 1)) is '$GOT', expected '$WANT'"
 
 echo "5. remove"
 focus_on "row:${INDEX}"; key Enter
@@ -108,6 +110,6 @@ focus_on remove; key Enter
 wait_for "Remove e2e?"
 focus_on confirm-yes; key Enter
 wait_for "Removed e2e."
-[ "$(rows | jq -c .)" = "$(printf '%s' "$BEFORE" | jq -c .)" ] || fail "the list is $(rows) after remove, expected $BEFORE"
+[ "$(entries | jq -c .)" = "$(printf '%s' "$BEFORE" | jq -c .)" ] || fail "the list is $(entries) after remove, expected $BEFORE"
 
 echo "PASS ($OUT)"

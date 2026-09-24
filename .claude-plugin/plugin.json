@@ -63,7 +63,7 @@
     "specialists": {
       "type": "string",
       "title": "Specialists",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this field holds what it saves, as a JSON list of rows, and /config does not show it.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this field holds what it saves, as a JSON list of objects, and /config does not show it.",
       "default": "[]"
     }
   }
