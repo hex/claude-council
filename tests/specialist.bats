@@ -61,17 +61,27 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 }
 
 @test "start refuses a tracked symlink in an include destination parent" {
-    ln -s "$ROOT" "$REPO/shared"
-    git -C "$REPO" add shared
+    mkdir "$ROOT/outside"
+    ln -s ../outside "$REPO/cfg"
+    git -C "$REPO" add cfg
     git -C "$REPO" commit -qm link
-    rm "$REPO/shared"
-    mkdir "$REPO/shared"
-    printf 'private\n' > "$REPO/shared/file.txt"
-    printf 'shared/file.txt\n' > "$REPO/.worktreeinclude"
+    rm "$REPO/cfg"
+    mkdir "$REPO/cfg"
+    printf 'private\n' > "$REPO/cfg/secret"
+    printf 'cfg/secret\n' > "$REPO/.worktreeinclude"
     run "$SPECIALIST" start "$REPO" sec 20260923-151204
     [ "$status" -eq 1 ]
-    [ "$output" = "specialist: symlink in worktree destination for 'shared/file.txt': shared" ]
-    [ ! -e "$ROOT/file.txt" ]
+    [ "$output" = "specialist: symlink in worktree destination for 'cfg/secret': cfg" ]
+    [ ! -e "$ROOT/outside/secret" ]
+    [ ! -e "${ROOT}/app.specialists/sec-20260923-151204" ]
+    [ ! -e "${ROOT}/app.specialists" ]
+    [ -z "$(git -C "$REPO" branch --list 'specialist/*')" ]
+    printf 'cfg\n' > "$REPO/.worktreeinclude"
+    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: symlink in worktree destination for 'cfg': cfg" ]
+    [ ! -e "${ROOT}/app.specialists" ]
+    [ -z "$(git -C "$REPO" branch --list 'specialist/*')" ]
 }
 
 @test "start refuses a tracked symlink within an included directory" {
@@ -84,8 +94,10 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     printf 'shared\n' > "$REPO/.worktreeinclude"
     run "$SPECIALIST" start "$REPO" sec 20260923-151204
     [ "$status" -eq 1 ]
-    [ "$output" = "specialist: symlink in worktree destination for 'shared/file.txt': shared/file.txt" ]
+    [ "$output" = "specialist: symlink in worktree destination for 'shared': shared/file.txt" ]
     [ ! -e "$ROOT/outside.txt" ]
+    [ ! -e "${ROOT}/app.specialists" ]
+    [ -z "$(git -C "$REPO" branch --list 'specialist/*')" ]
 }
 
 @test "start does not follow a symlink in an include source parent" {
@@ -97,6 +109,7 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     [ "$status" -eq 1 ]
     [ "$output" = "specialist: symlink in .worktreeinclude source for 'shared/file.txt': shared" ]
     [ ! -e "${ROOT}/app.specialists" ]
+    [ -z "$(git -C "$REPO" branch --list 'specialist/*')" ]
 }
 
 @test "start rejects invalid names before creating a worktree or branch" {

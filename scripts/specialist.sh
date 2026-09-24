@@ -10,32 +10,23 @@ repo_root() {
     git -C "$1" rev-parse --show-toplevel 2>/dev/null || die "$1 is not inside a git repository"
 }
 
-check_worktree_destination() {
-    local worktree="$1" entry="$2" remaining="$2" prefix="" part
+parse_include_path() {
+    local root="$1" raw="$2" remaining="$2" part path=""
+    [[ "$raw" != /* && "/$raw/" != */../* ]] || die "invalid .worktreeinclude path '${raw}': must be relative and contain no '..' component"
     while [[ -n "$remaining" ]]; do
         part="${remaining%%/*}"
         if [[ "$remaining" == */* ]]; then remaining="${remaining#*/}"; else remaining=""; fi
         if [[ -n "$part" && "$part" != . ]]; then
-            prefix="${prefix:+$prefix/}$part"
-            [[ ! -L "$worktree/$prefix" ]] || die "symlink in worktree destination for '${entry}': ${prefix}"
+            [[ -z "$path" || ! -L "$root/$path" ]] || die "symlink in .worktreeinclude source for '${raw}': ${path}"
+            path="${path:+$path/}$part"
         fi
     done
-}
-
-check_include_source() {
-    local root="$1" entry="$2" remaining="$2" prefix="" part
-    while [[ "$remaining" == */* ]]; do
-        part="${remaining%%/*}"
-        remaining="${remaining#*/}"
-        if [[ -n "$part" && "$part" != . ]]; then
-            prefix="${prefix:+$prefix/}$part"
-            [[ ! -L "$root/$prefix" ]] || die "symlink in .worktreeinclude source for '${entry}': ${prefix}"
-        fi
-    done
+    [[ -n "$path" ]] || die "invalid .worktreeinclude path '${raw}': must name a file or directory"
+    REPLY="$path"
 }
 
 cmd_start() {
-    local dir="$1" name="$2" ts="$3" root parent base short home worktree branch state dirty entry raw remaining part normalized source destination child i count=0
+    local dir="$1" name="$2" ts="$3" root parent base short home worktree branch state dirty entry source destination tree_entry link i count=0
     local -a includes
     [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || die "invalid name '${name}': must match ^[a-z][a-z0-9-]*\$"
     root="$(repo_root "$dir")"
@@ -51,18 +42,15 @@ cmd_start() {
         while IFS= read -r entry || [[ -n "$entry" ]]; do
             entry="${entry%$'\r'}"
             [[ -z "$entry" || "$entry" == \#* ]] && continue
-            [[ "$entry" != /* && "/$entry/" != */../* ]] || die "invalid .worktreeinclude path '${entry}': must be relative and contain no '..' component"
-            raw="$entry"
-            remaining="$entry"
-            normalized=""
-            while [[ -n "$remaining" ]]; do
-                part="${remaining%%/*}"
-                if [[ "$remaining" == */* ]]; then remaining="${remaining#*/}"; else remaining=""; fi
-                [[ -z "$part" || "$part" == . ]] || normalized="${normalized:+$normalized/}$part"
+            parse_include_path "$root" "$entry"
+            entry="$REPLY"
+            git -C "$root" ls-tree -r -z "$base" | while IFS= read -r -d '' tree_entry; do
+                [[ "${tree_entry%% *}" == 120000 ]] || continue
+                link="${tree_entry#*$'\t'}"
+                if [[ "$entry" == "$link" || "$entry" == "$link/"* || "$link" == "$entry/"* ]]; then
+                    die "symlink in worktree destination for '${entry}': ${link}"
+                fi
             done
-            [[ -n "$normalized" ]] || die "invalid .worktreeinclude path '${raw}': must name a file or directory"
-            entry="$normalized"
-            check_include_source "$root" "$entry"
             includes[$count]="$entry"
             count=$((count + 1))
         done < "$root/.worktreeinclude"
@@ -73,13 +61,9 @@ cmd_start() {
         entry="${includes[$i]}"
         source="$root/$entry"
         if [[ -e "$source" || -L "$source" ]]; then
-            check_worktree_destination "$worktree" "$entry"
             destination="$worktree/$entry"
             mkdir -p "$(dirname "$destination")"
             if [[ -d "$source" && ! -L "$source" ]]; then
-                while IFS= read -r -d '' child; do
-                    check_worktree_destination "$worktree" "$entry${child#"$source"}"
-                done < <(find "$source" -print0)
                 mkdir -p "$destination"
                 cp -R -P "$source/." "$destination"
             else
