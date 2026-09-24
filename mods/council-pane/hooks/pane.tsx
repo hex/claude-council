@@ -353,6 +353,14 @@ async function followSpecialist($: EngineInterface, state: PaneState): Promise<v
 
 // A round survives the session that started it: at start, follow one still
 // running and close one that ended meanwhile.
+// Scrolls the specialist pane to its end, which the engine keeps up with as
+// steps arrive. A refusal is reported: to the transcript where the pane
+// should have followed, to the debug log where a closed pane is expected.
+async function followPaneEnd($: EngineInterface, when: string, to: 'transcript' | 'debug'): Promise<void> {
+  const moved = await $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })
+  if (moved.deny) $.ui.log(`specialist pane did not follow (${when}): ${moved.deny}`, { to })
+}
+
 async function recoverRounds($: EngineInterface, state: PaneState): Promise<void> {
   for (const record of Object.values(await loadRuns($))) {
     if (record.state !== 'running') continue
@@ -533,7 +541,7 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
       // An open pane follows the new round; a closed one refuses, and follows
       // once opened from the band.
-      void $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })
+      await followPaneEnd($, 'round start', 'debug')
       return { result: startedReply(running, isDirty) }
     }
 
@@ -659,7 +667,7 @@ export const register: Register = (on, options) => {
             <ui.Text dimColor wrap="truncate-end">{`  ${latestStep(state.specialistLog?.steps ?? [])}  `}</ui.Text>
           </ui.Box>
           <ui.Box flexShrink={0}>
-            <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }).then(() => $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })) }} />
+            <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }).then(() => followPaneEnd($, 'pane opened', 'transcript')) }} />
           </ui.Box>
         </ui.Box>
       )
@@ -681,7 +689,7 @@ export const register: Register = (on, options) => {
   // stops it, as the engine's own `end` does.
   on('ui.scroll', { requestId: SPECIALIST_PANE }, async ($, e, next) => {
     const moved = await next(e)
-    if (!moved.deny && landsAtEnd(e)) void $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })
+    if (!moved.deny && landsAtEnd(e)) await followPaneEnd($, 'scrolled to the bottom', 'transcript')
     return moved
   })
 
