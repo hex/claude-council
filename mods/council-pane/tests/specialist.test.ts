@@ -198,10 +198,7 @@ test('a schema-shaped report is rendered as summary, tests and open questions', 
     open_questions: ['first\n\nsecond'],
   })
   const base = { record, lastMessage, roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '', exitCode: 0, commit: '31db1a2' }
-  const result = roundResult(base).result
-  expect(result).toContain('\n- pass: bun test (line one line two line three)\n')
-  expect(result).toContain('\n- first second')
-  expect(result).toEndWith(
+  expect(roundResult(base).result).toEndWith(
     "The specialist's own report (written before the tool committed):\n" +
     'Added a rate limit to login.\n\n' +
     'Tests:\n- pass: bun test (line one line two line three)\n- not run: bats tests/login.bats (bats is not installed)\n\n' +
