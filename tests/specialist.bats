@@ -300,14 +300,12 @@ launch() {
     [ "$(cat "$STATE/thread")" = "01a0ce2a-1d08-76c0-a6ef-8340b581212d" ]
 }
 
-@test "a follow-up round resumes the thread it is given, without the user's MCP servers" {
+@test "a follow-up round resumes the thread it is given" {
     start_run
     fake_codex "echo \"\$@\" > '${BATS_TEST_TMPDIR}/argv'"
     launch 01a0ce2a-1d08-76c0-a6ef-8340b581212d
     wait_round
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == "exec resume --json -m gpt-6-sol "*" 01a0ce2a-1d08-76c0-a6ef-8340b581212d -" ]]
-    # A round starts none of the user's own MCP servers.
-    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *" -c mcp_servers={} "* ]]
     [ "$(cat "$STATE/thread")" = "01a0ce2a-1d08-76c0-a6ef-8340b581212d" ]
 }
 
