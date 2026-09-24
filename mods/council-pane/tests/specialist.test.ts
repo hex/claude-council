@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
-  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine,
+  specialistCall, runStamp, startQuestion, followUpQuestion, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -339,6 +339,16 @@ test('the working line turns with each frame and counts the round\'s time', () =
   expect(workingLine(2, 0, 102_000)).toBe('\u2839 working  1:42')
   // Ten frames make one turn.
   expect(workingLine(12, 1_000, 4_000)).toBe('\u2839 working  0:03')
+})
+
+test('a move of the person\'s that lands on the last rows resumes following', () => {
+  const person = { kind: 'person' } as const
+  expect(landsAtEnd({ offset: 30, bodyRows: 20, contentRows: 50, origin: person })).toBe(true)
+  expect(landsAtEnd({ offset: 29, bodyRows: 20, contentRows: 50, origin: person })).toBe(false)
+  // A tree that fits has nowhere to scroll: its end always shows.
+  expect(landsAtEnd({ offset: 0, bodyRows: 20, contentRows: 12, origin: person })).toBe(true)
+  // The mod's own scroll to the end must not ask for another.
+  expect(landsAtEnd({ offset: 30, bodyRows: 20, contentRows: 50, origin: { kind: 'plugin', name: 'claude-council' } })).toBe(false)
 })
 
 test('roundClock counts m:ss, and h:mm:ss past an hour', () => {

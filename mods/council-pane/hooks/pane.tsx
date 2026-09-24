@@ -9,7 +9,7 @@ import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, followUpQuestion, followUpRefusal, parseSpecialistReport, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, startQuestion, threadFrom,
-  commitSubject, latestStep, lostResult, roundLiveness, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine,
+  commitSubject, latestStep, lostResult, roundLiveness, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type Roles, type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -531,6 +531,9 @@ export const register: Register = (on, options) => {
       state.specialist = { record: running, startedMs: running.startedMs, stateDir }
       state.specialistLog = { record: running, steps: [], isLive: true }
       $.ui.invalidate('ui.render')
+      // An open pane follows the new round; a closed one refuses, and follows
+      // once opened from the band.
+      void $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })
       return { result: startedReply(running) }
     }
 
@@ -663,7 +666,7 @@ export const register: Register = (on, options) => {
             <ui.Text dimColor wrap="truncate-end">{`  ${latestStep(state.specialistLog?.steps ?? [])}  `}</ui.Text>
           </ui.Box>
           <ui.Box flexShrink={0}>
-            <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }) }} />
+            <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }).then(() => $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })) }} />
           </ui.Box>
         </ui.Box>
       )
@@ -679,6 +682,14 @@ export const register: Register = (on, options) => {
         <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
       </ui.Box>
     )
+  })
+
+  // Scrolling back down to the last rows follows new steps again; scrolling up
+  // stops it, as the engine's own `end` does.
+  on('ui.scroll', { requestId: SPECIALIST_PANE }, async ($, e, next) => {
+    const moved = await next(e)
+    if (!moved.deny && landsAtEnd(e)) void $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })
+    return moved
   })
 
   on('ui.render', { component: 'Pane' }, ($, e, next) => {
@@ -758,7 +769,12 @@ export const register: Register = (on, options) => {
             </Text>
           )
         })}
-        {log.isLive && <Text color={status.color}>{workingLine(state.specialistFrame, record.startedMs, state.nowMs)}</Text>}
+        {/* A message already ends in a blank line; margins do not collapse. */}
+        {log.isLive && (
+          <Box marginTop={log.steps.at(-1)?.kind === 'say' ? 0 : 1}>
+            <Text dimColor>{workingLine(state.specialistFrame, record.startedMs, state.nowMs)}</Text>
+          </Box>
+        )}
       </Box>
     )
   })

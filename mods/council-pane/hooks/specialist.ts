@@ -348,6 +348,14 @@ export function workingLine(frame: number, startedMs: number, nowMs: number): st
   return `${spinner(frame)} working  ${roundClock(startedMs, nowMs)}`
 }
 
+// The engine keeps a pane scrolled to its end only until something else moves
+// it. A move of the person's that lands on the last rows asks to follow again;
+// the window's last offset is contentRows - bodyRows, and a tree that fits has
+// none.
+export function landsAtEnd(e: { offset: number; bodyRows: number; contentRows: number; origin: { kind: string } }): boolean {
+  return e.origin.kind === 'person' && e.offset >= e.contentRows - e.bodyRows
+}
+
 // The one coloured item in the pane's header: how the round stands.
 export function roundStatus(isLive: boolean, last: RunRecord['last'], clock: string): { glyph: string; text: string; color: string } {
   // A dark amber: a terminal's own yellow is unreadable on a light background.
