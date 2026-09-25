@@ -1,7 +1,7 @@
 {
   "name": "claude-council",
   "version": "2026.9.15",
-  "description": "Consult multiple AI coding agents (Gemini, OpenAI, Grok, Perplexity, Kimi, any model OpenRouter routes to, plus codex, antigravity, grok, kimi and cursor CLIs when installed, and a local ollama model) to get diverse perspectives on coding problems, with a streaming pane in tmux or inside Claude Code",
+  "description": "Consult multiple AI coding agents (Gemini, OpenAI, Grok, Perplexity, Kimi, any model OpenRouter routes to, plus codex, antigravity, grok, kimi and cursor CLIs when installed, and a local ollama model) to get diverse perspectives on coding problems, with a streaming pane in tmux or inside Claude Code. It can also hand a coding task to a Codex specialist that works on its own git branch and follows skills you pick (experimental).",
   "author": {
     "name": "hex",
     "url": "https://github.com/hex"
@@ -28,7 +28,8 @@
     "cli",
     "pane",
     "tmux",
-    "mod"
+    "mod",
+    "specialists"
   ],
   "userConfig": {
     "pane_host": {
