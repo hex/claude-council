@@ -37,7 +37,9 @@ const SPECIALIST_TOOL = 'specialist'
 const SPECIALIST_PANE = 'specialist'
 const RUNS_KEY = 'specialist-runs'
 const SETUP_PANE = 'specialist-setup'
-const SETUP_KEY = 'specialist-setup'
+// The setup screen's draft is one session's own: another session editing at
+// the same time must not restore it over its own after a reload.
+const SETUP_KEY_PREFIX = 'specialist-setup:'
 // The list as the last write in any session left it (see freshList).
 const LATEST_KEY = 'specialists-latest'
 const SETUP_COMMAND = 'specialists'
@@ -88,6 +90,8 @@ type PaneState = {
   paneFollowFrames: number
   // The setup screen's draft and catalog, mirrored from $.store so a reload redraws it.
   setup?: SetupState
+  // Where this session keeps setup in the shared store; set at session.start.
+  setupKey?: string
   // Bumped after each Enter in a setup field: the engine empties a submitted
   // Input, and a field under a new key draws its value again. The engine keeps
   // that emptied text across a reload of this module, so each load starts the
@@ -116,9 +120,10 @@ async function readCatalog($: EngineInterface) {
 }
 
 async function keepSetup($: EngineInterface, state: PaneState, setup: SetupState | undefined): Promise<void> {
+  if (!state.setupKey) throw new Error('the setup screen was used before session.start named its store key')
   state.setup = setup
-  if (setup) await $.store.set(SETUP_KEY, setup)
-  else await $.store.delete(SETUP_KEY)
+  if (setup) await $.store.set(state.setupKey, setup)
+  else await $.store.delete(state.setupKey)
   $.ui.invalidate('ui.render')
 }
 
@@ -710,7 +715,8 @@ export const register: Register = (on, options) => {
       await $.store.set(LATEST_KEY, options[LIST_FIELD])
       state.latest = options[LIST_FIELD]
     }
-    state.setup = restoreSetup(await $.store.get(SETUP_KEY), specialistEntries(options).entries)
+    state.setupKey = `${SETUP_KEY_PREFIX}${await $.session.id()}`
+    state.setup = restoreSetup(await $.store.get(state.setupKey), specialistEntries(options).entries)
     // A write made while the models were loading reloads this module before
     // they arrive; ask again, or Save would wait for them forever.
     if (state.setup && 'loading' in state.setup.catalog) void logFailure($, state, () => loadCatalog($, state))
@@ -1017,6 +1023,12 @@ export const register: Register = (on, options) => {
 
   // Closing the screen keeps a draft only when it holds changes; an untouched
   // one would reopen the form for nothing.
+  // A session's draft goes with it; the next session starts on the roster.
+  on('session.end', async ($, e, next) => {
+    if (state.setupKey) await $.store.delete(state.setupKey)
+    return next(e)
+  })
+
   on('ui.close', { id: SETUP_PANE }, async ($, e, next) => {
     const draft = state.setup?.draft
     if (e.origin.kind === 'person' && !(draft && isDirty(draft))) await keepSetup($, state, undefined)
