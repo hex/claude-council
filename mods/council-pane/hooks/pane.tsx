@@ -19,7 +19,7 @@ import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { missingSkills, skillBody, skillIndex, skillsOpening, type Skill } from './skills'
-import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, templateRule, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -1077,6 +1077,7 @@ export const register: Register = (on, options) => {
     const view = setupView(setup, stored.entries, stored.problem, state.skillNames)
     const draft = setup.draft
     const editor = view.editor
+    const templates = view.templates
     const width = Math.max(30, e.props.bodyColumns - 2)
     const press = (work: () => Promise<void>) => () => { void setupAction($, state, work) }
     const edit = (patch: Partial<Fields>) => { void setupAction($, state, () => editSetup($, state, patch)) }
@@ -1119,11 +1120,25 @@ export const register: Register = (on, options) => {
         <Text key="roster-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${view.header} `}</Text>
         <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={width}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
-          {view.templates ? (
-            <Box key="templates" flexDirection="row" flexWrap="wrap" columnGap={1} marginTop={1}>
-              {view.templates.map(name => (
-                <Button key={`template:${name}`} label={`Use ${name}`} onPress={press(() => openRow($, state, options, { template: name }))} />
-              ))}
+          {/* The templates draw as the roster does, so picking one reads as
+              picking a row; the name opens it as a new draft. */}
+          {templates ? (
+            <Box key="templates" flexDirection="column" marginTop={1}>
+              <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
+                {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
+                {cell('name', templates.nameWidth + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.template}</Text>)}
+                {separator('sep')}
+                <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color={COLOR.onFill} wrap="truncate-end">{HEADERS.when}</Text></Box>
+              </Box>
+              {templates.rows.map((row, at) => [
+                at > 0 ? <Text key={`rule:${row.name}`} color={COLOR.line} wrap="truncate">{templateRule(templates.nameWidth, width - 4)}</Text> : null,
+                <Box key={`template:${row.name}`} flexDirection="row" hover={{ backgroundColor: COLOR.selected }} {...(row.zebra ? { backgroundColor: COLOR.zebra } : {})}>
+                  {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
+                  {cell('name', (templates.nameWidth) + PAD, <Button key="use" plain label={row.name} onPress={press(() => openRow($, state, options, { template: row.name }))} />)}
+                  {separator('sep')}
+                  <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{row.when}</Text></Box>
+                </Box>,
+              ])}
             </Box>
           ) : null}
           {view.problem ? <Text key="problem" color={COLOR.danger} wrap="wrap">{`The stored list cannot be read: ${view.problem}. Save and Remove are off until it is fixed with /config.`}</Text> : null}
@@ -1168,7 +1183,7 @@ export const register: Register = (on, options) => {
               {entry.kind === 'broken' ? under('stored', entry.stored) : null}
             </Box>,
           ])}
-          <Box key="add-row" marginTop={view.roster.length > 0 ? 1 : 0}><Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} /></Box>
+          <Box key="add-row" marginTop={view.roster.length > 0 || templates ? 1 : 0}><Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} /></Box>
         </Box>
         {editor && draft ? (
           <Box key="editor-wrap" flexDirection="column" marginTop={1}>

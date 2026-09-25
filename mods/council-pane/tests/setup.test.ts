@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, TEMPLATES, templateDraft, draftAt, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, TEMPLATES, templateDraft, templateRule, draftAt, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -164,9 +164,16 @@ test('an entry that does not parse stays in the roster with its problem and what
 })
 
 test('with no specialists the roster says what to do and offers the templates', () => {
-  expect(setupView(ready, []).empty).toBe('No specialists yet. Start from a template, add one, or describe one to Claude. Claude offers a specialist when a task matches its use-when.')
+  expect(setupView(ready, []).empty).toBe('No specialists yet. A specialist is a Codex agent that works on its own branch. Pick a template, add your own, or describe one to Claude.')
   expect(setupView(ready, []).header).toBe('SPECIALISTS (0)')
-  expect(setupView(ready, []).templates).toEqual(['bug-fixer', 'ci-fixer', 'refactorer', 'test-writer', 'test-pruner', 'docs-updater'])
+  const templates = setupView(ready, []).templates
+  expect(templates?.rows.map(row => [row.name, row.zebra])).toEqual([
+    ['bug-fixer', false], ['ci-fixer', true], ['refactorer', false], ['test-writer', true], ['test-pruner', false], ['docs-updater', true],
+  ])
+  expect(templates?.rows[0]?.when).toBe(TEMPLATES[0]?.when)
+  // The name column fits the widest name, 'docs-updater', or its header if wider.
+  expect(templates?.nameWidth).toBe(12)
+  expect(templateRule(12, 30)).toBe('───────────────┼──────────────')
   expect(setupView(ready, two).templates).toBeUndefined()
 })
 

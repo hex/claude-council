@@ -188,8 +188,8 @@ export type SetupView = {
   roster: RosterEntry[]
   columns: Columns
   empty?: string
-  // Template names the empty screen offers; each opens a new draft.
-  templates?: string[]
+  // The templates the empty screen offers as a table; each row opens a new draft.
+  templates?: { nameWidth: number; rows: { name: string; when: string; zebra: boolean }[] }
   // Why the stored list could not be read; Save and Remove refuse while it stands.
   problem?: string
   editor?: EditorView
@@ -259,7 +259,7 @@ function confirmView(setup: SetupState, entries: unknown[]): SetupView['confirm'
   return { text: `${current} has unsaved changes.`, yes: `Discard and ${target}`, no: 'Keep editing' }
 }
 
-export const HEADERS = { name: 'NAME', model: 'MODEL', effort: 'EFFORT', when: 'USE WHEN' }
+export const HEADERS = { name: 'NAME', model: 'MODEL', effort: 'EFFORT', when: 'USE WHEN', template: 'TEMPLATE' }
 // The table's geometry: a swatch, then each column's widest text plus PAD,
 // then a bar before the next column.
 export const SWATCH_WIDTH = 2
@@ -277,6 +277,12 @@ export function ruleLine(columns: Columns, width: number): string {
   const cross = '┼' + '─'.repeat(SEPARATOR.length - 1)
   const line = '─'.repeat(SWATCH_WIDTH + columns.name + PAD) + cross +
     '─'.repeat(columns.model + PAD) + cross + '─'.repeat(columns.effort + PAD) + cross
+  return line.length >= width ? line.slice(0, width) : line + '─'.repeat(width - line.length)
+}
+
+// The templates table has two columns, so its rule crosses one bar.
+export function templateRule(nameWidth: number, width: number): string {
+  const line = '─'.repeat(SWATCH_WIDTH + nameWidth + PAD) + '┼' + '─'.repeat(SEPARATOR.length - 1)
   return line.length >= width ? line.slice(0, width) : line + '─'.repeat(width - line.length)
 }
 
@@ -314,8 +320,11 @@ export function setupView(setup: SetupState, entries: unknown[], problem?: strin
     columns: columnsOf(roster),
     ...(problem ? { problem } : {}),
     ...(roster.length === 0 && !problem ? {
-      empty: 'No specialists yet. Start from a template, add one, or describe one to Claude. Claude offers a specialist when a task matches its use-when.',
-      templates: TEMPLATES.map(t => t.name),
+      empty: 'No specialists yet. A specialist is a Codex agent that works on its own branch. Pick a template, add your own, or describe one to Claude.',
+      templates: {
+        nameWidth: Math.max(HEADERS.template.length, ...TEMPLATES.map(t => t.name.length)),
+        rows: TEMPLATES.map((t, at) => ({ name: t.name, when: t.when, zebra: at % 2 === 1 })),
+      },
     } : {}),
     ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, entries, installed ?? skillNames(setup.draft.skills)) } : {}),
     ...(setup.confirm ? { confirm: confirmView(setup, entries) } : {}),
