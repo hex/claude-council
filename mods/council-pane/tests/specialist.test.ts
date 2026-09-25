@@ -433,3 +433,23 @@ test('roundStatus: running, ended and failed each have their own mark and colour
   expect(roundStatus(false, { result: 'boom', isError: true }, '3:12')).toEqual({ glyph: '✗', text: 'failed 3:12', color: 'error' })
   expect(roundStatus(false, undefined, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'success' })
 })
+
+test('use-when and instructions keep to one line, since the form cannot show more', () => {
+  const sec = { name: 'sec', model: 'gpt-6-sol', when: 'auth' }
+  expect(parseSpecialist({ ...sec, when: 'auth\ncrypto' })).toEqual({ error: 'use-when must be one line' })
+  expect(parseSpecialist({ ...sec, instructions: 'one\r\ntwo' })).toEqual({ error: 'instructions must be one line' })
+})
+
+test('with no specialists but a run still open, the tool keeps follow-up, result and finish', () => {
+  const schema = specialistSchema([], true) as any
+  expect(Object.keys(schema.properties)).toEqual(['run', 'message', 'finish', 'result', 'setup'])
+  expect(specialistDescription([], true)).toBe(
+    'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
+    'When the user asks for one, call {setup: {name, model, effort, when, instructions}} with what they described; ' +
+    'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
+    SETUP_HINT + ' ' +
+    'A run started before its specialist was removed still takes {run, message}, {run, result: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.',
+  )
+  expect(Object.keys((specialistSchema([], false) as any).properties)).toEqual(['setup'])
+  expect(specialistCall({ run: 'sec-1', result: true }, [])).toEqual({ kind: 'result', run: 'sec-1' })
+})

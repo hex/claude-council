@@ -211,11 +211,21 @@ async function writeEntries($: EngineInterface, state: PaneState, setup: SetupSt
   if (written.deny) await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: written.deny } })
 }
 
+// A stored list that does not read would be overwritten by any write, so
+// Save and Remove refuse until it is fixed by hand.
+async function refuseUnreadable($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<boolean> {
+  const { problem } = specialistEntries(options)
+  if (!problem) return false
+  await keepSetup($, state, { ...currentSetup(state), confirm: undefined, status: { kind: 'error', text: `Nothing written: ${problem}. Fix it with /config first.` } })
+  return true
+}
+
 async function saveSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
   const setup = state.setup
   if (!setup?.draft) return
   if ('loading' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'note', text: 'Models are still loading; Save again in a moment.' } }); return }
   if ('error' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: `Cannot check the model: ${setup.catalog.error}` } }); return }
+  if (await refuseUnreadable($, state, options)) return
   const entries = specialistEntries(options).entries
   const checked = checkSpecialist(setup.draft, setup.draft.index, { models: setup.catalog.models, entries })
   if ('error' in checked) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: checked.error } }); return }
@@ -228,6 +238,7 @@ async function confirmSetup($: EngineInterface, state: PaneState, options: Recor
   const confirm = setup?.confirm
   if (!setup?.draft || !confirm) return
   if (confirm.kind === 'switch') { await openRow($, state, options, confirm.target, true); return }
+  if (await refuseUnreadable($, state, options)) return
   const entries = specialistEntries(options).entries
   const name = draftFor(setup.draft.index, entries, []).name || `specialist ${setup.draft.index + 1}`
   await writeEntries($, state, setup, dropEntry(entries, setup.draft.index), `Removed ${name}.`)
@@ -244,7 +255,7 @@ async function discardSetup($: EngineInterface, state: PaneState): Promise<void>
 
 // A list set by hand (`/config specialists=...`) gets the same checks as a
 // Save, entry by entry; the first problem is the refusal.
-async function handEditDenial($: EngineInterface, value: string): Promise<string | undefined> {
+async function handEditDenial($: EngineInterface, value: unknown): Promise<string | undefined> {
   const { entries, problem } = specialistEntries({ [LIST_FIELD]: value })
   if (problem) return problem
   if (entries.length === 0) return undefined
@@ -647,12 +658,17 @@ export const register: Register = (on, options) => {
     state.specialists = roster.specialists
     // A Save reloads this module; the screen's draft comes back from the store.
     state.setup = restoreSetup(await $.store.get(SETUP_KEY), specialistEntries(options).entries)
+    // A write made while the models were loading reloads this module before
+    // they arrive; ask again, or Save would wait for them forever.
+    if (state.setup && 'loading' in state.setup.catalog) void logFailure($, state, () => loadCatalog($, state))
     // An open setup screen was drawn by the reloaded module before the store
     // was read; draw it again with it.
     $.ui.invalidate('ui.render')
     // Registered with no specialists too, so a user can ask Claude to set the first one up.
-    await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
-    if (roster.specialists.length > 0) {
+    // A run outlives its specialist's removal: it can still be followed, fetched and finished.
+    const hasRuns = Object.values(await loadRuns($)).some(record => record.state !== 'finished')
+    await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists, hasRuns), inputSchema: specialistSchema(roster.specialists, hasRuns) })
+    if (roster.specialists.length > 0 || hasRuns) {
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })
       // The chip's shimmer moves only while a round runs.
@@ -731,6 +747,14 @@ export const register: Register = (on, options) => {
     if ('deny' in call) return { deny: call.deny }
     // Claude proposes, the user saves: the screen opens prefilled and nothing is written here.
     if (call.kind === 'setup') {
+      // A prefill never replaces the person's unsaved edits: the screen opens
+      // on them, and Claude hears why its proposal is not there.
+      const kept = state.setup?.draft
+      if (kept && isDirty(kept)) {
+        const refused = await openSetup($, state, options)
+        if (refused) return { deny: `the setup screen did not open: ${refused}` }
+        return { deny: `the setup screen is open on unsaved changes to ${kept.name || 'a new specialist'}; ask the user to save or discard them, then call {setup} again` }
+      }
       const refused = await openSetup($, state, options, call.fields)
       return refused ? { deny: `the setup screen did not open: ${refused}` } : { result: 'Opened the setup screen; nothing is saved until the user presses Save.' }
     }
@@ -912,12 +936,10 @@ export const register: Register = (on, options) => {
     )
   })
 
-  // Scrolling back down to the last rows follows new steps again; scrolling up
-  // stops it, as the engine's own `end` does.
   // The setup screen's own writes skip this hook (the engine does not run a
   // plugin's hooks for its own $.config.set); a list set by hand lands here.
   on('config.set', { key: LIST_KEY }, async ($, e, next) => {
-    const denial = await handEditDenial($, typeof e.value === 'string' ? e.value : '')
+    const denial = await handEditDenial($, e.value)
     return denial ? { deny: denial } : next(e)
   })
 
@@ -940,7 +962,8 @@ export const register: Register = (on, options) => {
     if (!('Input' in ui)) return <ui.Text key="setup-mobile">Specialists are set up in the terminal or desktop app.</ui.Text>
     const { Box, Text, Input, Select, Button } = ui
     const setup = currentSetup(state)
-    const view = setupView(setup, specialistEntries(options).entries)
+    const stored = specialistEntries(options)
+    const view = setupView(setup, stored.entries, stored.problem)
     const draft = setup.draft
     const editor = view.editor
     const width = Math.max(30, e.props.bodyColumns - 2)
@@ -974,6 +997,7 @@ export const register: Register = (on, options) => {
         <Text key="roster-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${view.header} `}</Text>
         <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
+          {view.problem ? <Text key="problem" color={COLOR.danger} wrap="wrap">{`The stored list cannot be read: ${view.problem}. Save and Remove are off until it is fixed with /config.`}</Text> : null}
           {view.roster.length > 0 ? (
             <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
               {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
@@ -1066,6 +1090,8 @@ export const register: Register = (on, options) => {
     )
   })
 
+  // Scrolling back down to the last rows follows new steps again; scrolling up
+  // stops it, as the engine's own `end` does.
   on('ui.scroll', { requestId: SPECIALIST_PANE }, async ($, e, next) => {
     const moved = await next(e)
     if (!moved.deny && landsAtEnd(e)) await followPaneEnd($, 'scrolled to the bottom', 'transcript')

@@ -74,6 +74,8 @@ pick() {
 
 BEFORE="$(jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$OUT/settings.before")"
 INDEX="$(printf '%s' "$BEFORE" | jq 'length')"
+# How /config names the hidden row in a typed /config key=value.
+CONFIG_KEY="${SPECIALIST_CONFIG_KEY:-specialists}"
 WANT='{"effort":"max","instructions":"say e2e first","model":"gpt-6-luna","name":"e2e","when":"e2e check"}'
 
 tmux new-session -d -s "$SESSION" -x 160 -y 45 -c "$ROOT" \
@@ -89,16 +91,23 @@ echo "2. add a new specialist"
 focus_on add; key Enter
 wait_for "NEW specialist"
 
-echo "3. fill the form"
+echo "3. fill the form; Enter in a text field keeps its text and moves on"
 focus_on name; tmux send-keys -t "$SESSION" -l e2e; sleep 1
-focus_on model; pick gpt-6-luna
+key Enter
+[ "$(focused)" = model ] || fail "Enter in name moved focus to '$(focused)', expected model"
+pick gpt-6-luna
 focus_on effort; pick max
 focus_on when; tmux send-keys -t "$SESSION" -l 'e2e check'; sleep 1
-focus_on instructions; tmux send-keys -t "$SESSION" -l 'say e2e first'; sleep 1
+key Enter
+[ "$(focused)" = instructions ] || fail "Enter in use-when moved focus to '$(focused)', expected instructions"
+tmux send-keys -t "$SESSION" -l 'say e2e first'; sleep 1
+key Enter
+[ "$(focused)" = save ] || fail "Enter in instructions moved focus to '$(focused)', expected save"
 screen > "$OUT/3-filled.txt"
+screen | grep -qF 'e2e check' || fail "the use-when text was lost after Enter"
 
 echo "4. save"
-focus_on save; key Enter
+key Enter
 wait_for "Saved e2e."
 screen > "$OUT/4-saved.txt"
 GOT="$(entries | jq -cS --argjson i "$INDEX" '.[$i]')"
@@ -111,5 +120,13 @@ wait_for "Remove e2e?"
 focus_on confirm-yes; key Enter
 wait_for "Removed e2e."
 [ "$(entries | jq -c .)" = "$(printf '%s' "$BEFORE" | jq -c .)" ] || fail "the list is $(entries) after remove, expected $BEFORE"
+
+echo "6. a list set by hand is checked like a Save"
+key Escape
+wait_for '❯'
+tmux send-keys -t "$SESSION" -l "/config $CONFIG_KEY=nope"; key Enter
+wait_for "the specialists setting is not JSON: nope"
+screen > "$OUT/6-hand-edit.txt"
+[ "$(entries | jq -c .)" = "$(printf '%s' "$BEFORE" | jq -c .)" ] || fail "the refused hand edit changed the list to $(entries)"
 
 echo "PASS ($OUT)"

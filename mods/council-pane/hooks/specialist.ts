@@ -47,8 +47,11 @@ export function parseSpecialist(entry: unknown): Specialist | { error: string } 
   if (badName) return { error: badName }
   if (model.trim() === '') return { error: 'model is empty' }
   if (when.trim() === '') return { error: 'use-when is empty' }
+  // The tool's description and the form's inputs hold one line.
+  if (/[\r\n]/.test(when)) return { error: 'use-when must be one line' }
   if (when.length > WHEN_MAX) return { error: `use-when is longer than ${WHEN_MAX} characters` }
   if (effort !== undefined && !EFFORT.test(effort)) return { error: `effort '${effort}' must be lowercase letters` }
+  if (instructions !== undefined && /[\r\n]/.test(instructions)) return { error: 'instructions must be one line' }
   if (instructions !== undefined && instructions.length > INSTRUCTIONS_MAX) return { error: `instructions are longer than ${INSTRUCTIONS_MAX} characters` }
   const hasInstructions = instructions !== undefined && instructions.trim() !== ''
   return { name, model, ...(effort === undefined ? {} : { effort }), when, ...(hasInstructions ? { instructions } : {}) }
@@ -86,13 +89,18 @@ export function specialistRoster(options: Record<string, unknown>): { specialist
 // Without this Claude fills instructions in on its own, and they open every task.
 const INSTRUCTIONS_HINT = 'instructions is optional: what the specialist is told before each task, in the user\'s words; leave it out unless the user gave some.'
 
-export function specialistDescription(list: Specialist[]): string {
+// hasRuns: a run not yet finished is in the store, so its calls stay offered
+// even once every specialist is removed.
+export function specialistDescription(list: Specialist[], hasRuns = false): string {
   if (list.length === 0) {
+    const open = hasRuns
+      ? ' A run started before its specialist was removed still takes {run, message}, {run, result: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.'
+      : ''
     return (
       'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
       `When the user asks for one, call {setup: {${SETUP_FIELDS.join(', ')}}} with what they described; ` +
       'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
-      INSTRUCTIONS_HINT
+      INSTRUCTIONS_HINT + open
     )
   }
   const roster = list.map(s => `${s.name} (${s.model}), use when: ${s.when}`).join('; ')
@@ -110,20 +118,24 @@ export function specialistDescription(list: Specialist[]): string {
   )
 }
 
-export function specialistSchema(list: Specialist[]): Record<string, unknown> {
+export function specialistSchema(list: Specialist[], hasRuns = false): Record<string, unknown> {
   const setup = {
     type: 'object',
     description: 'Open the setup screen prefilled with a proposed specialist; the user saves it.',
     properties: Object.fromEntries(SETUP_FIELDS.map(field => [field, { type: 'string' }])),
     additionalProperties: false,
   }
-  // With no specialists there is nothing to start; setting one up is the only call.
-  if (list.length === 0) return { type: 'object', properties: { setup }, additionalProperties: false }
+  // With no specialists there is nothing to start; with no open run either,
+  // setting one up is the only call.
+  if (list.length === 0 && !hasRuns) return { type: 'object', properties: { setup }, additionalProperties: false }
+  const start = list.length === 0 ? {} : {
+    specialist: { type: 'string', enum: list.map(s => s.name) },
+    task: { type: 'string', description: 'Start: the task, self-contained; the specialist sees only its worktree.' },
+  }
   return {
     type: 'object',
     properties: {
-      specialist: { type: 'string', enum: list.map(s => s.name) },
-      task: { type: 'string', description: 'Start: the task, self-contained; the specialist sees only its worktree.' },
+      ...start,
       run: { type: 'string', description: 'Follow-up or finish: the run id a start returned.' },
       message: { type: 'string', description: 'Follow-up: feedback for the specialist, e.g. a failing test.' },
       finish: { type: 'string', enum: ['merge', 'discard'] },

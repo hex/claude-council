@@ -245,3 +245,19 @@ test('a rule between rows crosses each column bar and runs to the given width', 
   expect(ruleLine({ name: 4, model: 10, effort: 7 }, 40)).toHaveLength(40)
   expect(ruleLine({ name: 4, model: 10, effort: 7 }, 10)).toBe('─'.repeat(7) + '┼──')
 })
+
+test('a stored list that cannot be read is shown as a problem, not as an empty roster', () => {
+  const view = setupView(ready, [], 'the specialists setting is not JSON: nope')
+  expect(view.problem).toBe('the specialists setting is not JSON: nope')
+  expect(view.empty).toBeUndefined()
+  expect(setupView(ready, []).problem).toBeUndefined()
+})
+
+test('a restored screen keeps only the fields it knows, and a catalog of another shape is set aside', () => {
+  const draft = draftFor(0, two, models)
+  const setAside = { catalog: { loading: true }, status: { kind: 'note', text: 'An earlier draft could not be read and was set aside.' } }
+  expect(restoreSetup({ draft: { ...draft, perspective: 'x' }, catalog: { models } }, two)).toEqual({ draft, catalog: { models } })
+  const oldModel = { slug: 'gpt-6-sol', listed: true, efforts: ['high'] }
+  expect(restoreSetup({ draft, catalog: { models: [oldModel] } }, two)).toEqual(setAside)
+  expect(restoreSetup({ draft, catalog: { models: 'many' } }, two)).toEqual(setAside)
+})

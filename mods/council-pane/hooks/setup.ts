@@ -55,9 +55,6 @@ export function checkSpecialist(f: Fields, index: number, context: { models: Cat
   const badName = nameProblem(f.name)
   if (badName) return { error: badName }
   if (f.when.trim() === '') return { error: 'use-when is empty' }
-  // The form's inputs hold one line, so a hand-set entry keeps to one too.
-  if (/[\r\n]/.test(f.when)) return { error: 'use-when must be one line' }
-  if (/[\r\n]/.test(f.instructions)) return { error: 'instructions must be one line' }
   const model = context.models.find(m => m.slug === f.model)
   if (!model) return { error: `model '${f.model}' is not in Codex's catalog: ${context.models.filter(m => m.listed).map(m => m.slug).join(', ')}` }
   if (f.effort && !model.efforts.includes(f.effort)) return { error: `effort '${f.effort}' is not offered by ${model.slug}: ${model.efforts.join(', ')}` }
@@ -135,6 +132,8 @@ export type SetupView = {
   roster: RosterEntry[]
   columns: Columns
   empty?: string
+  // Why the stored list could not be read; Save and Remove refuse while it stands.
+  problem?: string
   editor?: EditorView
   confirm?: { text: string; yes: string; no: string }
   status?: Status
@@ -232,13 +231,14 @@ function columnsOf(roster: RosterEntry[]): Columns {
   }
 }
 
-export function setupView(setup: SetupState, entries: unknown[]): SetupView {
+export function setupView(setup: SetupState, entries: unknown[], problem?: string): SetupView {
   const roster = entries.map((entry, index) => rosterRow(entry, index, setup.draft?.index === index))
   return {
     header: `SPECIALISTS ${roster.length}`,
     roster,
     columns: columnsOf(roster),
-    ...(roster.length === 0 ? { empty: 'No specialists yet. Add one, and Claude offers it when a task matches its use-when.' } : {}),
+    ...(problem ? { problem } : {}),
+    ...(roster.length === 0 && !problem ? { empty: 'No specialists yet. Add one, and Claude offers it when a task matches its use-when.' } : {}),
     ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, entries) } : {}),
     ...(setup.confirm ? { confirm: confirmView(setup, entries) } : {}),
     ...(setup.status ? { status: setup.status } : {}),
@@ -249,18 +249,44 @@ const SET_ASIDE: Status = { kind: 'note', text: 'An earlier draft could not be r
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const DRAFT_TEXT = ['baseline', 'name', 'model', 'effort', 'when', 'instructions'] as const
 
+const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every(item => typeof item === 'string')
+
+function readModel(v: unknown): CatalogModel | undefined {
+  if (!isRecord(v) || typeof v.slug !== 'string' || typeof v.listed !== 'boolean' || !isStrings(v.efforts) || typeof v.defaultEffort !== 'string') return undefined
+  if (!isRecord(v.effortHelp)) return undefined
+  const effortHelp: Record<string, string> = {}
+  for (const [effort, text] of Object.entries(v.effortHelp)) {
+    if (typeof text !== 'string') return undefined
+    effortHelp[effort] = text
+  }
+  return { slug: v.slug, listed: v.listed, efforts: v.efforts, effortHelp, defaultEffort: v.defaultEffort }
+}
+
 function readCatalogState(v: unknown): CatalogState | undefined {
   if (!isRecord(v)) return undefined
   if (v.loading === true) return { loading: true }
   if (typeof v.error === 'string') return { error: v.error }
-  if (Array.isArray(v.models)) return { models: v.models as CatalogModel[] }
-  return undefined
+  if (!Array.isArray(v.models)) return undefined
+  const models: CatalogModel[] = []
+  for (const item of v.models) {
+    const model = readModel(item)
+    if (!model) return undefined
+    models.push(model)
+  }
+  return { models }
 }
 
+// Rebuilt from its own fields, so a key another version added does not ride along.
 function readDraft(v: unknown): Draft | undefined {
   if (!isRecord(v) || typeof v.index !== 'number' || !Number.isInteger(v.index) || v.index < 0) return undefined
-  if (DRAFT_TEXT.some(field => typeof v[field] !== 'string')) return undefined
-  return v as unknown as Draft
+  const text: Record<string, string> = {}
+  for (const field of DRAFT_TEXT) {
+    const value = v[field]
+    if (typeof value !== 'string') return undefined
+    text[field] = value
+  }
+  const { baseline = '', name = '', model = '', effort = '', when = '', instructions = '' } = text
+  return { index: v.index, baseline, name, model, effort, when, instructions }
 }
 
 function readStatus(v: unknown): Status | undefined {
