@@ -235,10 +235,10 @@ export function whenWidth(columns: Columns, width: number): number {
 }
 
 // A form field: its label with the separator the engine draws, and the Enter
-// hint beside a focused field.
+// hint beside a focused field: the engine's own arrow, with no word after it.
 const FIELD_LABEL = 15
-export const SUBMIT_HINT = '\u23ce'
-const HINT = SUBMIT_HINT.length + 1
+export const SUBMIT_HINT = ''
+const HINT = 2
 
 // The engine's Input is one line and cuts a longer value at its end, where
 // typing happens; such a value is drawn whole, wrapped, under the field.
