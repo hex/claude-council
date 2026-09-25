@@ -981,10 +981,21 @@ export const register: Register = (on, options) => {
     const ui = $.ui.resolve(e)
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
+        {/* The specialist band's slots; only the event gives way when narrow. */}
         {chip(ui, 'chip', 'COUNCIL', state.frame)}
-        <ui.Text color={COLOR.accent}>{`  ${progress.bar}`}</ui.Text>
-        <ui.Text>{`  ${progress.text}  `}</ui.Text>
-        <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
+        <ui.Box flexShrink={0}>
+          <ui.Text>
+            <ui.Text bold>{`  ${progress.count}`}</ui.Text>
+            <ui.Text color={COLOR.accent}>{`  ${progress.bar}`}</ui.Text>
+            {progress.clock ? <ui.Text bold color={roundStatus(true, undefined, progress.clock).color}>{`  \u25cf ${progress.clock}`}</ui.Text> : null}
+          </ui.Text>
+        </ui.Box>
+        <ui.Box flexGrow={1} flexShrink={1}>
+          <ui.Text dimColor wrap="truncate-end">{`  ${progress.event ?? ''}  `}</ui.Text>
+        </ui.Box>
+        <ui.Box flexShrink={0}>
+          <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
+        </ui.Box>
       </ui.Box>
     )
   })

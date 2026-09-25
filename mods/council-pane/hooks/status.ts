@@ -21,3 +21,21 @@ export function parseStatus(log: string): ProviderStatus[] {
   }
   return [...byName.values()]
 }
+
+const EVENT: Record<string, (name: string) => string> = {
+  complete: name => `${name} answered`,
+  cached: name => `${name} answered from cache`,
+  error: name => `${name} failed`,
+  querying: name => `asking ${name}`,
+}
+
+// The band's latest event: the last whole line of the log, in words. A line
+// still being written has no state yet and is skipped.
+export function lastEvent(log: string): string | undefined {
+  const lines = log.split('\n').map(line => line.replace(/\r$/, '').split('\t'))
+  for (const [name, state] of lines.reverse()) {
+    if (!name || !state) continue
+    return (EVENT[state] ?? (n => `${n} ${state}`))(name)
+  }
+  return undefined
+}

@@ -2,6 +2,7 @@
 // ABOUTME: Pure functions over the run's provider states
 
 import type { ProviderStatus } from './status'
+import { roundClock } from './specialist'
 
 type RunProgress = { providers: ProviderStatus[]; isDone: boolean }
 
@@ -18,22 +19,25 @@ export function finishNotice({ providers }: RunProgress, jobId = ''): string {
 
 const PROGRESS_CELLS = 8
 
-// The band above the prompt while a run is live: a thin line and a percent,
-// both counting providers that are finished, an error included. Both round
-// down, so neither reads full while a provider is still out. `startedAtMs` is
-// when the pane picked the run up; before that there is no elapsed time.
+// The band above the prompt while a run is live, in the specialist band's
+// slots: how many providers finished (an error included), a thin line of the
+// same share, an m:ss clock and the latest event. Both counts round down, so
+// the line never reads full while a provider is still out. `startedAtMs` is
+// when the pane picked the run up; before that there is no clock.
 export function progressBand(
-  { providers, isDone }: RunProgress,
+  { providers, isDone, latest }: RunProgress & { latest?: string },
   startedAtMs: number | undefined,
   nowMs: number,
-): { bar: string; text: string } | undefined {
+): { count: string; bar: string; clock?: string; event?: string } | undefined {
   if (isDone || providers.length === 0) return undefined
-  const share = count(providers, 'complete', 'cached', 'error') / providers.length
-  const filled = Math.floor(share * PROGRESS_CELLS)
-  const bar = '\u2501'.repeat(filled) + '\u2500'.repeat(PROGRESS_CELLS - filled)
-  const parts = [`${Math.floor(share * 100)}%`]
-  if (startedAtMs !== undefined) parts.push(`${Math.max(0, Math.floor((nowMs - startedAtMs) / 1000))}s`)
-  return { bar, text: parts.join(' \u00b7 ') }
+  const finished = count(providers, 'complete', 'cached', 'error')
+  const filled = Math.floor((finished / providers.length) * PROGRESS_CELLS)
+  return {
+    count: `${finished} of ${providers.length}`,
+    bar: '\u2501'.repeat(filled) + '\u2500'.repeat(PROGRESS_CELLS - filled),
+    ...(startedAtMs === undefined ? {} : { clock: roundClock(startedAtMs, nowMs) }),
+    ...(latest ? { event: latest } : {}),
+  }
 }
 
 // A run whose process died without writing .done: what the band says instead.
