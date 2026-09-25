@@ -53,8 +53,3 @@ export const EFFORT_STYLE: Record<string, Style> = {
   max: { color: COLOR.danger, bold: true },
   ultra: { color: COLOR.peak, bold: true },
 }
-
-// Data colours tell things apart rather than say what they mean, and a theme
-// has too few hues for that. Each is drawn as a glyph, which needs 3:1, and
-// each reaches 3.4:1 or better on white and on rgb(30,30,30).
-export const SWATCHES = ['rgb(70,130,180)', 'rgb(150,90,170)', 'rgb(60,140,90)', 'rgb(200,80,110)', 'rgb(160,120,20)', 'rgb(40,140,140)'] as const

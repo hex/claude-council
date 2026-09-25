@@ -18,7 +18,7 @@ import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
-import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, whenWidth, wrapWords, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -1056,29 +1056,29 @@ export const register: Register = (on, options) => {
     // the terminal hands the keyboard back to the prompt.
     // A table cell keeps its width; only the last column gives way.
     const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
-    // A dim bar between two columns, as tall as the row's wrapped use-when.
-    const separator = (key: string, lines = 1) => (
-      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={COLOR.line}>{Array.from({ length: lines }, () => SEPARATOR).join('\n')}</Text></Box>
+    // A dim bar between two columns.
+    const separator = (key: string) => (
+      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={COLOR.line}>{SEPARATOR}</Text></Box>
     )
-    // A row's second line starts under the model column.
     // A switched-off row is grey and italic throughout; the name is a Button,
     // which takes neither.
     const offText = (text: string) => <Text key="text" color={COLOR.muted} italic wrap="truncate-end">{text}</Text>
-    const under = (key: string, text: string, off = false) => (
+    // A broken row's second line, under the model column, shows what was stored.
+    const under = (key: string, text: string) => (
       <Box key={key} flexDirection="row">
         {cell('indent', SWATCH_WIDTH + view.columns.name + PAD + SEPARATOR.length, <Text key="text">{''}</Text>)}
-        <Box key="body" flexShrink={1}>{off ? offText(text) : <Text key="text" dimColor wrap="truncate-end">{text}</Text>}</Box>
+        <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
       </Box>
     )
     const help = (key: string, text: string) => (
       <Text key={key} dimColor italic wrap="truncate-end">{text}</Text>
     )
-    // The form is a brief: numbered groups, each value on a tinted well that
-    // says where to type without a frame beside the field.
-    const step = (key: string, n: number, label: string, aside?: string) => (
-      <Box key={key} flexDirection="row" marginTop={n === 1 ? 0 : 1}>
-        <Text key="n" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${n} `}</Text>
-        <Text key="label" bold color={COLOR.muted}>{` ${label}`}</Text>
+    // Each field: its label in the roster's column name, anything about it on
+    // the right, and the value on a tinted well that says where to type
+    // without a frame beside the field.
+    const label = (key: string, text: string, aside?: string, isFirst = false) => (
+      <Box key={key} flexDirection="row" marginTop={isFirst ? 0 : 1}>
+        <Text key="label" bold color={COLOR.muted}>{text}</Text>
         <Box key="space" flexGrow={1} />
         {aside ? <Text key="aside" dimColor>{aside}</Text> : null}
       </Box>
@@ -1086,8 +1086,8 @@ export const register: Register = (on, options) => {
     const well = (key: string, field: RenderChildren) => <Box key={key} backgroundColor={COLOR.zebra}>{field}</Box>
     return (
       <Box key="setup" flexDirection="column" width={e.props.bodyColumns}>
-        {/* The roster: a table in one frame. A row's own colour marks its swatch,
-            every other row is shaded, and a second line carries its instructions. */}
+        {/* The roster: a table in one frame, one line per specialist, every
+            other row shaded; the form below holds the rest. */}
         <Text key="roster-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${view.header} `}</Text>
         <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={width}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
@@ -1104,43 +1104,35 @@ export const register: Register = (on, options) => {
               <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color={COLOR.onFill} wrap="truncate-end">{HEADERS.when}</Text></Box>
             </Box>
           ) : null}
-          {view.roster.map((entry, at) => {
-            // A long use-when wraps in its column rather than being cut.
-            const whenLines = entry.kind === 'ok' ? wrapWords(entry.off ? `off · ${entry.when}` : entry.when, whenWidth(view.columns, width)) : []
-            const tall = Math.max(1, whenLines.length)
-            return [
-            entry.firstOff
-              ? <Text key={`rule:${entry.index}`} color={COLOR.muted} italic wrap="truncate">{`── switched off ${'─'.repeat(Math.max(0, width - 21))}`}</Text>
-              : at > 0 ? <Text key={`rule:${entry.index}`} color={COLOR.line} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
+          {view.roster.map((entry, at) => [
+            at > 0 ? <Text key={`rule:${entry.index}`} color={COLOR.line} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
             <Box key={`entry:${entry.index}`} flexDirection="column" hover={{ backgroundColor: COLOR.selected }}
               {...(entry.editing ? { backgroundColor: COLOR.selected } : entry.zebra ? { backgroundColor: COLOR.zebra } : {})}>
               <Box key="line" flexDirection="row">
-                {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.kind === 'ok' && entry.off ? COLOR.muted : entry.color}>{entry.editing ? '▶' : entry.kind === 'ok' && entry.off ? '○' : '●'}</Text>)}
+                {cell('swatch', SWATCH_WIDTH, <Text key="text" {...(entry.kind === 'ok' && entry.off ? { color: COLOR.muted } : {})}>{entry.editing ? '▶' : entry.kind === 'ok' && entry.off ? '○' : '●'}</Text>)}
                 {cell('name', view.columns.name + PAD, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
-                {separator('sep-1', tall)}
+                {separator('sep-1')}
                 {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, entry.off
                   ? offText(entry.model)
-                  : <Text key="text" color={COLOR.model}>{entry.model}</Text>) : null}
-                {entry.kind === 'ok' ? separator('sep-2', tall) : null}
+                  : <Text key="text">{entry.model}</Text>) : null}
+                {entry.kind === 'ok' ? separator('sep-2') : null}
                 {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.off
                   ? offText(entry.effort)
                   : entry.effortStyle
                     ? <Text key="text" color={entry.effortStyle.color} bold={entry.effortStyle.bold === true}>{entry.effort}</Text>
                     : <Text key="text" dimColor>{entry.effort}</Text>) : null}
-                {entry.kind === 'ok' ? separator('sep-3', tall) : null}
+                {entry.kind === 'ok' ? separator('sep-3') : null}
                 <Box key="rest" flexGrow={1} flexShrink={1}>
                   {entry.kind === 'ok'
                     ? entry.off
-                      ? offText(whenLines.join('\n'))
-                      : <Text key="text" wrap="truncate-end">{whenLines.join('\n')}</Text>
+                      ? offText(`off · ${entry.when}`)
+                      : <Text key="text" wrap="truncate-end">{entry.when}</Text>
                     : <Text key="text" color={COLOR.danger} wrap="truncate-end">{entry.problem}</Text>}
                 </Box>
               </Box>
-              {entry.kind === 'ok' && entry.instructions ? under('instructions', `↳ ${entry.instructions}`, entry.off === true) : null}
               {entry.kind === 'broken' ? under('stored', entry.stored) : null}
             </Box>,
-            ]
-          })}
+          ])}
           <Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} />
         </Box>
         {editor && draft ? (
@@ -1153,15 +1145,11 @@ export const register: Register = (on, options) => {
                 focused field to the whole pane, so anything beside it cuts the text. */}
             <Text key="editor-top" color={COLOR.accent} wrap="truncate">{'\u2500'.repeat(e.props.bodyColumns)}</Text>
             <Box key="editor" flexDirection="column">
-              {step('who', 1, 'WHO')}
+              {label('name-label', HEADERS.name, undefined, true)}
               {well('who-well', <Input key={`name.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />)}
-              {step('runs-on', 2, 'RUNS ON')}
-              <Box key="runs-on-row" flexDirection="row" backgroundColor={COLOR.zebra}>
-                <Select key="model" value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
-                  onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
-                <Text key="gap">{'   '}</Text>
-                <Select key="effort" value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
-              </Box>
+              {label('model-label', HEADERS.model)}
+              {well('model-well', <Select key="model" value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
+                onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />)}
               {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
               {editor.models === 'failed' ? (
                 <Box key="models-failed" flexDirection="row">
@@ -1169,21 +1157,25 @@ export const register: Register = (on, options) => {
                   <Button key="retry" label="Retry" onPress={press(() => loadCatalog($, state))} />
                 </Box>
               ) : null}
+              {label('effort-label', HEADERS.effort)}
+              {well('effort-well', <Select key="effort" value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />)}
               {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
-              {step('call-when', 3, 'CALL WHEN', editor.whenCount)}
+              {label('when-label', HEADERS.when, editor.whenCount)}
               {well('call-when-well', <Input key={`when.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />)}
               {help('when-help', editor.whenHelp)}
-              {step('orders', 4, 'STANDING ORDERS', 'optional')}
+              {label('instructions-label', 'STANDING ORDERS', 'optional')}
               {well('orders-well', <Input key={`instructions.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />)}
               {help('instructions-help', editor.instructionsHelp)}
               <Box key="actions" flexDirection="row" marginTop={1}>
+                {/* The form's own pair first; the specialist's on/off apart from it;
+                    Remove last, so a Tab too many never lands on it from Save. */}
                 <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
                 <Text key="gap-1">{'  '}</Text>
-                {editor.toggle ? <Button key="toggle" label={editor.toggle} onPress={press(() => toggleSetup($, state, options))} /> : null}
-                {editor.toggle ? <Text key="gap-toggle">{'  '}</Text> : null}
-                {editor.removable ? <Button key="remove" dimColor label="Remove" onPress={press(() => askSetup($, state, { kind: 'remove' }))} /> : null}
-                {editor.removable ? <Text key="gap-2">{'  '}</Text> : null}
                 <Button key="discard" dimColor label={editor.discardLabel} onPress={press(() => discardSetup($, state))} />
+                {editor.toggle ? <Text key="gap-toggle">{'      '}</Text> : null}
+                {editor.toggle ? <Button key="toggle" label={editor.toggle} onPress={press(() => toggleSetup($, state, options))} /> : null}
+                {editor.removable ? <Text key="gap-2">{'  '}</Text> : null}
+                {editor.removable ? <Button key="remove" dimColor label="Remove" onPress={press(() => askSetup($, state, { kind: 'remove' }))} /> : null}
               </Box>
             </Box>
             <Text key="editor-bottom" color={COLOR.accent} wrap="truncate">{'\u2500'.repeat(e.props.bodyColumns)}</Text>

@@ -133,7 +133,7 @@ focus_on "row:${INDEX}"; key Enter
 focus_on toggle; key Enter
 wait_for "e2e is off: Claude will not offer or start it."
 wait_for "off · e2e check"
-screen | grep -A1 -E ' WHO *$' | grep -qE '│e2e *$' || fail "the form lost the name after the reload"
+screen | grep -A1 -E '│NAME *$' | grep -qE '│e2e *$' || fail "the form lost the name after the reload"
 GOT="$(entries | jq -cS --argjson i "$INDEX" '.[$i]')"
 OFF="$(printf '%s' "$WANT" | jq -cS '. + {enabled: false}')"
 [ "$GOT" = "$OFF" ] || fail "switched off, specialist $((INDEX + 1)) is '$GOT', expected '$OFF'"

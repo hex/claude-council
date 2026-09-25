@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, wrapWords, whenWidth, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -126,12 +126,12 @@ const two = [
 ]
 const ready: SetupState = { catalog: { models } }
 
-test('the roster is a table: a row per specialist, zebra on every other one, its own colour and its effort coloured', () => {
+test('the roster is a table: one line per specialist, zebra on every other one, its effort coloured, its instructions left to the form', () => {
   const view = setupView(ready, two)
   expect(view.header).toBe('SPECIALISTS (2)')
   expect(view.roster).toEqual([
-    { kind: 'ok', index: 0, name: 'sec', color: 'rgb(70,130,180)', zebra: false, editing: false, model: 'gpt-6-sol', effort: 'high', effortStyle: { color: 'warning' }, when: 'auth, crypto' },
-    { kind: 'ok', index: 1, name: 'mig', color: 'rgb(150,90,170)', zebra: true, editing: false, model: 'gpt-6-luna', effort: 'default', when: 'schema changes', instructions: 'Review migrations for locks and rollbacks.' },
+    { kind: 'ok', index: 0, name: 'sec', zebra: false, editing: false, model: 'gpt-6-sol', effort: 'high', effortStyle: { color: 'warning' }, when: 'auth, crypto' },
+    { kind: 'ok', index: 1, name: 'mig', zebra: true, editing: false, model: 'gpt-6-luna', effort: 'default', when: 'schema changes' },
   ])
   expect(view.editor).toBeUndefined()
 })
@@ -154,19 +154,12 @@ test('each effort has its own style, rising with the effort; the Codex default h
   expect(effortOf('turbo')).toBeUndefined()
 })
 
-test('specialist colours follow the list order and wrap after six', () => {
-  const seven = Array.from({ length: 7 }, (_, i) => ({ name: `s${i}`, model: 'm', when: 'w' }))
-  expect(setupView(ready, seven).roster.map(row => row.color)).toEqual([
-    'rgb(70,130,180)', 'rgb(150,90,170)', 'rgb(60,140,90)', 'rgb(200,80,110)', 'rgb(160,120,20)', 'rgb(40,140,140)', 'rgb(70,130,180)',
-  ])
-})
-
 test('an entry that does not parse stays in the roster with its problem and what was stored', () => {
   const old = { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth' }
   const view = setupView(ready, [old, 'sec = gpt-6-sol as security, when: auth'])
   expect(view.roster).toEqual([
-    { kind: 'broken', index: 0, name: 'specialist 1', color: 'rgb(70,130,180)', zebra: false, editing: false, problem: "unknown field 'perspective'", stored: '{"name":"sec","model":"gpt-6-sol","perspective":"security","when":"auth"}' },
-    { kind: 'broken', index: 1, name: 'specialist 2', color: 'rgb(150,90,170)', zebra: true, editing: false, problem: 'a specialist must be a JSON object with name, model and when', stored: '"sec = gpt-6-sol as security, when: auth"' },
+    { kind: 'broken', index: 0, name: 'specialist 1', zebra: false, editing: false, problem: "unknown field 'perspective'", stored: '{"name":"sec","model":"gpt-6-sol","perspective":"security","when":"auth"}' },
+    { kind: 'broken', index: 1, name: 'specialist 2', zebra: true, editing: false, problem: 'a specialist must be a JSON object with name, model and when', stored: '"sec = gpt-6-sol as security, when: auth"' },
   ])
 })
 
@@ -209,12 +202,12 @@ test('a switched-off specialist is marked off in the roster, and its editor offe
   expect(setupView({ ...ready, draft: blankDraft(2, models) }, entries).editor?.toggle).toBeUndefined()
 })
 
-test('switched-off rows sit under the rest, the header counts them, and shading follows the drawn order', () => {
+test('a switched-off row keeps its place in the list, marked off, and the header counts it', () => {
   const three = [{ ...two[0], enabled: false }, two[1], { name: 'ops', model: 'gpt-6-sol', when: 'deploys' }]
   const view = setupView(ready, three)
   expect(view.header).toBe('SPECIALISTS (3 · 1 off)')
-  expect(view.roster.map(row => [row.index, row.zebra, row.kind === 'ok' && row.off === true, row.firstOff === true])).toEqual([
-    [1, false, false, false], [2, true, false, false], [0, false, true, true],
+  expect(view.roster.map(row => [row.index, row.zebra, row.kind === 'ok' && row.off === true])).toEqual([
+    [0, false, true], [1, true, false], [2, false, false],
   ])
   expect(setupView(ready, two).header).toBe('SPECIALISTS (2)')
 })
@@ -298,17 +291,4 @@ test('a restored screen keeps only the fields it knows, and a catalog of another
 test('a new specialist lands at the end of the newest list; an edited one keeps its place', () => {
   expect(saveIndex(blankDraft(1, models), [secEntry, secEntry, secEntry])).toBe(3)
   expect(saveIndex(draftFor(0, [secEntry], models), [secEntry, secEntry])).toBe(0)
-})
-
-test('a long use-when wraps at spaces to the column, a word longer than the column is cut across lines, nothing is lost', () => {
-  expect(wrapWords('Postgres migrations and schema changes', 16)).toEqual(['Postgres', 'migrations and', 'schema changes'])
-  expect(wrapWords('auth, crypto', 16)).toEqual(['auth, crypto'])
-  expect(wrapWords('abcdefghij klm', 4)).toEqual(['abcd', 'efgh', 'ij', 'klm'])
-  expect(wrapWords('', 10)).toEqual([''])
-})
-
-test('the use-when column gets what the frame leaves after the fixed columns, never less than one', () => {
-  // frame 4 + swatch 2 + (name 4 + 1) + bar 2 + (model 10 + 1) + bar 2 + (effort 6 + 1) + bar 2 = 35
-  expect(whenWidth({ name: 4, model: 10, effort: 6 }, 60)).toBe(25)
-  expect(whenWidth({ name: 4, model: 10, effort: 6 }, 30)).toBe(1)
 })
