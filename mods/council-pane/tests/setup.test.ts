@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, wrapWords, whenWidth, fieldTail, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, wrapWords, whenWidth, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -310,12 +310,4 @@ test('the use-when column gets what the frame leaves after the fixed columns, ne
   // frame 4 + swatch 2 + (name 4 + 1) + bar 2 + (model 10 + 1) + bar 2 + (effort 6 + 1) + bar 2 = 35
   expect(whenWidth({ name: 4, model: 10, effort: 6 }, 60)).toBe(25)
   expect(whenWidth({ name: 4, model: 10, effort: 6 }, 30)).toBe(1)
-})
-
-test('a field value too long for its one-line field shows its end under it, from a word start; one that fits does not', () => {
-  // A 40-wide pane: frame 4 + label 15 leaves 21 for the line under the field, and the hint's 3 more leave 18 for the field.
-  expect(fieldTail('auth, crypto', 40)).toBeUndefined()
-  expect(fieldTail('x'.repeat(18), 40)).toBeUndefined()
-  expect(fieldTail('Postgres migrations and schema changes x', 40)).toBe('\u2026and schema changes x')
-  expect(fieldTail('a'.repeat(30), 40)).toBe('\u2026' + 'a'.repeat(20))
 })

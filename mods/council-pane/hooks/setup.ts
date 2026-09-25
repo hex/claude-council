@@ -234,24 +234,9 @@ export function whenWidth(columns: Columns, width: number): number {
   return Math.max(1, width - fixed)
 }
 
-// A form field: its label with the separator the engine draws, and the Enter
-// hint beside a focused field: the engine's own arrow, with no word after it.
-const FIELD_LABEL = 15
+// The Enter hint beside a focused text field: the engine's own arrow, with no
+// word after it, which leaves the one-line field more room.
 export const SUBMIT_HINT = ''
-const HINT = 3
-
-// Claude Code draws a text field on one line and cuts a longer value at its
-// end, where the typing happens, so an overflowing value gets one line under
-// the field showing its end, from the start of a word where one fits.
-export function fieldTail(value: string, width: number): string | undefined {
-  const line = width - FRAME - FIELD_LABEL
-  if (value.length <= line - HINT) return undefined
-  const tail = value.slice(-(line - 1))
-  const cut = value.length - tail.length
-  const space = tail.indexOf(' ')
-  const fromWord = value[cut - 1] === ' ' || space === -1 ? tail : tail.slice(space + 1)
-  return `\u2026${fromWord}`
-}
 
 // Breaks text into lines no wider than width, at spaces where it can; a word
 // longer than a line is cut across lines. Every character stays.
