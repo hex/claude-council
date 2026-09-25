@@ -111,7 +111,7 @@ export type Confirm = { kind: 'remove' } | { kind: 'switch'; target: Target }
 // templatesOpen: the templates fold is open; with no specialists it has no fold.
 export type SetupState = { draft?: Draft; catalog: CatalogState; status?: Status; confirm?: Confirm; templatesOpen?: true }
 
-const fieldsOf = (s: Specialist): Fields => ({ name: s.name, model: s.model, effort: s.effort ?? '', when: s.when, skills: (s.skills ?? []).join(', ') })
+export const fieldsOf = (s: Specialist): Fields => ({ name: s.name, model: s.model, effort: s.effort ?? '', when: s.when, skills: (s.skills ?? []).join(', ') })
 
 // An entry that does not parse opens as a blank draft on the first listed model,
 // so the model the screen shows is the one a Save writes.
@@ -201,7 +201,7 @@ export type SetupView = {
 
 const option = (value: string, label = value): Option => ({ value, label })
 
-function savedName(entries: unknown[], index: number): string | undefined {
+export function savedName(entries: unknown[], index: number): string | undefined {
   const parsed = parseSpecialist(entries[index])
   return 'error' in parsed ? undefined : parsed.name
 }

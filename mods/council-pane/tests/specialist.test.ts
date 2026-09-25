@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistEntries, freshList, specialistDescription, specialistSchema,
-  specialistCall, introNotice, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
+  specialistCall, introNotice, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, commitSubject, specialistSteps, latestStep, roundLiveness, readRuns, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -304,14 +304,6 @@ test('a round whose commit was refused is an error that names the refusal, not "
   })
 })
 
-test('the thread id is read from the first thread.started event, and only a UUID counts', () => {
-  const events = '{"type":"thread.started","thread_id":"01a0ce2a-1d08-76c0-a6ef-8340b581212d"}\n{"type":"turn.started"}\n{"type":"thread.started","thread_id":"99999999-0000-0000-0000-000000000000"}\n'
-  expect(threadFrom(events)).toBe('01a0ce2a-1d08-76c0-a6ef-8340b581212d')
-  expect(threadFrom('{"type":"turn.started"}\n')).toBe('')
-  expect(threadFrom('')).toBe('')
-  expect(threadFrom('{"type":"thread.started","thread_id":"--last"}\n')).toBe('')
-})
-
 test('the commit subject is the first non-empty line of the task, cut at a word near 72 characters', () => {
   expect(commitSubject('sec', 'harden login\nmore detail')).toBe('specialist sec: harden login')
   expect(commitSubject('sec', '\n\n  harden login  ')).toBe('specialist sec: harden login')
@@ -373,11 +365,32 @@ test('the band shows the latest step in one short line', () => {
 })
 
 test('a round is running while its process lives and has written no exit code', () => {
-  expect(roundLiveness('', 'same')).toBe('running')
-  expect(roundLiveness('', 'unknown')).toBe('running')
-  expect(roundLiveness('', 'gone')).toBe('lost')
-  expect(roundLiveness('0\n', 'gone')).toBe('ended')
-  expect(roundLiveness('1', 'unknown')).toBe('ended')
+  expect(roundLiveness('', 'same', true)).toBe('running')
+  expect(roundLiveness('', 'unknown', true)).toBe('running')
+  expect(roundLiveness('', 'gone', true)).toBe('lost')
+  expect(roundLiveness('0\n', 'gone', true)).toBe('ended')
+  expect(roundLiveness('1', 'unknown', true)).toBe('ended')
+})
+
+test('a round whose state dir was removed is lost, even when its process cannot be checked', () => {
+  expect(roundLiveness('', 'unknown', false)).toBe('lost')
+  expect(roundLiveness('', 'same', false)).toBe('lost')
+})
+
+const RUN = {
+  id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', skills: ['bug-fixer'],
+  repo: '/r/app', worktree: '/r/app.specialists/sec-20260923-151204', branch: 'specialist/sec/20260923-151204',
+  base: 'abc1234', thread: '', rounds: 1, state: 'running', startedMs: 1, roundBase: 'abc1234', subject: 'Fix it',
+}
+
+test('the run store keeps the records that read and names the ones that do not', () => {
+  const { worktree: _, ...noWorktree } = RUN
+  expect(readRuns({ [RUN.id]: RUN, broken: noWorktree, odd: 'text', badState: { ...RUN, state: 'paused' } })).toEqual({
+    runs: { [RUN.id]: RUN }, unreadable: ['broken', 'odd', 'badState'],
+  })
+  expect(readRuns({ [RUN.id]: { ...RUN, effort: 'high', last: { result: 'done', isError: false } } }).unreadable).toEqual([])
+  expect(readRuns(undefined)).toEqual({ runs: {}, unreadable: [] })
+  expect(readRuns(['x'])).toEqual({ runs: {}, unreadable: ['(the whole store)'] })
 })
 
 test('a round belongs only to the process whose start time was recorded', () => {

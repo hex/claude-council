@@ -8,8 +8,8 @@ import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } fro
 import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, introNotice, followUpRefusal, LIST_FIELD, freshList, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
-  specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
-  commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
+  specialistDescription, specialistPrompt, specialistRoster, specialistSchema,
+  commitSubject, latestStep, lostResult, readRuns, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -19,7 +19,7 @@ import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { missingSkills, skillBody, skillIndex, skillsOpening, type Skill } from './skills'
-import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
+import { blankDraft, dropEntry, fieldsOf, savedName, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -64,6 +64,8 @@ type PaneState = {
   shown: Set<string>
   lastError: string
   pidCheckedAtMs: number
+  // When the followed specialist round's process was last checked.
+  specialistCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
   retry?: { offer: RetryOffer; seenAtMs: number }
   retryShown?: RetrySection
@@ -313,7 +315,7 @@ async function confirmSetup($: EngineInterface, state: PaneState, options: Recor
   if (confirm.kind === 'switch') { await openRow($, state, options, confirm.target, true); return }
   const { entries, problem } = await latestList($, state, options)
   if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
-  const name = draftFor(setup.draft.index, entries, []).name || `specialist ${setup.draft.index + 1}`
+  const name = savedName(entries, setup.draft.index) ?? `specialist ${setup.draft.index + 1}`
   await writeEntries($, state, setup, dropEntry(entries, setup.draft.index), `Removed ${name}.`)
 }
 
@@ -354,7 +356,7 @@ async function handEditDenial($: EngineInterface, value: unknown): Promise<strin
   for (const [index, entry] of entries.entries()) {
     const parsed = parseSpecialist(entry)
     if ('error' in parsed) return `specialist ${index + 1}: ${parsed.error}`
-    const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '', skills: (parsed.skills ?? []).join(', ') }, index, { models: catalog.models, entries, skills })
+    const checked = checkSpecialist(fieldsOf(parsed), index, { models: catalog.models, entries, skills })
     if ('error' in checked) return `specialist ${index + 1}: ${checked.error}`
   }
   return undefined
@@ -542,16 +544,25 @@ function keyValues(text: string): Record<string, string> {
 
 const stateDirOf = (record: RunRecord) => `${record.worktree.replace(/\/[^/]+$/, '')}/.state/${record.id}`
 
+// Unreadable run records already reported, so a poll does not repeat them.
+const reportedUnreadable = new Set<string>()
+
 async function loadRuns($: EngineInterface): Promise<Record<string, RunRecord>> {
-  return ((await $.store.get(RUNS_KEY)) ?? {}) as Record<string, RunRecord>
+  const { runs, unreadable } = readRuns(await $.store.get(RUNS_KEY))
+  for (const id of unreadable.filter(id => !reportedUnreadable.has(id))) {
+    reportedUnreadable.add(id)
+    $.ui.log(`specialist run record ${id} in the plugin store does not read; it is skipped`)
+  }
+  return runs
 }
 
 // Every session shares the store, so a write re-reads it first rather than
-// overwriting the others' records with a stale copy.
+// overwriting the others' records with a stale copy. Records that do not read
+// are kept as they are, for a person to look at.
 async function saveRun($: EngineInterface, record: RunRecord): Promise<void> {
-  const runs = await loadRuns($)
-  runs[record.id] = record
-  await $.store.set(RUNS_KEY, runs)
+  const stored = await $.store.get(RUNS_KEY)
+  const runs = stored !== null && typeof stored === 'object' && !Array.isArray(stored) ? { ...stored } : {}
+  await $.store.set(RUNS_KEY, { ...runs, [record.id]: record })
 }
 
 async function roundState($: EngineInterface, state: PaneState, record: RunRecord): Promise<'running' | 'ended' | 'lost'> {
@@ -592,7 +603,7 @@ async function roundState($: EngineInterface, state: PaneState, record: RunRecor
       state.identityFailures.add(key)
     }
   }
-  return roundLiveness(await readText(files($), exitPath), identity)
+  return roundLiveness(await readText(files($), exitPath), identity, await $.fs.exists(stateDir))
 }
 
 // Closes a round that ended: commits it, keeps its result on the record for
@@ -610,6 +621,15 @@ async function finishRound($: EngineInterface, state: PaneState, record: RunReco
       return
     }
     const stateDir = stateDirOf(record)
+    // Every session following the round sees it end; only one closes it.
+    const claim = await specialistRun($, ['claim', stateDir])
+    if (claim.exitCode !== 0) throw new Error(`specialist claim for ${record.id} exited ${claim.exitCode}: ${claim.stderr.trim()}`)
+    if (keyValues(claim.stdout).claimed !== 'yes') {
+      if (state.specialist?.record.id === record.id) state.specialist = undefined
+      if (state.specialistLog?.record.id === record.id) state.specialistLog = { ...state.specialistLog, isLive: false }
+      $.ui.invalidate('ui.render')
+      return
+    }
     const events = await readText(files($), `${stateDir}/events.jsonl`)
     const report = async () => {
       const text = (await specialistRun($, ['report', record.worktree, record.roundBase, record.base])).stdout
@@ -621,7 +641,7 @@ async function finishRound($: EngineInterface, state: PaneState, record: RunReco
       outcome = lostResult(record, (await report()).status)
     } else {
       const exitCode = Number((await readText(files($), `${stateDir}/exit`)).trim())
-      thread = (await readText(files($), `${stateDir}/thread`)).trim() || threadFrom(events) || record.thread
+      thread = (await readText(files($), `${stateDir}/thread`)).trim() || record.thread
       const commit = exitCode === 0 ? await specialistRun($, ['commit', record.worktree, record.subject]) : undefined
       const didCommit = commit !== undefined && keyValues(commit.stdout).committed === 'yes'
       const committed = didCommit ? (await specialistRun($, ['head', record.worktree])).stdout.trim().slice(0, 7) : ''
@@ -655,6 +675,11 @@ async function followSpecialist($: EngineInterface, state: PaneState): Promise<v
   if (state.specialist !== working) return
   state.specialistLog = { record: working.record, steps, isLive: true }
   $.ui.invalidate('ui.render')
+  // The exit file is read every tick; the process check costs two execs, so
+  // it runs at the council's pid cadence.
+  const hasExit = (await readText(files($), `${working.stateDir}/exit`)).trim() !== ''
+  if (!hasExit && state.nowMs - state.specialistCheckedAtMs < PID_CHECK_MS) return
+  state.specialistCheckedAtMs = state.nowMs
   const now = await roundState($, state, working.record)
   if (now !== 'running') await finishRound($, state, working.record, now)
 }
@@ -742,7 +767,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })

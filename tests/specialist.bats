@@ -64,6 +64,26 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     done
 }
 
+@test "start refuses an include entry git does not ignore, before creating a worktree or branch" {
+    printf 'secret.env\n' > "$REPO/.worktreeinclude"
+    printf 'TOKEN=x\n' > "$REPO/secret.env"
+    git -C "$REPO" add .worktreeinclude && git -C "$REPO" commit -qm includes
+    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: .worktreeinclude entry 'secret.env' is not ignored by git: the round would commit it" ]
+    [ ! -e "${ROOT}/app.specialists/sec-20260923-151204" ]
+    run ! git -C "$REPO" show-ref --verify --quiet refs/heads/specialist/sec/20260923-151204
+}
+
+@test "start refuses a tracked file named in .worktreeinclude" {
+    printf 'src/a.txt\n' > "$REPO/.worktreeinclude"
+    git -C "$REPO" add .worktreeinclude && git -C "$REPO" commit -qm includes
+    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: .worktreeinclude entry 'src/a.txt' is not ignored by git: the round would commit it" ]
+    [ ! -e "${ROOT}/app.specialists/sec-20260923-151204" ]
+}
+
 @test "start refuses a tracked symlink in an include destination parent" {
     mkdir "$ROOT/outside"
     ln -s ../outside "$REPO/cfg"
@@ -307,6 +327,35 @@ start_run() {
     [ "$status" -ne 0 ]
 }
 
+@test "claim lets exactly one caller close a round" {
+    STATE="${ROOT}/app.specialists/.state/sec-20260923-151204"
+    mkdir -p "$STATE"
+    run "$SPECIALIST" claim "$STATE"
+    [ "$status" -eq 0 ]
+    [ "$output" = "claimed=yes" ]
+    run "$SPECIALIST" claim "$STATE"
+    [ "$status" -eq 0 ]
+    [ "$output" = "claimed=no" ]
+}
+
+@test "claim takes over a claim left more than a minute ago by a closer that died" {
+    STATE="${ROOT}/app.specialists/.state/sec-20260923-151204"
+    mkdir -p "$STATE/closing"
+    touch -t "$(date -v-10M +%Y%m%d%H%M 2>/dev/null || date -d '10 minutes ago' +%Y%m%d%H%M)" "$STATE/closing"
+    run "$SPECIALIST" claim "$STATE"
+    [ "$status" -eq 0 ]
+    [ "$output" = "claimed=yes" ]
+    run "$SPECIALIST" claim "$STATE"
+    [ "$output" = "claimed=no" ]
+}
+
+@test "claim closes a round whose state dir was removed by hand" {
+    STATE="${ROOT}/app.specialists/.state/sec-20260923-151204"
+    run "$SPECIALIST" claim "$STATE"
+    [ "$status" -eq 0 ]
+    [ "$output" = "claimed=yes" ]
+}
+
 @test "codex refuses a missing worktree before starting anything" {
     run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol '' < /dev/null
     [ "$status" -eq 1 ]
@@ -467,9 +516,10 @@ launch() {
     start_run
     mkdir -p "$STATE"
     for f in last-message.md stderr.txt exit thread; do echo 'round 1' > "$STATE/$f"; done
+    mkdir "$STATE/closing"
     fake_codex "while [ ! -f '${BATS_TEST_TMPDIR}/go' ]; do sleep 0.1; done"
     launch
-    for f in last-message.md exit thread; do [ ! -e "$STATE/$f" ] || return 1; done
+    for f in last-message.md exit thread closing; do [ ! -e "$STATE/$f" ] || return 1; done
     [ ! -s "$STATE/stderr.txt" ]
     touch "${BATS_TEST_TMPDIR}/go"
     wait_round

@@ -356,6 +356,38 @@ schema executably with jq, listing every violation; the bats suite
 keeps the two in sync.
 ```
 
+### Specialists (`scripts/specialist.sh`, `mods/council-pane/hooks/specialist.ts`, `.worktreeinclude`)
+
+```
+The council-pane mod owns the specialist tool: pane.tsx runs
+specialist.sh with argument arrays ($.process.run) and reads its
+key=value output; specialist.ts holds the pure rules (rows, call
+shapes, dialog text, prompts, report parsing). Subcommands:
+  start <dir> <name> <ts>       worktree + branch from HEAD, state dir
+  commit <worktree> <message>   one commit per round; committed=no if clean
+  head <worktree>               the round base
+  claim <state>                 atomic mkdir so one session closes a round
+  report <worktree> <round-base> <run-base>   diff --stat, round and total
+  counts <repo> <branch> <run-base>           commits, files, merge target
+  finish <repo> <worktree> <branch> merge|discard
+  codex <worktree> <state> <model> <effort|''> [thread]
+Per run, beside the repository:
+  worktree  ../<repo>.specialists/<name>-<ts>
+  branch    specialist/<name>/<ts>
+  state     ../<repo>.specialists/.state/<name>-<ts>
+start copies the paths listed in the repository's .worktreeinclude
+(relative, no .., no symlinks, and each one ignored by git, or the
+round's commit would carry it) into the new worktree, so gitignored
+local files reach it. codex runs the round detached under codex exec
+(or exec resume <thread>) with --output-schema
+scripts/specialist-report.schema.json, the round report's contract:
+summary, tests[] (command, result, detail) and open_questions. The
+state dir holds prompt.txt, events.jsonl, last-message.md and the
+pids; the exit file is written last and marks the round over. finish
+merge exits 3 on a conflict (aborted), 4 on uncommitted edits to the
+branch's files, 5 on a detached HEAD, 6 when git refuses to start.
+```
+
 ### Stop Gate (`hooks/hooks.json`, `scripts/stop-review-gate.sh`)
 
 ```
@@ -513,8 +545,11 @@ claude-council/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/
 │   └── council-pane/            # Experimental Claude Code mod: the pane drawn inside Claude Code
-│       ├── README.md            # Settings, watch-dir files, limits
+│       ├── README.md            # Settings, watch-dir files, limits, the council tool, specialists
+│       ├── DESIGN.md            # Colour and layout rules; every colour lives in hooks/theme.ts
+│       ├── tsconfig.json        # Type check against the locally generated plugin types
 │       ├── hooks/               # pane.tsx wires the engine; the other modules are pure
+│       ├── specialists/         # Six template skills, <name>/SKILL.md each, plus LICENSE-openclaw (MIT)
 │       └── tests/               # bun tests for the pure modules
 ├── prompts/
 │   ├── role-injection.md        # {{VAR}} template for role-wrapped prompts
@@ -532,6 +567,8 @@ claude-council/
 │   ├── session-transcript.sh    # Conversation id to transcript path, refusing ambiguity
 │   ├── transcript-digest.sh     # Session JSONL to a markdown digest for /advise
 │   ├── validate-analysis.sh     # Executable mirror of the agent-analysis schema (test suite)
+│   ├── specialist.sh            # Git side of specialists: worktree per run, one commit per round, merge or discard
+│   ├── specialist-report.schema.json  # Round report contract, passed to codex exec as --output-schema
 │   ├── release.sh               # Version bump and tagging
 │   ├── dev/
 │   │   └── demo-pane.sh         # Visual test harness for the streaming pane
@@ -582,6 +619,11 @@ claude-council/
 │   ├── run_tests.sh             # Test runner
 │   ├── shards/                  # Which bats files each Windows CI shard runs
 │   ├── test_helper.bash         # Shared test utilities
+│   ├── e2e/                     # Run by hand, not by run_tests.sh; each script has a recorded passing run
+│   │   ├── specialist-e2e.sh    # specialist.sh against the real codex: start, round, network follow-up, merge
+│   │   ├── specialist-e2e.expected.txt
+│   │   ├── specialist-setup-e2e.sh  # The /specialists screen in a real Claude Code, driven through tmux
+│   │   └── specialist-setup-e2e.expected.txt
 │   ├── fixtures/
 │   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/cursor-agent/ollama binaries on PATH
 │   │   └── status-fakes.bash    # Recording curl + jq for the check-status tests
@@ -609,6 +651,7 @@ claude-council/
 │   ├── router-seats.bats        # OPENROUTER_MODELS -> openrouter-1..N, one script, many seats
 │   ├── session-transcript.bats  # Session id to transcript path
 │   ├── shards.bats              # Every bats file is named in a Windows shard list
+│   ├── specialist.bats          # specialist.sh against real throwaway repositories; the Codex round with a fake codex
 │   ├── stop-gate.bats
 │   ├── theme.bats
 │   ├── tmpdir.bats              # Temp files honour TMPDIR
@@ -618,6 +661,7 @@ claude-council/
 │   └── query-council.bats
 ├── .gitattributes
 ├── .shellcheckrc               # Points shellcheck at the sourced libs
+├── .worktreeinclude            # Gitignored paths copied into each specialist worktree; here .claude/types
 ├── CHANGELOG.md
 ├── LICENSE
 ├── README.md

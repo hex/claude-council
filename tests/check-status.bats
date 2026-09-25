@@ -290,8 +290,8 @@ setup() {
 # ---- a key that authenticates but cannot run inference ----
 #
 # /v1/models (and Gemini's model metadata) answer 200 for any valid key, so a
-# key with exhausted billing or no inference entitlement used to read
-# Connected. After a passed key check, OpenAI, xAI, Kimi and Gemini get one
+# key with exhausted billing or no inference entitlement cannot be told apart
+# from a working one there. After a passed key check, OpenAI, xAI, Kimi and Gemini get one
 # small chat request. What it may and may not conclude:
 #   1. 402, or the vendor's own out-of-quota marker, is "Inference blocked".
 #   2. A plain 429 is "Rate limited": the key works, just not right now.
