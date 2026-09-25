@@ -116,7 +116,13 @@ export function staleMessage(draft: Draft, entries: unknown[]): string | undefin
 
 
 export type Option = { value: string; label: string }
-export type RosterEntry = { index: number; name: string; model: string; detail: string; when: string; problem?: string; editing: boolean }
+// One table row: zebra shades every other one, color marks the specialist.
+type RowBase = { index: number; name: string; color: string; zebra: boolean; editing: boolean }
+export type RosterEntry =
+  | RowBase & { kind: 'ok'; model: string; effort: string; effortColor?: string; when: string; instructions?: string }
+  | RowBase & { kind: 'broken'; problem: string; stored: string }
+// Character widths of the name, model and effort columns, headers included.
+export type Columns = { name: number; model: number; effort: number }
 export type EditorView = {
   title: string; unsaved: boolean; removable: boolean; discardLabel: string
   models: 'loading' | 'failed' | 'ready'
@@ -126,6 +132,7 @@ export type EditorView = {
 export type SetupView = {
   header: string
   roster: RosterEntry[]
+  columns: Columns
   empty?: string
   editor?: EditorView
   confirm?: { text: string; yes: string; no: string }
@@ -187,18 +194,41 @@ function confirmView(setup: SetupState, entries: unknown[]): SetupView['confirm'
   return { text: `${current} has unsaved changes.`, yes: `Discard and ${target}`, no: 'Keep editing' }
 }
 
+// Mid tones, so each reads on a light and a dark background alike.
+const SPECIALIST_RGB = ['rgb(70,130,180)', 'rgb(150,90,170)', 'rgb(60,140,90)', 'rgb(200,80,110)', 'rgb(190,140,40)', 'rgb(90,160,160)']
+// Warmer as the effort rises; an effort Codex adds later draws uncoloured.
+const EFFORT_RGB: Record<string, string> = {
+  low: 'rgb(96,140,72)', medium: 'rgb(90,110,200)', high: 'rgb(190,120,30)', xhigh: 'rgb(210,95,40)', max: 'rgb(190,55,55)', ultra: 'rgb(170,60,160)',
+}
+export const HEADERS = { name: 'NAME', model: 'MODEL', effort: 'EFFORT', when: 'USE WHEN' }
+
+function rosterRow(entry: unknown, index: number, editing: boolean): RosterEntry {
+  const base = { index, color: SPECIALIST_RGB[index % SPECIALIST_RGB.length] ?? '', zebra: index % 2 === 1, editing }
+  const parsed = parseSpecialist(entry)
+  if ('error' in parsed) return { ...base, kind: 'broken', name: `specialist ${index + 1}`, problem: parsed.error, stored: entryKey(entry) }
+  const effortColor = parsed.effort && Object.hasOwn(EFFORT_RGB, parsed.effort) ? EFFORT_RGB[parsed.effort] : undefined
+  return {
+    ...base, kind: 'ok', name: parsed.name, model: parsed.model, effort: parsed.effort ?? 'default',
+    ...(effortColor ? { effortColor } : {}), when: parsed.when, ...(parsed.instructions ? { instructions: parsed.instructions } : {}),
+  }
+}
+
+function columnsOf(roster: RosterEntry[]): Columns {
+  const widest = (header: string, cells: string[]) => Math.max(header.length, ...cells.map(cell => cell.length))
+  const ok = roster.flatMap(row => (row.kind === 'ok' ? [row] : []))
+  return {
+    name: widest(HEADERS.name, roster.map(row => row.name)),
+    model: widest(HEADERS.model, ok.map(row => row.model)),
+    effort: widest(HEADERS.effort, ok.map(row => row.effort)),
+  }
+}
+
 export function setupView(setup: SetupState, entries: unknown[]): SetupView {
-  const roster: RosterEntry[] = []
-  entries.forEach((entry, index) => {
-    const parsed = parseSpecialist(entry)
-    const editing = setup.draft?.index === index
-    if ('error' in parsed) { roster.push({ index, name: `specialist ${index + 1}`, model: '', detail: entryKey(entry), when: '', problem: parsed.error, editing }); return }
-    const instructions = parsed.instructions ? ` · instructions: ${parsed.instructions}` : ''
-    roster.push({ index, name: parsed.name, model: parsed.model, detail: `effort ${parsed.effort ?? 'default'}${instructions}`, when: parsed.when, editing })
-  })
+  const roster = entries.map((entry, index) => rosterRow(entry, index, setup.draft?.index === index))
   return {
     header: `SPECIALISTS ${roster.length}`,
     roster,
+    columns: columnsOf(roster),
     ...(roster.length === 0 ? { empty: 'No specialists yet. Add one, and Claude offers it when a task matches its use-when.' } : {}),
     ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, entries) } : {}),
     ...(setup.confirm ? { confirm: confirmView(setup, entries) } : {}),

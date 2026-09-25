@@ -1,6 +1,6 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
-import type { Elements, EngineInterface, Register } from 'claude-code'
+import type { Elements, EngineInterface, Register, RenderChildren } from 'claude-code'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
 import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice, progressBand } from './notices'
 import { paneOptions, type PaneOptions } from './options'
@@ -17,7 +17,7 @@ import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
-import { blankDraft, draftFor, dropEntry, putEntry, checkSpecialist, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, putEntry, checkSpecialist, HEADERS, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -48,6 +48,11 @@ const SETUP_KEY = 'specialist-setup'
 const SETUP_COMMAND = 'specialists'
 // Filled status labels carry white letters, so each background is dark enough
 // for white on a light or a dark terminal.
+// The roster's shaded rows use the theme's own message background, so the
+// shade follows a light or a dark theme.
+const ZEBRA_BG = 'userMessageBackground'
+const SWATCH_WIDTH = 2
+const GAP = 2
 const STATUS_RGB: Record<Status['kind'], string> = { saved: 'rgb(46,120,72)', error: 'rgb(178,58,52)', note: 'rgb(150,100,20)' }
 const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: ' ERROR ', note: ' NOTE ' }
 // Help lines start under the field values: the labels are 13 wide plus ': '.
@@ -956,6 +961,15 @@ export const register: Register = (on, options) => {
     const edit = (patch: Partial<Fields>) => { void setupAction($, state, () => editSetup($, state, patch)) }
     // A help line sits under the values and keeps to one row: a pane taller than
     // the terminal hands the keyboard back to the prompt.
+    // A table cell keeps its width; only the last column gives way.
+    const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
+    // A row's second line starts under the model column.
+    const under = (key: string, text: string) => (
+      <Box key={key} flexDirection="row">
+        {cell('indent', SWATCH_WIDTH + view.columns.name + GAP, <Text key="text">{''}</Text>)}
+        <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
+      </Box>
+    )
     const help = (key: string, text: string) => (
       <Box key={key} flexDirection="row">
         <Box key="indent" width={HELP_INDENT.length} flexShrink={0}><Text key="pad">{HELP_INDENT}</Text></Box>
@@ -964,22 +978,37 @@ export const register: Register = (on, options) => {
     )
     return (
       <Box key="setup" flexDirection="column" width={width}>
-        {/* The roster: one frame, two lines per specialist, the one being edited marked. */}
+        {/* The roster: a table in one frame. A row's own colour marks its swatch,
+            every other row is shaded, and a second line carries its instructions. */}
         <Text key="roster-chip" bold color="white" backgroundColor={COUNCIL_RGB}>{` ${view.header} `}</Text>
         <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
+          {view.roster.length > 0 ? (
+            <Box key="head" flexDirection="row">
+              {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
+              {cell('name', view.columns.name + GAP, <Text key="text" bold dimColor>{HEADERS.name}</Text>)}
+              {cell('model', view.columns.model + GAP, <Text key="text" bold dimColor>{HEADERS.model}</Text>)}
+              {cell('effort', view.columns.effort + GAP, <Text key="text" bold dimColor>{HEADERS.effort}</Text>)}
+              <Box key="when" flexShrink={1}><Text key="text" bold dimColor wrap="truncate-end">{HEADERS.when}</Text></Box>
+            </Box>
+          ) : null}
           {view.roster.map(entry => (
-            <Box key={`entry:${entry.index}`} flexDirection="column">
+            <Box key={`entry:${entry.index}`} flexDirection="column" {...(entry.zebra ? { backgroundColor: ZEBRA_BG } : {})}>
               <Box key="line" flexDirection="row">
-                <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />
-                {/* Only the detail gives way on a narrow pane; a long one is cut, never the model. */}
-                <Box key="model" flexShrink={0}><Text key="text" color={MODEL_RGB}>{entry.model ? `  ${entry.model}` : ''}</Text></Box>
-                <Box key="detail" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{`  ${entry.detail}`}</Text></Box>
-                {entry.editing ? <Box key="editing" flexShrink={0}><Text key="gap">{'  '}</Text><Text key="text" bold color="white" backgroundColor={COUNCIL_RGB}>{' EDITING '}</Text></Box> : null}
+                {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.color}>{entry.editing ? '▶' : '●'}</Text>)}
+                {cell('name', view.columns.name + GAP, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
+                {entry.kind === 'ok' ? cell('model', view.columns.model + GAP, <Text key="text" color={MODEL_RGB}>{entry.model}</Text>) : null}
+                {entry.kind === 'ok' ? cell('effort', view.columns.effort + GAP, entry.effortColor
+                  ? <Text key="text" color={entry.effortColor}>{entry.effort}</Text>
+                  : <Text key="text" dimColor>{entry.effort}</Text>) : null}
+                <Box key="rest" flexShrink={1}>
+                  {entry.kind === 'ok'
+                    ? <Text key="text" wrap="truncate-end">{entry.when}</Text>
+                    : <Text key="text" color={STATUS_RGB.error} wrap="truncate-end">{entry.problem}</Text>}
+                </Box>
               </Box>
-              {entry.problem
-                ? <Text key="problem" color={STATUS_RGB.error} wrap="wrap">{`  ${entry.problem}`}</Text>
-                : <Text key="when" dimColor wrap="wrap">{`  when: ${entry.when}`}</Text>}
+              {entry.kind === 'ok' && entry.instructions ? under('instructions', `↳ ${entry.instructions}`) : null}
+              {entry.kind === 'broken' ? under('stored', entry.stored) : null}
             </Box>
           ))}
           <Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} />

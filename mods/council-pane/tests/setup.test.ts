@@ -120,22 +120,47 @@ const two = [
 ]
 const ready: SetupState = { catalog: { models } }
 
-test('the roster shows each specialist on two lines and counts them', () => {
+test('the roster is a table: a row per specialist, zebra on every other one, its own colour and its effort coloured', () => {
   const view = setupView(ready, two)
   expect(view.header).toBe('SPECIALISTS 2')
   expect(view.roster).toEqual([
-    { index: 0, name: 'sec', model: 'gpt-6-sol', detail: 'effort high', when: 'auth, crypto', editing: false },
-    { index: 1, name: 'mig', model: 'gpt-6-luna', detail: 'effort default · instructions: Review migrations for locks and rollbacks.', when: 'schema changes', editing: false },
+    { kind: 'ok', index: 0, name: 'sec', color: 'rgb(70,130,180)', zebra: false, editing: false, model: 'gpt-6-sol', effort: 'high', effortColor: 'rgb(190,120,30)', when: 'auth, crypto' },
+    { kind: 'ok', index: 1, name: 'mig', color: 'rgb(150,90,170)', zebra: true, editing: false, model: 'gpt-6-luna', effort: 'default', when: 'schema changes', instructions: 'Review migrations for locks and rollbacks.' },
   ])
   expect(view.editor).toBeUndefined()
+})
+
+test('the columns are as wide as their widest cell, header included', () => {
+  expect(setupView(ready, two).columns).toEqual({ name: 4, model: 10, effort: 7 })
+  expect(setupView(ready, [{ name: 'a', model: 'm', when: 'w' }]).columns).toEqual({ name: 4, model: 5, effort: 7 })
+  expect(setupView(ready, [{ name: 'a', model: 'm', when: 'w' }, 'broken']).columns).toEqual({ name: 12, model: 5, effort: 7 })
+})
+
+test('each effort has its own colour, rising with the effort; the Codex default has none', () => {
+  const effortOf = (effort?: string) => {
+    const [row] = setupView(ready, [{ name: 'a', model: 'm', when: 'w', ...(effort ? { effort } : {}) }]).roster
+    return row?.kind === 'ok' ? row.effortColor : 'broken'
+  }
+  expect(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'].map(effortOf)).toEqual([
+    'rgb(96,140,72)', 'rgb(90,110,200)', 'rgb(190,120,30)', 'rgb(210,95,40)', 'rgb(190,55,55)', 'rgb(170,60,160)',
+  ])
+  expect(effortOf(undefined)).toBeUndefined()
+  expect(effortOf('turbo')).toBeUndefined()
+})
+
+test('specialist colours follow the list order and wrap after six', () => {
+  const seven = Array.from({ length: 7 }, (_, i) => ({ name: `s${i}`, model: 'm', when: 'w' }))
+  expect(setupView(ready, seven).roster.map(row => row.color)).toEqual([
+    'rgb(70,130,180)', 'rgb(150,90,170)', 'rgb(60,140,90)', 'rgb(200,80,110)', 'rgb(190,140,40)', 'rgb(90,160,160)', 'rgb(70,130,180)',
+  ])
 })
 
 test('an entry that does not parse stays in the roster with its problem and what was stored', () => {
   const old = { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth' }
   const view = setupView(ready, [old, 'sec = gpt-6-sol as security, when: auth'])
   expect(view.roster).toEqual([
-    { index: 0, name: 'specialist 1', model: '', detail: '{"name":"sec","model":"gpt-6-sol","perspective":"security","when":"auth"}', when: '', problem: "unknown field 'perspective'", editing: false },
-    { index: 1, name: 'specialist 2', model: '', detail: '"sec = gpt-6-sol as security, when: auth"', when: '', problem: 'a specialist must be a JSON object with name, model and when', editing: false },
+    { kind: 'broken', index: 0, name: 'specialist 1', color: 'rgb(70,130,180)', zebra: false, editing: false, problem: "unknown field 'perspective'", stored: '{"name":"sec","model":"gpt-6-sol","perspective":"security","when":"auth"}' },
+    { kind: 'broken', index: 1, name: 'specialist 2', color: 'rgb(150,90,170)', zebra: true, editing: false, problem: 'a specialist must be a JSON object with name, model and when', stored: '"sec = gpt-6-sol as security, when: auth"' },
   ])
 })
 
