@@ -9,7 +9,7 @@ import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, introNotice, followUpRefusal, LIST_FIELD, freshList, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema,
-  commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
+  commitSubject, latestStep, lostResult, readRuns, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -544,16 +544,25 @@ function keyValues(text: string): Record<string, string> {
 
 const stateDirOf = (record: RunRecord) => `${record.worktree.replace(/\/[^/]+$/, '')}/.state/${record.id}`
 
+// Unreadable run records already reported, so a poll does not repeat them.
+const reportedUnreadable = new Set<string>()
+
 async function loadRuns($: EngineInterface): Promise<Record<string, RunRecord>> {
-  return ((await $.store.get(RUNS_KEY)) ?? {}) as Record<string, RunRecord>
+  const { runs, unreadable } = readRuns(await $.store.get(RUNS_KEY))
+  for (const id of unreadable.filter(id => !reportedUnreadable.has(id))) {
+    reportedUnreadable.add(id)
+    $.ui.log(`specialist run record ${id} in the plugin store does not read; it is skipped`)
+  }
+  return runs
 }
 
 // Every session shares the store, so a write re-reads it first rather than
-// overwriting the others' records with a stale copy.
+// overwriting the others' records with a stale copy. Records that do not read
+// are kept as they are, for a person to look at.
 async function saveRun($: EngineInterface, record: RunRecord): Promise<void> {
-  const runs = await loadRuns($)
-  runs[record.id] = record
-  await $.store.set(RUNS_KEY, runs)
+  const stored = await $.store.get(RUNS_KEY)
+  const runs = stored !== null && typeof stored === 'object' && !Array.isArray(stored) ? { ...stored } : {}
+  await $.store.set(RUNS_KEY, { ...runs, [record.id]: record })
 }
 
 async function roundState($: EngineInterface, state: PaneState, record: RunRecord): Promise<'running' | 'ended' | 'lost'> {
@@ -594,7 +603,7 @@ async function roundState($: EngineInterface, state: PaneState, record: RunRecor
       state.identityFailures.add(key)
     }
   }
-  return roundLiveness(await readText(files($), exitPath), identity)
+  return roundLiveness(await readText(files($), exitPath), identity, await $.fs.exists(stateDir))
 }
 
 // Closes a round that ended: commits it, keeps its result on the record for
@@ -612,6 +621,15 @@ async function finishRound($: EngineInterface, state: PaneState, record: RunReco
       return
     }
     const stateDir = stateDirOf(record)
+    // Every session following the round sees it end; only one closes it.
+    const claim = await specialistRun($, ['claim', stateDir])
+    if (claim.exitCode !== 0) throw new Error(`specialist claim for ${record.id} exited ${claim.exitCode}: ${claim.stderr.trim()}`)
+    if (keyValues(claim.stdout).claimed !== 'yes') {
+      if (state.specialist?.record.id === record.id) state.specialist = undefined
+      if (state.specialistLog?.record.id === record.id) state.specialistLog = { ...state.specialistLog, isLive: false }
+      $.ui.invalidate('ui.render')
+      return
+    }
     const events = await readText(files($), `${stateDir}/events.jsonl`)
     const report = async () => {
       const text = (await specialistRun($, ['report', record.worktree, record.roundBase, record.base])).stdout

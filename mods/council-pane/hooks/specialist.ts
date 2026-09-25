@@ -195,6 +195,32 @@ export type RunRecord = {
   last?: { result: string; isError: boolean }
 }
 
+const RUN_STRINGS = ['id', 'specialist', 'model', 'repo', 'worktree', 'branch', 'base', 'thread', 'roundBase', 'subject'] as const
+
+function isRunRecord(v: unknown): v is RunRecord {
+  if (!isRecord(v)) return false
+  if (!RUN_STRINGS.every(key => typeof v[key] === 'string')) return false
+  if (typeof v.rounds !== 'number' || typeof v.startedMs !== 'number') return false
+  if (v.state !== 'running' && v.state !== 'idle' && v.state !== 'finished') return false
+  if (!Array.isArray(v.skills) || !v.skills.every(s => typeof s === 'string')) return false
+  if (v.effort !== undefined && typeof v.effort !== 'string') return false
+  return v.last === undefined || (isRecord(v.last) && typeof v.last.result === 'string' && typeof v.last.isError === 'boolean')
+}
+
+// The run store is shared by every session and can be edited by hand: a record
+// that does not read is named, never trusted.
+export function readRuns(value: unknown): { runs: Record<string, RunRecord>; unreadable: string[] } {
+  if (value === undefined || value === null) return { runs: {}, unreadable: [] }
+  if (!isRecord(value)) return { runs: {}, unreadable: ['(the whole store)'] }
+  const runs: Record<string, RunRecord> = {}
+  const unreadable: string[] = []
+  for (const [id, record] of Object.entries(value)) {
+    if (isRunRecord(record)) runs[id] = record
+    else unreadable.push(id)
+  }
+  return { runs, unreadable }
+}
+
 export type SpecialistCall =
   | { kind: 'start'; specialist: Specialist; task: string }
   | { kind: 'followUp'; run: string; message: string }
@@ -440,8 +466,11 @@ export function latestStep(steps: Step[]): string {
 // killed, and nothing will ever finish it.
 export type RoundProcessIdentity = 'same' | 'gone' | 'unknown'
 
-export function roundLiveness(exitText: string, identity: RoundProcessIdentity): 'running' | 'ended' | 'lost' {
+// A state dir removed by hand takes the pid file with it, so the process can
+// no longer be checked; without this such a round would run forever.
+export function roundLiveness(exitText: string, identity: RoundProcessIdentity, hasStateDir: boolean): 'running' | 'ended' | 'lost' {
   if (exitText.trim() !== '') return 'ended'
+  if (!hasStateDir) return 'lost'
   return identity === 'gone' ? 'lost' : 'running'
 }
 

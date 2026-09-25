@@ -57,6 +57,16 @@ cmd_start() {
             count=$((count + 1))
         done < "$root/.worktreeinclude"
     fi
+    # The worktree gets tracked files from git; a copied file git does not
+    # ignore would ride the round's commit into the merge.
+    i=0
+    while (( i < count )); do
+        entry="${includes[$i]}"
+        if [[ -e "$root/$entry" || -L "$root/$entry" ]] && ! git -C "$root" check-ignore -q -- "$entry"; then
+            die ".worktreeinclude entry '${entry}' is not ignored by git: the round would commit it"
+        fi
+        i=$((i + 1))
+    done
     git -C "$root" worktree add -q -b "$branch" "$worktree" "$base" >&2 || exit 1
     i=0
     while (( i < count )); do
@@ -88,6 +98,20 @@ cmd_commit() {
 }
 
 cmd_head() { git -C "$1" rev-parse HEAD; }
+
+# Every session follows a live round, so each may see it end: mkdir is atomic,
+# and only the session that creates the claim closes the round. A claim older
+# than a minute belongs to a closer that died midway and is taken over.
+cmd_claim() {
+    local state="$1"
+    mkdir -p "$state"
+    if mkdir "$state/closing" 2>/dev/null; then echo "claimed=yes"; return; fi
+    if [[ -n "$(find "$state/closing" -maxdepth 0 -mmin +1 2>/dev/null)" ]]; then
+        rmdir "$state/closing" 2>/dev/null || true
+        if mkdir "$state/closing" 2>/dev/null; then echo "claimed=yes"; return; fi
+    fi
+    echo "claimed=no"
+}
 
 cmd_report() {
     local worktree="$1" round_base="$2" run_base="$3"
@@ -153,6 +177,7 @@ cmd_codex() {
     mkdir -p "$state"
     # Each round's files describe that round only.
     rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/start.tmp" "${state}/codex-pid" "${state}/exit" "${state}/thread"
+    rmdir "${state}/closing" 2>/dev/null || true
     cat > "${state}/prompt.txt"
     local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'model_reasoning_summary="concise"' --output-schema "${SCRIPT_DIR}/specialist-report.schema.json" -o "${state}/last-message.md")
     if [[ -n "$effort" ]]; then flags+=(-c "model_reasoning_effort=\"${effort}\""); fi
@@ -200,6 +225,7 @@ main() {
         start)  [[ $# -eq 3 ]] || die "usage: start <dir> <name> <ts>"; cmd_start "$@" ;;
         commit) [[ $# -eq 2 ]] || die "usage: commit <worktree> <message>"; cmd_commit "$@" ;;
         head)   [[ $# -eq 1 ]] || die "usage: head <worktree>"; cmd_head "$@" ;;
+        claim)  [[ $# -eq 1 ]] || die "usage: claim <state>"; cmd_claim "$@" ;;
         report) [[ $# -eq 3 ]] || die "usage: report <worktree> <round-base> <run-base>"; cmd_report "$@" ;;
         counts) [[ $# -eq 3 ]] || die "usage: counts <repo> <branch> <run-base>"; cmd_counts "$@" ;;
         finish) [[ $# -eq 4 ]] || die "usage: finish <repo> <worktree> <branch> merge|discard"; cmd_finish "$@" ;;
