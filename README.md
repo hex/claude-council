@@ -82,6 +82,7 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 - Extensible provider system — add new AI agents easily
 - Put the conversation itself to the council with `/claude-council:advise`, which shows you what would leave the machine before it goes
 - Proactive agent that suggests consulting the council on architecture / debugging dead ends
+- Council as a tool (`mcp__claude-council__ask`, the `council_tool` setting in `/config`, on by default): the model can call the council itself, every call opens a dialog that quotes the question and names the providers, and nothing leaves the machine until you choose `Send to the council`; needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`
 - Specialists (experimental): hand a coding task to a Codex agent that works on its own git branch, following skills you pick
 
 ## Installation
@@ -488,8 +489,10 @@ use-when and starts it only when you ask or agree.
 Specialists live in the Claude Code mod, so they need `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`
 and a logged-in `codex`. Run `/specialists` to set one up. Each one has a name, a
 Codex model, an effort, a use-when for Claude, and the skills it follows: every
-`SKILL.md` you name, from `~/.claude/skills`, `~/.codex/skills` or `~/.agents/skills`,
-opens every task it starts.
+`SKILL.md` you name opens every task it starts. The mod looks for a skill in
+`~/.claude/skills`, `~/.codex/skills`, `~/.agents/skills` and its own bundled
+`mods/council-pane/specialists/` folder, in that order, and the first folder
+with the name wins, so your own copy of a template's skill replaces the bundled one.
 
 The plugin ships no specialists, but the screen offers six templates to start
 from: `bug-fixer`, `ci-fixer`, `refactorer`, `test-writer`, `test-pruner` and
