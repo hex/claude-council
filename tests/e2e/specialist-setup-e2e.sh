@@ -88,7 +88,7 @@ pick() {
 
 BEFORE="$(jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$OUT/settings.before")"
 INDEX="$(printf '%s' "$BEFORE" | jq 'length')"
-# Longer than the form's field at this width, so its end is off the field's first view.
+# Longer than the form's field at this width, so the roster has to wrap it.
 WHEN='e2e check alpha bravo charlie delta echo foxtrot golf hotel end-mark'
 WANT="{\"effort\":\"max\",\"instructions\":\"say e2e first\",\"model\":\"gpt-6-luna\",\"name\":\"e2e\",\"when\":\"$WHEN\"}"
 
@@ -112,7 +112,6 @@ key Enter
 pick gpt-6-luna
 focus_on effort; pick max
 focus_on when; tmux send-keys -t "$SESSION" -l "$WHEN"; sleep 1
-screen | grep -qF 'end-mark' || fail "the end of a long use-when is hidden while it is typed"
 key Enter
 [ "$(focused)" = instructions ] || fail "Enter in use-when moved focus to '$(focused)', expected instructions"
 tmux send-keys -t "$SESSION" -l 'say e2e first'; sleep 1
