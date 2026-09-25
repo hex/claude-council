@@ -1065,8 +1065,19 @@ export const register: Register = (on, options) => {
       </Box>
     )
     const help = (key: string, text: string) => (
-      <Text key={key} dimColor wrap="truncate-end">{text}</Text>
+      <Text key={key} dimColor italic wrap="truncate-end">{text}</Text>
     )
+    // The form is a brief: numbered groups, each value on a tinted well that
+    // says where to type without a frame beside the field.
+    const step = (key: string, n: number, label: string, aside?: string) => (
+      <Box key={key} flexDirection="row" marginTop={n === 1 ? 0 : 1}>
+        <Text key="n" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${n} `}</Text>
+        <Text key="label" bold color={COLOR.muted}>{` ${label}`}</Text>
+        <Box key="space" flexGrow={1} />
+        {aside ? <Text key="aside" dimColor>{aside}</Text> : null}
+      </Box>
+    )
+    const well = (key: string, field: RenderChildren) => <Box key={key} backgroundColor={COLOR.zebra}>{field}</Box>
     return (
       <Box key="setup" flexDirection="column" width={e.props.bodyColumns}>
         {/* The roster: a table in one frame. A row's own colour marks its swatch,
@@ -1136,11 +1147,15 @@ export const register: Register = (on, options) => {
                 focused field to the whole pane, so anything beside it cuts the text. */}
             <Text key="editor-top" color={COLOR.accent} wrap="truncate">{'\u2500'.repeat(e.props.bodyColumns)}</Text>
             <Box key="editor" flexDirection="column">
-              <Text key="name-label" bold>Name</Text>
-              <Input key={`name.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />
-              <Text key="model-label" bold>Model</Text>
-              <Select key="model" value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
-                onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
+              {step('who', 1, 'WHO')}
+              {well('who-well', <Input key={`name.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />)}
+              {step('runs-on', 2, 'RUNS ON')}
+              <Box key="runs-on-row" flexDirection="row" backgroundColor={COLOR.zebra}>
+                <Select key="model" value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
+                  onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
+                <Text key="gap">{'   '}</Text>
+                <Select key="effort" value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
+              </Box>
               {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
               {editor.models === 'failed' ? (
                 <Box key="models-failed" flexDirection="row">
@@ -1148,23 +1163,21 @@ export const register: Register = (on, options) => {
                   <Button key="retry" label="Retry" onPress={press(() => loadCatalog($, state))} />
                 </Box>
               ) : null}
-              <Text key="effort-label" bold>Effort</Text>
-              <Select key="effort" value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
               {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
-              <Text key="when-label" bold>Use when</Text>
-              <Input key={`when.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />
+              {step('call-when', 3, 'CALL WHEN', editor.whenCount)}
+              {well('call-when-well', <Input key={`when.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />)}
               {help('when-help', editor.whenHelp)}
-              <Text key="instructions-label" bold>Instructions</Text>
-              <Input key={`instructions.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />
+              {step('orders', 4, 'STANDING ORDERS', 'optional')}
+              {well('orders-well', <Input key={`instructions.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />)}
               {help('instructions-help', editor.instructionsHelp)}
-              <Box key="actions" flexDirection="row">
+              <Box key="actions" flexDirection="row" marginTop={1}>
                 <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
                 <Text key="gap-1">{'  '}</Text>
                 {editor.toggle ? <Button key="toggle" label={editor.toggle} onPress={press(() => toggleSetup($, state, options))} /> : null}
                 {editor.toggle ? <Text key="gap-toggle">{'  '}</Text> : null}
-                {editor.removable ? <Button key="remove" label="Remove" onPress={press(() => askSetup($, state, { kind: 'remove' }))} /> : null}
+                {editor.removable ? <Button key="remove" dimColor label="Remove" onPress={press(() => askSetup($, state, { kind: 'remove' }))} /> : null}
                 {editor.removable ? <Text key="gap-2">{'  '}</Text> : null}
-                <Button key="discard" label={editor.discardLabel} onPress={press(() => discardSetup($, state))} />
+                <Button key="discard" dimColor label={editor.discardLabel} onPress={press(() => discardSetup($, state))} />
               </Box>
             </Box>
             <Text key="editor-bottom" color={COLOR.accent} wrap="truncate">{'\u2500'.repeat(e.props.bodyColumns)}</Text>
