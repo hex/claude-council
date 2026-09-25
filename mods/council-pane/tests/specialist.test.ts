@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistEntries, freshList, specialistDescription, specialistSchema,
-  specialistCall, introNotice, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
+  specialistCall, introNotice, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -302,14 +302,6 @@ test('a round whose commit was refused is an error that names the refusal, not "
       "The specialist's own report (written before the tool committed):\n" +
       "It did not match the report schema; its last message as written:\nAdded a rate limit.",
   })
-})
-
-test('the thread id is read from the first thread.started event, and only a UUID counts', () => {
-  const events = '{"type":"thread.started","thread_id":"01a0ce2a-1d08-76c0-a6ef-8340b581212d"}\n{"type":"turn.started"}\n{"type":"thread.started","thread_id":"99999999-0000-0000-0000-000000000000"}\n'
-  expect(threadFrom(events)).toBe('01a0ce2a-1d08-76c0-a6ef-8340b581212d')
-  expect(threadFrom('{"type":"turn.started"}\n')).toBe('')
-  expect(threadFrom('')).toBe('')
-  expect(threadFrom('{"type":"thread.started","thread_id":"--last"}\n')).toBe('')
 })
 
 test('the commit subject is the first non-empty line of the task, cut at a word near 72 characters', () => {

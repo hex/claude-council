@@ -367,18 +367,6 @@ export function roundResult(r: {
   return { isError: false, result: [head, who, changes, `${OWN_REPORT}\n${reportText(r.lastMessage)}`].join('\n\n') }
 }
 
-const THREAD_STARTED = /"type":"thread\.started","thread_id":"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/
-
-// The Codex session a round opened, from its JSON event stream. A round cut off
-// at the time limit reports nothing, but its first event is already on disk.
-export function threadFrom(events: string): string {
-  for (const line of events.split('\n')) {
-    if (!line.includes('"thread.started"')) continue
-    return THREAD_STARTED.exec(line)?.[1] ?? ''
-  }
-  return ''
-}
-
 const SUBJECT_MAX = 72
 const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text)
 
