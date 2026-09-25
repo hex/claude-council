@@ -48,11 +48,15 @@ const SETUP_KEY = 'specialist-setup'
 const SETUP_COMMAND = 'specialists'
 // Filled status labels carry white letters, so each background is dark enough
 // for white on a light or a dark terminal.
-// The roster's shaded rows use the theme's own message background, so the
-// shade follows a light or a dark theme.
+// The roster's shades are theme keys, so they follow a light or a dark theme:
+// every other row takes the message background, and the row being edited or
+// under the pointer takes the selection's.
 const ZEBRA_BG = 'userMessageBackground'
+const SELECTED_BG = 'selectionBg'
 const SWATCH_WIDTH = 2
-const GAP = 2
+// A column's cell is its widest text plus one space; a separator follows it.
+const PAD = 1
+const SEPARATOR = '\u2502 '
 const STATUS_RGB: Record<Status['kind'], string> = { saved: 'rgb(46,120,72)', error: 'rgb(178,58,52)', note: 'rgb(150,100,20)' }
 const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: ' ERROR ', note: ' NOTE ' }
 // Help lines start under the field values: the labels are 13 wide plus ': '.
@@ -963,10 +967,16 @@ export const register: Register = (on, options) => {
     // the terminal hands the keyboard back to the prompt.
     // A table cell keeps its width; only the last column gives way.
     const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
+    // A dim bar between two columns; white on the header's fill.
+    const separator = (key: string, onHeader = false) => (
+      <Box key={key} width={SEPARATOR.length} flexShrink={0}>
+        {onHeader ? <Text key="text" color="white" dimColor>{SEPARATOR}</Text> : <Text key="text" dimColor>{SEPARATOR}</Text>}
+      </Box>
+    )
     // A row's second line starts under the model column.
     const under = (key: string, text: string) => (
       <Box key={key} flexDirection="row">
-        {cell('indent', SWATCH_WIDTH + view.columns.name + GAP, <Text key="text">{''}</Text>)}
+        {cell('indent', SWATCH_WIDTH + view.columns.name + PAD + SEPARATOR.length, <Text key="text">{''}</Text>)}
         <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
       </Box>
     )
@@ -984,24 +994,31 @@ export const register: Register = (on, options) => {
         <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
           {view.roster.length > 0 ? (
-            <Box key="head" flexDirection="row">
+            <Box key="head" flexDirection="row" backgroundColor={COUNCIL_RGB}>
               {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
-              {cell('name', view.columns.name + GAP, <Text key="text" bold dimColor>{HEADERS.name}</Text>)}
-              {cell('model', view.columns.model + GAP, <Text key="text" bold dimColor>{HEADERS.model}</Text>)}
-              {cell('effort', view.columns.effort + GAP, <Text key="text" bold dimColor>{HEADERS.effort}</Text>)}
-              <Box key="when" flexShrink={1}><Text key="text" bold dimColor wrap="truncate-end">{HEADERS.when}</Text></Box>
+              {cell('name', view.columns.name + PAD, <Text key="text" bold color="white">{HEADERS.name}</Text>)}
+              {separator('sep-1', true)}
+              {cell('model', view.columns.model + PAD, <Text key="text" bold color="white">{HEADERS.model}</Text>)}
+              {separator('sep-2', true)}
+              {cell('effort', view.columns.effort + PAD, <Text key="text" bold color="white">{HEADERS.effort}</Text>)}
+              {separator('sep-3', true)}
+              <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color="white" wrap="truncate-end">{HEADERS.when}</Text></Box>
             </Box>
           ) : null}
           {view.roster.map(entry => (
-            <Box key={`entry:${entry.index}`} flexDirection="column" {...(entry.zebra ? { backgroundColor: ZEBRA_BG } : {})}>
+            <Box key={`entry:${entry.index}`} flexDirection="column" hover={{ backgroundColor: SELECTED_BG }}
+              {...(entry.editing ? { backgroundColor: SELECTED_BG } : entry.zebra ? { backgroundColor: ZEBRA_BG } : {})}>
               <Box key="line" flexDirection="row">
                 {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.color}>{entry.editing ? '▶' : '●'}</Text>)}
-                {cell('name', view.columns.name + GAP, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
-                {entry.kind === 'ok' ? cell('model', view.columns.model + GAP, <Text key="text" color={MODEL_RGB}>{entry.model}</Text>) : null}
-                {entry.kind === 'ok' ? cell('effort', view.columns.effort + GAP, entry.effortColor
+                {cell('name', view.columns.name + PAD, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
+                {separator('sep-1')}
+                {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, <Text key="text" color={MODEL_RGB}>{entry.model}</Text>) : null}
+                {entry.kind === 'ok' ? separator('sep-2') : null}
+                {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.effortColor
                   ? <Text key="text" color={entry.effortColor}>{entry.effort}</Text>
                   : <Text key="text" dimColor>{entry.effort}</Text>) : null}
-                <Box key="rest" flexShrink={1}>
+                {entry.kind === 'ok' ? separator('sep-3') : null}
+                <Box key="rest" flexGrow={1} flexShrink={1}>
                   {entry.kind === 'ok'
                     ? <Text key="text" wrap="truncate-end">{entry.when}</Text>
                     : <Text key="text" color={STATUS_RGB.error} wrap="truncate-end">{entry.problem}</Text>}
