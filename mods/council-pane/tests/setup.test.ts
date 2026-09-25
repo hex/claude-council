@@ -182,7 +182,8 @@ test('the editor explains effort, use-when and instructions and counts the use-w
   expect(view.editor).toMatchObject({
     title: 'EDIT sec', unsaved: false, removable: true, discardLabel: 'Discard changes', models: 'ready',
     effortHelp: 'Greater reasoning depth for complex problems',
-    whenHelp: '12/200 · Claude reads this to decide when to offer this specialist.',
+    whenCount: '12/200',
+    whenHelp: 'Claude reads this to decide when to offer this specialist.',
     instructionsHelp: 'Sent to the specialist before each new task. Blank means it just follows the task.',
   })
   expect(view.editor?.effortOptions[0]).toEqual({ value: 'default', label: 'default' })

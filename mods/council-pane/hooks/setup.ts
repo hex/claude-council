@@ -146,7 +146,8 @@ export type EditorView = {
   toggle?: 'Disable' | 'Enable'
   models: 'loading' | 'failed' | 'ready'
   modelOptions: Option[]; effortOptions: Option[]
-  effortHelp: string; whenHelp: string; instructionsHelp: string
+  // whenCount: the use-when's length against its limit, shown on the field's label line.
+  effortHelp: string; whenCount: string; whenHelp: string; instructionsHelp: string
 }
 export type SetupView = {
   header: string
@@ -204,7 +205,8 @@ function editorView(draft: Draft, catalog: CatalogState, entries: unknown[]): Ed
     modelOptions: 'models' in catalog ? listed.map(m => option(m.slug, m.listed ? m.slug : `${m.slug} (hidden)`)) : [option(draft.model)],
     effortOptions: [option('default'), ...(model ? model.efforts : draft.effort ? [draft.effort] : []).map(e => option(e))],
     effortHelp,
-    whenHelp: `${draft.when.length}/${WHEN_MAX} · Claude reads this to decide when to offer this specialist.`,
+    whenCount: `${draft.when.length}/${WHEN_MAX}`,
+    whenHelp: 'Claude reads this to decide when to offer this specialist.',
     instructionsHelp: 'Sent to the specialist before each new task. Blank means it just follows the task.',
   }
 }
