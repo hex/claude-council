@@ -681,15 +681,21 @@ function retryRow(
 ) {
   return (
     <ui.Box key="retry" flexDirection="row" marginTop={1}>
-      <ui.Box flexDirection="row" paddingX={1} backgroundColor={FILL.chip}>
-        <ui.Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{offer.badge}</ui.Text>
+      {/* The other bands' chip; only the notice and the how-to give way when narrow. */}
+      {chip(ui, 'chip', offer.badge)}
+      <ui.Box flexShrink={1}>
+        <ui.Text bold color={COLOR.danger} wrap="truncate-end">{` \u2717 ${offer.notice}  `}</ui.Text>
       </ui.Box>
-      <ui.Text bold color={COLOR.danger}>{` \u2717 ${offer.notice}  `}</ui.Text>
-      <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
-      <ui.Text>{' '}</ui.Text>
-      <ui.Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={press.skip} />
-      <ui.Text color={COLOR.accent}>{`  ${offer.bar}`}</ui.Text>
-      <ui.Text dimColor>{` ${offer.remaining}s  click, or ctrl+x tab then r / s`}</ui.Text>
+      <ui.Box flexShrink={0} flexDirection="row">
+        <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
+        <ui.Text>{' '}</ui.Text>
+        <ui.Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={press.skip} />
+        <ui.Text color={COLOR.accent}>{`  ${offer.bar}`}</ui.Text>
+        <ui.Text dimColor>{` ${offer.remaining}s`}</ui.Text>
+      </ui.Box>
+      <ui.Box flexShrink={1}>
+        <ui.Text dimColor wrap="truncate-end">{'  click, or ctrl+x tab then r / s'}</ui.Text>
+      </ui.Box>
     </ui.Box>
   )
 }

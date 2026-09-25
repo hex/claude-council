@@ -26,15 +26,15 @@ test('retrySection counts the window down from when the offer was first seen', (
     label: 'r \u00b7 retry',
     skipLabel: 's \u00b7 skip',
     remaining: 38,
-    bar: '\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2591',
+    bar: '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2500',
   })
   expect(retrySection(offer, 10_000, 99_000)).toEqual(expect.objectContaining({ remaining: 0 }))
 })
 
 test('the countdown bar empties as the window runs out', () => {
   const offer = { seconds: 40, providers: ['grok'] }
-  expect(retrySection(offer, 0, 0).bar).toBe('\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588')
-  expect(retrySection(offer, 0, 20_000).bar).toBe('\u2588\u2588\u2588\u2588\u2591\u2591\u2591\u2591')
-  expect(retrySection(offer, 0, 39_000).bar).toBe('\u2588\u2591\u2591\u2591\u2591\u2591\u2591\u2591')
-  expect(retrySection(offer, 0, 40_000).bar).toBe('\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591')
+  expect(retrySection(offer, 0, 0).bar).toBe('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501')
+  expect(retrySection(offer, 0, 20_000).bar).toBe('\u2501\u2501\u2501\u2501\u2500\u2500\u2500\u2500')
+  expect(retrySection(offer, 0, 39_000).bar).toBe('\u2501\u2500\u2500\u2500\u2500\u2500\u2500\u2500')
+  expect(retrySection(offer, 0, 40_000).bar).toBe('\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500')
 })
