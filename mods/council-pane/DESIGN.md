@@ -6,8 +6,8 @@ How the mod looks, and why. Every colour lives in `hooks/theme.ts`, and no other
 
 - The council speaks inside Claude Code, so it borrows Claude's orange and the engine's own theme instead of bringing a palette of its own.
 - Colour carries meaning, and each meaning has one colour. Text or a glyph always says the same thing, so no state depends on colour alone.
-- Text a person reads meets 4.5:1 on a light and on a dark theme, with one exception: `info` is 4.4:1 on light, and the engine has no blue that does better. Glyphs and lines meet 3:1.
-- A screen fits the terminal. A pane taller than the terminal hands the keyboard back to the prompt, so help text stays on one line and cuts off at the end.
+- Text a person reads meets 4.5:1 on a light and on a dark theme, with two exceptions: `info` is 4.4:1 on light, and the engine has no blue that does better; and the form's help uses `hint` at 2.2:1 by choice, so it recedes behind the fields. Glyphs and lines meet 3:1.
+- A screen fits the terminal. A pane taller than the terminal hands the keyboard back to the prompt, so text stays short. Descriptions and help still wrap and never cut off: a text a person needs to read is shown whole.
 
 ## Colour
 
@@ -22,6 +22,7 @@ Most colours are engine theme keys. The engine resolves each one for the theme t
 | `info` | `suggestion` | 4.4 | 8.9 | A cached provider, effort medium |
 | `muted` | `inactive` | 5.7 | 5.9 | Secondary text that must stay readable, such as a branch or a worktree path |
 | `line` | `subtle` | 2.2 | 2.1 | Table bars and rules: decoration only |
+| `hint` | `subtle` | 2.2 | 2.1 | The form's help lines: a deliberate exception to 4.5:1, chosen so help recedes behind the fields |
 | `model` | `planMode` | 6.8 | 4.8 | Model names |
 | `peak` | `merged` | 6.0 | 6.1 | The top of a scale (effort ultra) |
 | `zebra` | `userMessageBackground` | | | Every other table row |
@@ -74,8 +75,9 @@ Each glyph has one meaning.
 - **Chip**: a bold uppercase label on the `chip` fill in `onFill` letters, one space of padding each side. It names the frame below it. A running chip shimmers.
 - **Frame**: a rounded border in `accent` with one column of padding, under its chip.
 - **Table**: a `header` fill with white bold labels, `line` bars between columns, a `line` rule between rows, `zebra` on every other row, `selected` on the row you are editing or the one under the pointer. Each column is as wide as its widest cell; only the last one gives way on a narrow pane, cut with `…`. One line per row: the details live in the form. A broken entry's second line, under the second column, shows what was stored.
+- **Templates table**: on the empty screen only, under `+ Add specialist`: the table's header fill and zebra with two columns, `TEMPLATE` and `USE WHEN`; the name is a plain Button, the use-when dim and wrapped so it reads whole. No bars or rules, since they would stop at a wrapped row's first line; the shading tells the rows apart. Once specialists exist it folds behind a dim plain `Templates (N) ▸` button beside Add, `▾` when open.
 - **Switched-off row**: keeps its place in the list, its text `muted` italic, a hollow `○` where an on row has `●`, and a word saying so (`off ·`), never colour alone. The chip counts them (`SPECIALISTS (3 · 1 off)`).
 - **Status label**: `SAVED`, `ERROR` or `NOTE` on its fill, then the message in plain text.
-- **Form**: each field under its label, the roster's own column name (`NAME`, `MODEL`, `EFFORT`, `USE WHEN`, then `STANDING ORDERS`) in `muted` bold, with anything about it on the right (the use-when counter, `optional`). Each value sits on a `zebra` well, the only sign of where to type; help is one dim italic line under it; a blank line between fields. Buttons: `Save` and the dim `Discard` together, then apart from them the specialist's `Disable`/`Enable`, and the dim `Remove` last, so a Tab too many from Save never lands on it. No frame, and nothing beside a text field: Claude Code sizes a focused field to the whole pane, so anything beside it cuts the text being typed, and given the whole width the field wraps a long value onto the lines below. Accent rules above and below mark the form.
+- **Form**: each field under its label, the roster's own column name (`NAME`, `MODEL`, `EFFORT`, `USE WHEN`, then `SKILLS`) in `muted` bold, with anything about it on the right (the use-when counter, `optional`). Each value sits on a `zebra` well, the only sign of where to type; help is `hint` italic under it, wrapped and never cut; a blank line between fields. Buttons: `Save` and the dim `Discard` together, then apart from them the specialist's `Disable`/`Enable`, and the dim `Remove` last, so a Tab too many from Save never lands on it. No frame, and nothing beside a text field: Claude Code sizes a focused field to the whole pane, so anything beside it cuts the text being typed, and given the whole width the field wraps a long value onto the lines below. Accent rules above and below mark the form.
 - **Enter hint**: the bare `⏎` (an empty `submitLabel`), leaving the field more room.
 - **Band**: the one line above the prompt while a council run or a specialist round is live: chip, name, model, time, latest step.

@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, TEMPLATES, templateDraft, draftAt, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -39,20 +39,19 @@ test('output that is not a catalog is an error, never an empty list', () => {
 
 const catalog = parseCatalog(ok(catalogText))
 const models = 'models' in catalog ? catalog.models : []
-const fields: Fields = { name: 'sec', model: 'gpt-6-sol', effort: 'high', when: 'auth, crypto', instructions: '' }
-const context = { models, entries: [] as unknown[] }
+const fields: Fields = { name: 'sec', model: 'gpt-6-sol', effort: 'high', when: 'auth, crypto', skills: '' }
+const context = { models, entries: [] as unknown[], skills: ['test-audit', 'web-perf', 'bug-fixer'] }
 
 test('a save writes the entry parseSpecialist reads, leaving blank optional fields out', () => {
   expect(checkSpecialist(fields, 0, context)).toEqual({ entry: { name: 'sec', model: 'gpt-6-sol', effort: 'high', when: 'auth, crypto' } })
-  expect(checkSpecialist({ ...fields, effort: '', instructions: 'Review migrations for locks.' }, 0, context)).toEqual({ entry: { name: 'sec', model: 'gpt-6-sol', when: 'auth, crypto', instructions: 'Review migrations for locks.' } })
+  expect(checkSpecialist({ ...fields, effort: '', skills: ' test-audit,web-perf ' }, 0, context)).toEqual({ entry: { name: 'sec', model: 'gpt-6-sol', when: 'auth, crypto', skills: ['test-audit', 'web-perf'] } })
 })
 
 test('free text holding quotes, commas, colons and when: round-trips through the stored JSON', () => {
   const when = 'auth, crypto: tokens, when: parsing "untrusted" input'
-  const instructions = 'Check it, when: always; say "no" to eval.'
-  const checked = checkSpecialist({ ...fields, when, instructions }, 0, context)
+  const checked = checkSpecialist({ ...fields, when, skills: 'test-audit' }, 0, context)
   if (!('entry' in checked)) throw new Error(checked.error)
-  expect(parseSpecialist(JSON.parse(JSON.stringify(checked.entry)))).toEqual({ name: 'sec', model: 'gpt-6-sol', effort: 'high', when, instructions })
+  expect(parseSpecialist(JSON.parse(JSON.stringify(checked.entry)))).toEqual({ name: 'sec', model: 'gpt-6-sol', effort: 'high', when, skills: ['test-audit'] })
 })
 
 test('every field is checked, and the error names the field and what is allowed', () => {
@@ -65,8 +64,9 @@ test('every field is checked, and the error names the field and what is allowed'
   expect(check({ when: '' })).toEqual({ error: 'use-when is empty' })
   expect(check({ when: 'two\nlines' })).toEqual({ error: 'use-when must be one line' })
   expect(check({ when: 'x'.repeat(201) })).toEqual({ error: 'use-when is longer than 200 characters' })
-  expect(check({ instructions: 'two\nlines' })).toEqual({ error: 'instructions must be one line' })
-  expect(check({ instructions: 'x'.repeat(401) })).toEqual({ error: 'instructions are longer than 400 characters' })
+  expect(check({ skills: 'test-audit, gone, also-gone' })).toEqual({ error: 'skills not installed: gone, also-gone' })
+  expect(check({ skills: 'test-audit, test-audit' })).toEqual({ error: "skill 'test-audit' is listed twice" })
+  expect(check({ skills: 'Test Audit' })).toEqual({ error: "skill 'Test Audit' must be lowercase letters, digits, dots, dashes or underscores" })
 })
 
 test('a hidden catalog model is accepted', () => {
@@ -98,13 +98,13 @@ const secEntry = { name: 'sec', model: 'gpt-6-sol', effort: 'high', when: 'auth'
 
 test('editing an entry starts from its fields; one that does not parse starts blank on the first listed model but keeps its place', () => {
   const entries = [secEntry, { name: 'old', model: 'gpt-6-sol', perspective: 'security', when: 'w' }]
-  expect(draftFor(0, entries, models)).toEqual({ index: 0, baseline: JSON.stringify(secEntry), name: 'sec', model: 'gpt-6-sol', effort: 'high', when: 'auth', instructions: '' })
-  expect(draftFor(1, entries, models)).toEqual({ index: 1, baseline: JSON.stringify(entries[1]), name: '', model: 'gpt-6-sol', effort: '', when: '', instructions: '' })
+  expect(draftFor(0, entries, models)).toEqual({ index: 0, baseline: JSON.stringify(secEntry), name: 'sec', model: 'gpt-6-sol', effort: 'high', when: 'auth', skills: '' })
+  expect(draftFor(1, entries, models)).toEqual({ index: 1, baseline: JSON.stringify(entries[1]), name: '', model: 'gpt-6-sol', effort: '', when: '', skills: '' })
 })
 
 test('a blank draft picks the first listed model and takes a prefill', () => {
-  expect(blankDraft(2, models)).toEqual({ index: 2, baseline: '', name: '', model: 'gpt-6-sol', effort: '', when: '', instructions: '' })
-  expect(blankDraft(2, models, { name: 'perf', when: 'hot loops', instructions: 'Measure first.' })).toMatchObject({ name: 'perf', when: 'hot loops', instructions: 'Measure first.' })
+  expect(blankDraft(2, models)).toEqual({ index: 2, baseline: '', name: '', model: 'gpt-6-sol', effort: '', when: '', skills: '' })
+  expect(blankDraft(2, models, { name: 'perf', when: 'hot loops', skills: 'web-perf' })).toMatchObject({ name: 'perf', when: 'hot loops', skills: 'web-perf' })
 })
 
 test('switching to a model that lacks the chosen effort resets it and says so', () => {
@@ -122,11 +122,11 @@ test('a draft whose entry changed meanwhile is flagged', () => {
 
 const two = [
   { name: 'sec', model: 'gpt-6-sol', effort: 'high', when: 'auth, crypto' },
-  { name: 'mig', model: 'gpt-6-luna', when: 'schema changes', instructions: 'Review migrations for locks and rollbacks.' },
+  { name: 'mig', model: 'gpt-6-luna', when: 'schema changes', skills: ['test-audit', 'web-perf'] },
 ]
 const ready: SetupState = { catalog: { models } }
 
-test('the roster is a table: one line per specialist, zebra on every other one, its effort coloured, its instructions left to the form', () => {
+test('the roster is a table: one line per specialist, zebra on every other one, its effort coloured, its skills left to the form', () => {
   const view = setupView(ready, two)
   expect(view.header).toBe('SPECIALISTS (2)')
   expect(view.roster).toEqual([
@@ -163,22 +163,64 @@ test('an entry that does not parse stays in the roster with its problem and what
   ])
 })
 
-test('with no specialists the roster says what to do', () => {
-  expect(setupView(ready, []).empty).toBe('No specialists yet. Add one, and Claude offers it when a task matches its use-when.')
+test('with no specialists the roster says what to do and offers the templates', () => {
+  expect(setupView(ready, []).empty).toBe('No specialists yet. A specialist is a Codex agent that works on its own branch. Pick a template, add your own, or describe one to Claude.')
   expect(setupView(ready, []).header).toBe('SPECIALISTS (0)')
+  const templates = setupView(ready, []).templates
+  expect(templates?.rows.map(row => [row.name, row.zebra])).toEqual([
+    ['bug-fixer', false], ['ci-fixer', true], ['refactorer', false], ['test-writer', true], ['test-pruner', false], ['docs-updater', true],
+  ])
+  expect(templates?.rows[0]?.when).toBe(TEMPLATES[0]?.when)
+  // The name column fits the widest name, 'docs-updater', or its header if wider.
+  expect(templates?.nameWidth).toBe(12)
+  // With no specialists the table is open, with nothing to fold.
+  expect(templates?.fold).toBeUndefined()
 })
 
-test('the editor explains effort, use-when and instructions and counts the use-when', () => {
+test('with specialists the templates fold behind a toggle that counts the ones not yet used', () => {
+  const used = [{ name: 'ci-fixer', model: 'gpt-6-sol', when: 'ci', skills: ['ci-fixer'] }, ...two]
+  const closed = setupView(ready, used).templates
+  expect(closed?.fold).toEqual({ label: 'Templates (5) ▸', open: false })
+  expect(closed?.rows.map(row => row.name)).toEqual(['bug-fixer', 'refactorer', 'test-writer', 'test-pruner', 'docs-updater'])
+  expect(closed?.rows.map(row => row.zebra)).toEqual([false, true, false, true, false])
+  expect(setupView({ ...ready, templatesOpen: true }, used).templates?.fold).toEqual({ label: 'Templates (5) ▾', open: true })
+  const all = TEMPLATES.map(t => ({ name: t.name, model: 'gpt-6-sol', when: t.when }))
+  expect(setupView(ready, all).templates).toBeUndefined()
+  // The open fold survives the reload every save causes.
+  expect(restoreSetup({ catalog: { models }, templatesOpen: true }, two)).toEqual({ catalog: { models }, templatesOpen: true })
+})
+
+test('a template opens as a new draft on its own bundled skill and the first listed model, and saves as it stands', () => {
+  const bundled = { ...context, skills: TEMPLATES.map(t => t.name) }
+  for (const template of TEMPLATES) {
+    // The use-when is the bundled skill's own description, so the two cannot drift.
+    const skill = readFileSync(`${import.meta.dir}/../specialists/${template.name}/SKILL.md`, 'utf8')
+    expect(skill.match(/^description: (.*)$/m)?.[1]).toBe(template.when)
+    const draft = templateDraft(template.name, 0, models)
+    expect(draft).toEqual({ index: 0, baseline: '', model: 'gpt-6-sol', effort: '', name: template.name, when: template.when, skills: template.name })
+    if (!draft) throw new Error('no draft')
+    expect(checkSpecialist(draft, 0, bundled)).toEqual({ entry: { name: template.name, model: 'gpt-6-sol', when: template.when, skills: [template.name] } })
+  }
+  expect(templateDraft('nope', 0, models)).toBeUndefined()
+  expect(draftAt({ template: 'test-writer' }, two, models)).toMatchObject({ index: 2, baseline: '', name: 'test-writer', skills: 'test-writer' })
+  expect(() => draftAt({ template: 'nope' }, [], models)).toThrow('no template named nope')
+})
+
+test('the editor explains effort, use-when and skills, counts the use-when and names skills not installed', () => {
   const draft = draftFor(0, two, models)
-  const view = setupView({ ...ready, draft }, two)
+  const view = setupView({ ...ready, draft }, two, undefined, ['test-audit'])
   expect(view.roster[0]?.editing).toBe(true)
   expect(view.editor).toMatchObject({
     title: 'EDIT sec', unsaved: false, removable: true, discardLabel: 'Discard changes', models: 'ready',
     effortHelp: 'Greater reasoning depth for complex problems',
     whenCount: '12/200',
     whenHelp: 'Claude reads this to decide when to offer this specialist.',
-    instructionsHelp: 'Sent to the specialist before each new task. Blank means it just follows the task.',
+    skillsHelp: "Comma-separated names from ~/.claude/skills, ~/.codex/skills, ~/.agents/skills or the templates. Each SKILL.md opens every new task.",
+    skillsMissing: '',
   })
+  const mig = draftFor(1, two, models)
+  expect(setupView({ ...ready, draft: mig }, two, undefined, ['test-audit']).editor?.skillsMissing).toBe('not installed: web-perf')
+  expect(setupView({ ...ready, draft: mig }, two, undefined, ['test-audit', 'web-perf']).editor?.skillsMissing).toBe('')
   expect(view.editor?.effortOptions[0]).toEqual({ value: 'default', label: 'default' })
   expect(view.editor?.effortOptions.map(o => o.value)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
   const byDefault = setupView({ ...ready, draft: { ...draft, effort: '' } }, two)
@@ -227,12 +269,12 @@ test('an edited field marks the draft unsaved, and a stored entry with its keys 
   const draft = draftFor(0, two, models)
   expect(isDirty(draft)).toBe(false)
   expect(isDirty({ ...draft, when: 'auth' })).toBe(true)
-  expect(isDirty({ ...draft, instructions: 'Be careful.' })).toBe(true)
-  const reordered = [{ when: 'schema changes', instructions: 'Review migrations for locks and rollbacks.', model: 'gpt-6-luna', name: 'mig' }]
+  expect(isDirty({ ...draft, skills: 'test-audit' })).toBe(true)
+  const reordered = [{ when: 'schema changes', skills: ['test-audit', 'web-perf'], model: 'gpt-6-luna', name: 'mig' }]
   expect(isDirty(draftFor(0, reordered, models))).toBe(false)
   expect(isDirty(blankDraft(2, models))).toBe(false)
   expect(isDirty({ ...blankDraft(2, models), name: 'x' })).toBe(true)
-  expect(isDirty({ ...blankDraft(2, models), instructions: 'x' })).toBe(true)
+  expect(isDirty({ ...blankDraft(2, models), skills: 'x' })).toBe(true)
   expect(setupView({ ...ready, draft: { ...draft, when: 'auth' } }, two).editor?.unsaved).toBe(true)
 })
 
@@ -252,6 +294,7 @@ test('confirmations ask in words that name the specialist', () => {
   expect(setupView({ ...ready, draft, confirm: { kind: 'remove' } }, two).confirm).toEqual({ text: 'Remove sec? Claude can no longer offer it.', yes: 'Remove sec', no: 'Keep it' })
   expect(setupView({ ...ready, draft, confirm: { kind: 'switch', target: 1 } }, two).confirm).toEqual({ text: 'sec has unsaved changes.', yes: 'Discard and open mig', no: 'Keep editing' })
   expect(setupView({ ...ready, draft, confirm: { kind: 'switch', target: 'new' } }, two).confirm).toEqual({ text: 'sec has unsaved changes.', yes: 'Discard and add new', no: 'Keep editing' })
+  expect(setupView({ ...ready, draft, confirm: { kind: 'switch', target: { template: 'bug-fixer' } } }, two).confirm).toEqual({ text: 'sec has unsaved changes.', yes: 'Discard and use bug-fixer', no: 'Keep editing' })
 })
 
 test('a saved screen is read back only when its shape is right; an older or broken one is set aside with a note', () => {
@@ -259,6 +302,8 @@ test('a saved screen is read back only when its shape is right; an older or brok
   const setAside = { catalog: { loading: true }, status: { kind: 'note', text: 'An earlier draft could not be read and was set aside.' } }
   expect(restoreSetup({ draft, catalog: { models } }, two)).toEqual({ draft, catalog: { models } })
   expect(restoreSetup(undefined, two)).toBeUndefined()
+  expect(restoreSetup({ draft, catalog: { models }, confirm: { kind: 'switch', target: { template: 'test-writer' } } }, two)).toEqual({ draft, catalog: { models }, confirm: { kind: 'switch', target: { template: 'test-writer' } } })
+  expect(restoreSetup({ draft, catalog: { models }, confirm: { kind: 'switch', target: { template: 'gone' } } }, two)).toEqual({ draft, catalog: { models } })
   const perspectiveDraft = { draft: { index: 0, baseline: '', name: 'sec', model: 'gpt-6-luna', perspective: 'custom', effort: '', focus: 'locks', when: '' }, catalog: { models } }
   expect(restoreSetup(perspectiveDraft, two)).toEqual(setAside)
   expect(restoreSetup('junk', two)).toEqual(setAside)

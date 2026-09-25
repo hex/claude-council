@@ -2,6 +2,7 @@
 // ABOUTME: No engine calls here, so every rule runs under bun test
 import { nameProblem, parseSpecialist, WHEN_MAX, type Specialist } from './specialist'
 import { EFFORT_STYLE, type Style } from './theme'
+import { skillNames } from './skills'
 
 // effortHelp is Codex's own one-line description of each effort; defaultEffort
 // is what the model uses when nothing sets one.
@@ -36,11 +37,12 @@ export function parseCatalog(run: { exitCode: number; stdout: string; stderr: st
   return { models }
 }
 
-// The form's fields as typed; a blank effort or instructions is left out of the entry.
-export type Fields = { name: string; model: string; effort: string; when: string; instructions: string }
+// The form's fields as typed; skills is a comma list. A blank effort or skills is left out of the entry.
+export type Fields = { name: string; model: string; effort: string; when: string; skills: string }
 
 function entryOf(f: Fields): Specialist {
-  return { name: f.name, model: f.model, ...(f.effort ? { effort: f.effort } : {}), when: f.when, ...(f.instructions.trim() ? { instructions: f.instructions } : {}) }
+  const skills = skillNames(f.skills)
+  return { name: f.name, model: f.model, ...(f.effort ? { effort: f.effort } : {}), when: f.when, ...(skills.length > 0 ? { skills } : {}) }
 }
 
 // The stored entry as text, so a draft can tell whether it changed meanwhile.
@@ -50,7 +52,8 @@ function entryKey(entry: unknown): string {
 
 // The fields a user types are checked here first, so each error names its field;
 // the entry then goes through parseSpecialist, the same reader session start uses.
-export function checkSpecialist(f: Fields, index: number, context: { models: CatalogModel[]; entries: unknown[] }): { entry: Specialist } | { error: string } {
+// context.skills: the names of every installed skill, the templates' included.
+export function checkSpecialist(f: Fields, index: number, context: { models: CatalogModel[]; entries: unknown[]; skills: string[] }): { entry: Specialist } | { error: string } {
   if (f.name.trim() === '') return { error: 'name is empty' }
   const badName = nameProblem(f.name)
   if (badName) return { error: badName }
@@ -60,6 +63,8 @@ export function checkSpecialist(f: Fields, index: number, context: { models: Cat
   if (f.effort && !model.efforts.includes(f.effort)) return { error: `effort '${f.effort}' is not offered by ${model.slug}: ${model.efforts.join(', ')}` }
   const parsed = parseSpecialist(entryOf(f))
   if ('error' in parsed) return parsed
+  const missing = (parsed.skills ?? []).filter(name => !context.skills.includes(name))
+  if (missing.length > 0) return { error: `skills not installed: ${missing.join(', ')}` }
   const taken = context.entries.findIndex((other, at) => {
     if (at === index) return false
     const theirs = parseSpecialist(other)
@@ -100,10 +105,13 @@ export function flipEntry(entries: unknown[], index: number): { entries: unknown
 export type Draft = Fields & { index: number; baseline: string }
 export type Status = { kind: 'saved' | 'error' | 'note'; text: string }
 // A question the screen asks inline before an action it cannot undo.
-export type Confirm = { kind: 'remove' } | { kind: 'switch'; target: number | 'new' }
-export type SetupState = { draft?: Draft; catalog: CatalogState; status?: Status; confirm?: Confirm }
+// What the form opens next: a stored entry, a blank one, or a template.
+export type Target = number | 'new' | { template: string }
+export type Confirm = { kind: 'remove' } | { kind: 'switch'; target: Target }
+// templatesOpen: the templates fold is open; with no specialists it has no fold.
+export type SetupState = { draft?: Draft; catalog: CatalogState; status?: Status; confirm?: Confirm; templatesOpen?: true }
 
-const fieldsOf = (s: Specialist): Fields => ({ name: s.name, model: s.model, effort: s.effort ?? '', when: s.when, instructions: s.instructions ?? '' })
+const fieldsOf = (s: Specialist): Fields => ({ name: s.name, model: s.model, effort: s.effort ?? '', when: s.when, skills: (s.skills ?? []).join(', ') })
 
 // An entry that does not parse opens as a blank draft on the first listed model,
 // so the model the screen shows is the one a Save writes.
@@ -116,7 +124,33 @@ export function draftFor(index: number, entries: unknown[], models: CatalogModel
 
 export function blankDraft(index: number, models: CatalogModel[], prefill: Partial<Fields> = {}): Draft {
   const model = models.find(m => m.listed)?.slug ?? ''
-  return { index, baseline: '', name: '', model, effort: '', when: '', instructions: '', ...prefill }
+  return { index, baseline: '', name: '', model, effort: '', when: '', skills: '', ...prefill }
+}
+
+// Starting points the empty screen offers. Each follows the skill of its own
+// name that the mod ships under specialists/; the model is left to the user's
+// Codex, so the draft takes the first listed one like Add does.
+export const TEMPLATES: Pick<Fields, 'name' | 'when'>[] = [
+  { name: 'bug-fixer', when: 'A bug reproduces, the expected behaviour is clear, and the fix stands apart from the current work.' },
+  { name: 'ci-fixer', when: 'A CI job fails on a named revision and the fix belongs in code, config or tests, not in the CI provider.' },
+  { name: 'refactorer', when: 'A behaviour-preserving restructure is named: extract, rename, move, split a module, or remove duplication across three or more sites.' },
+  { name: 'test-writer', when: 'The task is to add or extend tests for existing behaviour that has a spec, a documented contract, or a confirmed expected output.' },
+  { name: 'test-pruner', when: 'Tests in a named area duplicate stronger tests, re-assert the implementation, or keep test-only seams alive, and need pruning.' },
+  { name: 'docs-updater', when: 'Docs must be updated or restructured to match code that already changed: README, reference pages, CLI help or config docs.' },
+]
+
+export function templateDraft(name: string, index: number, models: CatalogModel[]): Draft | undefined {
+  const template = TEMPLATES.find(t => t.name === name)
+  return template ? blankDraft(index, models, { ...template, skills: template.name }) : undefined
+}
+
+// The draft a press opens: a stored entry, a blank one, or a template.
+export function draftAt(target: Target, entries: unknown[], models: CatalogModel[]): Draft {
+  if (target === 'new') return blankDraft(entries.length, models)
+  if (typeof target === 'number') return draftFor(target, entries, models)
+  const draft = templateDraft(target.template, entries.length, models)
+  if (!draft) throw new Error(`no template named ${target.template}`)
+  return draft
 }
 
 export function withModel(draft: Draft, slug: string, models: CatalogModel[]): { draft: Draft; message: string } {
@@ -146,13 +180,18 @@ export type EditorView = {
   models: 'loading' | 'failed' | 'ready'
   modelOptions: Option[]; effortOptions: Option[]
   // whenCount: the use-when's length against its limit, shown on the field's label line.
-  effortHelp: string; whenCount: string; whenHelp: string; instructionsHelp: string
+  effortHelp: string; whenCount: string; whenHelp: string; skillsHelp: string
+  // The typed skills that no folder holds, or '' when every one is found.
+  skillsMissing: string
 }
 export type SetupView = {
   header: string
   roster: RosterEntry[]
   columns: Columns
   empty?: string
+  // The templates not yet used by name, as a table; each row opens a new draft.
+  // fold: once specialists exist, a toggle that shows or hides the table.
+  templates?: { nameWidth: number; rows: { name: string; when: string; zebra: boolean }[]; fold?: { label: string; open: boolean } }
   // Why the stored list could not be read; Save and Remove refuse while it stands.
   problem?: string
   editor?: EditorView
@@ -179,12 +218,12 @@ function savedFields(draft: Draft): Fields | undefined {
 
 export function isDirty(draft: Draft): boolean {
   const saved = savedFields(draft)
-  if (!saved) return draft.name.trim() !== '' || draft.when.trim() !== '' || draft.instructions.trim() !== ''
+  if (!saved) return draft.name.trim() !== '' || draft.when.trim() !== '' || draft.skills.trim() !== ''
   return saved.name !== draft.name || saved.model !== draft.model || saved.effort !== draft.effort ||
-    saved.when !== draft.when || saved.instructions !== draft.instructions
+    saved.when !== draft.when || saved.skills !== draft.skills
 }
 
-function editorView(draft: Draft, catalog: CatalogState, entries: unknown[]): EditorView {
+function editorView(draft: Draft, catalog: CatalogState, entries: unknown[], installed: string[]): EditorView {
   const models = 'models' in catalog ? catalog.models : []
   const model = models.find(m => m.slug === draft.model)
   const listed = [...models.filter(m => m.listed), ...models.filter(m => !m.listed)]
@@ -192,6 +231,7 @@ function editorView(draft: Draft, catalog: CatalogState, entries: unknown[]): Ed
   const name = savedName(entries, draft.index)
   const saved = parseSpecialist(entries[draft.index])
   const toggle = removable && !('error' in saved) ? (saved.enabled === false ? 'Enable' : 'Disable') : undefined
+  const missing = skillNames(draft.skills).filter(name => !installed.includes(name))
   let effortHelp = ''
   if (model) effortHelp = draft.effort ? model.effortHelp[draft.effort] ?? '' : `Your Codex config decides; this model's own default is ${model.defaultEffort}`
   return {
@@ -206,7 +246,8 @@ function editorView(draft: Draft, catalog: CatalogState, entries: unknown[]): Ed
     effortHelp,
     whenCount: `${draft.when.length}/${WHEN_MAX}`,
     whenHelp: 'Claude reads this to decide when to offer this specialist.',
-    instructionsHelp: 'Sent to the specialist before each new task. Blank means it just follows the task.',
+    skillsHelp: 'Comma-separated names from ~/.claude/skills, ~/.codex/skills, ~/.agents/skills or the templates. Each SKILL.md opens every new task.',
+    skillsMissing: missing.length > 0 ? `not installed: ${missing.join(', ')}` : '',
   }
 }
 
@@ -215,11 +256,12 @@ function confirmView(setup: SetupState, entries: unknown[]): SetupView['confirm'
   if (!confirm || !draft) return undefined
   const current = savedName(entries, draft.index) ?? (draft.name || 'this draft')
   if (confirm.kind === 'remove') return { text: `Remove ${current}? Claude can no longer offer it.`, yes: `Remove ${current}`, no: 'Keep it' }
-  const target = confirm.target === 'new' ? 'add new' : `open ${savedName(entries, confirm.target) ?? `specialist ${confirm.target + 1}`}`
+  const to = confirm.target
+  const target = to === 'new' ? 'add new' : typeof to === 'number' ? `open ${savedName(entries, to) ?? `specialist ${to + 1}`}` : `use ${to.template}`
   return { text: `${current} has unsaved changes.`, yes: `Discard and ${target}`, no: 'Keep editing' }
 }
 
-export const HEADERS = { name: 'NAME', model: 'MODEL', effort: 'EFFORT', when: 'USE WHEN' }
+export const HEADERS = { name: 'NAME', model: 'MODEL', effort: 'EFFORT', when: 'USE WHEN', template: 'TEMPLATE' }
 // The table's geometry: a swatch, then each column's widest text plus PAD,
 // then a bar before the next column.
 export const SWATCH_WIDTH = 2
@@ -262,18 +304,33 @@ function columnsOf(roster: RosterEntry[]): Columns {
   }
 }
 
+function templatesView(roster: RosterEntry[], isOpen: boolean): SetupView['templates'] {
+  const taken = new Set(roster.map(row => row.name))
+  const left = TEMPLATES.filter(t => !taken.has(t.name))
+  if (left.length === 0) return undefined
+  const rows = left.map((t, at) => ({ name: t.name, when: t.when, zebra: at % 2 === 1 }))
+  const nameWidth = Math.max(HEADERS.template.length, ...left.map(t => t.name.length))
+  if (roster.length === 0) return { nameWidth, rows }
+  return { nameWidth, rows, fold: { label: `Templates (${left.length}) ${isOpen ? '▾' : '▸'}`, open: isOpen } }
+}
+
 const isOff = (row: RosterEntry) => row.kind === 'ok' && row.off === true
 
-export function setupView(setup: SetupState, entries: unknown[], problem?: string): SetupView {
+// installed: every skill name found; until the folders are read, nothing is named missing.
+export function setupView(setup: SetupState, entries: unknown[], problem?: string, installed?: string[]): SetupView {
   const roster = entries.map((entry, index) => rosterRow(entry, index, setup.draft?.index === index))
+  const templates = templatesView(roster, setup.templatesOpen === true)
   const off = roster.filter(isOff).length
   return {
     header: `SPECIALISTS (${roster.length}${off > 0 ? ` · ${off} off` : ''})`,
     roster,
     columns: columnsOf(roster),
     ...(problem ? { problem } : {}),
-    ...(roster.length === 0 && !problem ? { empty: 'No specialists yet. Add one, and Claude offers it when a task matches its use-when.' } : {}),
-    ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, entries) } : {}),
+    ...(roster.length === 0 && !problem ? {
+      empty: 'No specialists yet. A specialist is a Codex agent that works on its own branch. Pick a template, add your own, or describe one to Claude.',
+    } : {}),
+    ...(templates ? { templates } : {}),
+    ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, entries, installed ?? skillNames(setup.draft.skills)) } : {}),
     ...(setup.confirm ? { confirm: confirmView(setup, entries) } : {}),
     ...(setup.status ? { status: setup.status } : {}),
   }
@@ -281,7 +338,7 @@ export function setupView(setup: SetupState, entries: unknown[], problem?: strin
 
 const SET_ASIDE: Status = { kind: 'note', text: 'An earlier draft could not be read and was set aside.' }
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const DRAFT_TEXT = ['baseline', 'name', 'model', 'effort', 'when', 'instructions'] as const
+const DRAFT_TEXT = ['baseline', 'name', 'model', 'effort', 'when', 'skills'] as const
 
 const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every(item => typeof item === 'string')
 
@@ -319,8 +376,8 @@ function readDraft(v: unknown): Draft | undefined {
     if (typeof value !== 'string') return undefined
     text[field] = value
   }
-  const { baseline = '', name = '', model = '', effort = '', when = '', instructions = '' } = text
-  return { index: v.index, baseline, name, model, effort, when, instructions }
+  const { baseline = '', name = '', model = '', effort = '', when = '', skills = '' } = text
+  return { index: v.index, baseline, name, model, effort, when, skills }
 }
 
 function readStatus(v: unknown): Status | undefined {
@@ -332,6 +389,8 @@ function readConfirm(v: unknown): Confirm | undefined {
   if (!isRecord(v)) return undefined
   if (v.kind === 'remove') return { kind: 'remove' }
   if (v.kind === 'switch' && (v.target === 'new' || (typeof v.target === 'number' && Number.isInteger(v.target)))) return { kind: 'switch', target: v.target }
+  const template = isRecord(v.target) ? v.target.template : undefined
+  if (v.kind === 'switch' && typeof template === 'string' && TEMPLATES.some(t => t.name === template)) return { kind: 'switch', target: { template } }
   return undefined
 }
 
@@ -350,5 +409,5 @@ export function restoreSetup(value: unknown, entries: unknown[]): SetupState | u
   }
   const status = readStatus(value.status)
   const confirm = readConfirm(value.confirm)
-  return { catalog, ...(draft ? { draft } : {}), ...(status ? { status } : {}), ...(confirm ? { confirm } : {}) }
+  return { catalog, ...(draft ? { draft } : {}), ...(status ? { status } : {}), ...(confirm ? { confirm } : {}), ...(value.templatesOpen === true ? { templatesOpen: true as const } : {}) }
 }

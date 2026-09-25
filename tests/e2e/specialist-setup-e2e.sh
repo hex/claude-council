@@ -90,7 +90,7 @@ BEFORE="$(jq -r '.pluginConfigs["claude-council@inline"].options.specialists // 
 INDEX="$(printf '%s' "$BEFORE" | jq 'length')"
 # Longer than a line of the form at this width, so the field wraps it.
 WHEN='e2e check alpha bravo charlie delta echo foxtrot golf hotel end-mark'
-WANT="{\"effort\":\"max\",\"instructions\":\"say e2e first\",\"model\":\"gpt-6-luna\",\"name\":\"e2e\",\"when\":\"$WHEN\"}"
+WANT="{\"effort\":\"max\",\"model\":\"gpt-6-luna\",\"name\":\"e2e\",\"skills\":[\"test-writer\"],\"when\":\"$WHEN\"}"
 
 tmux new-session -d -s "$SESSION" -x 160 -y 45 -c "$ROOT" \
     "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 $HOME/.local/bin/claude --plugin-dir $ROOT --debug-file $LOG"
@@ -114,10 +114,10 @@ focus_on effort; pick max
 focus_on when; tmux send-keys -t "$SESSION" -l "$WHEN"; sleep 1
 screen | grep -qF 'end-mark' || fail "the end of a long use-when is hidden while it is typed"
 key Enter
-[ "$(focused)" = instructions ] || fail "Enter in use-when moved focus to '$(focused)', expected instructions"
-tmux send-keys -t "$SESSION" -l 'say e2e first'; sleep 1
+[ "$(focused)" = skills ] || fail "Enter in use-when moved focus to '$(focused)', expected skills"
+tmux send-keys -t "$SESSION" -l 'test-writer'; sleep 1
 key Enter
-[ "$(focused)" = save ] || fail "Enter in instructions moved focus to '$(focused)', expected save"
+[ "$(focused)" = save ] || fail "Enter in skills moved focus to '$(focused)', expected save"
 screen > "$OUT/3-filled.txt"
 screen | grep -qF 'e2e check' || fail "the use-when text was lost after Enter"
 
