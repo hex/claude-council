@@ -141,6 +141,15 @@ export function templateDraft(name: string, index: number, models: CatalogModel[
   return template ? blankDraft(index, models, template) : undefined
 }
 
+// The draft a press opens: a stored entry, a blank one, or a template.
+export function draftAt(target: Target, entries: unknown[], models: CatalogModel[]): Draft {
+  if (target === 'new') return blankDraft(entries.length, models)
+  if (typeof target === 'number') return draftFor(target, entries, models)
+  const draft = templateDraft(target.template, entries.length, models)
+  if (!draft) throw new Error(`no template named ${target.template}`)
+  return draft
+}
+
 export function withModel(draft: Draft, slug: string, models: CatalogModel[]): { draft: Draft; message: string } {
   const offered = models.find(m => m.slug === slug)?.efforts ?? []
   if (draft.effort === '' || offered.includes(draft.effort)) return { draft: { ...draft, model: slug }, message: '' }

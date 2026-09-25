@@ -18,7 +18,7 @@ import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
-import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, templateDraft, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -203,10 +203,7 @@ async function openRow($: EngineInterface, state: PaneState, options: Record<str
     return
   }
   const entries = (await latestList($, state, options)).entries
-  const models = modelsOf(setup)
-  const draft = target === 'new' ? blankDraft(entries.length, models)
-    : typeof target === 'number' ? draftFor(target, entries, models)
-    : templateDraft(target.template, entries.length, models) ?? blankDraft(entries.length, models)
+  const draft = draftAt(target, entries, modelsOf(setup))
   await keepSetup($, state, { ...setup, draft, confirm: undefined, status: undefined })
 }
 

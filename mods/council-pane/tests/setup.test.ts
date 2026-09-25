@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, TEMPLATES, templateDraft, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, TEMPLATES, templateDraft, draftAt, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -178,6 +178,8 @@ test('a template opens as a new draft on the first listed model, and saves as it
     expect(checkSpecialist(draft, 0, context)).toEqual({ entry: { name: template.name, model: 'gpt-6-sol', when: template.when, instructions: template.instructions } })
   }
   expect(templateDraft('nope', 0, models)).toBeUndefined()
+  expect(draftAt({ template: 'test-writer' }, two, models)).toEqual({ index: 2, baseline: '', model: 'gpt-6-sol', effort: '', ...TEMPLATES[0] })
+  expect(() => draftAt({ template: 'nope' }, [], models)).toThrow('no template named nope')
 })
 
 test('the editor explains effort, use-when and instructions and counts the use-when', () => {
