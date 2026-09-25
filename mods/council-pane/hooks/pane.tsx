@@ -1133,7 +1133,7 @@ export const register: Register = (on, options) => {
               {entry.kind === 'broken' ? under('stored', entry.stored) : null}
             </Box>,
           ])}
-          <Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} />
+          <Box key="add-row" marginTop={view.roster.length > 0 ? 1 : 0}><Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} /></Box>
         </Box>
         {editor && draft ? (
           <Box key="editor-wrap" flexDirection="column" marginTop={1}>
