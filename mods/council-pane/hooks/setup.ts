@@ -272,7 +272,7 @@ export function setupView(setup: SetupState, entries: unknown[], problem?: strin
     roster,
     columns: columnsOf(roster),
     ...(problem ? { problem } : {}),
-    ...(roster.length === 0 && !problem ? { empty: 'No specialists yet. Add one, and Claude offers it when a task matches its use-when.' } : {}),
+    ...(roster.length === 0 && !problem ? { empty: 'No specialists yet. Add one, or describe one to Claude, and Claude offers it when a task matches its use-when. The mod README has two recipes to start from.' } : {}),
     ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, entries) } : {}),
     ...(setup.confirm ? { confirm: confirmView(setup, entries) } : {}),
     ...(setup.status ? { status: setup.status } : {}),

@@ -164,7 +164,7 @@ test('an entry that does not parse stays in the roster with its problem and what
 })
 
 test('with no specialists the roster says what to do', () => {
-  expect(setupView(ready, []).empty).toBe('No specialists yet. Add one, and Claude offers it when a task matches its use-when.')
+  expect(setupView(ready, []).empty).toBe('No specialists yet. Add one, or describe one to Claude, and Claude offers it when a task matches its use-when. The mod README has two recipes to start from.')
   expect(setupView(ready, []).header).toBe('SPECIALISTS (0)')
 })
 

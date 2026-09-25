@@ -79,6 +79,15 @@ Disable, set apart from Save and Discard, switches a specialist off at once with
 
 You can also describe one to Claude, for example "add a specialist for Postgres migrations on gpt-6-luna, high effort". Claude opens the same screen with the fields filled in, and the screen saves nothing until you press Save. This works with no specialists set up yet. If you have unsaved changes on the screen, it opens on them instead, and the mod tells Claude to wait until you save or discard them.
 
+### Recipes
+
+The mod ships no specialists. These two are a place to start. Type the name, use-when and instructions into the form, or give them to Claude as a description. Pick the model and effort on the screen. They depend on your Codex account, so the recipes name none.
+
+| Name | Use when | Instructions |
+|---|---|---|
+| `test-writer` | The task is to add or extend tests for existing behaviour that has a spec. | Follow the repository's test layout and helpers. Take expected values from the spec, not from what the code returns. Change production code only when you cannot write the test otherwise, and say why. |
+| `bug-fixer` | A bug reproduces, the expected behaviour is clear, and the fix stands apart from the current work. | Reproduce the failure first and name the failing test or command. Find the cause before changing code. Make the smallest fix. Never weaken or skip a test to make it pass. Report what you ran. |
+
 ### Hand edits
 
 The list lives in one settings field, `specialists`, which `/config` does not show. It holds a JSON list with one object per specialist:
