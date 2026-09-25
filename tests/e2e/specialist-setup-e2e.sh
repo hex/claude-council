@@ -9,26 +9,18 @@ OUT="$(mktemp -d "${TMPDIR:-/tmp}/specialist-setup-e2e.XXXXXX")"
 SESSION=specialist-setup-e2e
 LOG="$OUT/debug.log"
 SETTINGS="$HOME/.claude/settings.json"
-# The plugin store is shared with every live session of the plugin; a draft
-# there is someone's unsaved work, and this run would type into it.
-for store in "$HOME"/.claude/plugins/store/claude-council_inline-*.json; do
-    [ -f "$store" ] || continue
-    if jq -e '.["specialist-setup"].draft != null' "$store" >/dev/null; then
-        echo "FAIL: a /specialists draft is open in $store; save or discard it first" >&2
-        exit 1
-    fi
-done
 cp "$SETTINGS" "$OUT/settings.before"
-# The screen's draft and the shared copy of the list live in the store; a run
-# that stops part-way would leave its own draft there for every session.
-STORE_KEYS='["specialist-setup", "specialists-latest"]'
+# The shared copy of the list and each session's screen state live in the
+# plugin store; a run that stops part-way would leave its own there.
+OURS='startswith("specialist-setup") or . == "specialists-latest"'
 for store in "$HOME"/.claude/plugins/store/claude-council_inline-*.json; do
     [ -f "$store" ] || continue
-    jq --argjson keys "$STORE_KEYS" '[$keys[] as $k | {key: $k, value: .[$k]}] | from_entries' "$store" > "$OUT/store.$(basename "$store")"
+    jq "with_entries(select(.key | $OURS))" "$store" > "$OUT/store.$(basename "$store")"
 done
 
-# Puts back only the specialists field and the screen's store keys, so a live
-# session's other settings and store entries written meanwhile survive.
+# Puts back only the specialists field and the list's shared copy, and drops
+# the screen state this run's session added; a live session's own screen
+# state and other settings written meanwhile survive.
 restore() {
     tmux kill-session -t "$SESSION" 2>/dev/null || true
     local before saved store
@@ -38,7 +30,10 @@ restore() {
     for saved in "$OUT"/store.*; do
         [ -f "$saved" ] || continue
         store="$HOME/.claude/plugins/store/${saved##*/store.}"
-        jq --slurpfile before "$saved" 'reduce ($before[0] | to_entries[]) as $e (.; if $e.value == null then del(.[$e.key]) else .[$e.key] = $e.value end)' "$store" > "$OUT/store.restored"
+        jq --slurpfile before "$saved" '$before[0] as $b
+            | with_entries(select((.key | startswith("specialist-setup") | not) or (.key as $k | $b | has($k))))
+            | if $b | has("specialists-latest") then .["specialists-latest"] = $b["specialists-latest"] else del(.["specialists-latest"]) end' \
+            "$store" > "$OUT/store.restored"
         cat "$OUT/store.restored" > "$store"
     done
 }
