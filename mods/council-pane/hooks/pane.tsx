@@ -252,7 +252,7 @@ async function discardSetup($: EngineInterface, state: PaneState): Promise<void>
 
 // A list set by hand (`/config specialists=...`) gets the same checks as a
 // Save, entry by entry; the first problem is the refusal.
-async function handEditDenial($: EngineInterface, state: PaneState, value: string): Promise<string | undefined> {
+async function handEditDenial($: EngineInterface, value: string): Promise<string | undefined> {
   const { entries, problem } = specialistEntries({ [LIST_FIELD]: value })
   if (problem) return problem
   if (entries.length === 0) return undefined
@@ -925,7 +925,7 @@ export const register: Register = (on, options) => {
   // The setup screen's own writes skip this hook (the engine does not run a
   // plugin's hooks for its own $.config.set); a list set by hand lands here.
   on('config.set', { key: LIST_KEY }, async ($, e, next) => {
-    const denial = await handEditDenial($, state, typeof e.value === 'string' ? e.value : '')
+    const denial = await handEditDenial($, typeof e.value === 'string' ? e.value : '')
     return denial ? { deny: denial } : next(e)
   })
 
@@ -972,10 +972,10 @@ export const register: Register = (on, options) => {
             <Box key={`entry:${entry.index}`} flexDirection="column">
               <Box key="line" flexDirection="row">
                 <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />
-                <Text key="model" color={MODEL_RGB}>{entry.model ? `  ${entry.model}` : ''}</Text>
-                <Text key="detail" dimColor wrap="truncate-end">{`  ${entry.detail}`}</Text>
-                {entry.editing ? <Text key="gap">{'  '}</Text> : null}
-                {entry.editing ? <Text key="editing" bold color="white" backgroundColor={COUNCIL_RGB}>{' EDITING '}</Text> : null}
+                {/* Only the detail gives way on a narrow pane; a long one is cut, never the model. */}
+                <Box key="model" flexShrink={0}><Text key="text" color={MODEL_RGB}>{entry.model ? `  ${entry.model}` : ''}</Text></Box>
+                <Box key="detail" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{`  ${entry.detail}`}</Text></Box>
+                {entry.editing ? <Box key="editing" flexShrink={0}><Text key="gap">{'  '}</Text><Text key="text" bold color="white" backgroundColor={COUNCIL_RGB}>{' EDITING '}</Text></Box> : null}
               </Box>
               {entry.problem
                 ? <Text key="problem" color={STATUS_RGB.error} wrap="wrap">{`  ${entry.problem}`}</Text>
