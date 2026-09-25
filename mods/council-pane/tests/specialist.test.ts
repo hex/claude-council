@@ -193,13 +193,13 @@ test('only the go label proceeds; Other text goes back to the model', () => {
 
 test('the prompt puts the skills first and the ground rules last; without skills it opens on the task', () => {
   expect(specialistPrompt('Follow these skills.\n\n## Skill: x (folder: /s/x)\n\nBody.\n\n', 'add the index')).toBe(
-    'Follow these skills.\n\n## Skill: x (folder: /s/x)\n\nBody.\n\nTask:\nadd the index\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
+    'Follow these skills.\n\n## Skill: x (folder: /s/x)\n\nBody.\n\nTask:\nadd the index\n\nWork only inside this directory, which is already this task\'s own git branch: do not create or switch branches. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
   )
   expect(specialistPrompt('', 'harden login')).toBe(
-    'Task:\nharden login\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
+    'Task:\nharden login\n\nWork only inside this directory, which is already this task\'s own git branch: do not create or switch branches. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
   )
   expect(specialistPrompt(' \n', 'harden login')).toBe(
-    'Task:\nharden login\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
+    'Task:\nharden login\n\nWork only inside this directory, which is already this task\'s own git branch: do not create or switch branches. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
   )
 })
 

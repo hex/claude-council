@@ -262,7 +262,7 @@ export function dialogOutcome(answer: string | undefined, go: string, stop: stri
 
 // opening: skillsOpening's text, which already ends in a blank line; '' for none.
 export function specialistPrompt(opening: string, task: string): string {
-  return `${opening.trim() === '' ? '' : opening}Task:\n${task}\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.`
+  return `${opening.trim() === '' ? '' : opening}Task:\n${task}\n\nWork only inside this directory, which is already this task's own git branch: do not create or switch branches. Run the tests you touch. Do not commit: the tool commits your changes after each round.`
 }
 
 export function followUpRefusal(record: RunRecord | undefined, id: string, worktreeExists: boolean): string | undefined {
