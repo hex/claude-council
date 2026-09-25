@@ -1169,21 +1169,13 @@ export const register: Register = (on, options) => {
               <Box key="actions" flexDirection="row" marginTop={1}>
                 {/* The form's own pair first; the specialist's on/off apart from it;
                     Remove last, so a Tab too many never lands on it from Save. */}
-                {/* Save is the one filled control: the primary action. A Button takes
-                    no colour at rest, so the fill is its Box's; hover styles its label. */}
-                <Box key="save-box" backgroundColor={FILL.chip}>
-                  <Button key="save" label="Save" hover={{ color: COLOR.onFill, bold: true }} onPress={press(() => saveSetup($, state, options))} />
-                </Box>
+                <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
                 <Text key="gap-1">{'  '}</Text>
                 <Button key="discard" dimColor label={editor.discardLabel} onPress={press(() => discardSetup($, state))} />
                 {editor.toggle ? <Text key="gap-toggle">{'      '}</Text> : null}
                 {editor.toggle ? <Button key="toggle" label={editor.toggle} onPress={press(() => toggleSetup($, state, options))} /> : null}
                 {editor.removable ? <Text key="gap-2">{'  '}</Text> : null}
-                {editor.removable ? (
-                  <Box key="remove-box">
-                    <Button key="remove" dimColor label="Remove" hover={{ color: COLOR.danger }} onPress={press(() => askSetup($, state, { kind: 'remove' }))} />
-                  </Box>
-                ) : null}
+                {editor.removable ? <Button key="remove" dimColor label="Remove" onPress={press(() => askSetup($, state, { kind: 'remove' }))} /> : null}
               </Box>
             </Box>
             <Text key="editor-bottom" color={COLOR.accent} wrap="truncate">{'\u2500'.repeat(e.props.bodyColumns)}</Text>
