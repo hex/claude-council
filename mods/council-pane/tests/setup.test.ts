@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, wrapWords, whenWidth, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, wrapWords, whenWidth, fieldPreview, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -310,4 +310,11 @@ test('the use-when column gets what the frame leaves after the fixed columns, ne
   // frame 4 + swatch 2 + (name 4 + 1) + bar 2 + (model 10 + 1) + bar 2 + (effort 6 + 1) + bar 2 = 35
   expect(whenWidth({ name: 4, model: 10, effort: 6 }, 60)).toBe(25)
   expect(whenWidth({ name: 4, model: 10, effort: 6 }, 30)).toBe(1)
+})
+
+test('a field value too long for its one-line field is shown whole, wrapped under it; one that fits is not', () => {
+  // A 40-wide pane: frame 4 + label 15 leaves 21 for the wrapped lines, and the hint's 2 more leave 19 for the field.
+  expect(fieldPreview('auth, crypto', 40)).toBeUndefined()
+  expect(fieldPreview('x'.repeat(19), 40)).toBeUndefined()
+  expect(fieldPreview('Postgres migrations and schema changes x', 40)).toEqual(['Postgres migrations', 'and schema changes x'])
 })

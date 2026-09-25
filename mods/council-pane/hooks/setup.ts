@@ -234,6 +234,19 @@ export function whenWidth(columns: Columns, width: number): number {
   return Math.max(1, width - fixed)
 }
 
+// A form field: its label with the separator the engine draws, and the Enter
+// hint beside a focused field.
+const FIELD_LABEL = 15
+export const SUBMIT_HINT = '\u23ce'
+const HINT = SUBMIT_HINT.length + 1
+
+// The engine's Input is one line and cuts a longer value at its end, where
+// typing happens; such a value is drawn whole, wrapped, under the field.
+export function fieldPreview(value: string, width: number): string[] | undefined {
+  const lines = width - FRAME - FIELD_LABEL
+  return value.length > lines - HINT ? wrapWords(value, Math.max(1, lines)) : undefined
+}
+
 // Breaks text into lines no wider than width, at spaces where it can; a word
 // longer than a line is cut across lines. Every character stays.
 export function wrapWords(text: string, width: number): string[] {
