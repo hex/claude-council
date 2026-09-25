@@ -41,7 +41,7 @@ Without the mod the variable is never set and the scripts behave as before.
 - A banner per answer with the model and the time it took. Errors show in red.
 - Tables wider than the pane are rewritten as one record per row. Claude Code sizes tables to the terminal, so a wide one wraps into noise otherwise.
 - The synthesis, below the answers, once Claude has written it. Press `0` to jump to it.
-- While a run is live, a `COUNCIL` band above the prompt shows a thin line and a percent that fill as providers finish, an error counting as finished, and the seconds since the run started, with a button to open the pane. The pane lists who is still out.
+- While a run is live, a `COUNCIL` band above the prompt reads like the specialist band: how many providers finished (`3 of 6`, an error counting as finished), a thin line that fills with them, an `m:ss` clock since the run started, the latest event (`gemini answered`, `asking kimi`), and a button to open the pane. On a narrow pane the event gives way first. The pane lists who is still out.
 - `retry` and `skip` buttons with a countdown bar when a provider fails. They sit in the band above the prompt, so they stay in view while the pane scrolls. Click them, or press ctrl+x tab to give the band the keys and then `r` or `s`. Typing goes to the prompt until you do.
 - Press `1` to `9` in the focused pane to jump to that provider's answer.
 - When a run ends, a `COUNCIL` notice sits above the prompt for 20 seconds with buttons to open the pane or dismiss it. This covers `--async` jobs too, and the notice names the job.

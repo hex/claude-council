@@ -9,6 +9,8 @@ export type RunView = {
   errors: Record<string, string>
   colors: Record<string, string>
   isDone: boolean
+  // The status log's last event in words, for the band.
+  latest?: string
   synthesis?: string
   // When the pane first saw each provider querying; the status log carries no clock.
   queryingSinceMs?: Record<string, number>

@@ -1,7 +1,7 @@
 // ABOUTME: Reads one snapshot of a run's watch dir: statuses, answers, errors, colors, and whether it is done
 // ABOUTME: Takes the engine's file access as a parameter so a scripted one can stand in
 
-import { parseStatus } from './status'
+import { lastEvent, parseStatus } from './status'
 import { parseColors, type RunView } from './view'
 
 export type Files = {
@@ -29,11 +29,14 @@ export async function readView(fs: Files, runDir: string): Promise<RunView> {
   // after it was seen are final, where a run ending mid-read would otherwise
   // be called done over a snapshot taken before its last answer.
   const isDone = await fs.exists(`${runDir}/.done`)
+  const status = await readText(fs, `${runDir}/status`)
+  const latest = lastEvent(status)
   return {
-    providers: parseStatus(await readText(fs, `${runDir}/status`)),
+    providers: parseStatus(status),
     responses: await readFolder(fs, `${runDir}/responses`, '.md'),
     errors: await readFolder(fs, `${runDir}/errors`, '.txt'),
     colors: parseColors(await readText(fs, `${runDir}/colors`)),
     isDone,
+    ...(latest ? { latest } : {}),
   }
 }
