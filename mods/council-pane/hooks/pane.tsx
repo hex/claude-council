@@ -46,8 +46,6 @@ const SETUP_COMMAND = 'specialists'
 // Every colour comes from theme.ts; DESIGN.md says which one serves what.
 const STATUS_FILL: Record<Status['kind'], string> = { saved: FILL.saved, error: FILL.error, note: FILL.note }
 const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: ' ERROR ', note: ' NOTE ' }
-// Help lines start under the field values: the labels are 13 wide plus ': '.
-const HELP_INDENT = ' '.repeat(15)
 // The settings field holding every specialist, as $.config names it; hidden
 // from the /config menu, since /specialists edits it.
 const LIST_KEY = `claude-council.${LIST_FIELD}`
@@ -1067,17 +1065,14 @@ export const register: Register = (on, options) => {
       </Box>
     )
     const help = (key: string, text: string) => (
-      <Box key={key} flexDirection="row">
-        <Box key="indent" width={HELP_INDENT.length} flexShrink={0}><Text key="pad">{HELP_INDENT}</Text></Box>
-        <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
-      </Box>
+      <Text key={key} dimColor wrap="truncate-end">{text}</Text>
     )
     return (
-      <Box key="setup" flexDirection="column" width={width}>
+      <Box key="setup" flexDirection="column" width={e.props.bodyColumns}>
         {/* The roster: a table in one frame. A row's own colour marks its swatch,
             every other row is shaded, and a second line carries its instructions. */}
         <Text key="roster-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${view.header} `}</Text>
-        <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1}>
+        <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={width}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
           {view.problem ? <Text key="problem" color={COLOR.danger} wrap="wrap">{`The stored list cannot be read: ${view.problem}. Save and Remove are off until it is fixed with /config.`}</Text> : null}
           {view.roster.length > 0 ? (
@@ -1137,22 +1132,30 @@ export const register: Register = (on, options) => {
               <Text key="editor-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${editor.title} `}</Text>
               {editor.unsaved ? <Text key="unsaved" color={COLOR.warning}>{'  unsaved changes'}</Text> : null}
             </Box>
-            <Box key="editor" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1}>
-              <Input key={`name.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />
-              <Select key="model" label="Model        " value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
+            {/* No frame and each text field under its own label: Claude Code sizes a
+                focused field to the whole pane, so anything beside it cuts the text. */}
+            <Text key="editor-top" color={COLOR.accent} wrap="truncate">{'\u2500'.repeat(e.props.bodyColumns)}</Text>
+            <Box key="editor" flexDirection="column">
+              <Text key="name-label" bold>Name</Text>
+              <Input key={`name.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />
+              <Text key="model-label" bold>Model</Text>
+              <Select key="model" value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
                 onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
               {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
               {editor.models === 'failed' ? (
                 <Box key="models-failed" flexDirection="row">
-                  <Text key="failed" color={COLOR.danger}>{`${HELP_INDENT}could not load models  `}</Text>
+                  <Text key="failed" color={COLOR.danger}>{'could not load models  '}</Text>
                   <Button key="retry" label="Retry" onPress={press(() => loadCatalog($, state))} />
                 </Box>
               ) : null}
-              <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
+              <Text key="effort-label" bold>Effort</Text>
+              <Select key="effort" value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
               {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
-              <Input key={`when.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />
+              <Text key="when-label" bold>Use when</Text>
+              <Input key={`when.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />
               {help('when-help', editor.whenHelp)}
-              <Input key={`instructions.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} label="Instructions " placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />
+              <Text key="instructions-label" bold>Instructions</Text>
+              <Input key={`instructions.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />
               {help('instructions-help', editor.instructionsHelp)}
               <Box key="actions" flexDirection="row">
                 <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
@@ -1164,6 +1167,7 @@ export const register: Register = (on, options) => {
                 <Button key="discard" label={editor.discardLabel} onPress={press(() => discardSetup($, state))} />
               </Box>
             </Box>
+            <Text key="editor-bottom" color={COLOR.accent} wrap="truncate">{'\u2500'.repeat(e.props.bodyColumns)}</Text>
           </Box>
         ) : null}
         {view.confirm ? (
