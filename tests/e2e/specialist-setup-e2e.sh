@@ -31,7 +31,12 @@ restore() {
 }
 trap restore EXIT
 
-fail() { echo "FAIL: $*" >&2; exit 1; }
+# Keeps the last screen, so a failed wait shows what was drawn instead.
+fail() {
+    tmux capture-pane -p -t "$SESSION" > "$OUT/fail.txt" 2>/dev/null || true
+    echo "FAIL: $* (screen: $OUT/fail.txt)" >&2
+    exit 1
+}
 # The engine drops keys sent faster than it draws; one second apiece is enough.
 key() { tmux send-keys -t "$SESSION" "$@"; sleep 1; }
 screen() { tmux capture-pane -p -t "$SESSION"; }
@@ -74,8 +79,6 @@ pick() {
 
 BEFORE="$(jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$OUT/settings.before")"
 INDEX="$(printf '%s' "$BEFORE" | jq 'length')"
-# How /config names the hidden row in a typed /config key=value.
-CONFIG_KEY="${SPECIALIST_CONFIG_KEY:-specialists}"
 WANT='{"effort":"max","instructions":"say e2e first","model":"gpt-6-luna","name":"e2e","when":"e2e check"}'
 
 tmux new-session -d -s "$SESSION" -x 160 -y 45 -c "$ROOT" \
@@ -124,9 +127,17 @@ wait_for "Removed e2e."
 echo "6. a list set by hand is checked like a Save"
 key Escape
 wait_for '❯'
-tmux send-keys -t "$SESSION" -l "/config $CONFIG_KEY=nope"; key Enter
-wait_for "the specialists setting is not JSON: nope"
+tmux send-keys -t "$SESSION" -l "/config claude-council.specialists=nope"; key Enter
+# The engine shows a plugin's refusal reason only when no Remote Control
+# bridge may be live; otherwise it prints a fixed line in its place.
+REASON="the specialists setting is not JSON: nope"
+WITHHELD="Couldn't save this setting (detail withheld on this connection)."
+tick=0
+until screen | grep -qF -e "$REASON" -e "$WITHHELD"; do
+    tick=$((tick + 1)); [ "$tick" -lt 20 ] || fail "never saw '$REASON' or '$WITHHELD'"; sleep 1
+done
 screen > "$OUT/6-hand-edit.txt"
+grep -qF "claude-council (user) answered config.set without next()" "$LOG" || fail "the mod's config.set hook did not answer the hand edit"
 [ "$(entries | jq -c .)" = "$(printf '%s' "$BEFORE" | jq -c .)" ] || fail "the refused hand edit changed the list to $(entries)"
 
 echo "PASS ($OUT)"

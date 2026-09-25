@@ -281,7 +281,7 @@ async function discardSetup($: EngineInterface, state: PaneState): Promise<void>
   await keepSetup($, state, { catalog: currentSetup(state).catalog })
 }
 
-// A list set by hand (`/config specialists=...`) gets the same checks as a
+// A list set by hand (`/config claude-council.specialists=...`) gets the same checks as a
 // Save, entry by entry; the first problem is the refusal.
 async function handEditDenial($: EngineInterface, value: unknown): Promise<string | undefined> {
   const { entries, problem } = specialistEntries({ [LIST_FIELD]: value })
