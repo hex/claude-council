@@ -53,6 +53,8 @@ const SETUP_COMMAND = 'specialists'
 // under the pointer takes the selection's.
 const ZEBRA_BG = 'userMessageBackground'
 const SELECTED_BG = 'selectionBg'
+// The header takes the theme's subtle grey, a shade apart from both.
+const HEADER_BG = 'subtle'
 const SWATCH_WIDTH = 2
 // A column's cell is its widest text plus one space; a separator follows it.
 const PAD = 1
@@ -967,11 +969,9 @@ export const register: Register = (on, options) => {
     // the terminal hands the keyboard back to the prompt.
     // A table cell keeps its width; only the last column gives way.
     const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
-    // A dim bar between two columns; white on the header's fill.
-    const separator = (key: string, onHeader = false) => (
-      <Box key={key} width={SEPARATOR.length} flexShrink={0}>
-        {onHeader ? <Text key="text" color="white" dimColor>{SEPARATOR}</Text> : <Text key="text" dimColor>{SEPARATOR}</Text>}
-      </Box>
+    // A dim bar between two columns.
+    const separator = (key: string) => (
+      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" dimColor>{SEPARATOR}</Text></Box>
     )
     // A row's second line starts under the model column.
     const under = (key: string, text: string) => (
@@ -994,15 +994,15 @@ export const register: Register = (on, options) => {
         <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
           {view.roster.length > 0 ? (
-            <Box key="head" flexDirection="row" backgroundColor={COUNCIL_RGB}>
+            <Box key="head" flexDirection="row" backgroundColor={HEADER_BG}>
               {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
-              {cell('name', view.columns.name + PAD, <Text key="text" bold color="white">{HEADERS.name}</Text>)}
-              {separator('sep-1', true)}
-              {cell('model', view.columns.model + PAD, <Text key="text" bold color="white">{HEADERS.model}</Text>)}
-              {separator('sep-2', true)}
-              {cell('effort', view.columns.effort + PAD, <Text key="text" bold color="white">{HEADERS.effort}</Text>)}
-              {separator('sep-3', true)}
-              <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color="white" wrap="truncate-end">{HEADERS.when}</Text></Box>
+              {cell('name', view.columns.name + PAD, <Text key="text" bold>{HEADERS.name}</Text>)}
+              {separator('sep-1')}
+              {cell('model', view.columns.model + PAD, <Text key="text" bold>{HEADERS.model}</Text>)}
+              {separator('sep-2')}
+              {cell('effort', view.columns.effort + PAD, <Text key="text" bold>{HEADERS.effort}</Text>)}
+              {separator('sep-3')}
+              <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold wrap="truncate-end">{HEADERS.when}</Text></Box>
             </Box>
           ) : null}
           {view.roster.map(entry => (
