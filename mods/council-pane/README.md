@@ -79,9 +79,9 @@ Disable, set apart from Save and Discard, switches a specialist off at once with
 
 You can also describe one to Claude, for example "add a specialist for Postgres migrations on gpt-6-luna, high effort". Claude opens the same screen with the fields filled in, and the screen saves nothing until you press Save. This works with no specialists set up yet. If you have unsaved changes on the screen, it opens on them instead, and the mod tells Claude to wait until you save or discard them.
 
-### Recipes
+### Templates
 
-The mod ships no specialists. These two are a place to start. Type the name, use-when and instructions into the form, or give them to Claude as a description. Pick the model and effort on the screen. They depend on your Codex account, so the recipes name none.
+The mod ships no specialists. While you have none, the screen offers two templates under the empty table: `Use test-writer` and `Use bug-fixer`. Each opens a new form with the template's name, use-when and instructions, on the first model Codex lists. Pick the model and effort you want and press Save. The screen saves nothing before that, and over unsaved changes the button asks first. The templates name no model because the models depend on your Codex account.
 
 | Name | Use when | Instructions |
 |---|---|---|

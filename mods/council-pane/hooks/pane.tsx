@@ -18,7 +18,7 @@ import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
-import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, templateDraft, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -196,14 +196,17 @@ async function pickModel($: EngineInterface, state: PaneState, slug: string): Pr
 }
 
 // Opening another row, or a new one, over unsaved edits asks first.
-async function openRow($: EngineInterface, state: PaneState, options: Record<string, unknown>, target: number | 'new', force = false): Promise<void> {
+async function openRow($: EngineInterface, state: PaneState, options: Record<string, unknown>, target: Target, force = false): Promise<void> {
   const setup = currentSetup(state)
   if (!force && setup.draft && setup.draft.index !== target && isDirty(setup.draft)) {
     await keepSetup($, state, { ...setup, confirm: { kind: 'switch', target } })
     return
   }
   const entries = (await latestList($, state, options)).entries
-  const draft = target === 'new' ? blankDraft(entries.length, modelsOf(setup)) : draftFor(target, entries, modelsOf(setup))
+  const models = modelsOf(setup)
+  const draft = target === 'new' ? blankDraft(entries.length, models)
+    : typeof target === 'number' ? draftFor(target, entries, models)
+    : templateDraft(target.template, entries.length, models) ?? blankDraft(entries.length, models)
   await keepSetup($, state, { ...setup, draft, confirm: undefined, status: undefined })
 }
 
@@ -1091,6 +1094,15 @@ export const register: Register = (on, options) => {
         <Text key="roster-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${view.header} `}</Text>
         <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={width}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
+          {view.templates ? (
+            <Box key="templates" flexDirection="row" marginTop={1}>
+              {view.templates.map((name, at) => (
+                <Box key={`template:${name}`} marginLeft={at > 0 ? 1 : 0}>
+                  <Button key="use" label={`Use ${name}`} onPress={press(() => openRow($, state, options, { template: name }))} />
+                </Box>
+              ))}
+            </Box>
+          ) : null}
           {view.problem ? <Text key="problem" color={COLOR.danger} wrap="wrap">{`The stored list cannot be read: ${view.problem}. Save and Remove are off until it is fixed with /config.`}</Text> : null}
           {view.roster.length > 0 ? (
             <Box key="head" flexDirection="row" backgroundColor={FILL.header}>

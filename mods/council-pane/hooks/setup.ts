@@ -100,7 +100,9 @@ export function flipEntry(entries: unknown[], index: number): { entries: unknown
 export type Draft = Fields & { index: number; baseline: string }
 export type Status = { kind: 'saved' | 'error' | 'note'; text: string }
 // A question the screen asks inline before an action it cannot undo.
-export type Confirm = { kind: 'remove' } | { kind: 'switch'; target: number | 'new' }
+// What the form opens next: a stored entry, a blank one, or a template.
+export type Target = number | 'new' | { template: string }
+export type Confirm = { kind: 'remove' } | { kind: 'switch'; target: Target }
 export type SetupState = { draft?: Draft; catalog: CatalogState; status?: Status; confirm?: Confirm }
 
 const fieldsOf = (s: Specialist): Fields => ({ name: s.name, model: s.model, effort: s.effort ?? '', when: s.when, instructions: s.instructions ?? '' })
@@ -117,6 +119,26 @@ export function draftFor(index: number, entries: unknown[], models: CatalogModel
 export function blankDraft(index: number, models: CatalogModel[], prefill: Partial<Fields> = {}): Draft {
   const model = models.find(m => m.listed)?.slug ?? ''
   return { index, baseline: '', name: '', model, effort: '', when: '', instructions: '', ...prefill }
+}
+
+// Starting points the empty screen offers. They name no model: which ones exist
+// depends on the user's Codex, so the draft takes the first listed one like Add does.
+export const TEMPLATES: Pick<Fields, 'name' | 'when' | 'instructions'>[] = [
+  {
+    name: 'test-writer',
+    when: 'The task is to add or extend tests for existing behaviour that has a spec.',
+    instructions: "Follow the repository's test layout and helpers. Take expected values from the spec, not from what the code returns. Change production code only when you cannot write the test otherwise, and say why.",
+  },
+  {
+    name: 'bug-fixer',
+    when: 'A bug reproduces, the expected behaviour is clear, and the fix stands apart from the current work.',
+    instructions: 'Reproduce the failure first and name the failing test or command. Find the cause before changing code. Make the smallest fix. Never weaken or skip a test to make it pass. Report what you ran.',
+  },
+]
+
+export function templateDraft(name: string, index: number, models: CatalogModel[]): Draft | undefined {
+  const template = TEMPLATES.find(t => t.name === name)
+  return template ? blankDraft(index, models, template) : undefined
 }
 
 export function withModel(draft: Draft, slug: string, models: CatalogModel[]): { draft: Draft; message: string } {
@@ -153,6 +175,8 @@ export type SetupView = {
   roster: RosterEntry[]
   columns: Columns
   empty?: string
+  // Template names the empty screen offers; each opens a new draft.
+  templates?: string[]
   // Why the stored list could not be read; Save and Remove refuse while it stands.
   problem?: string
   editor?: EditorView
@@ -215,7 +239,8 @@ function confirmView(setup: SetupState, entries: unknown[]): SetupView['confirm'
   if (!confirm || !draft) return undefined
   const current = savedName(entries, draft.index) ?? (draft.name || 'this draft')
   if (confirm.kind === 'remove') return { text: `Remove ${current}? Claude can no longer offer it.`, yes: `Remove ${current}`, no: 'Keep it' }
-  const target = confirm.target === 'new' ? 'add new' : `open ${savedName(entries, confirm.target) ?? `specialist ${confirm.target + 1}`}`
+  const to = confirm.target
+  const target = to === 'new' ? 'add new' : typeof to === 'number' ? `open ${savedName(entries, to) ?? `specialist ${to + 1}`}` : `use ${to.template}`
   return { text: `${current} has unsaved changes.`, yes: `Discard and ${target}`, no: 'Keep editing' }
 }
 
@@ -272,7 +297,10 @@ export function setupView(setup: SetupState, entries: unknown[], problem?: strin
     roster,
     columns: columnsOf(roster),
     ...(problem ? { problem } : {}),
-    ...(roster.length === 0 && !problem ? { empty: 'No specialists yet. Add one, or describe one to Claude, and Claude offers it when a task matches its use-when. The mod README has two recipes to start from.' } : {}),
+    ...(roster.length === 0 && !problem ? {
+      empty: 'No specialists yet. Start from a template, add one, or describe one to Claude. Claude offers a specialist when a task matches its use-when.',
+      templates: TEMPLATES.map(t => t.name),
+    } : {}),
     ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, entries) } : {}),
     ...(setup.confirm ? { confirm: confirmView(setup, entries) } : {}),
     ...(setup.status ? { status: setup.status } : {}),
@@ -332,6 +360,8 @@ function readConfirm(v: unknown): Confirm | undefined {
   if (!isRecord(v)) return undefined
   if (v.kind === 'remove') return { kind: 'remove' }
   if (v.kind === 'switch' && (v.target === 'new' || (typeof v.target === 'number' && Number.isInteger(v.target)))) return { kind: 'switch', target: v.target }
+  const template = isRecord(v.target) ? v.target.template : undefined
+  if (v.kind === 'switch' && typeof template === 'string' && TEMPLATES.some(t => t.name === template)) return { kind: 'switch', target: { template } }
   return undefined
 }
 

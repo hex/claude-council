@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, TEMPLATES, templateDraft, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -163,9 +163,21 @@ test('an entry that does not parse stays in the roster with its problem and what
   ])
 })
 
-test('with no specialists the roster says what to do', () => {
-  expect(setupView(ready, []).empty).toBe('No specialists yet. Add one, or describe one to Claude, and Claude offers it when a task matches its use-when. The mod README has two recipes to start from.')
+test('with no specialists the roster says what to do and offers the templates', () => {
+  expect(setupView(ready, []).empty).toBe('No specialists yet. Start from a template, add one, or describe one to Claude. Claude offers a specialist when a task matches its use-when.')
   expect(setupView(ready, []).header).toBe('SPECIALISTS (0)')
+  expect(setupView(ready, []).templates).toEqual(['test-writer', 'bug-fixer'])
+  expect(setupView(ready, two).templates).toBeUndefined()
+})
+
+test('a template opens as a new draft on the first listed model, and saves as it stands', () => {
+  for (const template of TEMPLATES) {
+    const draft = templateDraft(template.name, 0, models)
+    expect(draft).toEqual({ index: 0, baseline: '', model: 'gpt-6-sol', effort: '', ...template })
+    if (!draft) throw new Error('no draft')
+    expect(checkSpecialist(draft, 0, context)).toEqual({ entry: { name: template.name, model: 'gpt-6-sol', when: template.when, instructions: template.instructions } })
+  }
+  expect(templateDraft('nope', 0, models)).toBeUndefined()
 })
 
 test('the editor explains effort, use-when and instructions and counts the use-when', () => {
@@ -252,6 +264,7 @@ test('confirmations ask in words that name the specialist', () => {
   expect(setupView({ ...ready, draft, confirm: { kind: 'remove' } }, two).confirm).toEqual({ text: 'Remove sec? Claude can no longer offer it.', yes: 'Remove sec', no: 'Keep it' })
   expect(setupView({ ...ready, draft, confirm: { kind: 'switch', target: 1 } }, two).confirm).toEqual({ text: 'sec has unsaved changes.', yes: 'Discard and open mig', no: 'Keep editing' })
   expect(setupView({ ...ready, draft, confirm: { kind: 'switch', target: 'new' } }, two).confirm).toEqual({ text: 'sec has unsaved changes.', yes: 'Discard and add new', no: 'Keep editing' })
+  expect(setupView({ ...ready, draft, confirm: { kind: 'switch', target: { template: 'bug-fixer' } } }, two).confirm).toEqual({ text: 'sec has unsaved changes.', yes: 'Discard and use bug-fixer', no: 'Keep editing' })
 })
 
 test('a saved screen is read back only when its shape is right; an older or broken one is set aside with a note', () => {
@@ -259,6 +272,8 @@ test('a saved screen is read back only when its shape is right; an older or brok
   const setAside = { catalog: { loading: true }, status: { kind: 'note', text: 'An earlier draft could not be read and was set aside.' } }
   expect(restoreSetup({ draft, catalog: { models } }, two)).toEqual({ draft, catalog: { models } })
   expect(restoreSetup(undefined, two)).toBeUndefined()
+  expect(restoreSetup({ draft, catalog: { models }, confirm: { kind: 'switch', target: { template: 'test-writer' } } }, two)).toEqual({ draft, catalog: { models }, confirm: { kind: 'switch', target: { template: 'test-writer' } } })
+  expect(restoreSetup({ draft, catalog: { models }, confirm: { kind: 'switch', target: { template: 'gone' } } }, two)).toEqual({ draft, catalog: { models } })
   const perspectiveDraft = { draft: { index: 0, baseline: '', name: 'sec', model: 'gpt-6-luna', perspective: 'custom', effort: '', focus: 'locks', when: '' }, catalog: { models } }
   expect(restoreSetup(perspectiveDraft, two)).toEqual(setAside)
   expect(restoreSetup('junk', two)).toEqual(setAside)
