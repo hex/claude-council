@@ -12,7 +12,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - The council tool (`council_tool` in `/config`) is on by default. Every call now opens a dialog that quotes the question and names the providers, and nothing leaves the machine until you choose `Send to the council`. Dismissing it, or a run with no one to ask, refuses the call. Needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`.
 
 ### Fixes
-- `/claude-council:status` no longer reports Gemini, OpenAI, Grok or Kimi as connected when the key works but the account cannot run inference. A passed key check is now followed by one chat request capped at 16 output tokens. The row reads `Inference blocked` for a 402 or the vendor's own out-of-quota marker, and `Rate limited` for a plain 429. An answer that says nothing about billing leaves the row connected, as before.
+- `/claude-council:status` no longer reports Gemini, OpenAI, Grok or Kimi as connected when the key works but the account cannot run inference. A passed key check is now followed by one chat request capped at 16 output tokens. The row reads `Inference blocked` for a 402 or the vendor's own out-of-quota marker, and `Rate limited` for a plain 429. Any other answer keeps the provider available but adds `inference unverified (HTTP <code>)`, so an unexpected answer shows instead of passing as healthy.
 
 ## 2026.9.14
 

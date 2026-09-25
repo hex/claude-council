@@ -76,18 +76,28 @@ rejected_key() {
 #
 # A 429 is also how every vendor answers a plain rate limit, which a working key
 # hits too, so only each vendor's own quota marker, never the code, may say the
-# account cannot run inference. OpenAI marks it in error.code and Moonshot in
-# error.type (both in their error references). xAI gives no structured reason,
-# so its error text is read for "credit"; that shape is unconfirmed against a
-# live account without credits. Gemini answers 429 RESOURCE_EXHAUSTED for a
-# rate limit and a spent quota alike, so it has no marker here.
+# account cannot run inference. What each one documents (checked 2026-09-25):
+# - OpenAI (developers.openai.com/api/docs/guides/error-codes): 429 with
+#   error.code credit_balance_exhausted or insufficient_quota; error.type
+#   can still read insufficient_quota.
+# - Moonshot (platform.kimi.ai/docs/api/errors): 429 with error.type
+#   exceeded_current_quota_error, apart from rate_limit_reached_error.
+# - xAI documents no billing error. The one observed shape is a 403 whose
+#   code starts personal-team-blocked and whose text says credits run out.
+# - Gemini (ai.google.dev/gemini-api/docs/api-errors) answers a depleted
+#   prepay balance with 402, caught by code alone; its daily quota and its
+#   rate limit are both a 429, so neither is read as blocked.
 out_of_quota() {
     local provider="$1" body_file="$2"
     case "$provider" in
-        openai) jq -e 'try (.error.code == "insufficient_quota") catch false' "$body_file" >/dev/null 2>&1 ;;
+        openai)
+            jq -e 'try ((.error.code == "insufficient_quota") or (.error.code == "credit_balance_exhausted")
+                        or (.error.type == "insufficient_quota")) catch false' "$body_file" >/dev/null 2>&1
+            ;;
         kimi)   jq -e 'try (.error.type == "exceeded_current_quota_error") catch false' "$body_file" >/dev/null 2>&1 ;;
         grok)
-            jq -e 'try (((.error | type) == "string") and (.error | ascii_downcase | contains("credit"))) catch false' \
+            jq -e 'try ((((.code | type) == "string") and (.code | startswith("personal-team-blocked")))
+                        or (((.error | type) == "string") and (.error | ascii_downcase | contains("credit")))) catch false' \
                 "$body_file" >/dev/null 2>&1
             ;;
         *)      return 1 ;;
@@ -97,10 +107,11 @@ out_of_quota() {
 # After a passed key check, can the key run inference? A models listing answers
 # 200 for any valid key, even one whose account has no billing left, so this
 # sends one chat request capped at 16 output tokens: the one paid call a status
-# check makes per provider. Prints "inference_blocked:<code>" or
-# "rate_limited:429", or nothing when inference ran or the answer proves nothing
-# about billing (a 400 over request shape, a 500, a timeout), which leaves the
-# row reading Connected as it did before this probe existed.
+# check makes per provider. Prints nothing when inference ran,
+# "inference_blocked:<code>" or "rate_limited:429" for a recognised refusal,
+# and "unverified:<code>" for anything else (a 400 over request shape, a 500, a
+# timeout): the key works, but nothing proved it can run inference, and an
+# answer nobody expected must show rather than pass as healthy.
 # Usage: inference_state <provider> <api_key> <model>
 inference_state() {
     local name="$1" api_key="$2" model="$3"
@@ -143,6 +154,8 @@ inference_state() {
         echo "inference_blocked:${code}"
     elif [[ "$code" == "429" ]]; then
         echo "rate_limited:429"
+    elif [[ "$code" != 2?? ]]; then
+        echo "unverified:${code}"
     fi
     rm -f "$body_file"
 }
@@ -256,11 +269,12 @@ check_provider() {
     if [[ "$http_code" == "200" ]]; then
         local inference
         inference=$(inference_state "$name" "$api_key" "$model")
-        if [[ -n "$inference" ]]; then
-            echo "$inference"
-            return
-        fi
-        echo "ok:${duration}:${model}"
+        case "$inference" in
+            "")           echo "ok:${duration}:${model}" ;;
+            # Still an ok: row, so it counts as available; the detail says what is unproven.
+            unverified:*) echo "ok:${duration}:${model} · inference unverified (HTTP ${inference#unverified:})" ;;
+            *)            echo "$inference" ;;
+        esac
     elif [[ "$http_code" == "000" ]]; then
         echo "timeout"
     elif [[ "$http_code" == "401" ]] || [[ "$http_code" == "403" ]]; then
