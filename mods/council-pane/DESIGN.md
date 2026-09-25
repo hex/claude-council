@@ -37,7 +37,6 @@ Plain `dimColor` serves secondary text that is fine to fade: help rows, `when:` 
   - `header` `rgb(88,88,88)`, 7.1:1.
   - `saved` `rgb(46,120,72)` 5.4:1, `error` `rgb(178,58,52)` 5.9:1, `note` `rgb(150,100,20)` 5.1:1.
 - **Data colours** tell things apart without meaning anything, and a theme has too few hues for that.
-  - `SWATCHES`, one per specialist in list order, drawn as a `●`: each reaches 3.4:1 or better on both backgrounds.
   - Vendor colours come from the council's config and fill each provider's banner.
 - **Shimmer** (`SHIMMER`): the warm letters that pass over a running chip, 3.9:1 and 4.4:1 on the chip fill. They move, and the label stays readable in white between passes.
 
@@ -58,7 +57,7 @@ Each glyph has one meaning.
 
 | Glyph | Meaning |
 |---|---|
-| `●` | An identity (a specialist's swatch, a provider), or live when coloured `warning` |
+| `●` | A specialist that is on, a provider, or live when coloured `warning` |
 | `✓` | Done |
 | `✗` | Failed |
 | `⋯` | Running |
@@ -74,9 +73,9 @@ Each glyph has one meaning.
 
 - **Chip**: a bold uppercase label on the `chip` fill in `onFill` letters, one space of padding each side. It names the frame below it. A running chip shimmers.
 - **Frame**: a rounded border in `accent` with one column of padding, under its chip.
-- **Table**: a `header` fill with white bold labels, `line` bars between columns, a `line` rule between rows, `zebra` on every other row, `selected` on the row you are editing or the one under the pointer. Each column is as wide as its widest cell; only the last one gives way on a narrow pane, by wrapping at spaces, with the bars drawn as tall as the row. A row's second line starts with `↳` under the second column.
-- **Switched-off row**: grouped under a `muted` italic `switched off` divider at the table's foot, its text `muted` italic, a hollow `○` swatch, and a word saying so (`off ·`), never colour alone. The chip counts the group (`SPECIALISTS (3 · 1 off)`).
+- **Table**: a `header` fill with white bold labels, `line` bars between columns, a `line` rule between rows, `zebra` on every other row, `selected` on the row you are editing or the one under the pointer. Each column is as wide as its widest cell; only the last one gives way on a narrow pane, cut with `…`. One line per row: the details live in the form. A broken entry's second line, under the second column, shows what was stored.
+- **Switched-off row**: keeps its place in the list, its text `muted` italic, a hollow `○` where an on row has `●`, and a word saying so (`off ·`), never colour alone. The chip counts them (`SPECIALISTS (3 · 1 off)`).
 - **Status label**: `SAVED`, `ERROR` or `NOTE` on its fill, then the message in plain text.
-- **Form (the brief)**: four numbered groups, `1 WHO`, `2 RUNS ON`, `3 CALL WHEN`, `4 STANDING ORDERS`: a filled chip with the number, the group in `muted` bold capitals, and on the right the use-when counter or `optional`. Each value sits on a `zebra` well, the only sign of where to type; help is one dim italic line under it; a blank line between groups. Save is the plain button, Remove and Discard are `dimColor`. No frame, and nothing beside a text field: Claude Code sizes a focused field to the whole pane, so anything beside it cuts the text being typed, and given the whole width the field wraps a long value onto the lines below. Accent rules above and below mark the form.
+- **Form**: each field under its label, the roster's own column name (`NAME`, `MODEL`, `EFFORT`, `USE WHEN`, then `STANDING ORDERS`) in `muted` bold, with anything about it on the right (the use-when counter, `optional`). Each value sits on a `zebra` well, the only sign of where to type; help is one dim italic line under it; a blank line between fields. Buttons: `Save` and the dim `Discard` together, then apart from them the specialist's `Disable`/`Enable`, and the dim `Remove` last, so a Tab too many from Save never lands on it. No frame, and nothing beside a text field: Claude Code sizes a focused field to the whole pane, so anything beside it cuts the text being typed, and given the whole width the field wraps a long value onto the lines below. Accent rules above and below mark the form.
 - **Enter hint**: the bare `⏎` (an empty `submitLabel`), leaving the field more room.
 - **Band**: the one line above the prompt while a council run or a specialist round is live: chip, name, model, time, latest step.

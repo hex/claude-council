@@ -18,7 +18,8 @@ export function retrySection(offer: RetryOffer, seenAtMs: number, nowMs: number)
   const remaining = Math.max(0, offer.seconds - Math.floor((nowMs - seenAtMs) / 1000))
   const { providers } = offer
   const filled = Math.ceil((remaining / offer.seconds) * BAR_CELLS)
-  const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(BAR_CELLS - filled)
+  // The thin line the progress band draws; shade blocks render dithered in some fonts.
+  const bar = '\u2501'.repeat(filled) + '\u2500'.repeat(BAR_CELLS - filled)
   const notice = providers.length === 1 ? `${providers[0]} failed` : `${providers.length} providers failed: ${providers.join(', ')}`
   // The labels name their hotkeys: a terminal Button draws as `[ label ]` and shows no key of its own.
   return { kind: 'retry', badge: 'COUNCIL', notice, label: 'r \u00b7 retry', skipLabel: 's \u00b7 skip', remaining, bar }

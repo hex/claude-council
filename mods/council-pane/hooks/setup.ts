@@ -1,7 +1,7 @@
 // ABOUTME: Pure decisions for the specialist setup screen: Codex's model catalog, one validator, entries and drafts
 // ABOUTME: No engine calls here, so every rule runs under bun test
 import { nameProblem, parseSpecialist, WHEN_MAX, type Specialist } from './specialist'
-import { EFFORT_STYLE, SWATCHES, type Style } from './theme'
+import { EFFORT_STYLE, type Style } from './theme'
 
 // effortHelp is Codex's own one-line description of each effort; defaultEffort
 // is what the model uses when nothing sets one.
@@ -131,12 +131,11 @@ export function staleMessage(draft: Draft, entries: unknown[]): string | undefin
 
 
 export type Option = { value: string; label: string }
-// One table row: zebra shades every other drawn row, color marks the specialist.
-// index is the entry's place in the stored list, which the drawn order may differ from;
-// firstOff marks the row the switched-off group starts at.
-type RowBase = { index: number; name: string; color: string; zebra: boolean; editing: boolean; firstOff?: true }
+// One table row, one line: zebra shades every other one; index is the entry's
+// place in the stored list. Instructions stay in the form.
+type RowBase = { index: number; name: string; zebra: boolean; editing: boolean }
 export type RosterEntry =
-  | RowBase & { kind: 'ok'; model: string; effort: string; effortStyle?: Style; when: string; instructions?: string; off?: true }
+  | RowBase & { kind: 'ok'; model: string; effort: string; effortStyle?: Style; when: string; off?: true }
   | RowBase & { kind: 'broken'; problem: string; stored: string }
 // Character widths of the name, model and effort columns, headers included.
 export type Columns = { name: number; model: number; effort: number }
@@ -227,35 +226,10 @@ export const SWATCH_WIDTH = 2
 export const PAD = 1
 export const SEPARATOR = '│ '
 
-// The frame's border and padding around the table.
-const FRAME = 4
-
-// What the use-when column gets of a frame this wide, after the fixed columns.
-export function whenWidth(columns: Columns, width: number): number {
-  const fixed = FRAME + SWATCH_WIDTH + columns.name + PAD + columns.model + PAD + columns.effort + PAD + 3 * SEPARATOR.length
-  return Math.max(1, width - fixed)
-}
 
 // The Enter hint beside a focused text field: the engine's own arrow, with no
 // word after it, which leaves the one-line field more room.
 export const SUBMIT_HINT = ''
-
-// Breaks text into lines no wider than width, at spaces where it can; a word
-// longer than a line is cut across lines. Every character stays.
-export function wrapWords(text: string, width: number): string[] {
-  const lines: string[] = []
-  let line = ''
-  for (const word of text.split(' ')) {
-    const joined = line === '' ? word : `${line} ${word}`
-    if (joined.length <= width) { line = joined; continue }
-    if (line !== '') lines.push(line)
-    let rest = word
-    while (rest.length > width) { lines.push(rest.slice(0, width)); rest = rest.slice(width) }
-    line = rest
-  }
-  lines.push(line)
-  return lines
-}
 
 // The rule drawn between rows, crossing each bar where it stands; cut or
 // filled to the given width.
@@ -267,13 +241,13 @@ export function ruleLine(columns: Columns, width: number): string {
 }
 
 function rosterRow(entry: unknown, index: number, editing: boolean): RosterEntry {
-  const base = { index, color: SWATCHES[index % SWATCHES.length] ?? '', zebra: index % 2 === 1, editing }
+  const base = { index, zebra: index % 2 === 1, editing }
   const parsed = parseSpecialist(entry)
   if ('error' in parsed) return { ...base, kind: 'broken', name: `specialist ${index + 1}`, problem: parsed.error, stored: entryKey(entry) }
   const effortStyle = parsed.effort && Object.hasOwn(EFFORT_STYLE, parsed.effort) ? EFFORT_STYLE[parsed.effort] : undefined
   return {
     ...base, kind: 'ok', name: parsed.name, model: parsed.model, effort: parsed.effort ?? 'default',
-    ...(effortStyle ? { effortStyle } : {}), when: parsed.when, ...(parsed.instructions ? { instructions: parsed.instructions } : {}),
+    ...(effortStyle ? { effortStyle } : {}), when: parsed.when,
     ...(parsed.enabled === false ? { off: true as const } : {}),
   }
 }
@@ -290,15 +264,8 @@ function columnsOf(roster: RosterEntry[]): Columns {
 
 const isOff = (row: RosterEntry) => row.kind === 'ok' && row.off === true
 
-// Switched-off specialists go under the rest, each group in list order.
-function drawnOrder(rows: RosterEntry[]): RosterEntry[] {
-  const on = rows.filter(row => !isOff(row))
-  const off = rows.filter(isOff)
-  return [...on, ...off].map((row, at) => ({ ...row, zebra: at % 2 === 1, ...(at === on.length ? { firstOff: true as const } : {}) }))
-}
-
 export function setupView(setup: SetupState, entries: unknown[], problem?: string): SetupView {
-  const roster = drawnOrder(entries.map((entry, index) => rosterRow(entry, index, setup.draft?.index === index)))
+  const roster = entries.map((entry, index) => rosterRow(entry, index, setup.draft?.index === index))
   const off = roster.filter(isOff).length
   return {
     header: `SPECIALISTS (${roster.length}${off > 0 ? ` · ${off} off` : ''})`,
