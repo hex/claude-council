@@ -19,7 +19,7 @@ import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { missingSkills, skillBody, skillIndex, skillsOpening, type Skill } from './skills'
-import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, templateRule, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -1120,27 +1120,6 @@ export const register: Register = (on, options) => {
         <Text key="roster-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${view.header} `}</Text>
         <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={width}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
-          {/* The templates draw as the roster does, so picking one reads as
-              picking a row; the name opens it as a new draft. */}
-          {templates ? (
-            <Box key="templates" flexDirection="column" marginTop={1}>
-              <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
-                {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
-                {cell('name', templates.nameWidth + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.template}</Text>)}
-                {separator('sep')}
-                <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color={COLOR.onFill} wrap="truncate-end">{HEADERS.when}</Text></Box>
-              </Box>
-              {templates.rows.map((row, at) => [
-                at > 0 ? <Text key={`rule:${row.name}`} color={COLOR.line} wrap="truncate">{templateRule(templates.nameWidth, width - 4)}</Text> : null,
-                <Box key={`template:${row.name}`} flexDirection="row" hover={{ backgroundColor: COLOR.selected }} {...(row.zebra ? { backgroundColor: COLOR.zebra } : {})}>
-                  {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
-                  {cell('name', (templates.nameWidth) + PAD, <Button key="use" plain label={row.name} onPress={press(() => openRow($, state, options, { template: row.name }))} />)}
-                  {separator('sep')}
-                  <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{row.when}</Text></Box>
-                </Box>,
-              ])}
-            </Box>
-          ) : null}
           {view.problem ? <Text key="problem" color={COLOR.danger} wrap="wrap">{`The stored list cannot be read: ${view.problem}. Save and Remove are off until it is fixed with /config.`}</Text> : null}
           {view.roster.length > 0 ? (
             <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
@@ -1184,6 +1163,29 @@ export const register: Register = (on, options) => {
             </Box>,
           ])}
           <Box key="add-row" marginTop={view.roster.length > 0 || templates ? 1 : 0}><Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} /></Box>
+          {/* The templates draw as the roster does, so picking one reads as
+              picking a row; the name opens it as a new draft. The use-when wraps so it
+              reads whole, so the rows go without bars and rules, which would stop
+              at a wrapped row's first line; the shading tells them apart. They sit
+              under Add, as ways to add one. */}
+          {templates ? (
+            <Box key="templates" flexDirection="column" marginTop={1}>
+              <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
+                {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
+                {cell('name', templates.nameWidth + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.template}</Text>)}
+                {cell('gap', SEPARATOR.length, <Text key="text">{''}</Text>)}
+                <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color={COLOR.onFill} wrap="truncate-end">{HEADERS.when}</Text></Box>
+              </Box>
+              {templates.rows.map(row => [
+                <Box key={`template:${row.name}`} flexDirection="row" hover={{ backgroundColor: COLOR.selected }} {...(row.zebra ? { backgroundColor: COLOR.zebra } : {})}>
+                  {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
+                  {cell('name', templates.nameWidth + PAD, <Button key="use" plain label={row.name} onPress={press(() => openRow($, state, options, { template: row.name }))} />)}
+                  {cell('gap', SEPARATOR.length, <Text key="text">{''}</Text>)}
+                  <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" dimColor wrap="wrap">{row.when}</Text></Box>
+                </Box>,
+              ])}
+            </Box>
+          ) : null}
         </Box>
         {editor && draft ? (
           <Box key="editor-wrap" flexDirection="column" marginTop={1}>

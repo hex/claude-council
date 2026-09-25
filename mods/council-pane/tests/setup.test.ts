@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, TEMPLATES, templateDraft, templateRule, draftAt, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, TEMPLATES, templateDraft, draftAt, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -173,7 +173,6 @@ test('with no specialists the roster says what to do and offers the templates', 
   expect(templates?.rows[0]?.when).toBe(TEMPLATES[0]?.when)
   // The name column fits the widest name, 'docs-updater', or its header if wider.
   expect(templates?.nameWidth).toBe(12)
-  expect(templateRule(12, 30)).toBe('───────────────┼──────────────')
   expect(setupView(ready, two).templates).toBeUndefined()
 })
 

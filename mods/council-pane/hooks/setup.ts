@@ -280,12 +280,6 @@ export function ruleLine(columns: Columns, width: number): string {
   return line.length >= width ? line.slice(0, width) : line + '─'.repeat(width - line.length)
 }
 
-// The templates table has two columns, so its rule crosses one bar.
-export function templateRule(nameWidth: number, width: number): string {
-  const line = '─'.repeat(SWATCH_WIDTH + nameWidth + PAD) + '┼' + '─'.repeat(SEPARATOR.length - 1)
-  return line.length >= width ? line.slice(0, width) : line + '─'.repeat(width - line.length)
-}
-
 function rosterRow(entry: unknown, index: number, editing: boolean): RosterEntry {
   const base = { index, zebra: index % 2 === 1, editing }
   const parsed = parseSpecialist(entry)
