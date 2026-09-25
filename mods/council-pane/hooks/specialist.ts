@@ -182,8 +182,8 @@ export function specialistSchema(all: Specialist[], hasRuns = false): Record<str
 
 export type RunRecord = {
   id: string; specialist: string; model: string; effort?: string
-  // The skills opening the run started with; '' when it had none.
-  prompt: string
+  // The skills the run started with, by name; each round's text is not kept.
+  skills: string[]
   repo: string; worktree: string; branch: string; base: string; thread: string
   rounds: number; state: 'running' | 'idle' | 'finished'
   // When the current or last round started; the band's clock.

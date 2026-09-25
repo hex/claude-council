@@ -151,7 +151,7 @@ test('a switched-off specialist is never offered or started; the refusal says wh
 const SHAPES_TEXT = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
 const SETUP_DENY = 'setup fields must be strings: name, model, effort, when, skills'
 const record: RunRecord = {
-  id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', prompt: '',
+  id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', skills: [],
   repo: '/r/app', worktree: '/r/app.specialists/sec-20260923-151204', branch: 'specialist/sec/20260923-151204',
   base: 'a1b2c3d', thread: '01a0ce2a-1d08-76c0-a6ef-8340b581212d', rounds: 1, state: 'idle', startedMs: 0, roundBase: 'a1b2c3d', subject: 'specialist sec: harden login',
 }

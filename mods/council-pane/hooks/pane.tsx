@@ -902,7 +902,7 @@ export const register: Register = (on, options) => {
       if (started.exitCode !== 0) return { result: started.stderr.trim() || 'could not create the worktree', isError: true }
       const at = kv(started.stdout)
       const record: RunRecord = {
-        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), prompt: opening,
+        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), skills: s.skills ?? [],
         repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 0, state: 'idle', startedMs: 0, roundBase: '', subject: '',
       }
       return await round(record, specialistPrompt(opening, call.task), '', commitSubject(s.name, call.task), dirty)
