@@ -74,7 +74,7 @@ Each glyph has one meaning.
 
 - **Chip**: a bold uppercase label on the `chip` fill in `onFill` letters, one space of padding each side. It names the frame below it. A running chip shimmers.
 - **Frame**: a rounded border in `accent` with one column of padding, under its chip.
-- **Table**: a `header` fill with white bold labels, `line` bars between columns, a `line` rule between rows, `zebra` on every other row, `selected` on the row you are editing or the one under the pointer. Each column is as wide as its widest cell; only the last one gives way on a narrow pane. A row's second line starts with `↳` under the second column.
+- **Table**: a `header` fill with white bold labels, `line` bars between columns, a `line` rule between rows, `zebra` on every other row, `selected` on the row you are editing or the one under the pointer. Each column is as wide as its widest cell; only the last one gives way on a narrow pane, by wrapping at spaces, with the bars drawn as tall as the row. A row's second line starts with `↳` under the second column.
 - **Switched-off row**: grouped under a `muted` italic `switched off` divider at the table's foot, its text `muted` italic, a hollow `○` swatch, and a word saying so (`off ·`), never colour alone. The chip counts the group (`SPECIALISTS (3 · 1 off)`).
 - **Status label**: `SAVED`, `ERROR` or `NOTE` on its fill, then the message in plain text.
 - **Help row**: one dim line under the value it explains, indented to the values, cut at the end.

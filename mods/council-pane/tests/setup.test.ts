@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, wrapWords, whenWidth, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -297,4 +297,17 @@ test('a restored screen keeps only the fields it knows, and a catalog of another
 test('a new specialist lands at the end of the newest list; an edited one keeps its place', () => {
   expect(saveIndex(blankDraft(1, models), [secEntry, secEntry, secEntry])).toBe(3)
   expect(saveIndex(draftFor(0, [secEntry], models), [secEntry, secEntry])).toBe(0)
+})
+
+test('a long use-when wraps at spaces to the column, a word longer than the column is cut across lines, nothing is lost', () => {
+  expect(wrapWords('Postgres migrations and schema changes', 16)).toEqual(['Postgres', 'migrations and', 'schema changes'])
+  expect(wrapWords('auth, crypto', 16)).toEqual(['auth, crypto'])
+  expect(wrapWords('abcdefghij klm', 4)).toEqual(['abcd', 'efgh', 'ij', 'klm'])
+  expect(wrapWords('', 10)).toEqual([''])
+})
+
+test('the use-when column gets what the frame leaves after the fixed columns, never less than one', () => {
+  // frame 4 + swatch 2 + (name 4 + 1) + bar 2 + (model 10 + 1) + bar 2 + (effort 6 + 1) + bar 2 = 35
+  expect(whenWidth({ name: 4, model: 10, effort: 6 }, 60)).toBe(25)
+  expect(whenWidth({ name: 4, model: 10, effort: 6 }, 30)).toBe(1)
 })

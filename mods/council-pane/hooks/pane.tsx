@@ -18,7 +18,7 @@ import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
-import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, whenWidth, wrapWords, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -1040,9 +1040,9 @@ export const register: Register = (on, options) => {
     // the terminal hands the keyboard back to the prompt.
     // A table cell keeps its width; only the last column gives way.
     const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
-    // A dim bar between two columns.
-    const separator = (key: string) => (
-      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={COLOR.line}>{SEPARATOR}</Text></Box>
+    // A dim bar between two columns, as tall as the row's wrapped use-when.
+    const separator = (key: string, lines = 1) => (
+      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={COLOR.line}>{Array.from({ length: lines }, () => SEPARATOR).join('\n')}</Text></Box>
     )
     // A row's second line starts under the model column.
     // A switched-off row is grey and italic throughout; the name is a Button,
@@ -1080,7 +1080,11 @@ export const register: Register = (on, options) => {
               <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color={COLOR.onFill} wrap="truncate-end">{HEADERS.when}</Text></Box>
             </Box>
           ) : null}
-          {view.roster.map((entry, at) => [
+          {view.roster.map((entry, at) => {
+            // A long use-when wraps in its column rather than being cut.
+            const whenLines = entry.kind === 'ok' ? wrapWords(entry.off ? `off · ${entry.when}` : entry.when, whenWidth(view.columns, width)) : []
+            const tall = Math.max(1, whenLines.length)
+            return [
             entry.firstOff
               ? <Text key={`rule:${entry.index}`} color={COLOR.muted} italic wrap="truncate">{`── switched off ${'─'.repeat(Math.max(0, width - 21))}`}</Text>
               : at > 0 ? <Text key={`rule:${entry.index}`} color={COLOR.line} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
@@ -1089,29 +1093,30 @@ export const register: Register = (on, options) => {
               <Box key="line" flexDirection="row">
                 {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.kind === 'ok' && entry.off ? COLOR.muted : entry.color}>{entry.editing ? '▶' : entry.kind === 'ok' && entry.off ? '○' : '●'}</Text>)}
                 {cell('name', view.columns.name + PAD, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
-                {separator('sep-1')}
+                {separator('sep-1', tall)}
                 {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, entry.off
                   ? offText(entry.model)
                   : <Text key="text" color={COLOR.model}>{entry.model}</Text>) : null}
-                {entry.kind === 'ok' ? separator('sep-2') : null}
+                {entry.kind === 'ok' ? separator('sep-2', tall) : null}
                 {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.off
                   ? offText(entry.effort)
                   : entry.effortStyle
                     ? <Text key="text" color={entry.effortStyle.color} bold={entry.effortStyle.bold === true}>{entry.effort}</Text>
                     : <Text key="text" dimColor>{entry.effort}</Text>) : null}
-                {entry.kind === 'ok' ? separator('sep-3') : null}
+                {entry.kind === 'ok' ? separator('sep-3', tall) : null}
                 <Box key="rest" flexGrow={1} flexShrink={1}>
                   {entry.kind === 'ok'
                     ? entry.off
-                      ? offText(`off · ${entry.when}`)
-                      : <Text key="text" wrap="truncate-end">{entry.when}</Text>
+                      ? offText(whenLines.join('\n'))
+                      : <Text key="text" wrap="truncate-end">{whenLines.join('\n')}</Text>
                     : <Text key="text" color={COLOR.danger} wrap="truncate-end">{entry.problem}</Text>}
                 </Box>
               </Box>
               {entry.kind === 'ok' && entry.instructions ? under('instructions', `↳ ${entry.instructions}`, entry.off === true) : null}
               {entry.kind === 'broken' ? under('stored', entry.stored) : null}
             </Box>,
-          ])}
+            ]
+          })}
           <Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} />
         </Box>
         {editor && draft ? (
