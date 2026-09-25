@@ -71,6 +71,95 @@ rejected_key() {
     esac
 }
 
+# Does this failed inference probe say the account is out of quota or credit?
+# Usage: out_of_quota <provider> <body_file>
+#
+# A 429 is also how every vendor answers a plain rate limit, which a working key
+# hits too, so only each vendor's own quota marker, never the code, may say the
+# account cannot run inference. What each one documents (checked 2026-09-25):
+# - OpenAI (developers.openai.com/api/docs/guides/error-codes): 429 with
+#   error.code credit_balance_exhausted or insufficient_quota; error.type
+#   can still read insufficient_quota.
+# - Moonshot (platform.kimi.ai/docs/api/errors): 429 with error.type
+#   exceeded_current_quota_error, apart from rate_limit_reached_error.
+# - xAI documents no billing error. The one observed shape is a 403 whose
+#   code starts personal-team-blocked and whose text says credits run out.
+# - Gemini (ai.google.dev/gemini-api/docs/api-errors) answers a depleted
+#   prepay balance with 402, caught by code alone; its daily quota and its
+#   rate limit are both a 429, so neither is read as blocked.
+out_of_quota() {
+    local provider="$1" body_file="$2"
+    case "$provider" in
+        openai)
+            jq -e 'try ((.error.code == "insufficient_quota") or (.error.code == "credit_balance_exhausted")
+                        or (.error.type == "insufficient_quota")) catch false' "$body_file" >/dev/null 2>&1
+            ;;
+        kimi)   jq -e 'try (.error.type == "exceeded_current_quota_error") catch false' "$body_file" >/dev/null 2>&1 ;;
+        grok)
+            jq -e 'try ((((.code | type) == "string") and (.code | startswith("personal-team-blocked")))
+                        or (((.error | type) == "string") and (.error | ascii_downcase | contains("credit")))) catch false' \
+                "$body_file" >/dev/null 2>&1
+            ;;
+        *)      return 1 ;;
+    esac
+}
+
+# After a passed key check, can the key run inference? A models listing answers
+# 200 for any valid key, even one whose account has no billing left, so this
+# sends one chat request capped at 16 output tokens: the one paid call a status
+# check makes per provider. Prints nothing when inference ran,
+# "inference_blocked:<code>" or "rate_limited:429" for a recognised refusal,
+# and "unverified:<code>" for anything else (a 400 over request shape, a 500, a
+# timeout): the key works, but nothing proved it can run inference, and an
+# answer nobody expected must show rather than pass as healthy.
+# Usage: inference_state <provider> <api_key> <model>
+inference_state() {
+    local name="$1" api_key="$2" model="$3"
+    # jq builds the request so a model name can never break out of its string;
+    # without jq the probe is skipped and the warning above already stands.
+    jq --version >/dev/null 2>&1 || return 0
+    local url header payload
+    case "$name" in
+        openai)
+            url="https://api.openai.com/v1/chat/completions"
+            header="Authorization: Bearer ${api_key}"
+            # Reasoning models take max_completion_tokens, which caps their
+            # thinking too, so 16 bounds the cost whatever the model is.
+            payload=$(jq -nc --arg m "$model" '{model: $m, messages: [{role: "user", content: "hi"}], max_completion_tokens: 16}')
+            ;;
+        grok|kimi)
+            [[ "$name" == grok ]] && url="https://api.x.ai/v1/chat/completions" || url="https://api.moonshot.ai/v1/chat/completions"
+            header="Authorization: Bearer ${api_key}"
+            payload=$(jq -nc --arg m "$model" '{model: $m, messages: [{role: "user", content: "hi"}], max_tokens: 16}')
+            ;;
+        gemini)
+            url="https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent"
+            header="x-goog-api-key: ${api_key}"
+            payload=$(jq -nc '{contents: [{parts: [{text: "hi"}]}], generationConfig: {maxOutputTokens: 16}}')
+            ;;
+        *)  return 0 ;;
+    esac
+    local cfg body_file code
+    cfg=$(curl_secret_config "$header")
+    body_file=$(mktemp "${TMPDIR:-/tmp}/council-probe.XXXXXX")
+    code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+        -X POST \
+        --config "$cfg" \
+        -H "Content-Type: application/json" \
+        -d "$payload" \
+        "$url" 2>/dev/null || true)
+    rm -f "$cfg"
+    code="${code:-000}"
+    if [[ "$code" != "200" ]] && { [[ "$code" == "402" ]] || out_of_quota "$name" "$body_file"; }; then
+        echo "inference_blocked:${code}"
+    elif [[ "$code" == "429" ]]; then
+        echo "rate_limited:429"
+    elif [[ "$code" != 2?? ]]; then
+        echo "unverified:${code}"
+    fi
+    rm -f "$body_file"
+}
+
 # Check a single provider
 # Usage: check_provider <name> <api_key_var> <model>
 check_provider() {
@@ -178,7 +267,14 @@ check_provider() {
     duration=$((end_time - start_time))
 
     if [[ "$http_code" == "200" ]]; then
-        echo "ok:${duration}:${model}"
+        local inference
+        inference=$(inference_state "$name" "$api_key" "$model")
+        case "$inference" in
+            "")           echo "ok:${duration}:${model}" ;;
+            # Still an ok: row, so it counts as available; the detail says what is unproven.
+            unverified:*) echo "ok:${duration}:${model} · inference unverified (HTTP ${inference#unverified:})" ;;
+            *)            echo "$inference" ;;
+        esac
     elif [[ "$http_code" == "000" ]]; then
         echo "timeout"
     elif [[ "$http_code" == "401" ]] || [[ "$http_code" == "403" ]]; then
@@ -255,6 +351,8 @@ remediation_for() {
         ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;
         *:auth_error)         echo "key rejected - regenerate it" ;;
+        *:inference_blocked)  echo "check the account's billing or credits" ;;
+        *:rate_limited)       echo "rate limited - check again in a minute" ;;
         *)                    echo "" ;;
     esac
 }
@@ -300,8 +398,8 @@ ollama_status=$(check_cli_provider "ollama" "ollama" list)
 # carry SGR escape bytes that occupy no width, so measuring them would pad every
 # row by a different wrong amount.
 STATUS_NAME_W=14    # fits "OpenRouter 10" and "Antigravity"
-STATUS_STATE_W=24   # fits every state but "Installed, not authenticated", which
-                    # overflows to a single space rather than widening every row
+STATUS_STATE_W=28   # fits the longest states, "Installed, not authenticated" and
+                    # "Inference blocked (HTTP 429)"
 
 format_status() {
     local name="$1"
@@ -320,6 +418,8 @@ format_status() {
     color=$(provider_color "$provider_id")
     local state="$status"
     [[ "$status" == auth_error:* ]] && state="auth_error"
+    [[ "$status" == inference_blocked:* ]] && state="inference_blocked"
+    [[ "$status" == rate_limited:* ]] && state="rate_limited"
     local fix
     fix=$(remediation_for "$provider_id" "$state")
 
@@ -347,6 +447,16 @@ format_status() {
         auth_error:*)
             icon="${RED}✗ ${RESET}"
             plain_state="Auth failed (HTTP ${status#auth_error:})"
+            painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        inference_blocked:*)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Inference blocked (HTTP ${status#inference_blocked:})"
+            painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        rate_limited:*)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Rate limited (HTTP ${status#rate_limited:})"
             painted_state="${RED}${plain_state}${RESET}"
             ;;
         error:*)

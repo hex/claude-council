@@ -12,15 +12,23 @@ shadow_curl() {
     cat > "$dir/curl" <<'EOF'
 #!/bin/bash
 code="${COUNCIL_FAKE_HTTP_CODE:-200}"
+body="${COUNCIL_FAKE_HTTP_BODY:-}"
 # Mirror curl's -o: the body lands in the named file, never on stdout, so a
 # probe that inspects the body reads it exactly as it would from the real thing.
 out=""
 prev=""
 for arg in "$@"; do
     if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    # The inference probe that follows a passed key check answers on its own
+    # when COUNCIL_FAKE_CHAT_CODE is set. Perplexity's single chat probe is its
+    # key check, so it keeps the plain code.
+    if [[ -n "${COUNCIL_FAKE_CHAT_CODE:-}" && "$arg" =~ ^https://(api\.openai\.com|api\.x\.ai|api\.moonshot\.ai)/v1/chat/completions$|:generateContent$ ]]; then
+        code="$COUNCIL_FAKE_CHAT_CODE"
+        body="${COUNCIL_FAKE_CHAT_BODY:-}"
+    fi
     prev="$arg"
 done
-if [[ -n "$out" ]]; then printf '%s' "${COUNCIL_FAKE_HTTP_BODY:-}" > "$out"; fi
+if [[ -n "$out" ]]; then printf '%s' "$body" > "$out"; fi
 printf '%s' "$code"
 if [[ "$code" == "000" ]]; then exit 7; fi
 exit 0
@@ -66,6 +74,6 @@ EOF
     export PATH="$dir:$PATH"
     export GEMINI_API_KEY=SEKRET_GEM OPENAI_API_KEY=SEKRET_OAI \
            XAI_API_KEY=SEKRET_GROK PERPLEXITY_API_KEY=SEKRET_PPX \
-           OPENROUTER_API_KEY=SEKRET_ORT
+           KIMI_API_KEY=SEKRET_KIMI OPENROUTER_API_KEY=SEKRET_ORT
     export COUNCIL_FAKE_BEHAVIOR=valid
 }
