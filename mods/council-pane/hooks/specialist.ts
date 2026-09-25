@@ -5,16 +5,18 @@ import { COLOR } from './theme'
 import type { Fields } from './setup'
 
 // effort is Codex's reasoning effort; without it the user's own Codex default applies.
-// instructions open every task the specialist starts; without them it just follows the task.
+// skills: the installed skills whose SKILL.md opens every task it starts; without them it just follows the task.
 // enabled: false keeps it in the list but out of Claude's reach; without it the specialist is on.
-export type Specialist = { name: string; model: string; effort?: string; when: string; instructions?: string; enabled?: false }
+export type Specialist = { name: string; model: string; effort?: string; when: string; skills?: string[]; enabled?: false }
 
-export const INSTRUCTIONS_MAX = 400
+export const SKILLS_MAX = 8
+const SKILL_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/
 const EFFORT = /^[a-z]+$/
 const NAME = /^[a-z][a-z0-9-]{0,23}$/
 export const WHEN_MAX = 200
-const FIELDS = ['name', 'model', 'effort', 'when', 'instructions']
+const FIELDS = ['name', 'model', 'effort', 'when']
 const ENABLED = 'enabled'
+const SKILLS = 'skills'
 const SHAPE = 'a specialist must be a JSON object with name, model and when'
 // The one settings field that holds every specialist, as a JSON list of objects.
 export const LIST_FIELD = 'specialists'
@@ -34,9 +36,20 @@ function textField(entry: Record<string, unknown>, field: string, isRequired: bo
   return typeof value === 'string' ? value : { error: `${field} must be a string` }
 }
 
+function skillList(value: unknown): { list: string[] } | { error: string } {
+  if (value === undefined) return { list: [] }
+  if (!Array.isArray(value) || !value.every(item => typeof item === 'string')) return { error: 'skills must be a list of skill names' }
+  const bad = value.find(item => !SKILL_NAME.test(item))
+  if (bad !== undefined) return { error: `skill '${bad}' must be lowercase letters, digits, dots, dashes or underscores` }
+  const twice = value.find((item, at) => value.indexOf(item) !== at)
+  if (twice !== undefined) return { error: `skill '${twice}' is listed twice` }
+  if (value.length > SKILLS_MAX) return { error: `at most ${SKILLS_MAX} skills` }
+  return { list: value }
+}
+
 export function parseSpecialist(entry: unknown): Specialist | { error: string } {
   if (!isRecord(entry)) return { error: SHAPE }
-  const unknown = Object.keys(entry).find(key => !FIELDS.includes(key) && key !== ENABLED)
+  const unknown = Object.keys(entry).find(key => !FIELDS.includes(key) && key !== ENABLED && key !== SKILLS)
   if (unknown !== undefined) return { error: `unknown field '${unknown}'` }
   const read: Record<string, string | undefined> = {}
   for (const field of FIELDS) {
@@ -44,7 +57,7 @@ export function parseSpecialist(entry: unknown): Specialist | { error: string } 
     if (typeof value === 'object') return value
     read[field] = value
   }
-  const { name = '', model = '', effort, when = '', instructions } = read
+  const { name = '', model = '', effort, when = '' } = read
   const badName = nameProblem(name)
   if (badName) return { error: badName }
   if (model.trim() === '') return { error: 'model is empty' }
@@ -53,13 +66,12 @@ export function parseSpecialist(entry: unknown): Specialist | { error: string } 
   if (/[\r\n]/.test(when)) return { error: 'use-when must be one line' }
   if (when.length > WHEN_MAX) return { error: `use-when is longer than ${WHEN_MAX} characters` }
   if (effort !== undefined && !EFFORT.test(effort)) return { error: `effort '${effort}' must be lowercase letters` }
-  if (instructions !== undefined && /[\r\n]/.test(instructions)) return { error: 'instructions must be one line' }
-  if (instructions !== undefined && instructions.length > INSTRUCTIONS_MAX) return { error: `instructions are longer than ${INSTRUCTIONS_MAX} characters` }
+  const skills = skillList(entry[SKILLS])
+  if ('error' in skills) return skills
   const enabled = entry[ENABLED]
   if (enabled !== undefined && typeof enabled !== 'boolean') return { error: 'enabled must be true or false' }
-  const hasInstructions = instructions !== undefined && instructions.trim() !== ''
   return {
-    name, model, ...(effort === undefined ? {} : { effort }), when, ...(hasInstructions ? { instructions } : {}),
+    name, model, ...(effort === undefined ? {} : { effort }), when, ...(skills.list.length > 0 ? { skills: skills.list } : {}),
     ...(enabled === false ? { enabled } : {}),
   }
 }
@@ -100,8 +112,8 @@ export function specialistRoster(options: Record<string, unknown>): { specialist
   return { specialists, problems }
 }
 
-// Without this Claude fills instructions in on its own, and they open every task.
-const INSTRUCTIONS_HINT = 'instructions is optional: what the specialist is told before each task, in the user\'s words; leave it out unless the user gave some.'
+// Without this Claude picks skills on its own, and they open every task.
+const SKILLS_HINT = 'skills is optional: comma-separated names of installed skills the specialist follows on each new task; leave it out unless the user named some.'
 
 const isOn = (s: Specialist) => s.enabled !== false
 
@@ -120,7 +132,7 @@ export function specialistDescription(all: Specialist[], hasRuns = false): strin
       (off ? `Every specialist is switched off by the user (${off}); never offer or start one, and if one fits, say it can be turned on in /specialists. ` : 'None are set up yet. ') +
       `When the user asks for one, call {setup: {${SETUP_FIELDS.join(', ')}}} with what they described; ` +
       'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
-      INSTRUCTIONS_HINT + open
+      SKILLS_HINT + open
     )
   }
   const roster = list.map(s => `${s.name} (${s.model}), use when: ${s.when}`).join('; ')
@@ -130,7 +142,7 @@ export function specialistDescription(all: Specialist[], hasRuns = false): strin
     (off ? `Switched off by the user, so never offer or start: ${off}. ` : '') +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
     `When no specialist fits and the user wants one, or the user describes one, call {setup: {${SETUP_FIELDS.join(', ')}}}; it opens a screen with those fields filled in and nothing is saved until the user presses Save. ` +
-    `${INSTRUCTIONS_HINT} ` +
+    `${SKILLS_HINT} ` +
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
@@ -170,7 +182,7 @@ export function specialistSchema(all: Specialist[], hasRuns = false): Record<str
 
 export type RunRecord = {
   id: string; specialist: string; model: string; effort?: string
-  // The instructions the run started with; '' when it had none.
+  // The skills opening the run started with; '' when it had none.
   prompt: string
   repo: string; worktree: string; branch: string; base: string; thread: string
   rounds: number; state: 'running' | 'idle' | 'finished'
@@ -191,7 +203,7 @@ export type SpecialistCall =
   | { kind: 'setup'; fields: Partial<Fields> }
 
 const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
-const SETUP_FIELDS = ['name', 'model', 'effort', 'when', 'instructions']
+const SETUP_FIELDS = ['name', 'model', 'effort', 'when', 'skills']
 const filled = (value: unknown) => typeof value === 'string' && value.trim() !== ''
 
 export function specialistCall(input: Record<string, unknown>, list: Specialist[]): SpecialistCall | { deny: string } {
@@ -248,9 +260,9 @@ export function dialogOutcome(answer: string | undefined, go: string, stop: stri
   return { reply: `The user ${refusal} and said: ${answer}` }
 }
 
-export function specialistPrompt(instructions: string, task: string): string {
-  const opening = instructions.trim() === '' ? '' : `${instructions}\n\n`
-  return `${opening}Task:\n${task}\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.`
+// opening: skillsOpening's text, which already ends in a blank line; '' for none.
+export function specialistPrompt(opening: string, task: string): string {
+  return `${opening.trim() === '' ? '' : opening}Task:\n${task}\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.`
 }
 
 export function followUpRefusal(record: RunRecord | undefined, id: string, worktreeExists: boolean): string | undefined {

@@ -18,6 +18,7 @@ import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
+import { missingSkills, skillBody, skillIndex, skillsOpening, type Skill } from './skills'
 import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
@@ -52,6 +53,8 @@ const LIST_KEY = `claude-council.${LIST_FIELD}`
 
 type PaneState = {
   root: string
+  // Every installed skill's name, as the setup screen last read the folders.
+  skillNames?: string[]
   runDir?: string
   view?: RunView
   drawn: string
@@ -130,8 +133,25 @@ const modelsOf = (setup: SetupState) => ('models' in setup.catalog ? setup.catal
 
 // Asks Codex for its models and fills them in; a new draft that opened before
 // they arrived takes the first listed model.
+// Where a specialist's skills are found, in order; a name in an earlier folder
+// shadows the same one later, so the user's own copy wins over a template's.
+// A folder that is not there is normal; one that cannot be listed is an error.
+async function findSkills($: EngineInterface): Promise<Map<string, Skill>> {
+  const home = await $.env.get('HOME')
+  const roots = [...(home ? [`${home}/.claude/skills`, `${home}/.codex/skills`, `${home}/.agents/skills`] : []), `${$.plugin.root}/mods/council-pane/specialists`]
+  const folders = await Promise.all(roots.map(async dir => {
+    if (!(await $.fs.exists(dir))) return { dir, names: [] }
+    // A linked skill folder lists as `other`, so only plain files are skipped.
+    const entries = (await $.fs.list(dir)).filter(entry => entry.kind !== 'file')
+    const found = await Promise.all(entries.map(async entry => ((await $.fs.exists(`${dir}/${entry.name}/SKILL.md`)) ? entry.name : undefined)))
+    return { dir, names: found.filter((name): name is string => name !== undefined) }
+  }))
+  return skillIndex(folders)
+}
+
 async function loadCatalog($: EngineInterface, state: PaneState): Promise<void> {
   await keepSetup($, state, { ...currentSetup(state), catalog: { loading: true } })
+  state.skillNames = [...(await findSkills($)).keys()]
   const catalog = await readCatalog($)
   const setup = currentSetup(state)
   const first = 'models' in catalog ? catalog.models.find(m => m.listed)?.slug : undefined
@@ -261,7 +281,8 @@ async function saveSetup($: EngineInterface, state: PaneState, options: Record<s
   const { entries, problem } = await latestList($, state, options)
   if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
   const index = saveIndex(setup.draft, entries)
-  const checked = checkSpecialist(setup.draft, index, { models: setup.catalog.models, entries })
+  state.skillNames = [...(await findSkills($)).keys()]
+  const checked = checkSpecialist(setup.draft, index, { models: setup.catalog.models, entries, skills: state.skillNames })
   if ('error' in checked) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: checked.error } }); return }
   await writeEntries($, state, setup, putEntry(entries, index, checked.entry), `Saved ${setup.draft.name}.`)
 }
@@ -311,10 +332,11 @@ async function handEditDenial($: EngineInterface, value: unknown): Promise<strin
   if (entries.length === 0) return undefined
   const catalog = await readCatalog($)
   if ('error' in catalog) return `cannot check the models: ${catalog.error}`
+  const skills = [...(await findSkills($)).keys()]
   for (const [index, entry] of entries.entries()) {
     const parsed = parseSpecialist(entry)
     if ('error' in parsed) return `specialist ${index + 1}: ${parsed.error}`
-    const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '', instructions: parsed.instructions ?? '' }, index, { models: catalog.models, entries })
+    const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '', skills: (parsed.skills ?? []).join(', ') }, index, { models: catalog.models, entries, skills })
     if ('error' in checked) return `specialist ${index + 1}: ${checked.error}`
   }
   return undefined
@@ -868,16 +890,22 @@ export const register: Register = (on, options) => {
       if (top.exitCode !== 0) return { deny: `${cwd} is not inside a git repository with a commit` }
       const dirty = (await $.process.run(['git', '-C', cwd, 'status', '--porcelain'])).stdout.trim() !== ''
       const s = call.specialist
+      // Every skill is read before the worktree exists, so a missing one costs nothing.
+      const index = await findSkills($)
+      const missing = missingSkills(s.skills ?? [], index)
+      if (missing.length > 0) return { deny: `${s.name} follows skills that are not installed: ${missing.join(', ')}; fix it in /specialists` }
+      const chosen = (s.skills ?? []).flatMap(name => index.get(name) ?? [])
+      const loaded = await Promise.all(chosen.map(async skill => ({ ...skill, body: skillBody(await $.fs.read(`${skill.dir}/SKILL.md`)) })))
+      const opening = skillsOpening(loaded)
       const ts = runStamp(new Date(await $.clock.now()))
       const started = await sh(['start', cwd, s.name, ts])
       if (started.exitCode !== 0) return { result: started.stderr.trim() || 'could not create the worktree', isError: true }
       const at = kv(started.stdout)
-      const instructions = s.instructions ?? ''
       const record: RunRecord = {
-        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), prompt: instructions,
+        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), prompt: opening,
         repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 0, state: 'idle', startedMs: 0, roundBase: '', subject: '',
       }
-      return await round(record, specialistPrompt(instructions, call.task), '', commitSubject(s.name, call.task), dirty)
+      return await round(record, specialistPrompt(opening, call.task), '', commitSubject(s.name, call.task), dirty)
     }
 
     const record = Object.hasOwn(runs, call.run) ? runs[call.run] : undefined
@@ -1046,7 +1074,7 @@ export const register: Register = (on, options) => {
     const { Box, Text, Input, Select, Button } = ui
     const setup = currentSetup(state)
     const stored = freshList(options, state.latest)
-    const view = setupView(setup, stored.entries, stored.problem)
+    const view = setupView(setup, stored.entries, stored.problem, state.skillNames)
     const draft = setup.draft
     const editor = view.editor
     const width = Math.max(30, e.props.bodyColumns - 2)
@@ -1168,11 +1196,12 @@ export const register: Register = (on, options) => {
               {well('effort-well', <Select key="effort" value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />)}
               {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
               {label('when-label', HEADERS.when, editor.whenCount)}
-              {well('call-when-well', <Input key={`when.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />)}
+              {well('call-when-well', <Input key={`when.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'skills' })) }} />)}
               {help('when-help', editor.whenHelp)}
-              {label('instructions-label', 'STANDING ORDERS', 'optional')}
-              {well('orders-well', <Input key={`instructions.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />)}
-              {help('instructions-help', editor.instructionsHelp)}
+              {label('skills-label', 'SKILLS', 'optional')}
+              {well('skills-well', <Input key={`skills.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="optional, e.g. test-audit, web-perf" value={draft.skills} onInput={(v: string) => edit({ skills: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { skills: v }, { control: 'save' })) }} />)}
+              {editor.skillsMissing ? <Text key="skills-missing" color={COLOR.danger} wrap="wrap">{editor.skillsMissing}</Text> : null}
+              {help('skills-help', editor.skillsHelp)}
               <Box key="actions" flexDirection="row" marginTop={1}>
                 {/* The form's own pair first; the specialist's on/off apart from it;
                     Remove last, so a Tab too many never lands on it from Save. */}

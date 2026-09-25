@@ -13,9 +13,9 @@ test('an entry with the required fields parses', () => {
   })
 })
 
-test('an entry may set the reasoning effort and instructions', () => {
-  expect(parseSpecialist({ name: 'mig', model: 'gpt-6-luna', effort: 'high', when: 'schema changes', instructions: 'Review migrations for locks, rollbacks: always.' })).toEqual({
-    name: 'mig', model: 'gpt-6-luna', effort: 'high', when: 'schema changes', instructions: 'Review migrations for locks, rollbacks: always.',
+test('an entry may set the reasoning effort and the skills it follows', () => {
+  expect(parseSpecialist({ name: 'mig', model: 'gpt-6-luna', effort: 'high', when: 'schema changes', skills: ['test-audit', 'web-perf'] })).toEqual({
+    name: 'mig', model: 'gpt-6-luna', effort: 'high', when: 'schema changes', skills: ['test-audit', 'web-perf'],
   })
 })
 
@@ -23,8 +23,8 @@ test('any lowercase effort parses; which ones a model offers is checked at Save'
   expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', effort: 'ultra', when: 'auth' })).toEqual({ name: 'sec', model: 'gpt-6-sol', effort: 'ultra', when: 'auth' })
 })
 
-test('blank instructions are the same as none', () => {
-  expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', when: 'auth', instructions: '  ' })).toEqual({ name: 'sec', model: 'gpt-6-sol', when: 'auth' })
+test('an empty skills list is the same as none', () => {
+  expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', when: 'auth', skills: [] })).toEqual({ name: 'sec', model: 'gpt-6-sol', when: 'auth' })
 })
 
 test('a specialist is on unless its entry says enabled: false', () => {
@@ -49,8 +49,12 @@ test('a bad entry names what is wrong', () => {
   expect(parseSpecialist({ ...sec, when: 'x'.repeat(201) })).toEqual({ error: 'use-when is longer than 200 characters' })
   expect(parseSpecialist({ ...sec, effort: 'High' })).toEqual({ error: "effort 'High' must be lowercase letters" })
   expect(parseSpecialist({ ...sec, effort: 3 })).toEqual({ error: 'effort must be a string' })
-  expect(parseSpecialist({ ...sec, instructions: 'x'.repeat(401) })).toEqual({ error: 'instructions are longer than 400 characters' })
-  expect(parseSpecialist({ ...sec, instructions: ['a'] })).toEqual({ error: 'instructions must be a string' })
+  expect(parseSpecialist({ ...sec, skills: 'test-audit' })).toEqual({ error: 'skills must be a list of skill names' })
+  expect(parseSpecialist({ ...sec, skills: [3] })).toEqual({ error: 'skills must be a list of skill names' })
+  expect(parseSpecialist({ ...sec, skills: ['Test Audit'] })).toEqual({ error: "skill 'Test Audit' must be lowercase letters, digits, dots, dashes or underscores" })
+  expect(parseSpecialist({ ...sec, skills: ['a', 'b', 'a'] })).toEqual({ error: "skill 'a' is listed twice" })
+  expect(parseSpecialist({ ...sec, skills: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] })).toEqual({ error: 'at most 8 skills' })
+  expect(parseSpecialist({ ...sec, instructions: 'Measure first.' })).toEqual({ error: "unknown field 'instructions'" })
 })
 
 test('the roster reads the specialists list, keeps valid entries in order and reports the rest', () => {
@@ -58,13 +62,13 @@ test('the roster reads the specialists list, keeps valid entries in order and re
     { name: 'sec', model: 'gpt-6-sol', when: 'auth' },
     { name: 'sec', model: 'gpt-6-astra', when: 'loops' },
     { name: 'perf', model: 'gpt-6-astra', perspective: 'performance', when: 'loops' },
-    { name: 'perf', model: 'gpt-6-astra', when: 'loops', instructions: 'Measure first.' },
+    { name: 'perf', model: 'gpt-6-astra', when: 'loops', skills: ['web-perf'] },
     { name: 'five', model: 'gpt-6-sol', when: 'a fifth one' },
   ])
   expect(specialistRoster({ specialists })).toEqual({
     specialists: [
       { name: 'sec', model: 'gpt-6-sol', when: 'auth' },
-      { name: 'perf', model: 'gpt-6-astra', when: 'loops', instructions: 'Measure first.' },
+      { name: 'perf', model: 'gpt-6-astra', when: 'loops', skills: ['web-perf'] },
       { name: 'five', model: 'gpt-6-sol', when: 'a fifth one' },
     ],
     problems: [
@@ -85,18 +89,18 @@ test('a specialists setting that is not a JSON list is reported, never read as e
   expect(specialistRoster({ specialists: '[2]' })).toEqual({ specialists: [], problems: ['specialist 1 ignored: a specialist must be a JSON object with name, model and when'] })
 })
 
-const SETUP_HINT = 'instructions is optional: what the specialist is told before each task, in the user\'s words; leave it out unless the user gave some.'
+const SETUP_HINT = 'skills is optional: comma-separated names of installed skills the specialist follows on each new task; leave it out unless the user named some.'
 
 test('the description lists every specialist and what the user confirms', () => {
   const list = [
     { name: 'sec', model: 'gpt-6-sol', when: 'auth, crypto' },
-    { name: 'perf', model: 'gpt-6-astra', when: 'hot loops', instructions: 'Measure first.' },
+    { name: 'perf', model: 'gpt-6-astra', when: 'hot loops', skills: ['web-perf'] },
   ]
   expect(specialistDescription(list)).toBe(
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     'Specialists: sec (gpt-6-sol), use when: auth, crypto; perf (gpt-6-astra), use when: hot loops. ' +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
-    'When no specialist fits and the user wants one, or the user describes one, call {setup: {name, model, effort, when, instructions}}; it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
+    'When no specialist fits and the user wants one, or the user describes one, call {setup: {name, model, effort, when, skills}}; it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
     SETUP_HINT + ' ' +
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
@@ -109,13 +113,13 @@ test('the description lists every specialist and what the user confirms', () => 
 test('with no specialists the tool only offers to set one up', () => {
   expect(specialistDescription([])).toBe(
     'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
-    'When the user asks for one, call {setup: {name, model, effort, when, instructions}} with what they described; ' +
+    'When the user asks for one, call {setup: {name, model, effort, when, skills}} with what they described; ' +
     'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
     SETUP_HINT,
   )
   const schema = specialistSchema([]) as any
   expect(Object.keys(schema.properties)).toEqual(['setup'])
-  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'effort', 'when', 'instructions'])
+  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'effort', 'when', 'skills'])
 })
 
 test('the schema limits specialist to the configured names', () => {
@@ -124,7 +128,7 @@ test('the schema limits specialist to the configured names', () => {
   expect(schema.properties.finish).toEqual({ type: 'string', enum: ['merge', 'discard'] })
   expect(schema.additionalProperties).toBe(false)
   expect(schema.properties.setup.additionalProperties).toBe(false)
-  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'effort', 'when', 'instructions'])
+  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'effort', 'when', 'skills'])
 })
 
 const sec = { name: 'sec', model: 'gpt-6-sol', when: 'auth' }
@@ -138,14 +142,14 @@ test('a switched-off specialist is never offered or started; the refusal says wh
   expect(specialistDescription([off])).toBe(
     'Set up a specialist: a coding agent that works in its own git worktree with its own model. ' +
     'Every specialist is switched off by the user (sec); never offer or start one, and if one fits, say it can be turned on in /specialists. ' +
-    'When the user asks for one, call {setup: {name, model, effort, when, instructions}} with what they described; ' +
+    'When the user asks for one, call {setup: {name, model, effort, when, skills}} with what they described; ' +
     'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
     SETUP_HINT,
   )
   expect(Object.keys((specialistSchema([off]) as any).properties)).toEqual(['setup'])
 })
 const SHAPES_TEXT = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
-const SETUP_DENY = 'setup fields must be strings: name, model, effort, when, instructions'
+const SETUP_DENY = 'setup fields must be strings: name, model, effort, when, skills'
 const record: RunRecord = {
   id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', prompt: '',
   repo: '/r/app', worktree: '/r/app.specialists/sec-20260923-151204', branch: 'specialist/sec/20260923-151204',
@@ -163,7 +167,7 @@ test('each call shape is recognised, and nothing else is', () => {
   expect(specialistCall({}, [sec])).toEqual({ deny: SHAPES_TEXT })
   expect(specialistCall({ run: 'sec-1', result: true }, [sec])).toEqual({ kind: 'result', run: 'sec-1' })
   expect(specialistCall({ run: 'sec-1', result: true, message: 'm' }, [sec])).toEqual({ deny: SHAPES_TEXT })
-  expect(specialistCall({ setup: { name: 'perf', when: 'hot loops', instructions: 'Measure first.' } }, [sec])).toEqual({ kind: 'setup', fields: { name: 'perf', when: 'hot loops', instructions: 'Measure first.' } })
+  expect(specialistCall({ setup: { name: 'perf', when: 'hot loops', skills: 'web-perf, test-audit' } }, [sec])).toEqual({ kind: 'setup', fields: { name: 'perf', when: 'hot loops', skills: 'web-perf, test-audit' } })
   expect(specialistCall({ setup: {} }, [sec])).toEqual({ kind: 'setup', fields: {} })
   expect(specialistCall({ setup: { name: 3 } }, [sec])).toEqual({ deny: SETUP_DENY })
   expect(specialistCall({ setup: { perspective: 'security' } }, [sec])).toEqual({ deny: SETUP_DENY })
@@ -187,9 +191,9 @@ test('only the go label proceeds; Other text goes back to the model', () => {
   expect(dialogOutcome('use perf instead', 'Start sec', "Don't start", 'did not start sec')).toEqual({ reply: 'The user did not start sec and said: use perf instead' })
 })
 
-test('the prompt puts the instructions first and the ground rules last; without instructions it opens on the task', () => {
-  expect(specialistPrompt('Review migrations for locks.', 'add the index')).toBe(
-    'Review migrations for locks.\n\nTask:\nadd the index\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
+test('the prompt puts the skills first and the ground rules last; without skills it opens on the task', () => {
+  expect(specialistPrompt('Follow these skills.\n\n## Skill: x (folder: /s/x)\n\nBody.\n\n', 'add the index')).toBe(
+    'Follow these skills.\n\n## Skill: x (folder: /s/x)\n\nBody.\n\nTask:\nadd the index\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
   )
   expect(specialistPrompt('', 'harden login')).toBe(
     'Task:\nharden login\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
@@ -456,10 +460,9 @@ test('roundStatus: running, ended and failed each have their own mark and colour
   expect(roundStatus(false, undefined, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'success' })
 })
 
-test('use-when and instructions keep to one line, since the form cannot show more', () => {
+test('use-when keeps to one line, since the form cannot show more', () => {
   const sec = { name: 'sec', model: 'gpt-6-sol', when: 'auth' }
   expect(parseSpecialist({ ...sec, when: 'auth\ncrypto' })).toEqual({ error: 'use-when must be one line' })
-  expect(parseSpecialist({ ...sec, instructions: 'one\r\ntwo' })).toEqual({ error: 'instructions must be one line' })
 })
 
 test('with no specialists but a run still open, the tool keeps follow-up, result and finish', () => {
@@ -467,7 +470,7 @@ test('with no specialists but a run still open, the tool keeps follow-up, result
   expect(Object.keys(schema.properties)).toEqual(['run', 'message', 'finish', 'result', 'setup'])
   expect(specialistDescription([], true)).toBe(
     'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
-    'When the user asks for one, call {setup: {name, model, effort, when, instructions}} with what they described; ' +
+    'When the user asks for one, call {setup: {name, model, effort, when, skills}} with what they described; ' +
     'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
     SETUP_HINT + ' ' +
     'A run started before its specialist was removed still takes {run, message}, {run, result: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.',
