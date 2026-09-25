@@ -70,6 +70,13 @@ export function specialistEntries(options: Record<string, unknown>): { entries: 
   return { entries: data }
 }
 
+// Every session loads the list once, and another session's write does not
+// reach it; the plugin's store is shared and read live, so the last write any
+// session made there is the newest list. Without one, the loaded list stands.
+export function freshList(options: Record<string, unknown>, stored: unknown): { entries: unknown[]; problem?: string } {
+  return specialistEntries(typeof stored === 'string' ? { [LIST_FIELD]: stored } : options)
+}
+
 export function specialistRoster(options: Record<string, unknown>): { specialists: Specialist[]; problems: string[] } {
   const { entries, problem } = specialistEntries(options)
   const specialists: Specialist[] = []

@@ -7,7 +7,7 @@ import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import {
-  dialogOutcome, finishQuestion, followUpRefusal, LIST_FIELD, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
+  dialogOutcome, finishQuestion, followUpRefusal, LIST_FIELD, freshList, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
   commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type RunRecord, type Specialist, type Step,
@@ -18,7 +18,7 @@ import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
-import { blankDraft, draftFor, dropEntry, putEntry, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, putEntry, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -38,6 +38,8 @@ const SPECIALIST_PANE = 'specialist'
 const RUNS_KEY = 'specialist-runs'
 const SETUP_PANE = 'specialist-setup'
 const SETUP_KEY = 'specialist-setup'
+// The list as the last write in any session left it (see freshList).
+const LATEST_KEY = 'specialists-latest'
 const SETUP_COMMAND = 'specialists'
 // Every colour comes from theme.ts; DESIGN.md says which one serves what.
 const STATUS_FILL: Record<Status['kind'], string> = { saved: FILL.saved, error: FILL.error, note: FILL.note }
@@ -89,6 +91,8 @@ type PaneState = {
   // Bumped after each Enter in a setup field: the engine empties a submitted
   // Input, and a field under a new key draws its value again.
   inputEpoch: number
+  // The shared copy of the specialists list as last read (see latestList).
+  latest?: string
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -137,10 +141,11 @@ async function openSetup($: EngineInterface, state: PaneState, options: Record<s
   // Only a draft with changes survives to the next open; an untouched one would
   // reopen the form for nothing.
   const kept = state.setup?.draft && isDirty(state.setup.draft) ? state.setup.draft : undefined
+  const { entries } = await latestList($, state, options)
   let draft = kept
   let status: Status | undefined
   if (prefill) {
-    draft = blankDraft(specialistEntries(options).entries.length, [], prefill)
+    draft = blankDraft(entries.length, [], prefill)
   } else if (kept) {
     status = { kind: 'note', text: 'Your unsaved draft is back.' }
   }
@@ -192,31 +197,53 @@ async function openRow($: EngineInterface, state: PaneState, options: Record<str
     await keepSetup($, state, { ...setup, confirm: { kind: 'switch', target } })
     return
   }
-  const entries = specialistEntries(options).entries
+  const entries = (await latestList($, state, options)).entries
   const draft = target === 'new' ? blankDraft(entries.length, modelsOf(setup)) : draftFor(target, entries, modelsOf(setup))
   await keepSetup($, state, { ...setup, draft, confirm: undefined, status: undefined })
 }
 
 // The write reloads this module and the reload redraws from the store, so the
 // store is cleared first; a write that fails puts the draft back with the reason.
+// The shared copy is written first, since the settings write reloads this
+// module; a settings write that fails puts the copy back as it was.
 async function writeEntries($: EngineInterface, state: PaneState, setup: SetupState, entries: unknown[], done: string): Promise<void> {
   await keepSetup($, state, { catalog: setup.catalog, status: { kind: 'saved', text: done } })
+  const value = JSON.stringify(entries)
+  const before = await $.store.get(LATEST_KEY)
+  await $.store.set(LATEST_KEY, value)
   let written: { deny?: string }
   try {
-    written = await $.config.set({ key: LIST_KEY, value: JSON.stringify(entries) })
+    written = await $.config.set({ key: LIST_KEY, value })
   } catch (error) {
-    await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: String(error) } })
-    return
+    written = { deny: String(error) }
   }
-  if (written.deny) await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: written.deny } })
+  if (!written.deny) return
+  await (typeof before === 'string' ? $.store.set(LATEST_KEY, before) : $.store.delete(LATEST_KEY))
+  await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: written.deny } })
+}
+
+// Also keeps the copy for the screen, which draws without awaiting: it shows
+// what the last open or press read.
+async function latestList($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<{ entries: unknown[]; problem?: string }> {
+  const stored = await $.store.get(LATEST_KEY)
+  state.latest = typeof stored === 'string' ? stored : undefined
+  return freshList(options, stored)
 }
 
 // A stored list that does not read would be overwritten by any write, so
 // Save and Remove refuse until it is fixed by hand.
-async function refuseUnreadable($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<boolean> {
-  const { problem } = specialistEntries(options)
+async function refuseUnreadable($: EngineInterface, state: PaneState, problem: string | undefined): Promise<boolean> {
   if (!problem) return false
   await keepSetup($, state, { ...currentSetup(state), confirm: undefined, status: { kind: 'error', text: `Nothing written: ${problem}. Fix it with /config first.` } })
+  return true
+}
+
+// Another session may have changed the entry this draft opened on; writing
+// over it would lose that change, so the draft stays and nothing is written.
+async function refuseChanged($: EngineInterface, state: PaneState, draft: Draft, entries: unknown[]): Promise<boolean> {
+  if (draft.baseline === '' || !staleMessage(draft, entries)) return false
+  const name = draft.name || `specialist ${draft.index + 1}`
+  await keepSetup($, state, { ...currentSetup(state), confirm: undefined, status: { kind: 'error', text: `Nothing written: ${name} changed in another session since you opened it. Discard changes to see it.` } })
   return true
 }
 
@@ -225,11 +252,12 @@ async function saveSetup($: EngineInterface, state: PaneState, options: Record<s
   if (!setup?.draft) return
   if ('loading' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'note', text: 'Models are still loading; Save again in a moment.' } }); return }
   if ('error' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: `Cannot check the model: ${setup.catalog.error}` } }); return }
-  if (await refuseUnreadable($, state, options)) return
-  const entries = specialistEntries(options).entries
-  const checked = checkSpecialist(setup.draft, setup.draft.index, { models: setup.catalog.models, entries })
+  const { entries, problem } = await latestList($, state, options)
+  if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
+  const index = saveIndex(setup.draft, entries)
+  const checked = checkSpecialist(setup.draft, index, { models: setup.catalog.models, entries })
   if ('error' in checked) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: checked.error } }); return }
-  await writeEntries($, state, setup, putEntry(entries, setup.draft.index, checked.entry), `Saved ${setup.draft.name}.`)
+  await writeEntries($, state, setup, putEntry(entries, index, checked.entry), `Saved ${setup.draft.name}.`)
 }
 
 // The confirm row's yes: remove, or drop the unsaved draft and open the target.
@@ -238,8 +266,8 @@ async function confirmSetup($: EngineInterface, state: PaneState, options: Recor
   const confirm = setup?.confirm
   if (!setup?.draft || !confirm) return
   if (confirm.kind === 'switch') { await openRow($, state, options, confirm.target, true); return }
-  if (await refuseUnreadable($, state, options)) return
-  const entries = specialistEntries(options).entries
+  const { entries, problem } = await latestList($, state, options)
+  if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
   const name = draftFor(setup.draft.index, entries, []).name || `specialist ${setup.draft.index + 1}`
   await writeEntries($, state, setup, dropEntry(entries, setup.draft.index), `Removed ${name}.`)
 }
@@ -657,6 +685,11 @@ export const register: Register = (on, options) => {
     for (const problem of roster.problems) $.ui.log(problem)
     state.specialists = roster.specialists
     // A Save reloads this module; the screen's draft comes back from the store.
+    // This session's list is the newest at load; the shared copy starts from it.
+    if (typeof options[LIST_FIELD] === 'string') {
+      await $.store.set(LATEST_KEY, options[LIST_FIELD])
+      state.latest = options[LIST_FIELD]
+    }
     state.setup = restoreSetup(await $.store.get(SETUP_KEY), specialistEntries(options).entries)
     // A write made while the models were loading reloads this module before
     // they arrive; ask again, or Save would wait for them forever.
@@ -940,7 +973,10 @@ export const register: Register = (on, options) => {
   // plugin's hooks for its own $.config.set); a list set by hand lands here.
   on('config.set', { key: LIST_KEY }, async ($, e, next) => {
     const denial = await handEditDenial($, e.value)
-    return denial ? { deny: denial } : next(e)
+    if (denial) return { deny: denial }
+    const written = await next(e)
+    if (!('deny' in written) || !written.deny) await $.store.set(LATEST_KEY, e.value)
+    return written
   })
 
   on('command.run', { command: SETUP_COMMAND }, async ($) => {
@@ -962,7 +998,7 @@ export const register: Register = (on, options) => {
     if (!('Input' in ui)) return <ui.Text key="setup-mobile">Specialists are set up in the terminal or desktop app.</ui.Text>
     const { Box, Text, Input, Select, Button } = ui
     const setup = currentSetup(state)
-    const stored = specialistEntries(options)
+    const stored = freshList(options, state.latest)
     const view = setupView(setup, stored.entries, stored.problem)
     const draft = setup.draft
     const editor = view.editor

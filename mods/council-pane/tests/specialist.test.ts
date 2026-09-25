@@ -2,7 +2,7 @@
 // ABOUTME: Expected values are literals; bad entries must produce a named problem, never vanish
 import { test, expect } from 'bun:test'
 import {
-  parseSpecialist, specialistRoster, specialistEntries, specialistDescription, specialistSchema,
+  parseSpecialist, specialistRoster, specialistEntries, freshList, specialistDescription, specialistSchema,
   specialistCall, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
@@ -452,4 +452,13 @@ test('with no specialists but a run still open, the tool keeps follow-up, result
   )
   expect(Object.keys((specialistSchema([], false) as any).properties)).toEqual(['setup'])
   expect(specialistCall({ run: 'sec-1', result: true }, [])).toEqual({ kind: 'result', run: 'sec-1' })
+})
+
+test('the newest list is the copy in the shared store when there is one, else the one this session loaded', () => {
+  const loaded = { specialists: JSON.stringify([{ name: 'sec', model: 'm', when: 'w' }]) }
+  const newer = JSON.stringify([{ name: 'sec', model: 'm', when: 'w' }, { name: 'mig', model: 'm', when: 'w' }])
+  expect(freshList(loaded, newer)).toEqual({ entries: [{ name: 'sec', model: 'm', when: 'w' }, { name: 'mig', model: 'm', when: 'w' }] })
+  expect(freshList(loaded, undefined)).toEqual({ entries: [{ name: 'sec', model: 'm', when: 'w' }] })
+  expect(freshList(loaded, 7)).toEqual({ entries: [{ name: 'sec', model: 'm', when: 'w' }] })
+  expect(freshList(loaded, 'nope')).toEqual({ entries: [], problem: 'the specialists setting is not JSON: nope' })
 })

@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -260,4 +260,9 @@ test('a restored screen keeps only the fields it knows, and a catalog of another
   const oldModel = { slug: 'gpt-6-sol', listed: true, efforts: ['high'] }
   expect(restoreSetup({ draft, catalog: { models: [oldModel] } }, two)).toEqual(setAside)
   expect(restoreSetup({ draft, catalog: { models: 'many' } }, two)).toEqual(setAside)
+})
+
+test('a new specialist lands at the end of the newest list; an edited one keeps its place', () => {
+  expect(saveIndex(blankDraft(1, models), [secEntry, secEntry, secEntry])).toBe(3)
+  expect(saveIndex(draftFor(0, [secEntry], models), [secEntry, secEntry])).toBe(0)
 })

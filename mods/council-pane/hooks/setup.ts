@@ -74,6 +74,12 @@ export function putEntry<T>(entries: T[], index: number, entry: T): T[] {
   return index >= entries.length ? [...entries, entry] : entries.map((existing, at) => (at === index ? entry : existing))
 }
 
+// A new specialist goes after whatever the newest list holds; an edited one
+// keeps its place, which the stale check has already vouched for.
+export function saveIndex(draft: Draft, entries: unknown[]): number {
+  return draft.baseline === '' ? entries.length : draft.index
+}
+
 export function dropEntry<T>(entries: T[], index: number): T[] {
   return entries.filter((_, at) => at !== index)
 }
