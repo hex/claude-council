@@ -857,8 +857,10 @@ bash scripts/transcript-digest.sh --turns last:25 <path/to/transcript.jsonl>
 # Pipe to formatter for terminal display
 bash scripts/query-council.sh --providers=gemini -- "Question" 2>/dev/null | bash scripts/format-output.sh
 
-# Check provider status (the Perplexity check makes one minimal billable request,
-# since Perplexity has no free /models endpoint to probe)
+# Check provider status. A passed key check for Gemini, OpenAI, Grok or Kimi is
+# followed by one chat request capped at 16 output tokens, since a models
+# listing answers for a key whose account cannot run inference; Perplexity's
+# only check is such a request. Each costs a fraction of a cent.
 bash scripts/check-status.sh
 
 # List configured providers (human-readable, with policy info)

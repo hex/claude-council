@@ -20,7 +20,7 @@ setup() {
 # from check-status.bats because bats parallelises across files, not within one,
 # so the suite's wall clock had a floor at that file's total.
 
-# Perplexity is the one provider probed with a chat request, and it rejects any
+# Perplexity's key check is itself a chat request, and it rejects any
 # request below 16 output tokens with HTTP 400 ("max_tokens must be at least
 # 16"). A probe cheaper than the floor is not a cheaper probe, it is a broken
 # one, and record_curl cannot notice: only the payload we send can.
@@ -107,7 +107,8 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [ -s "$CS_ARGV_FILE" ]
-    [ "$(grep -cxF -- '--max-time' "$CS_ARGV_FILE" || true)" -eq 5 ]
+    # Six key checks, then the four inference probes that follow a passed one.
+    [ "$(grep -cxF -- '--max-time' "$CS_ARGV_FILE" || true)" -eq 10 ]
 }
 
 # rejected_key reads the vendor's key marker with jq. Without a working jq that
@@ -170,18 +171,32 @@ setup() {
     [ -z "$(ls -A "$TMPDIR")" ]
 }
 
+@test "check-status: the inference probes hit each vendor's chat endpoint with a small output cap" {
+    record_curl
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    grep -qxF 'https://api.openai.com/v1/chat/completions' "$CS_ARGV_FILE"
+    grep -qxF 'https://api.x.ai/v1/chat/completions' "$CS_ARGV_FILE"
+    grep -qxF 'https://api.moonshot.ai/v1/chat/completions' "$CS_ARGV_FILE"
+    grep -qE '^https://generativelanguage\.googleapis\.com/v1beta/models/[^/]+:generateContent$' "$CS_ARGV_FILE"
+    grep -qF '"max_completion_tokens":16' "$CS_ARGV_FILE"
+    [ "$(grep -cF '"max_tokens":16' "$CS_ARGV_FILE" || true)" -eq 3 ]
+    grep -qF '"maxOutputTokens":16' "$CS_ARGV_FILE"
+}
+
 @test "check-status: probe API keys never appear on the curl argv" {
     record_curl
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     # Guard against a vacuous pass: curl must have actually run and recorded argv.
     [ -s "$CS_ARGV_FILE" ]
-    # None of the five keys may reach the process table (ps-visible for the 10s probe).
+    # None of the six keys may reach the process table (ps-visible for the 10s probe).
     run ! grep -qF "SEKRET_GEM" "$CS_ARGV_FILE"
     run ! grep -qF "SEKRET_OAI" "$CS_ARGV_FILE"
     run ! grep -qF "SEKRET_GROK" "$CS_ARGV_FILE"
     run ! grep -qF "SEKRET_PPX" "$CS_ARGV_FILE"
     run ! grep -qF "SEKRET_ORT" "$CS_ARGV_FILE"
+    run ! grep -qF "SEKRET_KIMI" "$CS_ARGV_FILE"
     # They must instead travel via the mode-600 --config file.
     grep -qF "SEKRET_GEM" "$CS_CONFIG_FILE"
     grep -qF "SEKRET_OAI" "$CS_CONFIG_FILE"

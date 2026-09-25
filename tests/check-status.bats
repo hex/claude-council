@@ -285,3 +285,106 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"install the Cursor CLI (cursor-agent)"* ]]
 }
+
+# ---- a key that authenticates but cannot run inference ----
+#
+# /v1/models (and Gemini's model metadata) answer 200 for any valid key, so a
+# key with exhausted billing or no inference entitlement used to read
+# Connected. After a passed key check, OpenAI, xAI, Kimi and Gemini get one
+# small chat request. What it may and may not conclude:
+#   1. 402, or the vendor's own out-of-quota marker, is "Inference blocked".
+#   2. A plain 429 is "Rate limited": the key works, just not right now.
+#   3. Anything else (a 400 over request shape, a 500, a timeout) proves
+#      nothing about billing: the row reads Connected, inference unverified,
+#      with the code, so an answer nobody expected shows instead of passing.
+#   4. A key that failed its check gets no chat request at all.
+# Perplexity's only probe is already a chat request and is unchanged.
+
+@test "check-status: OpenAI insufficient_quota after a passed key check reports inference blocked" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=200
+    export COUNCIL_FAKE_CHAT_CODE=429
+    export COUNCIL_FAKE_CHAT_BODY='{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","code":"insufficient_quota"}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    [[ "$plain" == *"OpenAI        ✗  Inference blocked (HTTP 429)"*"fix: check the account's billing or credits"* ]]
+    # Only OpenAI's body carries OpenAI's marker; the other three read it as a
+    # plain 429. Perplexity, OpenRouter and the six CLIs stay available.
+    [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked' || true)" -eq 1 ]
+    [ "$(printf '%s\n' "$plain" | grep -c 'Rate limited (HTTP 429)' || true)" -eq 3 ]
+    [[ "$plain" == *"8/12 providers available"* ]]
+}
+
+@test "check-status: OpenAI credit_balance_exhausted reports inference blocked" {
+    shadow_curl
+    export COUNCIL_FAKE_CHAT_CODE=429
+    export COUNCIL_FAKE_CHAT_BODY='{"error":{"message":"Your organization has no prepaid credits remaining.","type":"insufficient_quota","code":"credit_balance_exhausted"}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')" == *"OpenAI        ✗  Inference blocked (HTTP 429)"* ]]
+}
+
+# The one xAI shape seen in the wild (xAI documents none): a 403, which without
+# its marker would read as an unverified answer rather than a rejected key.
+@test "check-status: an xAI spending-limit 403 reports inference blocked" {
+    shadow_curl
+    export COUNCIL_FAKE_CHAT_CODE=403
+    export COUNCIL_FAKE_CHAT_BODY='{"code":"personal-team-blocked:spending-limit","error":"You have run out of credits or need a Grok subscription."}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    [[ "$plain" == *"Grok          ✗  Inference blocked (HTTP 403)"* ]]
+    [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked' || true)" -eq 1 ]
+}
+
+@test "check-status: Kimi exceeded_current_quota_error reports inference blocked" {
+    shadow_curl
+    export COUNCIL_FAKE_CHAT_CODE=429
+    export COUNCIL_FAKE_CHAT_BODY='{"error":{"message":"Your account is suspended, please check your plan and billing details","type":"exceeded_current_quota_error"}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    [[ "$plain" == *"Kimi          ✗  Inference blocked (HTTP 429)"* ]]
+    [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked' || true)" -eq 1 ]
+}
+
+@test "check-status: a 402 from the inference probe reports inference blocked for every probed vendor" {
+    shadow_curl
+    export COUNCIL_FAKE_CHAT_CODE=402
+    export COUNCIL_FAKE_CHAT_BODY='{"error":"Payment Required"}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked (HTTP 402)' || true)" -eq 4 ]
+    [[ "$plain" == *"Perplexity    ✓  Connected"* ]]
+    [[ "$plain" == *"8/12 providers available"* ]]
+}
+
+@test "check-status: an inference answer the probe does not recognise reads Connected, inference unverified" {
+    shadow_curl
+    export COUNCIL_FAKE_CHAT_CODE=400
+    export COUNCIL_FAKE_CHAT_BODY='{"error":{"message":"Unsupported parameter: max_tokens","type":"invalid_request_error","code":"unsupported_parameter"}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    # The key works, so the provider still counts; the row says what is unproven.
+    [ "$(printf '%s\n' "$plain" | grep -c 'Connected .*inference unverified (HTTP 400)' || true)" -eq 4 ]
+    [[ "$plain" == *"OpenAI        ✓  Connected ("*"ms)"*"· inference unverified (HTTP 400)"* ]]
+    [[ "$plain" == *"12/12 providers available"* ]]
+    [[ "$plain" != *"Inference blocked"* ]]
+}
+
+@test "check-status: a key that fails its check gets no inference probe" {
+    record_curl
+    export COUNCIL_FAKE_HTTP_CODE=401
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ -s "$CS_ARGV_FILE" ]
+    run ! grep -qE 'api\.(openai\.com|x\.ai|moonshot\.ai)/v1/chat/completions|:generateContent$' "$CS_ARGV_FILE"
+}

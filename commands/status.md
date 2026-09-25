@@ -16,7 +16,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/check-status.sh
 ## Output
 
 Present the script output directly - it includes formatted status for each provider:
-- Connection status (connected, timeout, auth error, not configured)
+- Connection status (connected, timeout, auth error, inference blocked, rate limited, not configured), and "inference unverified" after the model when the chat probe got an answer it did not recognise
 - Response time in milliseconds
 - Configured model name
 - Per-provider fix command for anything not available
