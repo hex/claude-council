@@ -428,8 +428,8 @@ test('roundClock counts m:ss, and h:mm:ss past an hour', () => {
 })
 
 test('roundStatus: running, ended and failed each have their own mark and colour', () => {
-  expect(roundStatus(true, undefined, '0:49')).toEqual({ glyph: '●', text: '0:49', color: 'rgb(191,112,0)' })
-  expect(roundStatus(false, { result: 'ok', isError: false }, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'green' })
-  expect(roundStatus(false, { result: 'boom', isError: true }, '3:12')).toEqual({ glyph: '✗', text: 'failed 3:12', color: 'red' })
-  expect(roundStatus(false, undefined, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'green' })
+  expect(roundStatus(true, undefined, '0:49')).toEqual({ glyph: '●', text: '0:49', color: 'warning' })
+  expect(roundStatus(false, { result: 'ok', isError: false }, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'success' })
+  expect(roundStatus(false, { result: 'boom', isError: true }, '3:12')).toEqual({ glyph: '✗', text: 'failed 3:12', color: 'error' })
+  expect(roundStatus(false, undefined, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'success' })
 })

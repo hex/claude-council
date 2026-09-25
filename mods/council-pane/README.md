@@ -131,4 +131,6 @@ claude plugin validate .
 
 The types come from `/plugin-types`, which writes `.claude/types/` at the repo root. Regenerate them after a Claude Code update. Run with `--debug` and look for `claude-council` in the log when something does not draw.
 
+Colours, type, glyphs and components follow [DESIGN.md](DESIGN.md), and every colour lives in `hooks/theme.ts`. Most are the engine's own theme keys, so the mod follows a light, dark or colour-blind theme and keeps its contrast on each.
+
 `claude plugin validate` enforces one rule `tsc` does not: you can pass `$` only to functions declared at the top of the hooks module, never to a closure inside `register`.

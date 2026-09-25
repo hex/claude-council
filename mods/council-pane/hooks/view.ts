@@ -1,6 +1,7 @@
 // ABOUTME: Decides which council run the pane shows and turns its state into the markdown drawn there
 // ABOUTME: Pure functions over plain values, so they run without the engine
 import type { ProviderStatus } from './status'
+import { COLOR } from './theme'
 
 export type RunView = {
   providers: ProviderStatus[]
@@ -29,7 +30,8 @@ export type Section =
   | { kind: 'synthesis'; key: string; text: string }
   | { kind: 'error'; key: string; title: string; text: string }
 
-const STATE_COLORS: Record<string, string> = { querying: 'yellow', complete: 'green', cached: 'cyan', error: 'red' }
+const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger }
+// A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
 const SPINNER = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f']
 export const spinner = (frame: number) => SPINNER[frame % SPINNER.length] ?? '\u25cf'
@@ -64,10 +66,10 @@ function statusRows(
   return providers.map(provider => ({
     kind: 'status',
     glyph: glyph(provider.state),
-    glyphColor: provider.state === 'error' ? 'red' : vendor(provider.name),
+    glyphColor: provider.state === 'error' ? COLOR.danger : vendor(provider.name),
     name: provider.name.padEnd(names),
     state: provider.state.padEnd(states),
-    stateColor: STATE_COLORS[provider.state] ?? 'gray',
+    stateColor: STATE_COLORS[provider.state] ?? COLOR.muted,
     time: shownTime(provider).padStart(times),
     model: provider.model ?? '',
   }))
@@ -95,7 +97,7 @@ function doneSummary(
       // The digit is the hotkey that jumps to the provider's section while the pane has the keys.
       items: providers.map(({ name, state }, index) => ({
         glyph: glyph(state),
-        color: state === 'error' ? 'red' : vendor(name),
+        color: state === 'error' ? COLOR.danger : vendor(name),
         name,
         hotkey: index < 9 ? String(index + 1) : '',
         ...(hasSection(name) ? { target: jumpKey(name) } : {}),

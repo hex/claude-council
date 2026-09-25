@@ -124,7 +124,7 @@ test('the roster is a table: a row per specialist, zebra on every other one, its
   const view = setupView(ready, two)
   expect(view.header).toBe('SPECIALISTS 2')
   expect(view.roster).toEqual([
-    { kind: 'ok', index: 0, name: 'sec', color: 'rgb(70,130,180)', zebra: false, editing: false, model: 'gpt-6-sol', effort: 'high', effortColor: 'rgb(190,120,30)', when: 'auth, crypto' },
+    { kind: 'ok', index: 0, name: 'sec', color: 'rgb(70,130,180)', zebra: false, editing: false, model: 'gpt-6-sol', effort: 'high', effortStyle: { color: 'warning' }, when: 'auth, crypto' },
     { kind: 'ok', index: 1, name: 'mig', color: 'rgb(150,90,170)', zebra: true, editing: false, model: 'gpt-6-luna', effort: 'default', when: 'schema changes', instructions: 'Review migrations for locks and rollbacks.' },
   ])
   expect(view.editor).toBeUndefined()
@@ -136,13 +136,13 @@ test('the columns are as wide as their widest cell, header included', () => {
   expect(setupView(ready, [{ name: 'a', model: 'm', when: 'w' }, 'broken']).columns).toEqual({ name: 12, model: 5, effort: 7 })
 })
 
-test('each effort has its own colour, rising with the effort; the Codex default has none', () => {
+test('each effort has its own style, rising with the effort; the Codex default has none', () => {
   const effortOf = (effort?: string) => {
     const [row] = setupView(ready, [{ name: 'a', model: 'm', when: 'w', ...(effort ? { effort } : {}) }]).roster
-    return row?.kind === 'ok' ? row.effortColor : 'broken'
+    return row?.kind === 'ok' ? row.effortStyle : 'broken'
   }
   expect(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'].map(effortOf)).toEqual([
-    'rgb(96,140,72)', 'rgb(90,110,200)', 'rgb(190,120,30)', 'rgb(210,95,40)', 'rgb(190,55,55)', 'rgb(170,60,160)',
+    { color: 'inactive' }, { color: 'suggestion' }, { color: 'warning' }, { color: 'error' }, { color: 'error', bold: true }, { color: 'merged', bold: true },
   ])
   expect(effortOf(undefined)).toBeUndefined()
   expect(effortOf('turbo')).toBeUndefined()
@@ -151,7 +151,7 @@ test('each effort has its own colour, rising with the effort; the Codex default 
 test('specialist colours follow the list order and wrap after six', () => {
   const seven = Array.from({ length: 7 }, (_, i) => ({ name: `s${i}`, model: 'm', when: 'w' }))
   expect(setupView(ready, seven).roster.map(row => row.color)).toEqual([
-    'rgb(70,130,180)', 'rgb(150,90,170)', 'rgb(60,140,90)', 'rgb(200,80,110)', 'rgb(190,140,40)', 'rgb(90,160,160)', 'rgb(70,130,180)',
+    'rgb(70,130,180)', 'rgb(150,90,170)', 'rgb(60,140,90)', 'rgb(200,80,110)', 'rgb(160,120,20)', 'rgb(40,140,140)', 'rgb(70,130,180)',
   ])
 })
 

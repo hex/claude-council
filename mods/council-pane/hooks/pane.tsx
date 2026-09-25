@@ -17,19 +17,12 @@ import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
+import { COLOR, FILL } from './theme'
 import { blankDraft, draftFor, dropEntry, putEntry, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
 const RUN_TIMEOUT_MS = 600_000
-// Claude's orange (#D97757): the council speaks inside Claude Code, and the
-// synthesis is Claude's own text. No provider's banner uses it.
-const COUNCIL_RGB = 'rgb(217,119,87)'
-const MODEL_RGB = 'rgb(38,128,150)'
-// Mid tones, readable on a light and a dark background alike.
-const BRANCH_RGB = 'rgb(96,140,72)'
-const WORKTREE_RGB = 'rgb(112,120,160)'
-const CHIP_DARK_RGB = 'rgb(191,96,60)'
 const POLL_MS = 500
 // Ten frames a second: the spinner's pace in the tmux pane.
 const FRAME_MS = 100
@@ -46,19 +39,8 @@ const RUNS_KEY = 'specialist-runs'
 const SETUP_PANE = 'specialist-setup'
 const SETUP_KEY = 'specialist-setup'
 const SETUP_COMMAND = 'specialists'
-// Filled status labels carry white letters, so each background is dark enough
-// for white on a light or a dark terminal.
-// The roster's shades are theme keys, so they follow a light or a dark theme:
-// every other row takes the message background, and the row being edited or
-// under the pointer takes the selection's.
-const ZEBRA_BG = 'userMessageBackground'
-const SELECTED_BG = 'selectionBg'
-// A dark neutral grey under white letters reads on a light and a dark theme
-// alike (about 7:1).
-const HEADER_BG = 'rgb(88,88,88)'
-// Table lines take the theme's subtle grey, fainter than dim text.
-const RULE_COLOR = 'subtle'
-const STATUS_RGB: Record<Status['kind'], string> = { saved: 'rgb(46,120,72)', error: 'rgb(178,58,52)', note: 'rgb(150,100,20)' }
+// Every colour comes from theme.ts; DESIGN.md says which one serves what.
+const STATUS_FILL: Record<Status['kind'], string> = { saved: FILL.saved, error: FILL.error, note: FILL.note }
 const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: ' ERROR ', note: ' NOTE ' }
 // Help lines start under the field values: the labels are 13 wide plus ': '.
 const HELP_INDENT = ' '.repeat(15)
@@ -611,12 +593,12 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
 function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string, frame?: number) {
   return (
     <ui.Box key={key} flexDirection="row" flexShrink={0}>
-      <ui.Text bold color="white" backgroundColor={CHIP_DARK_RGB}>{' \u2726 '}</ui.Text>
-      <ui.Text backgroundColor={COUNCIL_RGB}>{' '}</ui.Text>
+      <ui.Text bold color={COLOR.onFill} backgroundColor={FILL.chipMark}>{' \u2726 '}</ui.Text>
+      <ui.Text backgroundColor={FILL.chip}>{' '}</ui.Text>
       {shimmer(label, frame).map((letter, index) => (
-        <ui.Text key={`${key}-${index}`} bold color={letter.color} backgroundColor={COUNCIL_RGB}>{letter.text}</ui.Text>
+        <ui.Text key={`${key}-${index}`} bold color={letter.color} backgroundColor={FILL.chip}>{letter.text}</ui.Text>
       ))}
-      <ui.Text backgroundColor={COUNCIL_RGB}>{' '}</ui.Text>
+      <ui.Text backgroundColor={FILL.chip}>{' '}</ui.Text>
     </ui.Box>
   )
 }
@@ -638,14 +620,14 @@ function retryRow(
 ) {
   return (
     <ui.Box key="retry" flexDirection="row" marginTop={1}>
-      <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
-        <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>{offer.badge}</ui.Text>
+      <ui.Box flexDirection="row" paddingX={1} backgroundColor={FILL.chip}>
+        <ui.Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{offer.badge}</ui.Text>
       </ui.Box>
-      <ui.Text bold color="red">{` \u2717 ${offer.notice}  `}</ui.Text>
+      <ui.Text bold color={COLOR.danger}>{` \u2717 ${offer.notice}  `}</ui.Text>
       <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
       <ui.Text>{' '}</ui.Text>
       <ui.Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={press.skip} />
-      <ui.Text color={COUNCIL_RGB}>{`  ${offer.bar}`}</ui.Text>
+      <ui.Text color={COLOR.accent}>{`  ${offer.bar}`}</ui.Text>
       <ui.Text dimColor>{` ${offer.remaining}s  click, or ctrl+x tab then r / s`}</ui.Text>
     </ui.Box>
   )
@@ -877,7 +859,7 @@ export const register: Register = (on, options) => {
       return (
         <ui.Box key="finished" flexDirection="row" marginTop={1}>
           {chip(ui, 'chip', 'COUNCIL')}
-          <ui.Text bold {...(finished.isFailure ? { color: 'red' } : {})}>{` ${finished.isFailure ? '\u2717' : '\u2713'} ${finished.text}  `}</ui.Text>
+          <ui.Text bold {...(finished.isFailure ? { color: COLOR.danger } : {})}>{` ${finished.isFailure ? '\u2717' : '\u2713'} ${finished.text}  `}</ui.Text>
           <ui.Button key="finished:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
           <ui.Text>{' '}</ui.Text>
           <ui.Button
@@ -904,7 +886,7 @@ export const register: Register = (on, options) => {
           <ui.Box flexShrink={0}>
             <ui.Text>
               <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
-              <ui.Text color={MODEL_RGB}>{`  ${working.record.model}`}</ui.Text>
+              <ui.Text color={COLOR.model}>{`  ${working.record.model}`}</ui.Text>
               <ui.Text bold color={roundStatus(true, undefined, clock).color}>{`  \u25cf ${clock}`}</ui.Text>
             </ui.Text>
           </ui.Box>
@@ -923,7 +905,7 @@ export const register: Register = (on, options) => {
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
         {chip(ui, 'chip', 'COUNCIL', state.frame)}
-        <ui.Text color={COUNCIL_RGB}>{`  ${progress.bar}`}</ui.Text>
+        <ui.Text color={COLOR.accent}>{`  ${progress.bar}`}</ui.Text>
         <ui.Text>{`  ${progress.text}  `}</ui.Text>
         <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
       </ui.Box>
@@ -970,7 +952,7 @@ export const register: Register = (on, options) => {
     const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
     // A dim bar between two columns.
     const separator = (key: string) => (
-      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={RULE_COLOR}>{SEPARATOR}</Text></Box>
+      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={COLOR.line}>{SEPARATOR}</Text></Box>
     )
     // A row's second line starts under the model column.
     const under = (key: string, text: string) => (
@@ -989,39 +971,39 @@ export const register: Register = (on, options) => {
       <Box key="setup" flexDirection="column" width={width}>
         {/* The roster: a table in one frame. A row's own colour marks its swatch,
             every other row is shaded, and a second line carries its instructions. */}
-        <Text key="roster-chip" bold color="white" backgroundColor={COUNCIL_RGB}>{` ${view.header} `}</Text>
-        <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1}>
+        <Text key="roster-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${view.header} `}</Text>
+        <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
           {view.roster.length > 0 ? (
-            <Box key="head" flexDirection="row" backgroundColor={HEADER_BG}>
+            <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
               {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
-              {cell('name', view.columns.name + PAD, <Text key="text" bold color="white">{HEADERS.name}</Text>)}
+              {cell('name', view.columns.name + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.name}</Text>)}
               {separator('sep-1')}
-              {cell('model', view.columns.model + PAD, <Text key="text" bold color="white">{HEADERS.model}</Text>)}
+              {cell('model', view.columns.model + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.model}</Text>)}
               {separator('sep-2')}
-              {cell('effort', view.columns.effort + PAD, <Text key="text" bold color="white">{HEADERS.effort}</Text>)}
+              {cell('effort', view.columns.effort + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.effort}</Text>)}
               {separator('sep-3')}
-              <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color="white" wrap="truncate-end">{HEADERS.when}</Text></Box>
+              <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color={COLOR.onFill} wrap="truncate-end">{HEADERS.when}</Text></Box>
             </Box>
           ) : null}
           {view.roster.map((entry, at) => [
-            at > 0 ? <Text key={`rule:${entry.index}`} color={RULE_COLOR} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
-            <Box key={`entry:${entry.index}`} flexDirection="column" hover={{ backgroundColor: SELECTED_BG }}
-              {...(entry.editing ? { backgroundColor: SELECTED_BG } : entry.zebra ? { backgroundColor: ZEBRA_BG } : {})}>
+            at > 0 ? <Text key={`rule:${entry.index}`} color={COLOR.line} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
+            <Box key={`entry:${entry.index}`} flexDirection="column" hover={{ backgroundColor: COLOR.selected }}
+              {...(entry.editing ? { backgroundColor: COLOR.selected } : entry.zebra ? { backgroundColor: COLOR.zebra } : {})}>
               <Box key="line" flexDirection="row">
                 {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.color}>{entry.editing ? '▶' : '●'}</Text>)}
                 {cell('name', view.columns.name + PAD, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
                 {separator('sep-1')}
-                {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, <Text key="text" color={MODEL_RGB}>{entry.model}</Text>) : null}
+                {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, <Text key="text" color={COLOR.model}>{entry.model}</Text>) : null}
                 {entry.kind === 'ok' ? separator('sep-2') : null}
-                {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.effortColor
-                  ? <Text key="text" color={entry.effortColor}>{entry.effort}</Text>
+                {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.effortStyle
+                  ? <Text key="text" color={entry.effortStyle.color} bold={entry.effortStyle.bold === true}>{entry.effort}</Text>
                   : <Text key="text" dimColor>{entry.effort}</Text>) : null}
                 {entry.kind === 'ok' ? separator('sep-3') : null}
                 <Box key="rest" flexGrow={1} flexShrink={1}>
                   {entry.kind === 'ok'
                     ? <Text key="text" wrap="truncate-end">{entry.when}</Text>
-                    : <Text key="text" color={STATUS_RGB.error} wrap="truncate-end">{entry.problem}</Text>}
+                    : <Text key="text" color={COLOR.danger} wrap="truncate-end">{entry.problem}</Text>}
                 </Box>
               </Box>
               {entry.kind === 'ok' && entry.instructions ? under('instructions', `↳ ${entry.instructions}`) : null}
@@ -1033,17 +1015,17 @@ export const register: Register = (on, options) => {
         {editor && draft ? (
           <Box key="editor-wrap" flexDirection="column" marginTop={1}>
             <Box key="editor-head" flexDirection="row">
-              <Text key="editor-chip" bold color="white" backgroundColor={COUNCIL_RGB}>{` ${editor.title} `}</Text>
-              {editor.unsaved ? <Text key="unsaved" color={COUNCIL_RGB}>{'  unsaved changes'}</Text> : null}
+              <Text key="editor-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${editor.title} `}</Text>
+              {editor.unsaved ? <Text key="unsaved" color={COLOR.warning}>{'  unsaved changes'}</Text> : null}
             </Box>
-            <Box key="editor" flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1}>
+            <Box key="editor" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1}>
               <Input key={`name.${state.inputEpoch}`} label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />
               <Select key="model" label="Model        " value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
                 onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
               {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
               {editor.models === 'failed' ? (
                 <Box key="models-failed" flexDirection="row">
-                  <Text key="failed" color={STATUS_RGB.error}>{`${HELP_INDENT}could not load models  `}</Text>
+                  <Text key="failed" color={COLOR.danger}>{`${HELP_INDENT}could not load models  `}</Text>
                   <Button key="retry" label="Retry" onPress={press(() => loadCatalog($, state))} />
                 </Box>
               ) : null}
@@ -1075,7 +1057,7 @@ export const register: Register = (on, options) => {
         ) : null}
         {view.status ? (
           <Box key="status" flexDirection="row" marginTop={1}>
-            <Text key="label" bold color="white" backgroundColor={STATUS_RGB[view.status.kind]}>{STATUS_LABEL[view.status.kind]}</Text>
+            <Text key="label" bold color={COLOR.onFill} backgroundColor={STATUS_FILL[view.status.kind]}>{STATUS_LABEL[view.status.kind]}</Text>
             <Text key="text" wrap="wrap">{` ${view.status.text}`}</Text>
           </Box>
         ) : null}
@@ -1097,13 +1079,13 @@ export const register: Register = (on, options) => {
     const { Box, Markdown, Text } = ui
     const columns = e.props.bodyColumns
     const { record } = log
-    const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', 'yellow'] : step.state === 'failed' ? ['\u2717', 'red'] : ['\u2713', 'green'])
+    const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', COLOR.warning] : step.state === 'failed' ? ['\u2717', COLOR.danger] : ['\u2713', COLOR.success])
     const status = roundStatus(log.isLive, record.last, roundClock(record.startedMs, state.nowMs))
     const cardWidth = Math.max(20, columns - 2)
     return (
       <Box key="specialist" flexDirection="column">
         {/* A card, like a sidebar entry: who, how it stands, then where it works. */}
-        <Box flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1} width={cardWidth}>
+        <Box flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={cardWidth}>
           {/* Each group is its own element, so a narrow pane wraps between
               groups, never inside one. */}
           <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
@@ -1111,23 +1093,23 @@ export const register: Register = (on, options) => {
             <Text bold>{record.specialist}</Text>
             <Text bold color={status.color}>{`${status.glyph} ${status.text}`}</Text>
             <Text dimColor>{`round ${record.rounds}`}</Text>
-            <Text color={MODEL_RGB}>{record.model}</Text>
+            <Text color={COLOR.model}>{record.model}</Text>
           </Box>
           {/* A line exactly as wide as the card wraps to an empty second line
               without truncate. */}
-          <Text color={COUNCIL_RGB} dimColor wrap="truncate">{'\u2500'.repeat(cardWidth - 4)}</Text>
+          <Text color={COLOR.accent} dimColor wrap="truncate">{'\u2500'.repeat(cardWidth - 4)}</Text>
           {/* The worktree is cut from the left: its last part names the run. */}
           <Box flexDirection="row">
             <Text dimColor>{'branch    '}</Text>
-            <Box flexShrink={1}><Text color={BRANCH_RGB} wrap="truncate-start">{record.branch}</Text></Box>
+            <Box flexShrink={1}><Text color={COLOR.muted} wrap="truncate-start">{record.branch}</Text></Box>
           </Box>
           <Box flexDirection="row">
             <Text dimColor>{'worktree  '}</Text>
-            <Box flexShrink={1}><Text color={WORKTREE_RGB} wrap="truncate-start">{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text></Box>
+            <Box flexShrink={1}><Text color={COLOR.muted} wrap="truncate-start">{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text></Box>
           </Box>
         </Box>
         <Text>
-          <Text bold color={COUNCIL_RGB}>{' STEPS'}</Text>
+          <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{' STEPS '}</Text>
           <Text dimColor>{`  ${log.steps.filter(step => step.kind === 'run' || step.kind === 'edit').length}`}</Text>
         </Text>
         {log.steps.map((step, index) => {
@@ -1150,7 +1132,7 @@ export const register: Register = (on, options) => {
             return (
               <Text key={key}>
                 <Text color={color}>{`${glyph} `}</Text>
-                <Text color={COUNCIL_RGB}>{'\u270e '}</Text>
+                <Text color={COLOR.accent}>{'\u270e '}</Text>
                 <Text bold={!isDone}>{step.text}</Text>
               </Text>
             )
@@ -1160,9 +1142,9 @@ export const register: Register = (on, options) => {
           return (
             <Text key={key} wrap="truncate-end">
               <Text color={color}>{`${glyph} `}</Text>
-              <Text color={COUNCIL_RGB}>{'$ '}</Text>
-              <Text bold color={step.state === 'failed' ? 'red' : undefined}>{program}</Text>
-              <Text dimColor={isDone} color={step.state === 'failed' ? 'red' : undefined}>{line.slice(program.length)}</Text>
+              <Text color={COLOR.accent}>{'$ '}</Text>
+              <Text bold color={step.state === 'failed' ? COLOR.danger : undefined}>{program}</Text>
+              <Text dimColor={isDone} color={step.state === 'failed' ? COLOR.danger : undefined}>{line.slice(program.length)}</Text>
             </Text>
           )
         })}
@@ -1229,15 +1211,15 @@ export const register: Register = (on, options) => {
         case 'banner':
           return (
             <Box key={section.key} flexDirection="row" marginTop={1} paddingX={1} width={columns} backgroundColor={section.background}>
-              <Text bold color="white" backgroundColor={section.background}>{section.title}</Text>
-              <Text italic color="white" backgroundColor={section.background}>{` ${section.subtitle}`}</Text>
+              <Text bold color={COLOR.onFill} backgroundColor={section.background}>{section.title}</Text>
+              <Text italic color={COLOR.onFill} backgroundColor={section.background}>{` ${section.subtitle}`}</Text>
             </Box>
           )
         case 'synthesis':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
-              <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={COUNCIL_RGB}>
-                <Text bold color="white" backgroundColor={COUNCIL_RGB}>SYNTHESIS</Text>
+              <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={FILL.chip}>
+                <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>SYNTHESIS</Text>
               </Box>
               {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
@@ -1256,8 +1238,8 @@ export const register: Register = (on, options) => {
         case 'error':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
-              <Text bold color="red">{`\u2717 ${section.title}`}</Text>
-              <Text color="red" dimColor>{(markdownBlocks(section.text, 2000)[0] ?? '')}</Text>
+              <Text bold color={COLOR.danger}>{`\u2717 ${section.title}`}</Text>
+              <Text color={COLOR.danger} dimColor>{(markdownBlocks(section.text, 2000)[0] ?? '')}</Text>
             </Box>
           )
       }

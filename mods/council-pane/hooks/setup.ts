@@ -1,6 +1,7 @@
 // ABOUTME: Pure decisions for the specialist setup screen: Codex's model catalog, one validator, entries and drafts
 // ABOUTME: No engine calls here, so every rule runs under bun test
 import { nameProblem, parseSpecialist, WHEN_MAX, type Specialist } from './specialist'
+import { EFFORT_STYLE, SWATCHES, type Style } from './theme'
 
 // effortHelp is Codex's own one-line description of each effort; defaultEffort
 // is what the model uses when nothing sets one.
@@ -119,7 +120,7 @@ export type Option = { value: string; label: string }
 // One table row: zebra shades every other one, color marks the specialist.
 type RowBase = { index: number; name: string; color: string; zebra: boolean; editing: boolean }
 export type RosterEntry =
-  | RowBase & { kind: 'ok'; model: string; effort: string; effortColor?: string; when: string; instructions?: string }
+  | RowBase & { kind: 'ok'; model: string; effort: string; effortStyle?: Style; when: string; instructions?: string }
   | RowBase & { kind: 'broken'; problem: string; stored: string }
 // Character widths of the name, model and effort columns, headers included.
 export type Columns = { name: number; model: number; effort: number }
@@ -194,12 +195,6 @@ function confirmView(setup: SetupState, entries: unknown[]): SetupView['confirm'
   return { text: `${current} has unsaved changes.`, yes: `Discard and ${target}`, no: 'Keep editing' }
 }
 
-// Mid tones, so each reads on a light and a dark background alike.
-const SPECIALIST_RGB = ['rgb(70,130,180)', 'rgb(150,90,170)', 'rgb(60,140,90)', 'rgb(200,80,110)', 'rgb(190,140,40)', 'rgb(90,160,160)']
-// Warmer as the effort rises; an effort Codex adds later draws uncoloured.
-const EFFORT_RGB: Record<string, string> = {
-  low: 'rgb(96,140,72)', medium: 'rgb(90,110,200)', high: 'rgb(190,120,30)', xhigh: 'rgb(210,95,40)', max: 'rgb(190,55,55)', ultra: 'rgb(170,60,160)',
-}
 export const HEADERS = { name: 'NAME', model: 'MODEL', effort: 'EFFORT', when: 'USE WHEN' }
 // The table's geometry: a swatch, then each column's widest text plus PAD,
 // then a bar before the next column.
@@ -217,13 +212,13 @@ export function ruleLine(columns: Columns, width: number): string {
 }
 
 function rosterRow(entry: unknown, index: number, editing: boolean): RosterEntry {
-  const base = { index, color: SPECIALIST_RGB[index % SPECIALIST_RGB.length] ?? '', zebra: index % 2 === 1, editing }
+  const base = { index, color: SWATCHES[index % SWATCHES.length] ?? '', zebra: index % 2 === 1, editing }
   const parsed = parseSpecialist(entry)
   if ('error' in parsed) return { ...base, kind: 'broken', name: `specialist ${index + 1}`, problem: parsed.error, stored: entryKey(entry) }
-  const effortColor = parsed.effort && Object.hasOwn(EFFORT_RGB, parsed.effort) ? EFFORT_RGB[parsed.effort] : undefined
+  const effortStyle = parsed.effort && Object.hasOwn(EFFORT_STYLE, parsed.effort) ? EFFORT_STYLE[parsed.effort] : undefined
   return {
     ...base, kind: 'ok', name: parsed.name, model: parsed.model, effort: parsed.effort ?? 'default',
-    ...(effortColor ? { effortColor } : {}), when: parsed.when, ...(parsed.instructions ? { instructions: parsed.instructions } : {}),
+    ...(effortStyle ? { effortStyle } : {}), when: parsed.when, ...(parsed.instructions ? { instructions: parsed.instructions } : {}),
   }
 }
 

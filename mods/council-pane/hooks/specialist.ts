@@ -1,6 +1,7 @@
 // ABOUTME: Pure decisions for the specialist tool: rows, call shapes, dialog text, prompts, results
 // ABOUTME: No engine calls here, so every rule runs under bun test
 import { spinner } from './view'
+import { COLOR } from './theme'
 import type { Fields } from './setup'
 
 // effort is Codex's reasoning effort; without it the user's own Codex default applies.
@@ -445,10 +446,9 @@ export function landsAtEnd(e: { offset: number; bodyRows: number; contentRows: n
 
 // The one coloured item in the pane's header: how the round stands.
 export function roundStatus(isLive: boolean, last: RunRecord['last'], clock: string): { glyph: string; text: string; color: string } {
-  // A dark amber: a terminal's own yellow is unreadable on a light background.
-  if (isLive) return { glyph: '\u25cf', text: clock, color: 'rgb(191,112,0)' }
-  if (last?.isError) return { glyph: '\u2717', text: `failed ${clock}`, color: 'red' }
-  return { glyph: '\u2713', text: `ended ${clock}`, color: 'green' }
+  if (isLive) return { glyph: '\u25cf', text: clock, color: COLOR.warning }
+  if (last?.isError) return { glyph: '\u2717', text: `failed ${clock}`, color: COLOR.danger }
+  return { glyph: '\u2713', text: `ended ${clock}`, color: COLOR.success }
 }
 
 // Submitted as a prompt when a round ends. It names the run only: the
