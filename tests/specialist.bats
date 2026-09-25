@@ -314,7 +314,7 @@ start_run() {
     # The effort goes into a -c value, so only Codex's own words get through.
     run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol 'high" -c x="y' < /dev/null
     [ "$status" -eq 1 ]
-    [ "$output" = "specialist: invalid effort 'high\" -c x=\"y': must be one of minimal, low, medium, high, xhigh" ]
+    [ "$output" = "specialist: invalid effort 'high\" -c x=\"y': must be lowercase letters" ]
     [ ! -e "${BATS_TEST_TMPDIR}/state" ]
 }
 
@@ -456,6 +456,11 @@ launch() {
     wait_round
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == "exec --json -m gpt-6-sol "*" -c model_reasoning_effort=\"high\" "*"-" ]]
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *" --output-schema ${schema} "* ]]
+    # Efforts outside the old fixed list reach Codex too.
+    rm -f "$STATE/exit"
+    EFFORT=ultra launch
+    wait_round
+    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *' -c model_reasoning_effort="ultra" '* ]]
 }
 
 @test "codex clears the previous round's files before it starts" {

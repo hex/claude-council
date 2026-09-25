@@ -57,29 +57,46 @@ They show up in `/config`. Changing one reloads the mod.
 | `collapse_when_done` | on | Off keeps the full status list after a run. |
 | `wake_on_async_done` | off | Submits a prompt when a background job's result can be fetched. That starts a model turn and costs tokens. A job that fails wakes nobody. |
 | `council_tool` | on | Registers `mcp__claude-council__ask` so the model can call the council as a tool. Each call asks you first. |
-| `specialist_1` to `specialist_4` | empty | One Codex specialist per row. See [Specialists](#specialists). |
+| `specialists` | `[]` | Every Codex specialist, as a JSON list of objects. Hidden from the menu; set up with `/specialists`. See [Specialists](#specialists). |
 
 The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. Every call opens a dialog quoting the question and naming the providers, and nothing leaves the machine unless you choose `Send to the council`. `Don't send` or dismissing the dialog refuses the call. Anything you type under Other goes back to the model as a plain tool result, not a refusal, so it reads as your answer rather than an error. The specialist's finish dialog does the same. A `claude -p` run has no one to ask and gets the same refusal.
 
 ## Specialists
 
-A specialist is a Codex agent that writes code for you on its own model, in its own git worktree. You name it, pick its model and the council perspective it works from, and say when it fits. Claude offers one when a task matches and starts it only once you ask or agree. The start itself opens no dialog; only a finish asks you first.
+A specialist is a Codex agent that writes code for you on its own model, in its own git worktree. You name it, pick its model, say when it fits, and optionally give it instructions. Claude offers one when a task matches and starts it only once you ask or agree. The start itself opens no dialog; only a finish asks you first.
 
-Each `/config` row holds one specialist:
+Run `/specialists` to set them up. It opens a screen with your specialists as a table in an orange frame: name, model, effort and use-when, one row each, with the instructions on a dim line under a row that has some. The header has a neutral grey fill and dim bars separate the columns. Each specialist has its own colour swatch, efforts get warmer as they rise, and every other row is shaded; the row you edit, and the one under the pointer, take the selection colour. Pick one to edit it in the form below, or add a new one. You type the name, the use-when and the instructions, and pick the model and the effort from lists:
 
+- The models come from `codex debug models`. Listed models come first, and hidden ones carry `(hidden)`.
+- The efforts are the ones Codex offers for the chosen model, each with Codex's own description, plus `default`, which keeps your own Codex default. If you switch to a model that lacks the chosen effort, the effort goes back to `default` and the screen says so.
+- Use when is for Claude: it reads this to decide when to offer the specialist.
+- Instructions are for the specialist: they open every new task it starts. Leave them blank and it just follows the task.
+
+Save checks the specialist against Codex's catalog and writes it into the list: in place of the one you opened, or at the end for a new one. You can keep as many as you like. If a field is wrong, the screen names it and what it accepts, and writes nothing. The form marks unsaved changes. Opening another specialist or adding one over them asks first, and so does Remove, which takes the specialist out of the list. Discard changes drops your edits and keeps the screen open. With `/specialists` open in two sessions, a Save builds on the newest list either one wrote, and a specialist that changed in the other session since you opened it refuses to save over that change. Esc closes the screen and keeps a changed draft for the next `/specialists`. The screen opens at once and fills in the models when Codex answers; if Codex cannot list them, a Retry button asks again. Each save reloads the mod, so the transcript shows the engine's `options changed — reloaded` line. If `codex` is missing or logged out, the list and Remove still work, and Save shows Codex's error. On a phone, the screen asks you to use the terminal or the desktop app.
+
+You can also describe one to Claude, for example "add a specialist for Postgres migrations on gpt-6-luna, high effort". Claude opens the same screen with the fields filled in, and the screen saves nothing until you press Save. This works with no specialists set up yet. If you have unsaved changes on the screen, it opens on them instead, and the mod tells Claude to wait until you save or discard them.
+
+### Hand edits
+
+The list lives in one settings field, `specialists`, which `/config` does not show. It holds a JSON list with one object per specialist:
+
+```json
+[
+  {"name": "sec", "model": "gpt-6-sol", "when": "auth, crypto, untrusted input"},
+  {"name": "mig", "model": "gpt-6-luna", "effort": "high", "when": "schema changes",
+   "instructions": "Review migrations for locks and rollbacks."}
+]
 ```
-sec = gpt-6-sol as security, when: auth, crypto, untrusted input
-sec = gpt-6-sol as security, effort: high, when: auth, crypto, untrusted input
-```
 
-The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. `effort:` is optional and sets Codex's reasoning effort for every round of that specialist: `minimal`, `low`, `medium`, `high` or `xhigh`. Without it, your own Codex default applies. The perspective is a key of `config/roles.json` (`security`, `performance`, `maintainability`, `devil`, `simplicity`, `scalability`, `dx`, `compliance`), and its prompt opens every task. The text after `when:` is what Claude matches tasks against, up to 200 characters. The mod ignores an empty row and skips a row that does not parse; the session log says which row and why. With at least one valid row the mod registers `mcp__claude-council__specialist`.
+Each entry needs `name`, `model` and `when`; `effort` and `instructions` are optional, and the mod refuses any other key by name. The name is lowercase letters, digits and dashes. The model goes to `codex exec -m` as written. `effort` must be one of the levels Codex offers for that model; without it, your own Codex default applies. `when` is what Claude matches tasks against, one line of up to 200 characters. `instructions` are one line of up to 400 characters that open every new task. Setting the whole list by hand, as `/config claude-council.specialists=[...]`, goes through the same checks as a Save, and a refusal names the entry and the reason. While a Remote Control connection may be live, Claude Code hides that reason and prints `Couldn't save this setting (detail withheld on this connection).` instead, and the stored list is unchanged. The check asks Codex for its catalog, so it takes about a second. At session start the mod skips an entry that still does not parse, for example one written straight into `settings.json`, and the session log says which one and why. If the mod cannot read the stored list itself, the screen says why, and Save and Remove stay off until you fix it with `/config`. The mod registers `mcp__claude-council__specialist` in every session; with no specialists it only offers to set one up, and follow-ups, results and finishes for a run that is still open.
 
-The tool takes four calls. Only a finish opens a dialog:
+The tool takes five calls. Only a finish opens a dialog:
 
 - Start, `{specialist, task}`: creates the worktree from `HEAD` and starts round 1. When you have uncommitted changes, the reply says the worktree lacks them.
 - Follow-up, `{run, message}`: continues the same Codex session in the same worktree.
 - Finish, `{run, finish}`: asks `Merge <branch> (N commits, M files) into <branch>?` or `Discard run <id> and delete its branch?`
 - Result, `{run, result: true}`: returns the last round's result.
+- Setup, `{setup: {name, model, effort, when, instructions}}`, every field optional: opens the setup screen with those fields filled in. The screen saves nothing until you press Save. With no specialists set up, this is the only call the tool takes.
 
 A round runs in the background: start and follow-up return at once, and you can keep talking to Claude. When the round ends, the mod commits it and submits a prompt asking Claude to fetch the result and review it. The prompt carries only the run id; the specialist's own words reach Claude as a tool result. While a round runs, a `SPECIALIST` band above the prompt shows the specialist, its model, the time so far and its latest step: the command it runs, the file it edits, or the first line of what it says. `o · open pane` opens a pane that lists every step of the round under a header naming the specialist, its model, the round and its time: Codex's messages as markdown, its short reasoning summaries in dim italics, each command on one line, and each edited file, with a mark for each command and edit that is running, done or failed. While the round runs, a spinner and its time close the list, so the pane moves even while Codex only thinks. The pane follows new steps; scrolling up stops that, and scrolling back to the bottom resumes it. The pane keeps the last round after it ends. Codex ends each round with a report in the shape of `scripts/specialist-report.schema.json`: a summary, each test command it ran with pass, fail or not run, and its open questions. The pane shows the summary and questions. The result carries that report, the diff stat for the round and for the whole run, the branch and the worktree path. A last message that is not such a report reaches Claude as written, marked as off-schema. Claude reviews that and runs the tests in the worktree before asking you how to finish.
 
@@ -113,5 +130,7 @@ claude plugin validate .
 ```
 
 The types come from `/plugin-types`, which writes `.claude/types/` at the repo root. Regenerate them after a Claude Code update. Run with `--debug` and look for `claude-council` in the log when something does not draw.
+
+Colours, type, glyphs and components follow [DESIGN.md](DESIGN.md), and every colour lives in `hooks/theme.ts`. Most are the engine's own theme keys, so the mod follows a light, dark or colour-blind theme and keeps its contrast on each.
 
 `claude plugin validate` enforces one rule `tsc` does not: you can pass `$` only to functions declared at the top of the hooks module, never to a closure inside `register`.

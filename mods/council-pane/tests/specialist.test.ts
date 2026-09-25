@@ -1,79 +1,97 @@
-// ABOUTME: Tests for reading specialist rows out of the options register receives
-// ABOUTME: Expected values are literals; bad rows must produce a named problem, never vanish
+// ABOUTME: Tests for reading specialist entries out of the options register receives
+// ABOUTME: Expected values are literals; bad entries must produce a named problem, never vanish
 import { test, expect } from 'bun:test'
 import {
-  parseSpecialist, specialistRoster, specialistDescription, specialistSchema,
+  parseSpecialist, specialistRoster, specialistEntries, freshList, specialistDescription, specialistSchema,
   specialistCall, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
 
-const roles = {
-  security: { name: 'Security Auditor', prompt: 'You are a security-focused code reviewer.' },
-  performance: { name: 'Performance Optimizer', prompt: 'You are a performance-focused engineer.' },
-}
-
-test('a well-formed row parses into its four parts', () => {
-  expect(parseSpecialist('sec = gpt-6-sol as security, when: auth, crypto, untrusted input', roles)).toEqual({
-    name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth, crypto, untrusted input',
+test('an entry with the required fields parses', () => {
+  expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', when: 'auth, crypto, untrusted input' })).toEqual({
+    name: 'sec', model: 'gpt-6-sol', when: 'auth, crypto, untrusted input',
   })
 })
 
-test('spacing around the separators is tolerated', () => {
-  expect(parseSpecialist('  perf=gpt-6-astra  as performance ,when:hot loops ', roles)).toEqual({
-    name: 'perf', model: 'gpt-6-astra', perspective: 'performance', when: 'hot loops',
+test('an entry may set the reasoning effort and instructions', () => {
+  expect(parseSpecialist({ name: 'mig', model: 'gpt-6-luna', effort: 'high', when: 'schema changes', instructions: 'Review migrations for locks, rollbacks: always.' })).toEqual({
+    name: 'mig', model: 'gpt-6-luna', effort: 'high', when: 'schema changes', instructions: 'Review migrations for locks, rollbacks: always.',
   })
 })
 
-test('a row may set the reasoning effort', () => {
-  expect(parseSpecialist('sec = gpt-6-sol as security, effort: high, when: auth', roles)).toEqual({
-    name: 'sec', model: 'gpt-6-sol', perspective: 'security', effort: 'high', when: 'auth',
-  })
+test('any lowercase effort parses; which ones a model offers is checked at Save', () => {
+  expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', effort: 'ultra', when: 'auth' })).toEqual({ name: 'sec', model: 'gpt-6-sol', effort: 'ultra', when: 'auth' })
 })
 
-test('an empty or absent row is unused, not a problem', () => {
-  expect(parseSpecialist('', roles)).toBeUndefined()
-  expect(parseSpecialist('   ', roles)).toBeUndefined()
-  expect(parseSpecialist(undefined, roles)).toBeUndefined()
+test('blank instructions are the same as none', () => {
+  expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', when: 'auth', instructions: '  ' })).toEqual({ name: 'sec', model: 'gpt-6-sol', when: 'auth' })
 })
 
-test('a bad row names what is wrong', () => {
-  expect(parseSpecialist('sec = gpt-6-sol as secrity, when: auth', roles)).toEqual({ error: "unknown perspective 'secrity'" })
-  expect(parseSpecialist('Sec = gpt-6-sol as security, when: auth', roles)).toEqual({ error: "name 'Sec' must be lowercase letters, digits and dashes, starting with a letter" })
-  expect(parseSpecialist('sec = as security, when: auth', roles)).toEqual({ error: 'expected: name = model as perspective, when: use-when' })
-  expect(parseSpecialist('sec = gpt-6-sol as security', roles)).toEqual({ error: 'expected: name = model as perspective, when: use-when' })
-  expect(parseSpecialist(`sec = gpt-6-sol as security, when: ${'x'.repeat(201)}`, roles)).toEqual({ error: 'use-when is longer than 200 characters' })
-  expect(parseSpecialist(42, roles)).toEqual({ error: 'expected: name = model as perspective, when: use-when' })
-  expect(parseSpecialist('sec = gpt-6-sol as security, effort: max, when: auth', roles)).toEqual({ error: "effort 'max' must be one of minimal, low, medium, high, xhigh" })
+test('a bad entry names what is wrong', () => {
+  const sec = { name: 'sec', model: 'gpt-6-sol', when: 'auth' }
+  expect(parseSpecialist('sec = gpt-6-sol as security, when: auth')).toEqual({ error: 'a specialist must be a JSON object with name, model and when' })
+  expect(parseSpecialist(42)).toEqual({ error: 'a specialist must be a JSON object with name, model and when' })
+  expect(parseSpecialist(['sec'])).toEqual({ error: 'a specialist must be a JSON object with name, model and when' })
+  expect(parseSpecialist({ ...sec, perspective: 'security' })).toEqual({ error: "unknown field 'perspective'" })
+  expect(parseSpecialist({ ...sec, focus: 'locks' })).toEqual({ error: "unknown field 'focus'" })
+  expect(parseSpecialist({ model: 'gpt-6-sol', when: 'auth' })).toEqual({ error: 'name is missing' })
+  expect(parseSpecialist({ ...sec, model: 7 })).toEqual({ error: 'model must be a string' })
+  expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol' })).toEqual({ error: 'when is missing' })
+  expect(parseSpecialist({ ...sec, name: 'Sec' })).toEqual({ error: "name 'Sec' must be lowercase letters, digits and dashes, starting with a letter" })
+  expect(parseSpecialist({ ...sec, model: ' ' })).toEqual({ error: 'model is empty' })
+  expect(parseSpecialist({ ...sec, when: '' })).toEqual({ error: 'use-when is empty' })
+  expect(parseSpecialist({ ...sec, when: 'x'.repeat(201) })).toEqual({ error: 'use-when is longer than 200 characters' })
+  expect(parseSpecialist({ ...sec, effort: 'High' })).toEqual({ error: "effort 'High' must be lowercase letters" })
+  expect(parseSpecialist({ ...sec, effort: 3 })).toEqual({ error: 'effort must be a string' })
+  expect(parseSpecialist({ ...sec, instructions: 'x'.repeat(401) })).toEqual({ error: 'instructions are longer than 400 characters' })
+  expect(parseSpecialist({ ...sec, instructions: ['a'] })).toEqual({ error: 'instructions must be a string' })
 })
 
-test('the roster keeps valid rows in slot order and reports the rest', () => {
-  expect(specialistRoster({
-    specialist_1: 'sec = gpt-6-sol as security, when: auth',
-    specialist_2: 'sec = gpt-6-astra as performance, when: loops',
-    specialist_3: 'perf = gpt-6-astra as secrity, when: loops',
-    specialist_4: 'perf = gpt-6-astra as performance, when: loops',
-  }, roles)).toEqual({
+test('the roster reads the specialists list, keeps valid entries in order and reports the rest', () => {
+  const specialists = JSON.stringify([
+    { name: 'sec', model: 'gpt-6-sol', when: 'auth' },
+    { name: 'sec', model: 'gpt-6-astra', when: 'loops' },
+    { name: 'perf', model: 'gpt-6-astra', perspective: 'performance', when: 'loops' },
+    { name: 'perf', model: 'gpt-6-astra', when: 'loops', instructions: 'Measure first.' },
+    { name: 'five', model: 'gpt-6-sol', when: 'a fifth one' },
+  ])
+  expect(specialistRoster({ specialists })).toEqual({
     specialists: [
-      { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth' },
-      { name: 'perf', model: 'gpt-6-astra', perspective: 'performance', when: 'loops' },
+      { name: 'sec', model: 'gpt-6-sol', when: 'auth' },
+      { name: 'perf', model: 'gpt-6-astra', when: 'loops', instructions: 'Measure first.' },
+      { name: 'five', model: 'gpt-6-sol', when: 'a fifth one' },
     ],
     problems: [
-      "specialist_2 ignored: the name 'sec' is already used by specialist_1",
-      "specialist_3 ignored: unknown perspective 'secrity'",
+      "specialist 2 ignored: the name 'sec' is already used by specialist 1",
+      "specialist 3 ignored: unknown field 'perspective'",
     ],
   })
-  expect(specialistRoster({}, roles)).toEqual({ specialists: [], problems: [] })
+  expect(specialistRoster({})).toEqual({ specialists: [], problems: [] })
+  expect(specialistRoster({ specialists: '' })).toEqual({ specialists: [], problems: [] })
 })
+
+test('a specialists setting that is not a JSON list is reported, never read as empty silently', () => {
+  expect(specialistEntries({ specialists: 'nope' })).toEqual({ entries: [], problem: 'the specialists setting is not JSON: nope' })
+  expect(specialistEntries({ specialists: '{"a":1}' })).toEqual({ entries: [], problem: 'the specialists setting must be a JSON list' })
+  expect(specialistEntries({ specialists: 3 })).toEqual({ entries: [], problem: 'the specialists setting must be a JSON list' })
+  expect(specialistEntries({ specialists: '[{"name":"a"}, 2]' })).toEqual({ entries: [{ name: 'a' }, 2] })
+  expect(specialistRoster({ specialists: 'nope' })).toEqual({ specialists: [], problems: ['the specialists setting is not JSON: nope'] })
+  expect(specialistRoster({ specialists: '[2]' })).toEqual({ specialists: [], problems: ['specialist 1 ignored: a specialist must be a JSON object with name, model and when'] })
+})
+
+const SETUP_HINT = 'instructions is optional: what the specialist is told before each task, in the user\'s words; leave it out unless the user gave some.'
 
 test('the description lists every specialist and what the user confirms', () => {
   const list = [
-    { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth, crypto' },
-    { name: 'perf', model: 'gpt-6-astra', perspective: 'performance', when: 'hot loops' },
+    { name: 'sec', model: 'gpt-6-sol', when: 'auth, crypto' },
+    { name: 'perf', model: 'gpt-6-astra', when: 'hot loops', instructions: 'Measure first.' },
   ]
   expect(specialistDescription(list)).toBe(
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
-    'Specialists: sec (security, gpt-6-sol), use when: auth, crypto; perf (performance, gpt-6-astra), use when: hot loops. ' +
+    'Specialists: sec (gpt-6-sol), use when: auth, crypto; perf (gpt-6-astra), use when: hot loops. ' +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
+    'When no specialist fits and the user wants one, or the user describes one, call {setup: {name, model, effort, when, instructions}}; it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
+    SETUP_HINT + ' ' +
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
@@ -82,16 +100,32 @@ test('the description lists every specialist and what the user confirms', () => 
   )
 })
 
+test('with no specialists the tool only offers to set one up', () => {
+  expect(specialistDescription([])).toBe(
+    'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
+    'When the user asks for one, call {setup: {name, model, effort, when, instructions}} with what they described; ' +
+    'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
+    SETUP_HINT,
+  )
+  const schema = specialistSchema([]) as any
+  expect(Object.keys(schema.properties)).toEqual(['setup'])
+  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'effort', 'when', 'instructions'])
+})
+
 test('the schema limits specialist to the configured names', () => {
-  const schema = specialistSchema([{ name: 'sec', model: 'm', perspective: 'security', when: 'w' }]) as any
+  const schema = specialistSchema([{ name: 'sec', model: 'm', when: 'w' }]) as any
   expect(schema.properties.specialist).toEqual({ type: 'string', enum: ['sec'] })
   expect(schema.properties.finish).toEqual({ type: 'string', enum: ['merge', 'discard'] })
   expect(schema.additionalProperties).toBe(false)
+  expect(schema.properties.setup.additionalProperties).toBe(false)
+  expect(Object.keys(schema.properties.setup.properties)).toEqual(['name', 'model', 'effort', 'when', 'instructions'])
 })
 
-const sec = { name: 'sec', model: 'gpt-6-sol', perspective: 'security', when: 'auth' }
+const sec = { name: 'sec', model: 'gpt-6-sol', when: 'auth' }
+const SHAPES_TEXT = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
+const SETUP_DENY = 'setup fields must be strings: name, model, effort, when, instructions'
 const record: RunRecord = {
-  id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', perspective: 'security', prompt: 'You are a security-focused code reviewer.',
+  id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', prompt: '',
   repo: '/r/app', worktree: '/r/app.specialists/sec-20260923-151204', branch: 'specialist/sec/20260923-151204',
   base: 'a1b2c3d', thread: '01a0ce2a-1d08-76c0-a6ef-8340b581212d', rounds: 1, state: 'idle', startedMs: 0, roundBase: 'a1b2c3d', subject: 'specialist sec: harden login',
 }
@@ -102,11 +136,17 @@ test('each call shape is recognised, and nothing else is', () => {
   expect(specialistCall({ run: 'sec-1', finish: 'discard' }, [sec])).toEqual({ kind: 'finish', run: 'sec-1', finish: 'discard' })
   expect(specialistCall({ specialist: 'nope', task: 't' }, [sec])).toEqual({ deny: "no specialist named 'nope'; configured: sec" })
   expect(specialistCall({ specialist: 'sec', task: '  ' }, [sec])).toEqual({ deny: 'task must be a non-empty string' })
-  expect(specialistCall({ run: 'sec-1', message: 'm', finish: 'merge' }, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}' })
+  expect(specialistCall({ run: 'sec-1', message: 'm', finish: 'merge' }, [sec])).toEqual({ deny: SHAPES_TEXT })
   expect(specialistCall({ run: 'sec-1', finish: 'keep' }, [sec])).toEqual({ deny: 'finish must be merge or discard' })
-  expect(specialistCall({}, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}' })
+  expect(specialistCall({}, [sec])).toEqual({ deny: SHAPES_TEXT })
   expect(specialistCall({ run: 'sec-1', result: true }, [sec])).toEqual({ kind: 'result', run: 'sec-1' })
-  expect(specialistCall({ run: 'sec-1', result: true, message: 'm' }, [sec])).toEqual({ deny: 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}' })
+  expect(specialistCall({ run: 'sec-1', result: true, message: 'm' }, [sec])).toEqual({ deny: SHAPES_TEXT })
+  expect(specialistCall({ setup: { name: 'perf', when: 'hot loops', instructions: 'Measure first.' } }, [sec])).toEqual({ kind: 'setup', fields: { name: 'perf', when: 'hot loops', instructions: 'Measure first.' } })
+  expect(specialistCall({ setup: {} }, [sec])).toEqual({ kind: 'setup', fields: {} })
+  expect(specialistCall({ setup: { name: 3 } }, [sec])).toEqual({ deny: SETUP_DENY })
+  expect(specialistCall({ setup: { perspective: 'security' } }, [sec])).toEqual({ deny: SETUP_DENY })
+  expect(specialistCall({ setup: 'perf' }, [sec])).toEqual({ deny: SETUP_DENY })
+  expect(specialistCall({ setup: {}, run: 'x' }, [sec])).toEqual({ deny: SHAPES_TEXT })
 })
 
 test('runStamp is local time, zero padded', () => {
@@ -125,9 +165,15 @@ test('only the go label proceeds; Other text goes back to the model', () => {
   expect(dialogOutcome('use perf instead', 'Start sec', "Don't start", 'did not start sec')).toEqual({ reply: 'The user did not start sec and said: use perf instead' })
 })
 
-test('the prompt puts the perspective first and the ground rules last', () => {
-  expect(specialistPrompt('You are a security-focused code reviewer.', 'harden login')).toBe(
-    'You are a security-focused code reviewer.\n\nTask:\nharden login\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
+test('the prompt puts the instructions first and the ground rules last; without instructions it opens on the task', () => {
+  expect(specialistPrompt('Review migrations for locks.', 'add the index')).toBe(
+    'Review migrations for locks.\n\nTask:\nadd the index\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
+  )
+  expect(specialistPrompt('', 'harden login')).toBe(
+    'Task:\nharden login\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
+  )
+  expect(specialistPrompt(' \n', 'harden login')).toBe(
+    'Task:\nharden login\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.',
   )
 })
 
@@ -382,8 +428,37 @@ test('roundClock counts m:ss, and h:mm:ss past an hour', () => {
 })
 
 test('roundStatus: running, ended and failed each have their own mark and colour', () => {
-  expect(roundStatus(true, undefined, '0:49')).toEqual({ glyph: '●', text: '0:49', color: 'rgb(191,112,0)' })
-  expect(roundStatus(false, { result: 'ok', isError: false }, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'green' })
-  expect(roundStatus(false, { result: 'boom', isError: true }, '3:12')).toEqual({ glyph: '✗', text: 'failed 3:12', color: 'red' })
-  expect(roundStatus(false, undefined, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'green' })
+  expect(roundStatus(true, undefined, '0:49')).toEqual({ glyph: '●', text: '0:49', color: 'warning' })
+  expect(roundStatus(false, { result: 'ok', isError: false }, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'success' })
+  expect(roundStatus(false, { result: 'boom', isError: true }, '3:12')).toEqual({ glyph: '✗', text: 'failed 3:12', color: 'error' })
+  expect(roundStatus(false, undefined, '3:12')).toEqual({ glyph: '✓', text: 'ended 3:12', color: 'success' })
+})
+
+test('use-when and instructions keep to one line, since the form cannot show more', () => {
+  const sec = { name: 'sec', model: 'gpt-6-sol', when: 'auth' }
+  expect(parseSpecialist({ ...sec, when: 'auth\ncrypto' })).toEqual({ error: 'use-when must be one line' })
+  expect(parseSpecialist({ ...sec, instructions: 'one\r\ntwo' })).toEqual({ error: 'instructions must be one line' })
+})
+
+test('with no specialists but a run still open, the tool keeps follow-up, result and finish', () => {
+  const schema = specialistSchema([], true) as any
+  expect(Object.keys(schema.properties)).toEqual(['run', 'message', 'finish', 'result', 'setup'])
+  expect(specialistDescription([], true)).toBe(
+    'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
+    'When the user asks for one, call {setup: {name, model, effort, when, instructions}} with what they described; ' +
+    'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
+    SETUP_HINT + ' ' +
+    'A run started before its specialist was removed still takes {run, message}, {run, result: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.',
+  )
+  expect(Object.keys((specialistSchema([], false) as any).properties)).toEqual(['setup'])
+  expect(specialistCall({ run: 'sec-1', result: true }, [])).toEqual({ kind: 'result', run: 'sec-1' })
+})
+
+test('the newest list is the copy in the shared store when there is one, else the one this session loaded', () => {
+  const loaded = { specialists: JSON.stringify([{ name: 'sec', model: 'm', when: 'w' }]) }
+  const newer = JSON.stringify([{ name: 'sec', model: 'm', when: 'w' }, { name: 'mig', model: 'm', when: 'w' }])
+  expect(freshList(loaded, newer)).toEqual({ entries: [{ name: 'sec', model: 'm', when: 'w' }, { name: 'mig', model: 'm', when: 'w' }] })
+  expect(freshList(loaded, undefined)).toEqual({ entries: [{ name: 'sec', model: 'm', when: 'w' }] })
+  expect(freshList(loaded, 7)).toEqual({ entries: [{ name: 'sec', model: 'm', when: 'w' }] })
+  expect(freshList(loaded, 'nope')).toEqual({ entries: [], problem: 'the specialists setting is not JSON: nope' })
 })

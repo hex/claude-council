@@ -1,34 +1,28 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
-import type { Elements, EngineInterface, Register } from 'claude-code'
+import type { Elements, EngineInterface, Register, RenderChildren } from 'claude-code'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
 import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice, progressBand } from './notices'
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import {
-  dialogOutcome, finishQuestion, followUpRefusal, parseSpecialistReport, roundResult, runStamp, specialistCall,
+  dialogOutcome, finishQuestion, followUpRefusal, LIST_FIELD, freshList, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
   commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
-  type Roles, type RunRecord, type Specialist, type Step,
+  type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
+import { COLOR, FILL } from './theme'
+import { blankDraft, draftFor, dropEntry, putEntry, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
 const RUN_TIMEOUT_MS = 600_000
-// Claude's orange (#D97757): the council speaks inside Claude Code, and the
-// synthesis is Claude's own text. No provider's banner uses it.
-const COUNCIL_RGB = 'rgb(217,119,87)'
-const MODEL_RGB = 'rgb(38,128,150)'
-// Mid tones, readable on a light and a dark background alike.
-const BRANCH_RGB = 'rgb(96,140,72)'
-const WORKTREE_RGB = 'rgb(112,120,160)'
-const CHIP_DARK_RGB = 'rgb(191,96,60)'
 const POLL_MS = 500
 // Ten frames a second: the spinner's pace in the tmux pane.
 const FRAME_MS = 100
@@ -42,6 +36,19 @@ const PID_CHECK_MS = 5_000
 const SPECIALIST_TOOL = 'specialist'
 const SPECIALIST_PANE = 'specialist'
 const RUNS_KEY = 'specialist-runs'
+const SETUP_PANE = 'specialist-setup'
+const SETUP_KEY = 'specialist-setup'
+// The list as the last write in any session left it (see freshList).
+const LATEST_KEY = 'specialists-latest'
+const SETUP_COMMAND = 'specialists'
+// Every colour comes from theme.ts; DESIGN.md says which one serves what.
+const STATUS_FILL: Record<Status['kind'], string> = { saved: FILL.saved, error: FILL.error, note: FILL.note }
+const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: ' ERROR ', note: ' NOTE ' }
+// Help lines start under the field values: the labels are 13 wide plus ': '.
+const HELP_INDENT = ' '.repeat(15)
+// The settings field holding every specialist, as $.config names it; hidden
+// from the /config menu, since /specialists edits it.
+const LIST_KEY = `claude-council.${LIST_FIELD}`
 
 type PaneState = {
   root: string
@@ -66,7 +73,6 @@ type PaneState = {
   // frame redraws the tree, not the markdown, and a resize replaces the entry.
   fitted: Map<string, { columns: number; text: string; blocks: string[] }>
   specialists: Specialist[]
-  roles: Roles
   // The specialist round this session is waiting on; the band's subject.
   specialist?: { record: RunRecord; startedMs: number; stateDir: string }
   // What the last specialist round did, step by step; the pane's subject. It
@@ -80,6 +86,13 @@ type PaneState = {
   // Frames left to retry following a just-opened pane: it becomes scrollable
   // only once drawn, milliseconds after $.ui.open settles.
   paneFollowFrames: number
+  // The setup screen's draft and catalog, mirrored from $.store so a reload redraws it.
+  setup?: SetupState
+  // Bumped after each Enter in a setup field: the engine empties a submitted
+  // Input, and a field under a new key draws its value again.
+  inputEpoch: number
+  // The shared copy of the specialists list as last read (see latestList).
+  latest?: string
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -90,6 +103,199 @@ function files($: EngineInterface): Files {
     read: path => $.fs.read(path),
     list: dir => $.fs.list(dir),
   }
+}
+
+// The model and effort lists come from Codex itself; a failure is kept as the
+// catalog's error, never an empty list.
+async function readCatalog($: EngineInterface) {
+  const run = await $.process.run(['codex', 'debug', 'models'], { timeoutMs: 15_000 })
+    .catch((err: unknown) => ({ exitCode: 127, stdout: '', stderr: String(err) }))
+  return parseCatalog(run)
+}
+
+async function keepSetup($: EngineInterface, state: PaneState, setup: SetupState | undefined): Promise<void> {
+  state.setup = setup
+  if (setup) await $.store.set(SETUP_KEY, setup)
+  else await $.store.delete(SETUP_KEY)
+  $.ui.invalidate('ui.render')
+}
+
+const currentSetup = (state: PaneState): SetupState => state.setup ?? { catalog: { loading: true } }
+const modelsOf = (setup: SetupState) => ('models' in setup.catalog ? setup.catalog.models : [])
+
+// Asks Codex for its models and fills them in; a new draft that opened before
+// they arrived takes the first listed model.
+async function loadCatalog($: EngineInterface, state: PaneState): Promise<void> {
+  await keepSetup($, state, { ...currentSetup(state), catalog: { loading: true } })
+  const catalog = await readCatalog($)
+  const setup = currentSetup(state)
+  const first = 'models' in catalog ? catalog.models.find(m => m.listed)?.slug : undefined
+  const draft = setup.draft && !setup.draft.model && first ? { ...setup.draft, model: first } : setup.draft
+  await keepSetup($, state, { ...setup, catalog, draft })
+}
+
+// Returns why the screen did not open, or undefined once it is open. It opens
+// at once and the catalog fills in after. A prefill comes from Claude's {setup}
+// call and starts a new row at the end of the list.
+async function openSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>, prefill?: Partial<Fields>): Promise<string | undefined> {
+  // Only a draft with changes survives to the next open; an untouched one would
+  // reopen the form for nothing.
+  const kept = state.setup?.draft && isDirty(state.setup.draft) ? state.setup.draft : undefined
+  const { entries } = await latestList($, state, options)
+  let draft = kept
+  let status: Status | undefined
+  if (prefill) {
+    draft = blankDraft(entries.length, [], prefill)
+  } else if (kept) {
+    status = { kind: 'note', text: 'Your unsaved draft is back.' }
+  }
+  await keepSetup($, state, { catalog: { loading: true }, draft, status })
+  try { await $.ui.open({ id: SETUP_PANE, title: 'Specialists', focus: true, closeOnEscape: true }) } catch (err) { return String(err) }
+  await loadCatalog($, state)
+  return undefined
+}
+
+// Runs one press of the setup screen; a failure shows under the form instead
+// of vanishing with the press, and the log keeps it if even that fails.
+async function setupAction($: EngineInterface, state: PaneState, work: () => Promise<void>): Promise<void> {
+  try {
+    await work()
+  } catch (error) {
+    await keepSetup($, state, { ...currentSetup(state), status: { kind: 'error', text: String(error) } })
+      .catch(() => $.ui.log(`specialists: ${String(error)}`))
+  }
+}
+
+// Field edits read the draft at press time, so two quick edits both land.
+async function editSetup($: EngineInterface, state: PaneState, patch: Partial<Fields>): Promise<void> {
+  const setup = state.setup
+  if (setup?.draft) await keepSetup($, state, { ...setup, draft: { ...setup.draft, ...patch }, status: undefined, confirm: undefined })
+}
+
+// Enter in a setup field keeps what was typed and moves on to the next control.
+// An Input's key carries the epoch, so a next Input is named by its field and
+// gets the epoch this submit moves to.
+async function submitField($: EngineInterface, state: PaneState, patch: Partial<Fields>, next: { control: string } | { input: keyof Fields }): Promise<void> {
+  await editSetup($, state, patch)
+  state.inputEpoch += 1
+  $.ui.invalidate('ui.render')
+  const key = 'control' in next ? next.control : `${next.input}.${state.inputEpoch}`
+  await $.ui.focus({ requestId: SETUP_PANE, key })
+}
+
+async function pickModel($: EngineInterface, state: PaneState, slug: string): Promise<void> {
+  const setup = state.setup
+  if (!setup?.draft) return
+  const picked = withModel(setup.draft, slug, modelsOf(setup))
+  await keepSetup($, state, { ...setup, draft: picked.draft, status: picked.message ? { kind: 'note', text: picked.message } : undefined })
+}
+
+// Opening another row, or a new one, over unsaved edits asks first.
+async function openRow($: EngineInterface, state: PaneState, options: Record<string, unknown>, target: number | 'new', force = false): Promise<void> {
+  const setup = currentSetup(state)
+  if (!force && setup.draft && setup.draft.index !== target && isDirty(setup.draft)) {
+    await keepSetup($, state, { ...setup, confirm: { kind: 'switch', target } })
+    return
+  }
+  const entries = (await latestList($, state, options)).entries
+  const draft = target === 'new' ? blankDraft(entries.length, modelsOf(setup)) : draftFor(target, entries, modelsOf(setup))
+  await keepSetup($, state, { ...setup, draft, confirm: undefined, status: undefined })
+}
+
+// The write reloads this module and the reload redraws from the store, so the
+// store is cleared first; a write that fails puts the draft back with the reason.
+// The shared copy is written first, since the settings write reloads this
+// module; a settings write that fails puts the copy back as it was.
+async function writeEntries($: EngineInterface, state: PaneState, setup: SetupState, entries: unknown[], done: string): Promise<void> {
+  await keepSetup($, state, { catalog: setup.catalog, status: { kind: 'saved', text: done } })
+  const value = JSON.stringify(entries)
+  const before = await $.store.get(LATEST_KEY)
+  await $.store.set(LATEST_KEY, value)
+  let written: { deny?: string }
+  try {
+    written = await $.config.set({ key: LIST_KEY, value })
+  } catch (error) {
+    written = { deny: String(error) }
+  }
+  if (!written.deny) return
+  await (typeof before === 'string' ? $.store.set(LATEST_KEY, before) : $.store.delete(LATEST_KEY))
+  await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: written.deny } })
+}
+
+// Also keeps the copy for the screen, which draws without awaiting: it shows
+// what the last open or press read.
+async function latestList($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<{ entries: unknown[]; problem?: string }> {
+  const stored = await $.store.get(LATEST_KEY)
+  state.latest = typeof stored === 'string' ? stored : undefined
+  return freshList(options, stored)
+}
+
+// A stored list that does not read would be overwritten by any write, so
+// Save and Remove refuse until it is fixed by hand.
+async function refuseUnreadable($: EngineInterface, state: PaneState, problem: string | undefined): Promise<boolean> {
+  if (!problem) return false
+  await keepSetup($, state, { ...currentSetup(state), confirm: undefined, status: { kind: 'error', text: `Nothing written: ${problem}. Fix it with /config first.` } })
+  return true
+}
+
+// Another session may have changed the entry this draft opened on; writing
+// over it would lose that change, so the draft stays and nothing is written.
+async function refuseChanged($: EngineInterface, state: PaneState, draft: Draft, entries: unknown[]): Promise<boolean> {
+  if (draft.baseline === '' || !staleMessage(draft, entries)) return false
+  const name = draft.name || `specialist ${draft.index + 1}`
+  await keepSetup($, state, { ...currentSetup(state), confirm: undefined, status: { kind: 'error', text: `Nothing written: ${name} changed in another session since you opened it. Discard changes to see it.` } })
+  return true
+}
+
+async function saveSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
+  const setup = state.setup
+  if (!setup?.draft) return
+  if ('loading' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'note', text: 'Models are still loading; Save again in a moment.' } }); return }
+  if ('error' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: `Cannot check the model: ${setup.catalog.error}` } }); return }
+  const { entries, problem } = await latestList($, state, options)
+  if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
+  const index = saveIndex(setup.draft, entries)
+  const checked = checkSpecialist(setup.draft, index, { models: setup.catalog.models, entries })
+  if ('error' in checked) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: checked.error } }); return }
+  await writeEntries($, state, setup, putEntry(entries, index, checked.entry), `Saved ${setup.draft.name}.`)
+}
+
+// The confirm row's yes: remove, or drop the unsaved draft and open the target.
+async function confirmSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
+  const setup = state.setup
+  const confirm = setup?.confirm
+  if (!setup?.draft || !confirm) return
+  if (confirm.kind === 'switch') { await openRow($, state, options, confirm.target, true); return }
+  const { entries, problem } = await latestList($, state, options)
+  if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
+  const name = draftFor(setup.draft.index, entries, []).name || `specialist ${setup.draft.index + 1}`
+  await writeEntries($, state, setup, dropEntry(entries, setup.draft.index), `Removed ${name}.`)
+}
+
+async function askSetup($: EngineInterface, state: PaneState, confirm: SetupState['confirm']): Promise<void> {
+  await keepSetup($, state, { ...currentSetup(state), confirm })
+}
+
+// Drops the draft; the screen stays open on the roster.
+async function discardSetup($: EngineInterface, state: PaneState): Promise<void> {
+  await keepSetup($, state, { catalog: currentSetup(state).catalog })
+}
+
+// A list set by hand (`/config claude-council.specialists=...`) gets the same checks as a
+// Save, entry by entry; the first problem is the refusal.
+async function handEditDenial($: EngineInterface, value: unknown): Promise<string | undefined> {
+  const { entries, problem } = specialistEntries({ [LIST_FIELD]: value })
+  if (problem) return problem
+  if (entries.length === 0) return undefined
+  const catalog = await readCatalog($)
+  if ('error' in catalog) return `cannot check the models: ${catalog.error}`
+  for (const [index, entry] of entries.entries()) {
+    const parsed = parseSpecialist(entry)
+    if ('error' in parsed) return `specialist ${index + 1}: ${parsed.error}`
+    const checked = checkSpecialist({ ...parsed, effort: parsed.effort ?? '', instructions: parsed.instructions ?? '' }, index, { models: catalog.models, entries })
+    if ('error' in checked) return `specialist ${index + 1}: ${checked.error}`
+  }
+  return undefined
 }
 
 // Submits the wake prompt once the job's record says completed. A job that
@@ -426,12 +632,12 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
 function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string, frame?: number) {
   return (
     <ui.Box key={key} flexDirection="row" flexShrink={0}>
-      <ui.Text bold color="white" backgroundColor={CHIP_DARK_RGB}>{' \u2726 '}</ui.Text>
-      <ui.Text backgroundColor={COUNCIL_RGB}>{' '}</ui.Text>
+      <ui.Text bold color={COLOR.onFill} backgroundColor={FILL.chipMark}>{' \u2726 '}</ui.Text>
+      <ui.Text backgroundColor={FILL.chip}>{' '}</ui.Text>
       {shimmer(label, frame).map((letter, index) => (
-        <ui.Text key={`${key}-${index}`} bold color={letter.color} backgroundColor={COUNCIL_RGB}>{letter.text}</ui.Text>
+        <ui.Text key={`${key}-${index}`} bold color={letter.color} backgroundColor={FILL.chip}>{letter.text}</ui.Text>
       ))}
-      <ui.Text backgroundColor={COUNCIL_RGB}>{' '}</ui.Text>
+      <ui.Text backgroundColor={FILL.chip}>{' '}</ui.Text>
     </ui.Box>
   )
 }
@@ -453,14 +659,14 @@ function retryRow(
 ) {
   return (
     <ui.Box key="retry" flexDirection="row" marginTop={1}>
-      <ui.Box flexDirection="row" paddingX={1} backgroundColor={COUNCIL_RGB}>
-        <ui.Text bold color="white" backgroundColor={COUNCIL_RGB}>{offer.badge}</ui.Text>
+      <ui.Box flexDirection="row" paddingX={1} backgroundColor={FILL.chip}>
+        <ui.Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{offer.badge}</ui.Text>
       </ui.Box>
-      <ui.Text bold color="red">{` \u2717 ${offer.notice}  `}</ui.Text>
+      <ui.Text bold color={COLOR.danger}>{` \u2717 ${offer.notice}  `}</ui.Text>
       <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
       <ui.Text>{' '}</ui.Text>
       <ui.Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={press.skip} />
-      <ui.Text color={COUNCIL_RGB}>{`  ${offer.bar}`}</ui.Text>
+      <ui.Text color={COLOR.accent}>{`  ${offer.bar}`}</ui.Text>
       <ui.Text dimColor>{` ${offer.remaining}s  click, or ctrl+x tab then r / s`}</ui.Text>
     </ui.Box>
   )
@@ -468,21 +674,34 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], roles: {}, finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
+    await $.command.register({ name: SETUP_COMMAND, description: 'Add, edit or remove specialists', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
-    // Perspectives come from the council's own roles file, so one definition
-    // serves both; a row naming a missing one is reported, never dropped quietly.
-    const rolesText = await readText(files($), `${$.plugin.root}/config/roles.json`)
-    const roles: Roles = rolesText ? (JSON.parse(rolesText).roles ?? {}) : {}
-    const roster = specialistRoster(options, roles)
+    // An entry that does not parse is reported, never dropped quietly.
+    const roster = specialistRoster(options)
     for (const problem of roster.problems) $.ui.log(problem)
     state.specialists = roster.specialists
-    state.roles = roles
-    if (roster.specialists.length > 0) {
-      await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists), inputSchema: specialistSchema(roster.specialists) })
+    // A Save reloads this module; the screen's draft comes back from the store.
+    // This session's list is the newest at load; the shared copy starts from it.
+    if (typeof options[LIST_FIELD] === 'string') {
+      await $.store.set(LATEST_KEY, options[LIST_FIELD])
+      state.latest = options[LIST_FIELD]
+    }
+    state.setup = restoreSetup(await $.store.get(SETUP_KEY), specialistEntries(options).entries)
+    // A write made while the models were loading reloads this module before
+    // they arrive; ask again, or Save would wait for them forever.
+    if (state.setup && 'loading' in state.setup.catalog) void logFailure($, state, () => loadCatalog($, state))
+    // An open setup screen was drawn by the reloaded module before the store
+    // was read; draw it again with it.
+    $.ui.invalidate('ui.render')
+    // Registered with no specialists too, so a user can ask Claude to set the first one up.
+    // A run outlives its specialist's removal: it can still be followed, fetched and finished.
+    const hasRuns = Object.values(await loadRuns($)).some(record => record.state !== 'finished')
+    await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists, hasRuns), inputSchema: specialistSchema(roster.specialists, hasRuns) })
+    if (roster.specialists.length > 0 || hasRuns) {
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })
       // The chip's shimmer moves only while a round runs.
@@ -520,6 +739,8 @@ export const register: Register = (on, options) => {
   // The settings row says ask while an answer is remembered; its label says which.
   on('config.describe', async ($, e, next) => {
     const row = await next(e)
+    // /specialists edits the list; the menu would only show its JSON.
+    if (e.key === LIST_KEY) return { ...row, isHidden: true }
     if (!e.key.endsWith('.pane_host')) return row
     return { ...row, label: hostRowLabel(row.label, settings.host, hostFrom(await $.store.get(HOST_STORE_KEY))) }
   })
@@ -557,6 +778,19 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: /^mcp__claude-council__specialist$/ }, async ($, e) => {
     const call = specialistCall(e as unknown as Record<string, unknown>, state.specialists)
     if ('deny' in call) return { deny: call.deny }
+    // Claude proposes, the user saves: the screen opens prefilled and nothing is written here.
+    if (call.kind === 'setup') {
+      // A prefill never replaces the person's unsaved edits: the screen opens
+      // on them, and Claude hears why its proposal is not there.
+      const kept = state.setup?.draft
+      if (kept && isDirty(kept)) {
+        const refused = await openSetup($, state, options)
+        if (refused) return { deny: `the setup screen did not open: ${refused}` }
+        return { deny: `the setup screen is open on unsaved changes to ${kept.name || 'a new specialist'}; ask the user to save or discard them, then call {setup} again` }
+      }
+      const refused = await openSetup($, state, options, call.fields)
+      return refused ? { deny: `the setup screen did not open: ${refused}` } : { result: 'Opened the setup screen; nothing is saved until the user presses Save.' }
+    }
     const sh = (args: string[], init?: { stdin?: string }) => specialistRun($, args, init)
     const kv = keyValues
     // One round at a time across every session: they all share the store. A
@@ -608,12 +842,12 @@ export const register: Register = (on, options) => {
       const started = await sh(['start', cwd, s.name, ts])
       if (started.exitCode !== 0) return { result: started.stderr.trim() || 'could not create the worktree', isError: true }
       const at = kv(started.stdout)
-      const perspectivePrompt = state.roles[s.perspective]?.prompt ?? ''
+      const instructions = s.instructions ?? ''
       const record: RunRecord = {
-        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), perspective: s.perspective, prompt: perspectivePrompt,
+        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), prompt: instructions,
         repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 0, state: 'idle', startedMs: 0, roundBase: '', subject: '',
       }
-      return await round(record, specialistPrompt(perspectivePrompt, call.task), '', commitSubject(s.name, call.task), dirty)
+      return await round(record, specialistPrompt(instructions, call.task), '', commitSubject(s.name, call.task), dirty)
     }
 
     const record = Object.hasOwn(runs, call.run) ? runs[call.run] : undefined
@@ -682,7 +916,7 @@ export const register: Register = (on, options) => {
       return (
         <ui.Box key="finished" flexDirection="row" marginTop={1}>
           {chip(ui, 'chip', 'COUNCIL')}
-          <ui.Text bold {...(finished.isFailure ? { color: 'red' } : {})}>{` ${finished.isFailure ? '\u2717' : '\u2713'} ${finished.text}  `}</ui.Text>
+          <ui.Text bold {...(finished.isFailure ? { color: COLOR.danger } : {})}>{` ${finished.isFailure ? '\u2717' : '\u2713'} ${finished.text}  `}</ui.Text>
           <ui.Button key="finished:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
           <ui.Text>{' '}</ui.Text>
           <ui.Button
@@ -709,7 +943,7 @@ export const register: Register = (on, options) => {
           <ui.Box flexShrink={0}>
             <ui.Text>
               <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
-              <ui.Text color={MODEL_RGB}>{`  ${working.record.model}`}</ui.Text>
+              <ui.Text color={COLOR.model}>{`  ${working.record.model}`}</ui.Text>
               <ui.Text bold color={roundStatus(true, undefined, clock).color}>{`  \u25cf ${clock}`}</ui.Text>
             </ui.Text>
           </ui.Box>
@@ -728,10 +962,167 @@ export const register: Register = (on, options) => {
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
         {chip(ui, 'chip', 'COUNCIL', state.frame)}
-        <ui.Text color={COUNCIL_RGB}>{`  ${progress.bar}`}</ui.Text>
+        <ui.Text color={COLOR.accent}>{`  ${progress.bar}`}</ui.Text>
         <ui.Text>{`  ${progress.text}  `}</ui.Text>
         <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
       </ui.Box>
+    )
+  })
+
+  // The setup screen's own writes skip this hook (the engine does not run a
+  // plugin's hooks for its own $.config.set); a list set by hand lands here.
+  on('config.set', { key: LIST_KEY }, async ($, e, next) => {
+    const denial = await handEditDenial($, e.value)
+    if (denial) return { deny: denial }
+    const written = await next(e)
+    if (!('deny' in written) || !written.deny) await $.store.set(LATEST_KEY, e.value)
+    return written
+  })
+
+  on('command.run', { command: SETUP_COMMAND }, async ($) => {
+    const refused = await openSetup($, state, options)
+    return { text: refused ? `The setup screen did not open: ${refused}` : 'Specialists: esc closes the screen.' }
+  })
+
+  // Closing the screen keeps a draft only when it holds changes; an untouched
+  // one would reopen the form for nothing.
+  on('ui.close', { id: SETUP_PANE }, async ($, e, next) => {
+    const draft = state.setup?.draft
+    if (e.origin.kind === 'person' && !(draft && isDirty(draft))) await keepSetup($, state, undefined)
+    return next(e)
+  })
+
+  on('ui.render', { component: 'Pane' }, ($, e, next) => {
+    if (e.requestId !== SETUP_PANE) return next(e)
+    const ui = $.ui.resolve(e)
+    if (!('Input' in ui)) return <ui.Text key="setup-mobile">Specialists are set up in the terminal or desktop app.</ui.Text>
+    const { Box, Text, Input, Select, Button } = ui
+    const setup = currentSetup(state)
+    const stored = freshList(options, state.latest)
+    const view = setupView(setup, stored.entries, stored.problem)
+    const draft = setup.draft
+    const editor = view.editor
+    const width = Math.max(30, e.props.bodyColumns - 2)
+    const press = (work: () => Promise<void>) => () => { void setupAction($, state, work) }
+    const edit = (patch: Partial<Fields>) => { void setupAction($, state, () => editSetup($, state, patch)) }
+    // A help line sits under the values and keeps to one row: a pane taller than
+    // the terminal hands the keyboard back to the prompt.
+    // A table cell keeps its width; only the last column gives way.
+    const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
+    // A dim bar between two columns.
+    const separator = (key: string) => (
+      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={COLOR.line}>{SEPARATOR}</Text></Box>
+    )
+    // A row's second line starts under the model column.
+    const under = (key: string, text: string) => (
+      <Box key={key} flexDirection="row">
+        {cell('indent', SWATCH_WIDTH + view.columns.name + PAD + SEPARATOR.length, <Text key="text">{''}</Text>)}
+        <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
+      </Box>
+    )
+    const help = (key: string, text: string) => (
+      <Box key={key} flexDirection="row">
+        <Box key="indent" width={HELP_INDENT.length} flexShrink={0}><Text key="pad">{HELP_INDENT}</Text></Box>
+        <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
+      </Box>
+    )
+    return (
+      <Box key="setup" flexDirection="column" width={width}>
+        {/* The roster: a table in one frame. A row's own colour marks its swatch,
+            every other row is shaded, and a second line carries its instructions. */}
+        <Text key="roster-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${view.header} `}</Text>
+        <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1}>
+          {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
+          {view.problem ? <Text key="problem" color={COLOR.danger} wrap="wrap">{`The stored list cannot be read: ${view.problem}. Save and Remove are off until it is fixed with /config.`}</Text> : null}
+          {view.roster.length > 0 ? (
+            <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
+              {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
+              {cell('name', view.columns.name + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.name}</Text>)}
+              {separator('sep-1')}
+              {cell('model', view.columns.model + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.model}</Text>)}
+              {separator('sep-2')}
+              {cell('effort', view.columns.effort + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.effort}</Text>)}
+              {separator('sep-3')}
+              <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color={COLOR.onFill} wrap="truncate-end">{HEADERS.when}</Text></Box>
+            </Box>
+          ) : null}
+          {view.roster.map((entry, at) => [
+            at > 0 ? <Text key={`rule:${entry.index}`} color={COLOR.line} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
+            <Box key={`entry:${entry.index}`} flexDirection="column" hover={{ backgroundColor: COLOR.selected }}
+              {...(entry.editing ? { backgroundColor: COLOR.selected } : entry.zebra ? { backgroundColor: COLOR.zebra } : {})}>
+              <Box key="line" flexDirection="row">
+                {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.color}>{entry.editing ? '▶' : '●'}</Text>)}
+                {cell('name', view.columns.name + PAD, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
+                {separator('sep-1')}
+                {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, <Text key="text" color={COLOR.model}>{entry.model}</Text>) : null}
+                {entry.kind === 'ok' ? separator('sep-2') : null}
+                {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.effortStyle
+                  ? <Text key="text" color={entry.effortStyle.color} bold={entry.effortStyle.bold === true}>{entry.effort}</Text>
+                  : <Text key="text" dimColor>{entry.effort}</Text>) : null}
+                {entry.kind === 'ok' ? separator('sep-3') : null}
+                <Box key="rest" flexGrow={1} flexShrink={1}>
+                  {entry.kind === 'ok'
+                    ? <Text key="text" wrap="truncate-end">{entry.when}</Text>
+                    : <Text key="text" color={COLOR.danger} wrap="truncate-end">{entry.problem}</Text>}
+                </Box>
+              </Box>
+              {entry.kind === 'ok' && entry.instructions ? under('instructions', `↳ ${entry.instructions}`) : null}
+              {entry.kind === 'broken' ? under('stored', entry.stored) : null}
+            </Box>,
+          ])}
+          <Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} />
+        </Box>
+        {editor && draft ? (
+          <Box key="editor-wrap" flexDirection="column" marginTop={1}>
+            <Box key="editor-head" flexDirection="row">
+              <Text key="editor-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${editor.title} `}</Text>
+              {editor.unsaved ? <Text key="unsaved" color={COLOR.warning}>{'  unsaved changes'}</Text> : null}
+            </Box>
+            <Box key="editor" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1}>
+              <Input key={`name.${state.inputEpoch}`} label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />
+              <Select key="model" label="Model        " value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
+                onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
+              {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
+              {editor.models === 'failed' ? (
+                <Box key="models-failed" flexDirection="row">
+                  <Text key="failed" color={COLOR.danger}>{`${HELP_INDENT}could not load models  `}</Text>
+                  <Button key="retry" label="Retry" onPress={press(() => loadCatalog($, state))} />
+                </Box>
+              ) : null}
+              <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
+              {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
+              <Input key={`when.${state.inputEpoch}`} label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />
+              {help('when-help', editor.whenHelp)}
+              <Input key={`instructions.${state.inputEpoch}`} label="Instructions " placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />
+              {help('instructions-help', editor.instructionsHelp)}
+              <Box key="actions" flexDirection="row">
+                <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
+                <Text key="gap-1">{'  '}</Text>
+                {editor.removable ? <Button key="remove" label="Remove" onPress={press(() => askSetup($, state, { kind: 'remove' }))} /> : null}
+                {editor.removable ? <Text key="gap-2">{'  '}</Text> : null}
+                <Button key="discard" label={editor.discardLabel} onPress={press(() => discardSetup($, state))} />
+              </Box>
+            </Box>
+          </Box>
+        ) : null}
+        {view.confirm ? (
+          <Box key="confirm" flexDirection="column" marginTop={1}>
+            <Text key="question" bold wrap="wrap">{view.confirm.text}</Text>
+            <Box key="answers" flexDirection="row">
+              <Button key="confirm-yes" label={view.confirm.yes} onPress={press(() => confirmSetup($, state, options))} />
+              <Text key="gap">{'  '}</Text>
+              <Button key="confirm-no" label={view.confirm.no} onPress={press(() => askSetup($, state, undefined))} />
+            </Box>
+          </Box>
+        ) : null}
+        {view.status ? (
+          <Box key="status" flexDirection="row" marginTop={1}>
+            <Text key="label" bold color={COLOR.onFill} backgroundColor={STATUS_FILL[view.status.kind]}>{STATUS_LABEL[view.status.kind]}</Text>
+            <Text key="text" wrap="wrap">{` ${view.status.text}`}</Text>
+          </Box>
+        ) : null}
+        <Text key="keys" dimColor wrap="truncate-end">{'Tab next · Shift+Tab back · ↓ opens a list, Enter picks · Esc closes, draft kept'}</Text>
+      </Box>
     )
   })
 
@@ -750,13 +1141,13 @@ export const register: Register = (on, options) => {
     const { Box, Markdown, Text } = ui
     const columns = e.props.bodyColumns
     const { record } = log
-    const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', 'yellow'] : step.state === 'failed' ? ['\u2717', 'red'] : ['\u2713', 'green'])
+    const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', COLOR.warning] : step.state === 'failed' ? ['\u2717', COLOR.danger] : ['\u2713', COLOR.success])
     const status = roundStatus(log.isLive, record.last, roundClock(record.startedMs, state.nowMs))
     const cardWidth = Math.max(20, columns - 2)
     return (
       <Box key="specialist" flexDirection="column">
         {/* A card, like a sidebar entry: who, how it stands, then where it works. */}
-        <Box flexDirection="column" borderStyle="round" borderColor={COUNCIL_RGB} paddingX={1} width={cardWidth}>
+        <Box flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={cardWidth}>
           {/* Each group is its own element, so a narrow pane wraps between
               groups, never inside one. */}
           <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
@@ -764,24 +1155,23 @@ export const register: Register = (on, options) => {
             <Text bold>{record.specialist}</Text>
             <Text bold color={status.color}>{`${status.glyph} ${status.text}`}</Text>
             <Text dimColor>{`round ${record.rounds}`}</Text>
-            <Text dimColor>{record.perspective}</Text>
-            <Text color={MODEL_RGB}>{record.model}</Text>
+            <Text color={COLOR.model}>{record.model}</Text>
           </Box>
           {/* A line exactly as wide as the card wraps to an empty second line
               without truncate. */}
-          <Text color={COUNCIL_RGB} dimColor wrap="truncate">{'\u2500'.repeat(cardWidth - 4)}</Text>
+          <Text color={COLOR.accent} dimColor wrap="truncate">{'\u2500'.repeat(cardWidth - 4)}</Text>
           {/* The worktree is cut from the left: its last part names the run. */}
           <Box flexDirection="row">
             <Text dimColor>{'branch    '}</Text>
-            <Box flexShrink={1}><Text color={BRANCH_RGB} wrap="truncate-start">{record.branch}</Text></Box>
+            <Box flexShrink={1}><Text color={COLOR.muted} wrap="truncate-start">{record.branch}</Text></Box>
           </Box>
           <Box flexDirection="row">
             <Text dimColor>{'worktree  '}</Text>
-            <Box flexShrink={1}><Text color={WORKTREE_RGB} wrap="truncate-start">{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text></Box>
+            <Box flexShrink={1}><Text color={COLOR.muted} wrap="truncate-start">{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text></Box>
           </Box>
         </Box>
         <Text>
-          <Text bold color={COUNCIL_RGB}>{' STEPS'}</Text>
+          <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{' STEPS '}</Text>
           <Text dimColor>{`  ${log.steps.filter(step => step.kind === 'run' || step.kind === 'edit').length}`}</Text>
         </Text>
         {log.steps.map((step, index) => {
@@ -804,7 +1194,7 @@ export const register: Register = (on, options) => {
             return (
               <Text key={key}>
                 <Text color={color}>{`${glyph} `}</Text>
-                <Text color={COUNCIL_RGB}>{'\u270e '}</Text>
+                <Text color={COLOR.accent}>{'\u270e '}</Text>
                 <Text bold={!isDone}>{step.text}</Text>
               </Text>
             )
@@ -814,9 +1204,9 @@ export const register: Register = (on, options) => {
           return (
             <Text key={key} wrap="truncate-end">
               <Text color={color}>{`${glyph} `}</Text>
-              <Text color={COUNCIL_RGB}>{'$ '}</Text>
-              <Text bold color={step.state === 'failed' ? 'red' : undefined}>{program}</Text>
-              <Text dimColor={isDone} color={step.state === 'failed' ? 'red' : undefined}>{line.slice(program.length)}</Text>
+              <Text color={COLOR.accent}>{'$ '}</Text>
+              <Text bold color={step.state === 'failed' ? COLOR.danger : undefined}>{program}</Text>
+              <Text dimColor={isDone} color={step.state === 'failed' ? COLOR.danger : undefined}>{line.slice(program.length)}</Text>
             </Text>
           )
         })}
@@ -883,15 +1273,15 @@ export const register: Register = (on, options) => {
         case 'banner':
           return (
             <Box key={section.key} flexDirection="row" marginTop={1} paddingX={1} width={columns} backgroundColor={section.background}>
-              <Text bold color="white" backgroundColor={section.background}>{section.title}</Text>
-              <Text italic color="white" backgroundColor={section.background}>{` ${section.subtitle}`}</Text>
+              <Text bold color={COLOR.onFill} backgroundColor={section.background}>{section.title}</Text>
+              <Text italic color={COLOR.onFill} backgroundColor={section.background}>{` ${section.subtitle}`}</Text>
             </Box>
           )
         case 'synthesis':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
-              <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={COUNCIL_RGB}>
-                <Text bold color="white" backgroundColor={COUNCIL_RGB}>SYNTHESIS</Text>
+              <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={FILL.chip}>
+                <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>SYNTHESIS</Text>
               </Box>
               {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
@@ -910,8 +1300,8 @@ export const register: Register = (on, options) => {
         case 'error':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
-              <Text bold color="red">{`\u2717 ${section.title}`}</Text>
-              <Text color="red" dimColor>{(markdownBlocks(section.text, 2000)[0] ?? '')}</Text>
+              <Text bold color={COLOR.danger}>{`\u2717 ${section.title}`}</Text>
+              <Text color={COLOR.danger} dimColor>{(markdownBlocks(section.text, 2000)[0] ?? '')}</Text>
             </Box>
           )
       }

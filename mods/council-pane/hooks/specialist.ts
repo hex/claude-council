@@ -1,53 +1,122 @@
 // ABOUTME: Pure decisions for the specialist tool: rows, call shapes, dialog text, prompts, results
 // ABOUTME: No engine calls here, so every rule runs under bun test
 import { spinner } from './view'
+import { COLOR } from './theme'
+import type { Fields } from './setup'
 
-export type Roles = Record<string, { name: string; prompt: string }>
 // effort is Codex's reasoning effort; without it the user's own Codex default applies.
-export type Specialist = { name: string; model: string; perspective: string; effort?: string; when: string }
+// instructions open every task the specialist starts; without them it just follows the task.
+export type Specialist = { name: string; model: string; effort?: string; when: string; instructions?: string }
 
-const ROW = /^\s*([^=\s]+)\s*=\s*(\S+)\s+as\s+([^,\s]+)\s*,(?:\s*effort:\s*([^,\s]*)\s*,)?\s*when:\s*(.+?)\s*$/
-export const EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh']
+export const INSTRUCTIONS_MAX = 400
+const EFFORT = /^[a-z]+$/
 const NAME = /^[a-z][a-z0-9-]{0,23}$/
-const WHEN_MAX = 200
-const SHAPE = 'expected: name = model as perspective, when: use-when'
-export const SLOTS = ['specialist_1', 'specialist_2', 'specialist_3', 'specialist_4']
+export const WHEN_MAX = 200
+const FIELDS = ['name', 'model', 'effort', 'when', 'instructions']
+const SHAPE = 'a specialist must be a JSON object with name, model and when'
+// The one settings field that holds every specialist, as a JSON list of objects.
+export const LIST_FIELD = 'specialists'
 
-export function parseSpecialist(row: unknown, roles: Roles): Specialist | { error: string } | undefined {
-  if (row === undefined || (typeof row === 'string' && row.trim() === '')) return undefined
-  if (typeof row !== 'string') return { error: SHAPE }
-  const match = ROW.exec(row)
-  if (!match) return { error: SHAPE }
-  const [, name = '', model = '', perspective = '', effort, when = ''] = match
-  if (!NAME.test(name)) return { error: `name '${name}' must be lowercase letters, digits and dashes, starting with a letter` }
-  if (!Object.hasOwn(roles, perspective)) return { error: `unknown perspective '${perspective}'` }
-  if (effort !== undefined && !EFFORTS.includes(effort)) return { error: `effort '${effort}' must be one of ${EFFORTS.join(', ')}` }
-  if (when.length > WHEN_MAX) return { error: `use-when is longer than ${WHEN_MAX} characters` }
-  return effort === undefined ? { name, model, perspective, when } : { name, model, perspective, effort, when }
+// One wording for a bad name, whether it came from the list or the setup screen's field.
+export function nameProblem(name: string): string | undefined {
+  return NAME.test(name) ? undefined : `name '${name}' must be lowercase letters, digits and dashes, starting with a letter`
 }
 
-export function specialistRoster(options: Record<string, unknown>, roles: Roles): { specialists: Specialist[]; problems: string[] } {
-  const specialists: Specialist[] = []
-  const problems: string[] = []
-  const usedBy = new Map<string, string>()
-  for (const slot of SLOTS) {
-    const parsed = parseSpecialist(options[slot], roles)
-    if (parsed === undefined) continue
-    if ('error' in parsed) { problems.push(`${slot} ignored: ${parsed.error}`); continue }
-    const earlier = usedBy.get(parsed.name)
-    if (earlier) { problems.push(`${slot} ignored: the name '${parsed.name}' is already used by ${earlier}`); continue }
-    usedBy.set(parsed.name, slot)
-    specialists.push(parsed)
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+// A field a person or another version wrote by hand must say what is wrong
+// with it; a misspelt key would otherwise be dropped without a word.
+function textField(entry: Record<string, unknown>, field: string, isRequired: boolean): string | undefined | { error: string } {
+  const value = entry[field]
+  if (value === undefined) return isRequired ? { error: `${field} is missing` } : undefined
+  return typeof value === 'string' ? value : { error: `${field} must be a string` }
+}
+
+export function parseSpecialist(entry: unknown): Specialist | { error: string } {
+  if (!isRecord(entry)) return { error: SHAPE }
+  const unknown = Object.keys(entry).find(key => !FIELDS.includes(key))
+  if (unknown !== undefined) return { error: `unknown field '${unknown}'` }
+  const read: Record<string, string | undefined> = {}
+  for (const field of FIELDS) {
+    const value = textField(entry, field, field === 'name' || field === 'model' || field === 'when')
+    if (typeof value === 'object') return value
+    read[field] = value
   }
+  const { name = '', model = '', effort, when = '', instructions } = read
+  const badName = nameProblem(name)
+  if (badName) return { error: badName }
+  if (model.trim() === '') return { error: 'model is empty' }
+  if (when.trim() === '') return { error: 'use-when is empty' }
+  // The tool's description and the form's inputs hold one line.
+  if (/[\r\n]/.test(when)) return { error: 'use-when must be one line' }
+  if (when.length > WHEN_MAX) return { error: `use-when is longer than ${WHEN_MAX} characters` }
+  if (effort !== undefined && !EFFORT.test(effort)) return { error: `effort '${effort}' must be lowercase letters` }
+  if (instructions !== undefined && /[\r\n]/.test(instructions)) return { error: 'instructions must be one line' }
+  if (instructions !== undefined && instructions.length > INSTRUCTIONS_MAX) return { error: `instructions are longer than ${INSTRUCTIONS_MAX} characters` }
+  const hasInstructions = instructions !== undefined && instructions.trim() !== ''
+  return { name, model, ...(effort === undefined ? {} : { effort }), when, ...(hasInstructions ? { instructions } : {}) }
+}
+
+// Reads the specialists list from the plugin's options; a value that is not a
+// JSON list is a named problem, never an empty list in disguise. Each entry is
+// checked by parseSpecialist, so a bad one is reported by its place.
+export function specialistEntries(options: Record<string, unknown>): { entries: unknown[]; problem?: string } {
+  const value = options[LIST_FIELD]
+  if (value === undefined || (typeof value === 'string' && value.trim() === '')) return { entries: [] }
+  if (typeof value !== 'string') return { entries: [], problem: 'the specialists setting must be a JSON list' }
+  let data: unknown
+  try { data = JSON.parse(value) } catch { return { entries: [], problem: `the specialists setting is not JSON: ${value}` } }
+  if (!Array.isArray(data)) return { entries: [], problem: 'the specialists setting must be a JSON list' }
+  return { entries: data }
+}
+
+// Every session loads the list once, and another session's write does not
+// reach it; the plugin's store is shared and read live, so the last write any
+// session made there is the newest list. Without one, the loaded list stands.
+export function freshList(options: Record<string, unknown>, stored: unknown): { entries: unknown[]; problem?: string } {
+  return specialistEntries(typeof stored === 'string' ? { [LIST_FIELD]: stored } : options)
+}
+
+export function specialistRoster(options: Record<string, unknown>): { specialists: Specialist[]; problems: string[] } {
+  const { entries, problem } = specialistEntries(options)
+  const specialists: Specialist[] = []
+  const problems: string[] = problem ? [problem] : []
+  const usedBy = new Map<string, number>()
+  entries.forEach((entry, index) => {
+    const parsed = parseSpecialist(entry)
+    if ('error' in parsed) { problems.push(`specialist ${index + 1} ignored: ${parsed.error}`); return }
+    const earlier = usedBy.get(parsed.name)
+    if (earlier !== undefined) { problems.push(`specialist ${index + 1} ignored: the name '${parsed.name}' is already used by specialist ${earlier + 1}`); return }
+    usedBy.set(parsed.name, index)
+    specialists.push(parsed)
+  })
   return { specialists, problems }
 }
 
-export function specialistDescription(list: Specialist[]): string {
-  const roster = list.map(s => `${s.name} (${s.perspective}, ${s.model}), use when: ${s.when}`).join('; ')
+// Without this Claude fills instructions in on its own, and they open every task.
+const INSTRUCTIONS_HINT = 'instructions is optional: what the specialist is told before each task, in the user\'s words; leave it out unless the user gave some.'
+
+// hasRuns: a run not yet finished is in the store, so its calls stay offered
+// even once every specialist is removed.
+export function specialistDescription(list: Specialist[], hasRuns = false): string {
+  if (list.length === 0) {
+    const open = hasRuns
+      ? ' A run started before its specialist was removed still takes {run, message}, {run, result: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.'
+      : ''
+    return (
+      'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
+      `When the user asks for one, call {setup: {${SETUP_FIELDS.join(', ')}}} with what they described; ` +
+      'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
+      INSTRUCTIONS_HINT + open
+    )
+  }
+  const roster = list.map(s => `${s.name} (${s.model}), use when: ${s.when}`).join('; ')
   return (
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     `Specialists: ${roster}. ` +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
+    `When no specialist fits and the user wants one, or the user describes one, call {setup: {${SETUP_FIELDS.join(', ')}}}; it opens a screen with those fields filled in and nothing is saved until the user presses Save. ` +
+    `${INSTRUCTIONS_HINT} ` +
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
@@ -56,23 +125,38 @@ export function specialistDescription(list: Specialist[]): string {
   )
 }
 
-export function specialistSchema(list: Specialist[]): Record<string, unknown> {
+export function specialistSchema(list: Specialist[], hasRuns = false): Record<string, unknown> {
+  const setup = {
+    type: 'object',
+    description: 'Open the setup screen prefilled with a proposed specialist; the user saves it.',
+    properties: Object.fromEntries(SETUP_FIELDS.map(field => [field, { type: 'string' }])),
+    additionalProperties: false,
+  }
+  // With no specialists there is nothing to start; with no open run either,
+  // setting one up is the only call.
+  if (list.length === 0 && !hasRuns) return { type: 'object', properties: { setup }, additionalProperties: false }
+  const start = list.length === 0 ? {} : {
+    specialist: { type: 'string', enum: list.map(s => s.name) },
+    task: { type: 'string', description: 'Start: the task, self-contained; the specialist sees only its worktree.' },
+  }
   return {
     type: 'object',
     properties: {
-      specialist: { type: 'string', enum: list.map(s => s.name) },
-      task: { type: 'string', description: 'Start: the task, self-contained; the specialist sees only its worktree.' },
+      ...start,
       run: { type: 'string', description: 'Follow-up or finish: the run id a start returned.' },
       message: { type: 'string', description: 'Follow-up: feedback for the specialist, e.g. a failing test.' },
       finish: { type: 'string', enum: ['merge', 'discard'] },
       result: { type: 'boolean', description: 'Fetch the last round\'s result: {run, result: true}, after the prompt saying the round ended.' },
+      setup,
     },
     additionalProperties: false,
   }
 }
 
 export type RunRecord = {
-  id: string; specialist: string; model: string; effort?: string; perspective: string; prompt: string
+  id: string; specialist: string; model: string; effort?: string
+  // The instructions the run started with; '' when it had none.
+  prompt: string
   repo: string; worktree: string; branch: string; base: string; thread: string
   rounds: number; state: 'running' | 'idle' | 'finished'
   // When the current or last round started; the band's clock.
@@ -89,13 +173,23 @@ export type SpecialistCall =
   | { kind: 'followUp'; run: string; message: string }
   | { kind: 'finish'; run: string; finish: 'merge' | 'discard' }
   | { kind: 'result'; run: string }
+  | { kind: 'setup'; fields: Partial<Fields> }
 
-const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish} or {run, result: true}'
+const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
+const SETUP_FIELDS = ['name', 'model', 'effort', 'when', 'instructions']
 const filled = (value: unknown) => typeof value === 'string' && value.trim() !== ''
 
 export function specialistCall(input: Record<string, unknown>, list: Specialist[]): SpecialistCall | { deny: string } {
   const { specialist, task, run, message, finish, result } = input
   const has = (v: unknown) => v !== undefined
+  if (has(input.setup)) {
+    if (has(specialist) || has(task) || has(run) || has(message) || has(finish) || has(result)) return { deny: SHAPES }
+    const fields = input.setup
+    const isFields = typeof fields === 'object' && fields !== null && !Array.isArray(fields) &&
+      Object.entries(fields).every(([key, value]) => SETUP_FIELDS.includes(key) && typeof value === 'string')
+    if (!isFields) return { deny: `setup fields must be strings: ${SETUP_FIELDS.join(', ')}` }
+    return { kind: 'setup', fields: fields as Partial<Fields> }
+  }
   if (has(result)) {
     if (result !== true || !filled(run) || has(specialist) || has(task) || has(message) || has(finish)) return { deny: SHAPES }
     return { kind: 'result', run: run as string }
@@ -138,8 +232,9 @@ export function dialogOutcome(answer: string | undefined, go: string, stop: stri
   return { reply: `The user ${refusal} and said: ${answer}` }
 }
 
-export function specialistPrompt(perspectivePrompt: string, task: string): string {
-  return `${perspectivePrompt}\n\nTask:\n${task}\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.`
+export function specialistPrompt(instructions: string, task: string): string {
+  const opening = instructions.trim() === '' ? '' : `${instructions}\n\n`
+  return `${opening}Task:\n${task}\n\nWork only inside this directory. Run the tests you touch. Do not commit: the tool commits your changes after each round.`
 }
 
 export function followUpRefusal(record: RunRecord | undefined, id: string, worktreeExists: boolean): string | undefined {
@@ -158,7 +253,6 @@ export type RoundReport = { summary: string; tests: { command: string; result: T
 
 const TEST_RESULTS: readonly string[] = ['pass', 'fail', 'not_run']
 const isString = (v: unknown): v is string => typeof v === 'string'
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const hasKeys = (v: Record<string, unknown>, keys: string[]) => {
   const own = Object.keys(v)
   return own.length === keys.length && keys.every((k) => own.includes(k))
@@ -371,10 +465,9 @@ export function landsAtEnd(e: { offset: number; bodyRows: number; contentRows: n
 
 // The one coloured item in the pane's header: how the round stands.
 export function roundStatus(isLive: boolean, last: RunRecord['last'], clock: string): { glyph: string; text: string; color: string } {
-  // A dark amber: a terminal's own yellow is unreadable on a light background.
-  if (isLive) return { glyph: '\u25cf', text: clock, color: 'rgb(191,112,0)' }
-  if (last?.isError) return { glyph: '\u2717', text: `failed ${clock}`, color: 'red' }
-  return { glyph: '\u2713', text: `ended ${clock}`, color: 'green' }
+  if (isLive) return { glyph: '\u25cf', text: clock, color: COLOR.warning }
+  if (last?.isError) return { glyph: '\u2717', text: `failed ${clock}`, color: COLOR.danger }
+  return { glyph: '\u2713', text: `ended ${clock}`, color: COLOR.success }
 }
 
 // Submitted as a prompt when a round ends. It names the run only: the
