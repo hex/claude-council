@@ -7,7 +7,7 @@ import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import {
-  dialogOutcome, finishQuestion, followUpRefusal, LIST_FIELD, freshList, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
+  dialogOutcome, finishQuestion, introNotice, followUpRefusal, LIST_FIELD, freshList, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema, threadFrom,
   commitSubject, latestStep, lostResult, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
   type RunRecord, type Specialist, type Step,
@@ -43,6 +43,8 @@ const SETUP_PANE = 'specialist-setup'
 const SETUP_KEY_PREFIX = 'specialist-setup:'
 // The list as the last write in any session left it (see freshList).
 const LATEST_KEY = 'specialists-latest'
+// Set once the specialists notice has shown, or was not needed.
+const INTRO_KEY = 'specialists-intro-shown'
 const SETUP_COMMAND = 'specialists'
 // Every colour comes from theme.ts; DESIGN.md says which one serves what.
 const STATUS_FILL: Record<Status['kind'], string> = { saved: FILL.saved, error: FILL.error, note: FILL.note }
@@ -313,6 +315,17 @@ async function confirmSetup($: EngineInterface, state: PaneState, options: Recor
   if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
   const name = draftFor(setup.draft.index, entries, []).name || `specialist ${setup.draft.index + 1}`
   await writeEntries($, state, setup, dropEntry(entries, setup.draft.index), `Removed ${name}.`)
+}
+
+// The store flag is shared by every session, so the notice shows once per install.
+// The codex check runs only for someone who could still get the notice.
+async function introduceSpecialists($: EngineInterface, specialists: number): Promise<void> {
+  const shown = (await $.store.get(INTRO_KEY)) === true
+  const codexReady = shown || specialists > 0 ? false
+    : (await $.process.run(['codex', 'login', 'status']).catch(() => undefined))?.exitCode === 0
+  const notice = introNotice({ shown, specialists, codexReady })
+  if (notice.log) $.ui.log(notice.log)
+  if (notice.markShown) await $.store.set(INTRO_KEY, true)
 }
 
 async function foldTemplates($: EngineInterface, state: PaneState): Promise<void> {
@@ -758,6 +771,7 @@ export const register: Register = (on, options) => {
     // A run outlives its specialist's removal: it can still be followed, fetched and finished.
     const hasRuns = Object.values(await loadRuns($)).some(record => record.state !== 'finished')
     await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists, hasRuns), inputSchema: specialistSchema(roster.specialists, hasRuns) })
+    void logFailure($, state, () => introduceSpecialists($, roster.specialists.length))
     if (roster.specialists.length > 0 || hasRuns) {
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })

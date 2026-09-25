@@ -82,6 +82,7 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 - Extensible provider system — add new AI agents easily
 - Put the conversation itself to the council with `/claude-council:advise`, which shows you what would leave the machine before it goes
 - Proactive agent that suggests consulting the council on architecture / debugging dead ends
+- Specialists (experimental): hand a coding task to a Codex agent that works on its own git branch, following skills you pick
 
 ## Installation
 
@@ -476,6 +477,27 @@ the user and the providers read it.
 The confirmation is the privacy control, and deliberately so: a script cannot
 tell whose conversation it holds, because inside a subagent the ambient session
 id names the parent conversation.
+
+### Specialists (experimental)
+
+A specialist is a Codex agent that Claude can hand a coding task to. It works in
+its own git worktree and branch, commits each round there, and you merge or
+discard the branch at the end. Claude offers one when a task matches its
+use-when and starts it only when you ask or agree.
+
+Specialists live in the Claude Code mod, so they need `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`
+and a logged-in `codex`. Run `/specialists` to set one up. Each one has a name, a
+Codex model, an effort, a use-when for Claude, and the skills it follows: every
+`SKILL.md` you name, from `~/.claude/skills`, `~/.codex/skills` or `~/.agents/skills`,
+opens every task it starts.
+
+The plugin ships no specialists, but the screen offers six templates to start
+from: `bug-fixer`, `ci-fixer`, `refactorer`, `test-writer`, `test-pruner` and
+`docs-updater`. Each one comes with a full skill of its own. The first session
+where specialists can run shows a one-line note about them, once.
+
+The [mod README](mods/council-pane/README.md#specialists) covers the screen, the
+tool calls, the worktrees and the limits.
 
 ## Configuration
 
