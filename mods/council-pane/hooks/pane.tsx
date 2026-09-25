@@ -18,7 +18,7 @@ import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
-import { blankDraft, draftFor, dropEntry, putEntry, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -89,7 +89,9 @@ type PaneState = {
   // The setup screen's draft and catalog, mirrored from $.store so a reload redraws it.
   setup?: SetupState
   // Bumped after each Enter in a setup field: the engine empties a submitted
-  // Input, and a field under a new key draws its value again.
+  // Input, and a field under a new key draws its value again. The engine keeps
+  // that emptied text across a reload of this module, so each load starts the
+  // epoch at its own clock reading rather than at a number an earlier load used.
   inputEpoch: number
   // The shared copy of the specialists list as last read (see latestList).
   latest?: string
@@ -206,8 +208,9 @@ async function openRow($: EngineInterface, state: PaneState, options: Record<str
 // store is cleared first; a write that fails puts the draft back with the reason.
 // The shared copy is written first, since the settings write reloads this
 // module; a settings write that fails puts the copy back as it was.
-async function writeEntries($: EngineInterface, state: PaneState, setup: SetupState, entries: unknown[], done: string): Promise<void> {
-  await keepSetup($, state, { catalog: setup.catalog, status: { kind: 'saved', text: done } })
+// after: what the screen shows once written; by default the roster alone.
+async function writeEntries($: EngineInterface, state: PaneState, setup: SetupState, entries: unknown[], done: string, after?: SetupState): Promise<void> {
+  await keepSetup($, state, after ?? { catalog: setup.catalog, status: { kind: 'saved', text: done } })
   const value = JSON.stringify(entries)
   const before = await $.store.get(LATEST_KEY)
   await $.store.set(LATEST_KEY, value)
@@ -258,6 +261,22 @@ async function saveSetup($: EngineInterface, state: PaneState, options: Record<s
   const checked = checkSpecialist(setup.draft, index, { models: setup.catalog.models, entries })
   if ('error' in checked) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: checked.error } }); return }
   await writeEntries($, state, setup, putEntry(entries, index, checked.entry), `Saved ${setup.draft.name}.`)
+}
+
+// Switches the stored entry on or off at once. The form stays open on the
+// person's draft, unsaved edits included, now based on the switched entry.
+async function toggleSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
+  const setup = state.setup
+  if (!setup?.draft) return
+  const { entries, problem } = await latestList($, state, options)
+  if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
+  const flipped = flipEntry(entries, setup.draft.index)
+  if ('error' in flipped) { await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: flipped.error } }); return }
+  const entry = parseSpecialist(flipped.entries[setup.draft.index])
+  if ('error' in entry) throw new Error(`a switched specialist no longer reads: ${entry.error}`)
+  const done = entry.enabled === false ? `${entry.name} is off: Claude will not offer or start it.` : `${entry.name} is on again.`
+  const draft = { ...setup.draft, baseline: JSON.stringify(flipped.entries[setup.draft.index]) }
+  await writeEntries($, state, setup, flipped.entries, done, { ...setup, draft, confirm: undefined, status: { kind: 'saved', text: done } })
 }
 
 // The confirm row's yes: remove, or drop the unsaved draft and open the target.
@@ -684,6 +703,7 @@ export const register: Register = (on, options) => {
     const roster = specialistRoster(options)
     for (const problem of roster.problems) $.ui.log(problem)
     state.specialists = roster.specialists
+    state.inputEpoch = await $.clock.now()
     // A Save reloads this module; the screen's draft comes back from the store.
     // This session's list is the newest at load; the shared copy starts from it.
     if (typeof options[LIST_FIELD] === 'string') {
@@ -1051,18 +1071,22 @@ export const register: Register = (on, options) => {
             <Box key={`entry:${entry.index}`} flexDirection="column" hover={{ backgroundColor: COLOR.selected }}
               {...(entry.editing ? { backgroundColor: COLOR.selected } : entry.zebra ? { backgroundColor: COLOR.zebra } : {})}>
               <Box key="line" flexDirection="row">
-                {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.color}>{entry.editing ? '▶' : '●'}</Text>)}
+                {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.color}>{entry.editing ? '▶' : entry.kind === 'ok' && entry.off ? '○' : '●'}</Text>)}
                 {cell('name', view.columns.name + PAD, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
                 {separator('sep-1')}
-                {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, <Text key="text" color={COLOR.model}>{entry.model}</Text>) : null}
+                {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, entry.off
+                  ? <Text key="text" dimColor>{entry.model}</Text>
+                  : <Text key="text" color={COLOR.model}>{entry.model}</Text>) : null}
                 {entry.kind === 'ok' ? separator('sep-2') : null}
-                {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.effortStyle
+                {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.effortStyle && !entry.off
                   ? <Text key="text" color={entry.effortStyle.color} bold={entry.effortStyle.bold === true}>{entry.effort}</Text>
                   : <Text key="text" dimColor>{entry.effort}</Text>) : null}
                 {entry.kind === 'ok' ? separator('sep-3') : null}
                 <Box key="rest" flexGrow={1} flexShrink={1}>
                   {entry.kind === 'ok'
-                    ? <Text key="text" wrap="truncate-end">{entry.when}</Text>
+                    ? entry.off
+                      ? <Text key="text" dimColor wrap="truncate-end">{`off · ${entry.when}`}</Text>
+                      : <Text key="text" wrap="truncate-end">{entry.when}</Text>
                     : <Text key="text" color={COLOR.danger} wrap="truncate-end">{entry.problem}</Text>}
                 </Box>
               </Box>
@@ -1098,6 +1122,8 @@ export const register: Register = (on, options) => {
               <Box key="actions" flexDirection="row">
                 <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
                 <Text key="gap-1">{'  '}</Text>
+                {editor.toggle ? <Button key="toggle" label={editor.toggle} onPress={press(() => toggleSetup($, state, options))} /> : null}
+                {editor.toggle ? <Text key="gap-toggle">{'  '}</Text> : null}
                 {editor.removable ? <Button key="remove" label="Remove" onPress={press(() => askSetup($, state, { kind: 'remove' }))} /> : null}
                 {editor.removable ? <Text key="gap-2">{'  '}</Text> : null}
                 <Button key="discard" label={editor.discardLabel} onPress={press(() => discardSetup($, state))} />

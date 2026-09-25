@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -78,6 +78,12 @@ test('a name another specialist uses is refused; the one being edited may keep i
   expect(checkSpecialist(fields, 0, { ...context, entries })).toEqual({ error: "name 'sec' is already used by specialist 2" })
   expect(checkSpecialist(fields, 2, { ...context, entries })).toEqual({ error: "name 'sec' is already used by specialist 2" })
   expect(checkSpecialist(fields, 1, { ...context, entries })).toEqual({ entry: { name: 'sec', model: 'gpt-6-sol', effort: 'high', when: 'auth, crypto' } })
+})
+
+test('saving an edit keeps a switched-off specialist off; a new one starts on', () => {
+  const entries = [{ name: 'mig', model: 'gpt-6-luna', when: 'schema' }, { name: 'sec', model: 'gpt-6-sol', when: 'auth', enabled: false }]
+  expect(checkSpecialist(fields, 1, { ...context, entries })).toEqual({ entry: { name: 'sec', model: 'gpt-6-sol', effort: 'high', when: 'auth, crypto', enabled: false } })
+  expect(checkSpecialist({ ...fields, name: 'ops' }, 2, { ...context, entries })).toEqual({ entry: { name: 'ops', model: 'gpt-6-sol', effort: 'high', when: 'auth, crypto' } })
 })
 
 test('a save replaces the entry it edits or appends a new one; a remove drops it; there is no limit', () => {
@@ -190,6 +196,22 @@ test('listed models come first and hidden ones say so', () => {
   const options = setupView({ ...ready, draft }, two).editor?.modelOptions ?? []
   expect(options.slice(0, 2)).toEqual([{ value: 'gpt-6-sol', label: 'gpt-6-sol' }, { value: 'gpt-6-astra', label: 'gpt-6-astra' }])
   expect(options.at(-1)).toEqual({ value: 'codex-auto-review', label: 'codex-auto-review (hidden)' })
+})
+
+test('a switched-off specialist is marked off in the roster, and its editor offers to turn it back on', () => {
+  const entries = [{ ...two[0], enabled: false }, two[1]]
+  const view = setupView({ ...ready, draft: draftFor(0, entries, models) }, entries)
+  expect(view.roster[0]).toMatchObject({ kind: 'ok', name: 'sec', off: true })
+  expect(view.roster[1]).not.toHaveProperty('off')
+  expect(view.editor?.toggle).toBe('Enable')
+  expect(setupView({ ...ready, draft: draftFor(1, entries, models) }, entries).editor?.toggle).toBe('Disable')
+  expect(setupView({ ...ready, draft: blankDraft(2, models) }, entries).editor?.toggle).toBeUndefined()
+})
+
+test('flipping an entry turns it off, or back on by dropping the key, and touches nothing else', () => {
+  expect(flipEntry(two, 0)).toEqual({ entries: [{ ...two[0], enabled: false }, two[1]] })
+  expect(flipEntry([{ ...two[0], enabled: false }, two[1]], 0)).toEqual({ entries: two })
+  expect(flipEntry([{ name: 'Bad' }, two[1]], 0)).toEqual({ error: 'specialist 1 cannot be switched: it does not read (model is missing)' })
 })
 
 test('a new draft is titled new and offers to cancel rather than discard', () => {

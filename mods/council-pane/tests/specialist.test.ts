@@ -27,6 +27,12 @@ test('blank instructions are the same as none', () => {
   expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', when: 'auth', instructions: '  ' })).toEqual({ name: 'sec', model: 'gpt-6-sol', when: 'auth' })
 })
 
+test('a specialist is on unless its entry says enabled: false', () => {
+  expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', when: 'auth', enabled: false })).toEqual({ name: 'sec', model: 'gpt-6-sol', when: 'auth', enabled: false })
+  expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', when: 'auth', enabled: true })).toEqual({ name: 'sec', model: 'gpt-6-sol', when: 'auth' })
+  expect(parseSpecialist({ name: 'sec', model: 'gpt-6-sol', when: 'auth', enabled: 'no' })).toEqual({ error: 'enabled must be true or false' })
+})
+
 test('a bad entry names what is wrong', () => {
   const sec = { name: 'sec', model: 'gpt-6-sol', when: 'auth' }
   expect(parseSpecialist('sec = gpt-6-sol as security, when: auth')).toEqual({ error: 'a specialist must be a JSON object with name, model and when' })
@@ -122,6 +128,22 @@ test('the schema limits specialist to the configured names', () => {
 })
 
 const sec = { name: 'sec', model: 'gpt-6-sol', when: 'auth' }
+
+test('a switched-off specialist is never offered or started; the refusal says where to turn it on', () => {
+  const off = { name: 'sec', model: 'gpt-6-sol', when: 'auth', enabled: false as const }
+  const mig = { name: 'mig', model: 'gpt-6-luna', when: 'schema' }
+  expect(specialistDescription([off, mig])).toContain('Specialists: mig (gpt-6-luna), use when: schema. Switched off by the user, so never offer or start: sec. ')
+  expect((specialistSchema([off, mig]) as any).properties.specialist).toEqual({ type: 'string', enum: ['mig'] })
+  expect(specialistCall({ specialist: 'sec', task: 't' }, [off, mig])).toEqual({ deny: 'sec is switched off; the user can turn it on in /specialists' })
+  expect(specialistDescription([off])).toBe(
+    'Set up a specialist: a coding agent that works in its own git worktree with its own model. ' +
+    'Every specialist is switched off by the user (sec); never offer or start one, and if one fits, say it can be turned on in /specialists. ' +
+    'When the user asks for one, call {setup: {name, model, effort, when, instructions}} with what they described; ' +
+    'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
+    SETUP_HINT,
+  )
+  expect(Object.keys((specialistSchema([off]) as any).properties)).toEqual(['setup'])
+})
 const SHAPES_TEXT = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
 const SETUP_DENY = 'setup fields must be strings: name, model, effort, when, instructions'
 const record: RunRecord = {

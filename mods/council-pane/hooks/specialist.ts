@@ -6,13 +6,15 @@ import type { Fields } from './setup'
 
 // effort is Codex's reasoning effort; without it the user's own Codex default applies.
 // instructions open every task the specialist starts; without them it just follows the task.
-export type Specialist = { name: string; model: string; effort?: string; when: string; instructions?: string }
+// enabled: false keeps it in the list but out of Claude's reach; without it the specialist is on.
+export type Specialist = { name: string; model: string; effort?: string; when: string; instructions?: string; enabled?: false }
 
 export const INSTRUCTIONS_MAX = 400
 const EFFORT = /^[a-z]+$/
 const NAME = /^[a-z][a-z0-9-]{0,23}$/
 export const WHEN_MAX = 200
 const FIELDS = ['name', 'model', 'effort', 'when', 'instructions']
+const ENABLED = 'enabled'
 const SHAPE = 'a specialist must be a JSON object with name, model and when'
 // The one settings field that holds every specialist, as a JSON list of objects.
 export const LIST_FIELD = 'specialists'
@@ -34,7 +36,7 @@ function textField(entry: Record<string, unknown>, field: string, isRequired: bo
 
 export function parseSpecialist(entry: unknown): Specialist | { error: string } {
   if (!isRecord(entry)) return { error: SHAPE }
-  const unknown = Object.keys(entry).find(key => !FIELDS.includes(key))
+  const unknown = Object.keys(entry).find(key => !FIELDS.includes(key) && key !== ENABLED)
   if (unknown !== undefined) return { error: `unknown field '${unknown}'` }
   const read: Record<string, string | undefined> = {}
   for (const field of FIELDS) {
@@ -53,8 +55,13 @@ export function parseSpecialist(entry: unknown): Specialist | { error: string } 
   if (effort !== undefined && !EFFORT.test(effort)) return { error: `effort '${effort}' must be lowercase letters` }
   if (instructions !== undefined && /[\r\n]/.test(instructions)) return { error: 'instructions must be one line' }
   if (instructions !== undefined && instructions.length > INSTRUCTIONS_MAX) return { error: `instructions are longer than ${INSTRUCTIONS_MAX} characters` }
+  const enabled = entry[ENABLED]
+  if (enabled !== undefined && typeof enabled !== 'boolean') return { error: 'enabled must be true or false' }
   const hasInstructions = instructions !== undefined && instructions.trim() !== ''
-  return { name, model, ...(effort === undefined ? {} : { effort }), when, ...(hasInstructions ? { instructions } : {}) }
+  return {
+    name, model, ...(effort === undefined ? {} : { effort }), when, ...(hasInstructions ? { instructions } : {}),
+    ...(enabled === false ? { enabled } : {}),
+  }
 }
 
 // Reads the specialists list from the plugin's options; a value that is not a
@@ -96,15 +103,21 @@ export function specialistRoster(options: Record<string, unknown>): { specialist
 // Without this Claude fills instructions in on its own, and they open every task.
 const INSTRUCTIONS_HINT = 'instructions is optional: what the specialist is told before each task, in the user\'s words; leave it out unless the user gave some.'
 
+const isOn = (s: Specialist) => s.enabled !== false
+
 // hasRuns: a run not yet finished is in the store, so its calls stay offered
-// even once every specialist is removed.
-export function specialistDescription(list: Specialist[], hasRuns = false): string {
+// even once every specialist is removed. A switched-off specialist is named
+// only so Claude knows not to offer it.
+export function specialistDescription(all: Specialist[], hasRuns = false): string {
+  const list = all.filter(isOn)
+  const off = all.filter(s => !isOn(s)).map(s => s.name).join(', ')
   if (list.length === 0) {
     const open = hasRuns
       ? ' A run started before its specialist was removed still takes {run, message}, {run, result: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.'
       : ''
     return (
-      'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
+      'Set up a specialist: a coding agent that works in its own git worktree with its own model. ' +
+      (off ? `Every specialist is switched off by the user (${off}); never offer or start one, and if one fits, say it can be turned on in /specialists. ` : 'None are set up yet. ') +
       `When the user asks for one, call {setup: {${SETUP_FIELDS.join(', ')}}} with what they described; ` +
       'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
       INSTRUCTIONS_HINT + open
@@ -114,6 +127,7 @@ export function specialistDescription(list: Specialist[], hasRuns = false): stri
   return (
     'Hand a coding task to a specialist that works in its own git worktree with its own model. ' +
     `Specialists: ${roster}. ` +
+    (off ? `Switched off by the user, so never offer or start: ${off}. ` : '') +
     'When a task matches a use-when, offer that specialist to the user; start one only when the user asked for it or agreed. ' +
     `When no specialist fits and the user wants one, or the user describes one, call {setup: {${SETUP_FIELDS.join(', ')}}}; it opens a screen with those fields filled in and nothing is saved until the user presses Save. ` +
     `${INSTRUCTIONS_HINT} ` +
@@ -125,7 +139,8 @@ export function specialistDescription(list: Specialist[], hasRuns = false): stri
   )
 }
 
-export function specialistSchema(list: Specialist[], hasRuns = false): Record<string, unknown> {
+export function specialistSchema(all: Specialist[], hasRuns = false): Record<string, unknown> {
+  const list = all.filter(isOn)
   const setup = {
     type: 'object',
     description: 'Open the setup screen prefilled with a proposed specialist; the user saves it.',
@@ -197,6 +212,7 @@ export function specialistCall(input: Record<string, unknown>, list: Specialist[
   if (has(specialist) && !has(run) && !has(message) && !has(finish)) {
     const found = list.find(s => s.name === specialist)
     if (!found) return { deny: `no specialist named '${String(specialist)}'; configured: ${list.map(s => s.name).join(', ')}` }
+    if (!isOn(found)) return { deny: `${found.name} is switched off; the user can turn it on in /specialists` }
     if (!filled(task)) return { deny: 'task must be a non-empty string' }
     return { kind: 'start', specialist: found, task: task as string }
   }

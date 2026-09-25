@@ -66,7 +66,9 @@ export function checkSpecialist(f: Fields, index: number, context: { models: Cat
     return !('error' in theirs) && theirs.name === parsed.name
   })
   if (taken !== -1) return { error: `name '${parsed.name}' is already used by specialist ${taken + 1}` }
-  return { entry: parsed }
+  // The form has no on/off field, so an edit keeps whatever the stored entry says.
+  const stored = parseSpecialist(context.entries[index])
+  return { entry: 'error' in stored || stored.enabled !== false ? parsed : { ...parsed, enabled: false } }
 }
 
 // A save puts the entry at its index, which one past the end appends; a remove drops it.
@@ -82,6 +84,15 @@ export function saveIndex(draft: Draft, entries: unknown[]): number {
 
 export function dropEntry<T>(entries: T[], index: number): T[] {
   return entries.filter((_, at) => at !== index)
+}
+
+// Switches one specialist off, or back on by dropping the key, leaving the
+// rest of its stored entry as it was.
+export function flipEntry(entries: unknown[], index: number): { entries: unknown[] } | { error: string } {
+  const parsed = parseSpecialist(entries[index])
+  if ('error' in parsed) return { error: `specialist ${index + 1} cannot be switched: it does not read (${parsed.error})` }
+  const { enabled: _, ...rest } = entries[index] as Record<string, unknown>
+  return { entries: putEntry(entries, index, parsed.enabled === false ? rest : { ...rest, enabled: false }) }
 }
 
 // index: the entry's place in the list, or the list's length for a new one.
@@ -123,12 +134,14 @@ export type Option = { value: string; label: string }
 // One table row: zebra shades every other one, color marks the specialist.
 type RowBase = { index: number; name: string; color: string; zebra: boolean; editing: boolean }
 export type RosterEntry =
-  | RowBase & { kind: 'ok'; model: string; effort: string; effortStyle?: Style; when: string; instructions?: string }
+  | RowBase & { kind: 'ok'; model: string; effort: string; effortStyle?: Style; when: string; instructions?: string; off?: true }
   | RowBase & { kind: 'broken'; problem: string; stored: string }
 // Character widths of the name, model and effort columns, headers included.
 export type Columns = { name: number; model: number; effort: number }
 export type EditorView = {
   title: string; unsaved: boolean; removable: boolean; discardLabel: string
+  // Offered only for a saved entry that reads: the press switches the stored one.
+  toggle?: 'Disable' | 'Enable'
   models: 'loading' | 'failed' | 'ready'
   modelOptions: Option[]; effortOptions: Option[]
   effortHelp: string; whenHelp: string; instructionsHelp: string
@@ -175,6 +188,8 @@ function editorView(draft: Draft, catalog: CatalogState, entries: unknown[]): Ed
   const listed = [...models.filter(m => m.listed), ...models.filter(m => !m.listed)]
   const removable = draft.baseline.trim() !== ''
   const name = savedName(entries, draft.index)
+  const saved = parseSpecialist(entries[draft.index])
+  const toggle = removable && !('error' in saved) ? (saved.enabled === false ? 'Enable' : 'Disable') : undefined
   let effortHelp = ''
   if (model) effortHelp = draft.effort ? model.effortHelp[draft.effort] ?? '' : `Your Codex config decides; this model's own default is ${model.defaultEffort}`
   return {
@@ -182,6 +197,7 @@ function editorView(draft: Draft, catalog: CatalogState, entries: unknown[]): Ed
     unsaved: isDirty(draft),
     removable,
     discardLabel: removable ? 'Discard changes' : 'Cancel adding',
+    ...(toggle ? { toggle } : {}),
     models: 'loading' in catalog ? 'loading' : 'error' in catalog ? 'failed' : 'ready',
     modelOptions: 'models' in catalog ? listed.map(m => option(m.slug, m.listed ? m.slug : `${m.slug} (hidden)`)) : [option(draft.model)],
     effortOptions: [option('default'), ...(model ? model.efforts : draft.effort ? [draft.effort] : []).map(e => option(e))],
@@ -224,6 +240,7 @@ function rosterRow(entry: unknown, index: number, editing: boolean): RosterEntry
   return {
     ...base, kind: 'ok', name: parsed.name, model: parsed.model, effort: parsed.effort ?? 'default',
     ...(effortStyle ? { effortStyle } : {}), when: parsed.when, ...(parsed.instructions ? { instructions: parsed.instructions } : {}),
+    ...(parsed.enabled === false ? { off: true as const } : {}),
   }
 }
 
