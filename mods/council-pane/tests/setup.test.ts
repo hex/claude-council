@@ -173,7 +173,21 @@ test('with no specialists the roster says what to do and offers the templates', 
   expect(templates?.rows[0]?.when).toBe(TEMPLATES[0]?.when)
   // The name column fits the widest name, 'docs-updater', or its header if wider.
   expect(templates?.nameWidth).toBe(12)
-  expect(setupView(ready, two).templates).toBeUndefined()
+  // With no specialists the table is open, with nothing to fold.
+  expect(templates?.fold).toBeUndefined()
+})
+
+test('with specialists the templates fold behind a toggle that counts the ones not yet used', () => {
+  const used = [{ name: 'ci-fixer', model: 'gpt-6-sol', when: 'ci', skills: ['ci-fixer'] }, ...two]
+  const closed = setupView(ready, used).templates
+  expect(closed?.fold).toEqual({ label: 'Templates (5) ▸', open: false })
+  expect(closed?.rows.map(row => row.name)).toEqual(['bug-fixer', 'refactorer', 'test-writer', 'test-pruner', 'docs-updater'])
+  expect(closed?.rows.map(row => row.zebra)).toEqual([false, true, false, true, false])
+  expect(setupView({ ...ready, templatesOpen: true }, used).templates?.fold).toEqual({ label: 'Templates (5) ▾', open: true })
+  const all = TEMPLATES.map(t => ({ name: t.name, model: 'gpt-6-sol', when: t.when }))
+  expect(setupView(ready, all).templates).toBeUndefined()
+  // The open fold survives the reload every save causes.
+  expect(restoreSetup({ catalog: { models }, templatesOpen: true }, two)).toEqual({ catalog: { models }, templatesOpen: true })
 })
 
 test('a template opens as a new draft on its own bundled skill and the first listed model, and saves as it stands', () => {

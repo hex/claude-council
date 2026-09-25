@@ -108,7 +108,8 @@ export type Status = { kind: 'saved' | 'error' | 'note'; text: string }
 // What the form opens next: a stored entry, a blank one, or a template.
 export type Target = number | 'new' | { template: string }
 export type Confirm = { kind: 'remove' } | { kind: 'switch'; target: Target }
-export type SetupState = { draft?: Draft; catalog: CatalogState; status?: Status; confirm?: Confirm }
+// templatesOpen: the templates fold is open; with no specialists it has no fold.
+export type SetupState = { draft?: Draft; catalog: CatalogState; status?: Status; confirm?: Confirm; templatesOpen?: true }
 
 const fieldsOf = (s: Specialist): Fields => ({ name: s.name, model: s.model, effort: s.effort ?? '', when: s.when, skills: (s.skills ?? []).join(', ') })
 
@@ -188,8 +189,9 @@ export type SetupView = {
   roster: RosterEntry[]
   columns: Columns
   empty?: string
-  // The templates the empty screen offers as a table; each row opens a new draft.
-  templates?: { nameWidth: number; rows: { name: string; when: string; zebra: boolean }[] }
+  // The templates not yet used by name, as a table; each row opens a new draft.
+  // fold: once specialists exist, a toggle that shows or hides the table.
+  templates?: { nameWidth: number; rows: { name: string; when: string; zebra: boolean }[]; fold?: { label: string; open: boolean } }
   // Why the stored list could not be read; Save and Remove refuse while it stands.
   problem?: string
   editor?: EditorView
@@ -302,11 +304,22 @@ function columnsOf(roster: RosterEntry[]): Columns {
   }
 }
 
+function templatesView(roster: RosterEntry[], isOpen: boolean): SetupView['templates'] {
+  const taken = new Set(roster.map(row => row.name))
+  const left = TEMPLATES.filter(t => !taken.has(t.name))
+  if (left.length === 0) return undefined
+  const rows = left.map((t, at) => ({ name: t.name, when: t.when, zebra: at % 2 === 1 }))
+  const nameWidth = Math.max(HEADERS.template.length, ...left.map(t => t.name.length))
+  if (roster.length === 0) return { nameWidth, rows }
+  return { nameWidth, rows, fold: { label: `Templates (${left.length}) ${isOpen ? '▾' : '▸'}`, open: isOpen } }
+}
+
 const isOff = (row: RosterEntry) => row.kind === 'ok' && row.off === true
 
 // installed: every skill name found; until the folders are read, nothing is named missing.
 export function setupView(setup: SetupState, entries: unknown[], problem?: string, installed?: string[]): SetupView {
   const roster = entries.map((entry, index) => rosterRow(entry, index, setup.draft?.index === index))
+  const templates = templatesView(roster, setup.templatesOpen === true)
   const off = roster.filter(isOff).length
   return {
     header: `SPECIALISTS (${roster.length}${off > 0 ? ` · ${off} off` : ''})`,
@@ -315,11 +328,8 @@ export function setupView(setup: SetupState, entries: unknown[], problem?: strin
     ...(problem ? { problem } : {}),
     ...(roster.length === 0 && !problem ? {
       empty: 'No specialists yet. A specialist is a Codex agent that works on its own branch. Pick a template, add your own, or describe one to Claude.',
-      templates: {
-        nameWidth: Math.max(HEADERS.template.length, ...TEMPLATES.map(t => t.name.length)),
-        rows: TEMPLATES.map((t, at) => ({ name: t.name, when: t.when, zebra: at % 2 === 1 })),
-      },
     } : {}),
+    ...(templates ? { templates } : {}),
     ...(setup.draft ? { editor: editorView(setup.draft, setup.catalog, entries, installed ?? skillNames(setup.draft.skills)) } : {}),
     ...(setup.confirm ? { confirm: confirmView(setup, entries) } : {}),
     ...(setup.status ? { status: setup.status } : {}),
@@ -399,5 +409,5 @@ export function restoreSetup(value: unknown, entries: unknown[]): SetupState | u
   }
   const status = readStatus(value.status)
   const confirm = readConfirm(value.confirm)
-  return { catalog, ...(draft ? { draft } : {}), ...(status ? { status } : {}), ...(confirm ? { confirm } : {}) }
+  return { catalog, ...(draft ? { draft } : {}), ...(status ? { status } : {}), ...(confirm ? { confirm } : {}), ...(value.templatesOpen === true ? { templatesOpen: true as const } : {}) }
 }

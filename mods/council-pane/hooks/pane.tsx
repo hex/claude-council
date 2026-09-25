@@ -315,6 +315,11 @@ async function confirmSetup($: EngineInterface, state: PaneState, options: Recor
   await writeEntries($, state, setup, dropEntry(entries, setup.draft.index), `Removed ${name}.`)
 }
 
+async function foldTemplates($: EngineInterface, state: PaneState): Promise<void> {
+  const { templatesOpen, ...setup } = currentSetup(state)
+  await keepSetup($, state, templatesOpen ? setup : { ...setup, templatesOpen: true })
+}
+
 async function askSetup($: EngineInterface, state: PaneState, confirm: SetupState['confirm']): Promise<void> {
   await keepSetup($, state, { ...currentSetup(state), confirm })
 }
@@ -1162,13 +1167,17 @@ export const register: Register = (on, options) => {
               {entry.kind === 'broken' ? under('stored', entry.stored) : null}
             </Box>,
           ])}
-          <Box key="add-row" marginTop={view.roster.length > 0 || templates ? 1 : 0}><Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} /></Box>
+          <Box key="add-row" flexDirection="row" marginTop={view.roster.length > 0 || view.empty ? 1 : 0}>
+            <Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} />
+            {templates?.fold ? <Text key="gap">{'   '}</Text> : null}
+            {templates?.fold ? <Button key="templates-fold" plain dimColor label={templates.fold.label} onPress={press(() => foldTemplates($, state))} /> : null}
+          </Box>
           {/* The templates draw as the roster does, so picking one reads as
               picking a row; the name opens it as a new draft. The use-when wraps so it
               reads whole, so the rows go without bars and rules, which would stop
               at a wrapped row's first line; the shading tells them apart. They sit
               under Add, as ways to add one. */}
-          {templates ? (
+          {templates && (!templates.fold || templates.fold.open) ? (
             <Box key="templates" flexDirection="column" marginTop={1}>
               <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
                 {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
