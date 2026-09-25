@@ -78,5 +78,5 @@ Each glyph has one meaning.
 - **Switched-off row**: grouped under a `muted` italic `switched off` divider at the table's foot, its text `muted` italic, a hollow `○` swatch, and a word saying so (`off ·`), never colour alone. The chip counts the group (`SPECIALISTS (3 · 1 off)`).
 - **Status label**: `SAVED`, `ERROR` or `NOTE` on its fill, then the message in plain text.
 - **Help row**: one dim line under the value it explains, indented to the values, cut at the end.
-- **Long field value**: a text field is one line and Claude Code cuts a longer value at its end, where the cursor is, so a value that does not fit is repeated whole in plain text on wrapped lines under the field, above its help row. The Enter hint is `⏎` alone to leave the field more room.
+- **Long field value**: a text field is one line and Claude Code cuts a longer value at its end, where the cursor is, so a value that does not fit is repeated whole in plain text on wrapped lines under the field, above its help row. The Enter hint is the bare `⏎` (an empty `submitLabel`) to leave the field more room.
 - **Band**: the one line above the prompt while a council run or a specialist round is live: chip, name, model, time, latest step.
