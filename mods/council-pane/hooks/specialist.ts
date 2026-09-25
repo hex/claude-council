@@ -260,6 +260,15 @@ export function dialogOutcome(answer: string | undefined, go: string, stop: stri
   return { reply: `The user ${refusal} and said: ${answer}` }
 }
 
+// Specialists need the mod and a logged-in codex, so the one notice about them
+// waits for a session where both hold, and someone with specialists never gets it.
+export function introNotice(at: { shown: boolean; specialists: number; codexReady: boolean }): { log?: string; markShown: boolean } {
+  if (at.shown) return { markShown: false }
+  if (at.specialists > 0) return { markShown: true }
+  if (!at.codexReady) return { markShown: false }
+  return { log: 'New: /specialists hands a coding task to a Codex agent on its own git branch, with six templates to start from. This note shows once.', markShown: true }
+}
+
 // opening: skillsOpening's text, which already ends in a blank line; '' for none.
 export function specialistPrompt(opening: string, task: string): string {
   return `${opening.trim() === '' ? '' : opening}Task:\n${task}\n\nWork only inside this directory, which is already this task's own git branch: do not create or switch branches. Run the tests you touch. Do not commit: the tool commits your changes after each round.`

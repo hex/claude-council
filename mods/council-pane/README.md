@@ -83,6 +83,8 @@ You can also describe one to Claude, for example "add a specialist for Postgres 
 
 The mod ships no specialists. While you have none, the screen says that a specialist is a Codex agent working on its own branch, and lists six templates under `+ Add specialist`, in a table with `TEMPLATE` and the full `USE WHEN`. Once you have specialists, the table folds behind a dim `Templates (N) ▸` beside `+ Add specialist`, where N counts the templates whose name no specialist of yours uses yet; a used one leaves the table, and with all six used the toggle goes too. Pressing a template's name opens a new form with the template's name, its use-when and the bundled skill of the same name, on the first model Codex lists. Pick the model and effort you want and press Save. The screen saves nothing before that, and over unsaved changes the button asks first. The templates name no model because the models depend on your Codex account.
 
+The first session with no specialists and a logged-in `codex` logs one line about the feature: `New: /specialists hands a coding task to a Codex agent on its own git branch, with six templates to start from. This note shows once.` A flag in the plugin store keeps it from coming back, and someone who already has specialists never sees it.
+
 Each template's skill is a full procedure in `mods/council-pane/specialists/<name>/SKILL.md`: steps, the evidence to record, when to stop, and what to report. They sit outside any `skills/` folder, so Claude does not load them as its own skills. Five of them adapt text from OpenClaw's skills, under the MIT licence in `specialists/LICENSE-openclaw`.
 
 | Name | Use when |

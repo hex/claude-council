@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistEntries, freshList, specialistDescription, specialistSchema,
-  specialistCall, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
+  specialistCall, introNotice, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, threadFrom, commitSubject, specialistSteps, latestStep, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -486,4 +486,14 @@ test('the newest list is the copy in the shared store when there is one, else th
   expect(freshList(loaded, undefined)).toEqual({ entries: [{ name: 'sec', model: 'm', when: 'w' }] })
   expect(freshList(loaded, 7)).toEqual({ entries: [{ name: 'sec', model: 'm', when: 'w' }] })
   expect(freshList(loaded, 'nope')).toEqual({ entries: [], problem: 'the specialists setting is not JSON: nope' })
+})
+
+test('the one-time notice shows only to someone who can use specialists and has none yet', () => {
+  const text = 'New: /specialists hands a coding task to a Codex agent on its own git branch, with six templates to start from. This note shows once.'
+  expect(introNotice({ shown: false, specialists: 0, codexReady: true })).toEqual({ log: text, markShown: true })
+  // Someone who already has specialists knows the feature: never shown, never again.
+  expect(introNotice({ shown: false, specialists: 2, codexReady: true })).toEqual({ markShown: true })
+  // Without a logged-in codex nothing could run; wait for a session where it can.
+  expect(introNotice({ shown: false, specialists: 0, codexReady: false })).toEqual({ markShown: false })
+  expect(introNotice({ shown: true, specialists: 0, codexReady: true })).toEqual({ markShown: false })
 })
