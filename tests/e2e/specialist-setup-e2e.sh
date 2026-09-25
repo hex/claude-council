@@ -73,7 +73,7 @@ focus_on() {
 # An open Select draws its highlighted option in reverse video (SGR 7): read it
 # from the escape codes and move until it is the one wanted.
 highlighted() {
-    tmux capture-pane -e -p -t "$SESSION" | LC_ALL=C sed 's/\x1b\[7m/<R>/g; s/\x1b\[[0-9;]*m/<E>/g' \
+    tmux capture-pane -e -p -t "$SESSION" | LC_ALL=C sed 's/\x1b\[7m/<R>/g; s/\x1b\[[0-9;]*m//g' \
         | LC_ALL=C grep -o '<R>  [a-z0-9.-][a-z0-9.-]*' | head -1 | sed 's/^<R>  //'
 }
 pick() {
@@ -88,7 +88,7 @@ pick() {
 
 BEFORE="$(jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$OUT/settings.before")"
 INDEX="$(printf '%s' "$BEFORE" | jq 'length')"
-# Longer than the form's field at this width, so the roster has to wrap it.
+# Longer than a line of the form at this width, so the field wraps it.
 WHEN='e2e check alpha bravo charlie delta echo foxtrot golf hotel end-mark'
 WANT="{\"effort\":\"max\",\"instructions\":\"say e2e first\",\"model\":\"gpt-6-luna\",\"name\":\"e2e\",\"when\":\"$WHEN\"}"
 
@@ -112,6 +112,7 @@ key Enter
 pick gpt-6-luna
 focus_on effort; pick max
 focus_on when; tmux send-keys -t "$SESSION" -l "$WHEN"; sleep 1
+screen | grep -qF 'end-mark' || fail "the end of a long use-when is hidden while it is typed"
 key Enter
 [ "$(focused)" = instructions ] || fail "Enter in use-when moved focus to '$(focused)', expected instructions"
 tmux send-keys -t "$SESSION" -l 'say e2e first'; sleep 1
@@ -132,7 +133,7 @@ focus_on "row:${INDEX}"; key Enter
 focus_on toggle; key Enter
 wait_for "e2e is off: Claude will not offer or start it."
 wait_for "off · e2e check"
-screen | grep -qF "Name         : e2e" || fail "the form lost the name after the reload"
+screen | grep -A1 -E '│Name *$' | grep -qE '│e2e *$' || fail "the form lost the name after the reload"
 GOT="$(entries | jq -cS --argjson i "$INDEX" '.[$i]')"
 OFF="$(printf '%s' "$WANT" | jq -cS '. + {enabled: false}')"
 [ "$GOT" = "$OFF" ] || fail "switched off, specialist $((INDEX + 1)) is '$GOT', expected '$OFF'"
