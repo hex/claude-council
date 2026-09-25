@@ -42,6 +42,7 @@ trap restore EXIT
 # Keeps the last screen, so a failed wait shows what was drawn instead.
 fail() {
     tmux capture-pane -p -t "$SESSION" > "$OUT/fail.txt" 2>/dev/null || true
+    tmux capture-pane -e -p -t "$SESSION" > "$OUT/fail.ansi" 2>/dev/null || true
     echo "FAIL: $* (screen: $OUT/fail.txt)" >&2
     exit 1
 }
@@ -87,7 +88,9 @@ pick() {
 
 BEFORE="$(jq -r '.pluginConfigs["claude-council@inline"].options.specialists // "[]"' "$OUT/settings.before")"
 INDEX="$(printf '%s' "$BEFORE" | jq 'length')"
-WANT='{"effort":"max","instructions":"say e2e first","model":"gpt-6-luna","name":"e2e","when":"e2e check"}'
+# Longer than the form's field at this width, so its end is off the field's first view.
+WHEN='e2e check alpha bravo charlie delta echo foxtrot golf hotel end-mark'
+WANT="{\"effort\":\"max\",\"instructions\":\"say e2e first\",\"model\":\"gpt-6-luna\",\"name\":\"e2e\",\"when\":\"$WHEN\"}"
 
 tmux new-session -d -s "$SESSION" -x 160 -y 45 -c "$ROOT" \
     "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 $HOME/.local/bin/claude --plugin-dir $ROOT --debug-file $LOG"
@@ -108,7 +111,8 @@ key Enter
 [ "$(focused)" = model ] || fail "Enter in name moved focus to '$(focused)', expected model"
 pick gpt-6-luna
 focus_on effort; pick max
-focus_on when; tmux send-keys -t "$SESSION" -l 'e2e check'; sleep 1
+focus_on when; tmux send-keys -t "$SESSION" -l "$WHEN"; sleep 1
+screen | grep -qF 'end-mark' || fail "the end of a long use-when is hidden while it is typed"
 key Enter
 [ "$(focused)" = instructions ] || fail "Enter in use-when moved focus to '$(focused)', expected instructions"
 tmux send-keys -t "$SESSION" -l 'say e2e first'; sleep 1

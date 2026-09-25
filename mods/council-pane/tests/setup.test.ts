@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, flipEntry, wrapWords, whenWidth, fieldPreview, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, flipEntry, wrapWords, whenWidth, fieldTail, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -312,9 +312,10 @@ test('the use-when column gets what the frame leaves after the fixed columns, ne
   expect(whenWidth({ name: 4, model: 10, effort: 6 }, 30)).toBe(1)
 })
 
-test('a field value too long for its one-line field is shown whole, wrapped under it; one that fits is not', () => {
-  // A 40-wide pane: frame 4 + label 15 leaves 21 for the wrapped lines, and the hint's 2 more leave 19 for the field.
-  expect(fieldPreview('auth, crypto', 40)).toBeUndefined()
-  expect(fieldPreview('x'.repeat(19), 40)).toBeUndefined()
-  expect(fieldPreview('Postgres migrations and schema changes x', 40)).toEqual(['Postgres migrations', 'and schema changes x'])
+test('a field value too long for its one-line field shows its end under it, from a word start; one that fits does not', () => {
+  // A 40-wide pane: frame 4 + label 15 leaves 21 for the line under the field, and the hint's 3 more leave 18 for the field.
+  expect(fieldTail('auth, crypto', 40)).toBeUndefined()
+  expect(fieldTail('x'.repeat(18), 40)).toBeUndefined()
+  expect(fieldTail('Postgres migrations and schema changes x', 40)).toBe('\u2026and schema changes x')
+  expect(fieldTail('a'.repeat(30), 40)).toBe('\u2026' + 'a'.repeat(20))
 })

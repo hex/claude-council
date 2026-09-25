@@ -238,13 +238,19 @@ export function whenWidth(columns: Columns, width: number): number {
 // hint beside a focused field: the engine's own arrow, with no word after it.
 const FIELD_LABEL = 15
 export const SUBMIT_HINT = ''
-const HINT = 2
+const HINT = 3
 
-// The engine's Input is one line and cuts a longer value at its end, where
-// typing happens; such a value is drawn whole, wrapped, under the field.
-export function fieldPreview(value: string, width: number): string[] | undefined {
-  const lines = width - FRAME - FIELD_LABEL
-  return value.length > lines - HINT ? wrapWords(value, Math.max(1, lines)) : undefined
+// Claude Code draws a text field on one line and cuts a longer value at its
+// end, where the typing happens, so an overflowing value gets one line under
+// the field showing its end, from the start of a word where one fits.
+export function fieldTail(value: string, width: number): string | undefined {
+  const line = width - FRAME - FIELD_LABEL
+  if (value.length <= line - HINT) return undefined
+  const tail = value.slice(-(line - 1))
+  const cut = value.length - tail.length
+  const space = tail.indexOf(' ')
+  const fromWord = value[cut - 1] === ' ' || space === -1 ? tail : tail.slice(space + 1)
+  return `\u2026${fromWord}`
 }
 
 // Breaks text into lines no wider than width, at spaces where it can; a word
