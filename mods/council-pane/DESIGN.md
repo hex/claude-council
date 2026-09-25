@@ -47,7 +47,7 @@ Effort grows warmer as it rises, and the two highest are bold as well: low `mute
 
 ## Type
 
-- Bold uppercase labels name a thing: chips (`SPECIALISTS 2`, `EDIT sec`, `STEPS`, `SYNTHESIS`) and table headers.
+- Bold uppercase labels name a thing: chips (`SPECIALISTS (2)`, `EDIT sec`, `STEPS`, `SYNTHESIS`) and table headers.
 - Bold marks an identity: a specialist's or provider's name, the program in a command.
 - Dim marks metadata: counts, labels, help, times.
 - Italic is Codex's thinking, and nothing else.
