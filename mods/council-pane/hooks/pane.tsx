@@ -1034,10 +1034,13 @@ export const register: Register = (on, options) => {
       <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={COLOR.line}>{SEPARATOR}</Text></Box>
     )
     // A row's second line starts under the model column.
-    const under = (key: string, text: string) => (
+    // A switched-off row is grey and italic throughout; the name is a Button,
+    // which takes neither.
+    const offText = (text: string) => <Text key="text" color={COLOR.muted} italic wrap="truncate-end">{text}</Text>
+    const under = (key: string, text: string, off = false) => (
       <Box key={key} flexDirection="row">
         {cell('indent', SWATCH_WIDTH + view.columns.name + PAD + SEPARATOR.length, <Text key="text">{''}</Text>)}
-        <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
+        <Box key="body" flexShrink={1}>{off ? offText(text) : <Text key="text" dimColor wrap="truncate-end">{text}</Text>}</Box>
       </Box>
     )
     const help = (key: string, text: string) => (
@@ -1067,30 +1070,34 @@ export const register: Register = (on, options) => {
             </Box>
           ) : null}
           {view.roster.map((entry, at) => [
-            at > 0 ? <Text key={`rule:${entry.index}`} color={COLOR.line} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
+            entry.firstOff
+              ? <Text key={`rule:${entry.index}`} color={COLOR.muted} italic wrap="truncate">{`── switched off ${'─'.repeat(Math.max(0, width - 21))}`}</Text>
+              : at > 0 ? <Text key={`rule:${entry.index}`} color={COLOR.line} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
             <Box key={`entry:${entry.index}`} flexDirection="column" hover={{ backgroundColor: COLOR.selected }}
               {...(entry.editing ? { backgroundColor: COLOR.selected } : entry.zebra ? { backgroundColor: COLOR.zebra } : {})}>
               <Box key="line" flexDirection="row">
-                {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.color}>{entry.editing ? '▶' : entry.kind === 'ok' && entry.off ? '○' : '●'}</Text>)}
+                {cell('swatch', SWATCH_WIDTH, <Text key="text" color={entry.kind === 'ok' && entry.off ? COLOR.muted : entry.color}>{entry.editing ? '▶' : entry.kind === 'ok' && entry.off ? '○' : '●'}</Text>)}
                 {cell('name', view.columns.name + PAD, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
                 {separator('sep-1')}
                 {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, entry.off
-                  ? <Text key="text" dimColor>{entry.model}</Text>
+                  ? offText(entry.model)
                   : <Text key="text" color={COLOR.model}>{entry.model}</Text>) : null}
                 {entry.kind === 'ok' ? separator('sep-2') : null}
-                {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.effortStyle && !entry.off
-                  ? <Text key="text" color={entry.effortStyle.color} bold={entry.effortStyle.bold === true}>{entry.effort}</Text>
-                  : <Text key="text" dimColor>{entry.effort}</Text>) : null}
+                {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.off
+                  ? offText(entry.effort)
+                  : entry.effortStyle
+                    ? <Text key="text" color={entry.effortStyle.color} bold={entry.effortStyle.bold === true}>{entry.effort}</Text>
+                    : <Text key="text" dimColor>{entry.effort}</Text>) : null}
                 {entry.kind === 'ok' ? separator('sep-3') : null}
                 <Box key="rest" flexGrow={1} flexShrink={1}>
                   {entry.kind === 'ok'
                     ? entry.off
-                      ? <Text key="text" dimColor wrap="truncate-end">{`off · ${entry.when}`}</Text>
+                      ? offText(`off · ${entry.when}`)
                       : <Text key="text" wrap="truncate-end">{entry.when}</Text>
                     : <Text key="text" color={COLOR.danger} wrap="truncate-end">{entry.problem}</Text>}
                 </Box>
               </Box>
-              {entry.kind === 'ok' && entry.instructions ? under('instructions', `↳ ${entry.instructions}`) : null}
+              {entry.kind === 'ok' && entry.instructions ? under('instructions', `↳ ${entry.instructions}`, entry.off === true) : null}
               {entry.kind === 'broken' ? under('stored', entry.stored) : null}
             </Box>,
           ])}

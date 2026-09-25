@@ -201,11 +201,21 @@ test('listed models come first and hidden ones say so', () => {
 test('a switched-off specialist is marked off in the roster, and its editor offers to turn it back on', () => {
   const entries = [{ ...two[0], enabled: false }, two[1]]
   const view = setupView({ ...ready, draft: draftFor(0, entries, models) }, entries)
-  expect(view.roster[0]).toMatchObject({ kind: 'ok', name: 'sec', off: true })
-  expect(view.roster[1]).not.toHaveProperty('off')
+  expect(view.roster.find(row => row.name === 'sec')).toMatchObject({ kind: 'ok', off: true })
+  expect(view.roster.find(row => row.name === 'mig')).not.toHaveProperty('off')
   expect(view.editor?.toggle).toBe('Enable')
   expect(setupView({ ...ready, draft: draftFor(1, entries, models) }, entries).editor?.toggle).toBe('Disable')
   expect(setupView({ ...ready, draft: blankDraft(2, models) }, entries).editor?.toggle).toBeUndefined()
+})
+
+test('switched-off rows sit under the rest, the header counts them, and shading follows the drawn order', () => {
+  const three = [{ ...two[0], enabled: false }, two[1], { name: 'ops', model: 'gpt-6-sol', when: 'deploys' }]
+  const view = setupView(ready, three)
+  expect(view.header).toBe('SPECIALISTS (3 · 1 off)')
+  expect(view.roster.map(row => [row.index, row.zebra, row.kind === 'ok' && row.off === true, row.firstOff === true])).toEqual([
+    [1, false, false, false], [2, true, false, false], [0, false, true, true],
+  ])
+  expect(setupView(ready, two).header).toBe('SPECIALISTS (2)')
 })
 
 test('flipping an entry turns it off, or back on by dropping the key, and touches nothing else', () => {

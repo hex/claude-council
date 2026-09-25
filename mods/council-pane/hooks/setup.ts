@@ -131,8 +131,10 @@ export function staleMessage(draft: Draft, entries: unknown[]): string | undefin
 
 
 export type Option = { value: string; label: string }
-// One table row: zebra shades every other one, color marks the specialist.
-type RowBase = { index: number; name: string; color: string; zebra: boolean; editing: boolean }
+// One table row: zebra shades every other drawn row, color marks the specialist.
+// index is the entry's place in the stored list, which the drawn order may differ from;
+// firstOff marks the row the switched-off group starts at.
+type RowBase = { index: number; name: string; color: string; zebra: boolean; editing: boolean; firstOff?: true }
 export type RosterEntry =
   | RowBase & { kind: 'ok'; model: string; effort: string; effortStyle?: Style; when: string; instructions?: string; off?: true }
   | RowBase & { kind: 'broken'; problem: string; stored: string }
@@ -254,10 +256,20 @@ function columnsOf(roster: RosterEntry[]): Columns {
   }
 }
 
+const isOff = (row: RosterEntry) => row.kind === 'ok' && row.off === true
+
+// Switched-off specialists go under the rest, each group in list order.
+function drawnOrder(rows: RosterEntry[]): RosterEntry[] {
+  const on = rows.filter(row => !isOff(row))
+  const off = rows.filter(isOff)
+  return [...on, ...off].map((row, at) => ({ ...row, zebra: at % 2 === 1, ...(at === on.length ? { firstOff: true as const } : {}) }))
+}
+
 export function setupView(setup: SetupState, entries: unknown[], problem?: string): SetupView {
-  const roster = entries.map((entry, index) => rosterRow(entry, index, setup.draft?.index === index))
+  const roster = drawnOrder(entries.map((entry, index) => rosterRow(entry, index, setup.draft?.index === index)))
+  const off = roster.filter(isOff).length
   return {
-    header: `SPECIALISTS (${roster.length})`,
+    header: `SPECIALISTS (${roster.length}${off > 0 ? ` · ${off} off` : ''})`,
     roster,
     columns: columnsOf(roster),
     ...(problem ? { problem } : {}),
