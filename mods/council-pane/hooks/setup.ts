@@ -225,6 +225,32 @@ export const SWATCH_WIDTH = 2
 export const PAD = 1
 export const SEPARATOR = '│ '
 
+// The frame's border and padding around the table.
+const FRAME = 4
+
+// What the use-when column gets of a frame this wide, after the fixed columns.
+export function whenWidth(columns: Columns, width: number): number {
+  const fixed = FRAME + SWATCH_WIDTH + columns.name + PAD + columns.model + PAD + columns.effort + PAD + 3 * SEPARATOR.length
+  return Math.max(1, width - fixed)
+}
+
+// Breaks text into lines no wider than width, at spaces where it can; a word
+// longer than a line is cut across lines. Every character stays.
+export function wrapWords(text: string, width: number): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const word of text.split(' ')) {
+    const joined = line === '' ? word : `${line} ${word}`
+    if (joined.length <= width) { line = joined; continue }
+    if (line !== '') lines.push(line)
+    let rest = word
+    while (rest.length > width) { lines.push(rest.slice(0, width)); rest = rest.slice(width) }
+    line = rest
+  }
+  lines.push(line)
+  return lines
+}
+
 // The rule drawn between rows, crossing each bar where it stands; cut or
 // filled to the given width.
 export function ruleLine(columns: Columns, width: number): string {
