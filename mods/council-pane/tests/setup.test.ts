@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the specialist setup screen's pure logic: catalog, validation, entries, drafts
 // ABOUTME: The catalog fixture is real `codex debug models` output, trimmed with jq to the fields read
 import { test, expect } from 'bun:test'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
 import { parseCatalog, checkSpecialist, flipEntry, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, saveIndex, setupView, isDirty, TEMPLATES, templateDraft, draftAt, type Fields, type SetupState } from '../hooks/setup'
 
@@ -173,7 +173,9 @@ test('with no specialists the roster says what to do and offers the templates', 
 test('a template opens as a new draft on its own bundled skill and the first listed model, and saves as it stands', () => {
   const bundled = { ...context, skills: TEMPLATES.map(t => t.name) }
   for (const template of TEMPLATES) {
-    expect(existsSync(`${import.meta.dir}/../specialists/${template.name}/SKILL.md`)).toBe(true)
+    // The use-when is the bundled skill's own description, so the two cannot drift.
+    const skill = readFileSync(`${import.meta.dir}/../specialists/${template.name}/SKILL.md`, 'utf8')
+    expect(skill.match(/^description: (.*)$/m)?.[1]).toBe(template.when)
     const draft = templateDraft(template.name, 0, models)
     expect(draft).toEqual({ index: 0, baseline: '', model: 'gpt-6-sol', effort: '', name: template.name, when: template.when, skills: template.name })
     if (!draft) throw new Error('no draft')

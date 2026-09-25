@@ -131,9 +131,9 @@ export function blankDraft(index: number, models: CatalogModel[], prefill: Parti
 // Codex, so the draft takes the first listed one like Add does.
 export const TEMPLATES: Pick<Fields, 'name' | 'when'>[] = [
   { name: 'bug-fixer', when: 'A bug reproduces, the expected behaviour is clear, and the fix stands apart from the current work.' },
-  { name: 'ci-fixer', when: 'A CI job fails on a named branch or commit and the fix belongs in code, config or tests, not in the CI provider.' },
+  { name: 'ci-fixer', when: 'A CI job fails on a named revision and the fix belongs in code, config or tests, not in the CI provider.' },
   { name: 'refactorer', when: 'A behaviour-preserving restructure is named: extract, rename, move, split a module, or remove duplication across three or more sites.' },
-  { name: 'test-writer', when: 'The task is to add or extend tests for existing behaviour that has a spec.' },
+  { name: 'test-writer', when: 'The task is to add or extend tests for existing behaviour that has a spec, a documented contract, or a confirmed expected output.' },
   { name: 'test-pruner', when: 'Tests in a named area duplicate stronger tests, re-assert the implementation, or keep test-only seams alive, and need pruning.' },
   { name: 'docs-updater', when: 'Docs must be updated or restructured to match code that already changed: README, reference pages, CLI help or config docs.' },
 ]
