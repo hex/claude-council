@@ -71,6 +71,82 @@ rejected_key() {
     esac
 }
 
+# Does this failed inference probe say the account is out of quota or credit?
+# Usage: out_of_quota <provider> <body_file>
+#
+# A 429 is also how every vendor answers a plain rate limit, which a working key
+# hits too, so only each vendor's own quota marker, never the code, may say the
+# account cannot run inference. OpenAI marks it in error.code and Moonshot in
+# error.type (both in their error references). xAI gives no structured reason,
+# so its error text is read for "credit"; that shape is unconfirmed against a
+# live account without credits. Gemini answers 429 RESOURCE_EXHAUSTED for a
+# rate limit and a spent quota alike, so it has no marker here.
+out_of_quota() {
+    local provider="$1" body_file="$2"
+    case "$provider" in
+        openai) jq -e 'try (.error.code == "insufficient_quota") catch false' "$body_file" >/dev/null 2>&1 ;;
+        kimi)   jq -e 'try (.error.type == "exceeded_current_quota_error") catch false' "$body_file" >/dev/null 2>&1 ;;
+        grok)
+            jq -e 'try (((.error | type) == "string") and (.error | ascii_downcase | contains("credit"))) catch false' \
+                "$body_file" >/dev/null 2>&1
+            ;;
+        *)      return 1 ;;
+    esac
+}
+
+# After a passed key check, can the key run inference? A models listing answers
+# 200 for any valid key, even one whose account has no billing left, so this
+# sends one chat request capped at 16 output tokens: the one paid call a status
+# check makes per provider. Prints "inference_blocked:<code>" or
+# "rate_limited:429", or nothing when inference ran or the answer proves nothing
+# about billing (a 400 over request shape, a 500, a timeout), which leaves the
+# row reading Connected as it did before this probe existed.
+# Usage: inference_state <provider> <api_key> <model>
+inference_state() {
+    local name="$1" api_key="$2" model="$3"
+    # jq builds the request so a model name can never break out of its string;
+    # without jq the probe is skipped and the warning above already stands.
+    jq --version >/dev/null 2>&1 || return 0
+    local url header payload
+    case "$name" in
+        openai)
+            url="https://api.openai.com/v1/chat/completions"
+            header="Authorization: Bearer ${api_key}"
+            # Reasoning models take max_completion_tokens, which caps their
+            # thinking too, so 16 bounds the cost whatever the model is.
+            payload=$(jq -nc --arg m "$model" '{model: $m, messages: [{role: "user", content: "hi"}], max_completion_tokens: 16}')
+            ;;
+        grok|kimi)
+            [[ "$name" == grok ]] && url="https://api.x.ai/v1/chat/completions" || url="https://api.moonshot.ai/v1/chat/completions"
+            header="Authorization: Bearer ${api_key}"
+            payload=$(jq -nc --arg m "$model" '{model: $m, messages: [{role: "user", content: "hi"}], max_tokens: 16}')
+            ;;
+        gemini)
+            url="https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent"
+            header="x-goog-api-key: ${api_key}"
+            payload=$(jq -nc '{contents: [{parts: [{text: "hi"}]}], generationConfig: {maxOutputTokens: 16}}')
+            ;;
+        *)  return 0 ;;
+    esac
+    local cfg body_file code
+    cfg=$(curl_secret_config "$header")
+    body_file=$(mktemp "${TMPDIR:-/tmp}/council-probe.XXXXXX")
+    code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+        -X POST \
+        --config "$cfg" \
+        -H "Content-Type: application/json" \
+        -d "$payload" \
+        "$url" 2>/dev/null || true)
+    rm -f "$cfg"
+    code="${code:-000}"
+    if [[ "$code" != "200" ]] && { [[ "$code" == "402" ]] || out_of_quota "$name" "$body_file"; }; then
+        echo "inference_blocked:${code}"
+    elif [[ "$code" == "429" ]]; then
+        echo "rate_limited:429"
+    fi
+    rm -f "$body_file"
+}
+
 # Check a single provider
 # Usage: check_provider <name> <api_key_var> <model>
 check_provider() {
@@ -178,6 +254,12 @@ check_provider() {
     duration=$((end_time - start_time))
 
     if [[ "$http_code" == "200" ]]; then
+        local inference
+        inference=$(inference_state "$name" "$api_key" "$model")
+        if [[ -n "$inference" ]]; then
+            echo "$inference"
+            return
+        fi
         echo "ok:${duration}:${model}"
     elif [[ "$http_code" == "000" ]]; then
         echo "timeout"
@@ -255,6 +337,8 @@ remediation_for() {
         ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;
         *:auth_error)         echo "key rejected - regenerate it" ;;
+        *:inference_blocked)  echo "check the account's billing or credits" ;;
+        *:rate_limited)       echo "rate limited - check again in a minute" ;;
         *)                    echo "" ;;
     esac
 }
@@ -300,8 +384,8 @@ ollama_status=$(check_cli_provider "ollama" "ollama" list)
 # carry SGR escape bytes that occupy no width, so measuring them would pad every
 # row by a different wrong amount.
 STATUS_NAME_W=14    # fits "OpenRouter 10" and "Antigravity"
-STATUS_STATE_W=24   # fits every state but "Installed, not authenticated", which
-                    # overflows to a single space rather than widening every row
+STATUS_STATE_W=28   # fits the longest states, "Installed, not authenticated" and
+                    # "Inference blocked (HTTP 429)"
 
 format_status() {
     local name="$1"
@@ -320,6 +404,8 @@ format_status() {
     color=$(provider_color "$provider_id")
     local state="$status"
     [[ "$status" == auth_error:* ]] && state="auth_error"
+    [[ "$status" == inference_blocked:* ]] && state="inference_blocked"
+    [[ "$status" == rate_limited:* ]] && state="rate_limited"
     local fix
     fix=$(remediation_for "$provider_id" "$state")
 
@@ -347,6 +433,16 @@ format_status() {
         auth_error:*)
             icon="${RED}✗ ${RESET}"
             plain_state="Auth failed (HTTP ${status#auth_error:})"
+            painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        inference_blocked:*)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Inference blocked (HTTP ${status#inference_blocked:})"
+            painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        rate_limited:*)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Rate limited (HTTP ${status#rate_limited:})"
             painted_state="${RED}${plain_state}${RESET}"
             ;;
         error:*)
