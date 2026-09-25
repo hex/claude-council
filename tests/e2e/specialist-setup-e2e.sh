@@ -19,15 +19,28 @@ for store in "$HOME"/.claude/plugins/store/claude-council_inline-*.json; do
     fi
 done
 cp "$SETTINGS" "$OUT/settings.before"
+# The screen's draft and the shared copy of the list live in the store; a run
+# that stops part-way would leave its own draft there for every session.
+STORE_KEYS='["specialist-setup", "specialists-latest"]'
+for store in "$HOME"/.claude/plugins/store/claude-council_inline-*.json; do
+    [ -f "$store" ] || continue
+    jq --argjson keys "$STORE_KEYS" '[$keys[] as $k | {key: $k, value: .[$k]}] | from_entries' "$store" > "$OUT/store.$(basename "$store")"
+done
 
-# Puts back only the specialists field, so a live session's other settings
-# written meanwhile survive.
+# Puts back only the specialists field and the screen's store keys, so a live
+# session's other settings and store entries written meanwhile survive.
 restore() {
     tmux kill-session -t "$SESSION" 2>/dev/null || true
-    local before
+    local before saved store
     before="$(jq '.pluginConfigs["claude-council@inline"].options.specialists' "$OUT/settings.before")"
     jq --argjson v "$before" 'if $v == null then del(.pluginConfigs["claude-council@inline"].options.specialists) else .pluginConfigs["claude-council@inline"].options.specialists = $v end' "$SETTINGS" > "$OUT/settings.restored"
     cat "$OUT/settings.restored" > "$SETTINGS"
+    for saved in "$OUT"/store.*; do
+        [ -f "$saved" ] || continue
+        store="$HOME/.claude/plugins/store/${saved##*/store.}"
+        jq --slurpfile before "$saved" 'reduce ($before[0] | to_entries[]) as $e (.; if $e.value == null then del(.[$e.key]) else .[$e.key] = $e.value end)' "$store" > "$OUT/store.restored"
+        cat "$OUT/store.restored" > "$store"
+    done
 }
 trap restore EXIT
 
@@ -116,15 +129,32 @@ screen > "$OUT/4-saved.txt"
 GOT="$(entries | jq -cS --argjson i "$INDEX" '.[$i]')"
 [ "$GOT" = "$WANT" ] || fail "specialist $((INDEX + 1)) is '$GOT', expected '$WANT'"
 
-echo "5. remove"
+echo "5. switch off and back on"
 focus_on "row:${INDEX}"; key Enter
+focus_on toggle; key Enter
+wait_for "e2e is off: Claude will not offer or start it."
+wait_for "off · e2e check"
+screen | grep -qF "Name         : e2e" || fail "the form lost the name after the reload"
+GOT="$(entries | jq -cS --argjson i "$INDEX" '.[$i]')"
+OFF="$(printf '%s' "$WANT" | jq -cS '. + {enabled: false}')"
+[ "$GOT" = "$OFF" ] || fail "switched off, specialist $((INDEX + 1)) is '$GOT', expected '$OFF'"
+screen > "$OUT/5-off.txt"
+# The write reloaded the module and the form was drawn again: the log's last
+# focus line is from before, so move once to get a fresh one.
+key Tab
+focus_on toggle; key Enter
+wait_for "e2e is on again."
+GOT="$(entries | jq -cS --argjson i "$INDEX" '.[$i]')"
+[ "$GOT" = "$WANT" ] || fail "switched back on, specialist $((INDEX + 1)) is '$GOT', expected '$WANT'"
+
+echo "6. remove"
 focus_on remove; key Enter
 wait_for "Remove e2e?"
 focus_on confirm-yes; key Enter
 wait_for "Removed e2e."
 [ "$(entries | jq -c .)" = "$(printf '%s' "$BEFORE" | jq -c .)" ] || fail "the list is $(entries) after remove, expected $BEFORE"
 
-echo "6. a list set by hand is checked like a Save"
+echo "7. a list set by hand is checked like a Save"
 key Escape
 wait_for '❯'
 tmux send-keys -t "$SESSION" -l "/config claude-council.specialists=nope"; key Enter

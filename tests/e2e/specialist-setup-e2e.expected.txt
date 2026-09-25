@@ -2,6 +2,7 @@
 2. add a new specialist
 3. fill the form; Enter in a text field keeps its text and moves on
 4. save
-5. remove
-6. a list set by hand is checked like a Save
+5. switch off and back on
+6. remove
+7. a list set by hand is checked like a Save
 PASS ($OUT)
