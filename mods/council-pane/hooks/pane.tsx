@@ -18,7 +18,7 @@ import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
-import { blankDraft, draftFor, dropEntry, flipEntry, putEntry, whenWidth, wrapWords, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, fieldPreview, flipEntry, putEntry, SUBMIT_HINT, whenWidth, wrapWords, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -1066,10 +1066,10 @@ export const register: Register = (on, options) => {
         <Box key="body" flexShrink={1}>{off ? offText(text) : <Text key="text" dimColor wrap="truncate-end">{text}</Text>}</Box>
       </Box>
     )
-    const help = (key: string, text: string) => (
+    const help = (key: string, text: string, isValue = false) => (
       <Box key={key} flexDirection="row">
         <Box key="indent" width={HELP_INDENT.length} flexShrink={0}><Text key="pad">{HELP_INDENT}</Text></Box>
-        <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
+        <Box key="body" flexShrink={1}><Text key="text" dimColor={!isValue} wrap="truncate-end">{text}</Text></Box>
       </Box>
     )
     return (
@@ -1138,7 +1138,7 @@ export const register: Register = (on, options) => {
               {editor.unsaved ? <Text key="unsaved" color={COLOR.warning}>{'  unsaved changes'}</Text> : null}
             </Box>
             <Box key="editor" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1}>
-              <Input key={`name.${state.inputEpoch}`} label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />
+              <Input key={`name.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} label="Name         " placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />
               <Select key="model" label="Model        " value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
                 onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />
               {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
@@ -1150,9 +1150,11 @@ export const register: Register = (on, options) => {
               ) : null}
               <Select key="effort" label="Effort       " value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />
               {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
-              <Input key={`when.${state.inputEpoch}`} label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />
+              <Input key={`when.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} label="Use when     " placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'instructions' })) }} />
+              {(fieldPreview(draft.when, width) ?? []).map((line, at) => help(`when-full-${at}`, line, true))}
               {help('when-help', editor.whenHelp)}
-              <Input key={`instructions.${state.inputEpoch}`} label="Instructions " placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />
+              <Input key={`instructions.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} label="Instructions " placeholder="optional, e.g. review migrations for locks" value={draft.instructions} onInput={(v: string) => edit({ instructions: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { instructions: v }, { control: 'save' })) }} />
+              {(fieldPreview(draft.instructions, width) ?? []).map((line, at) => help(`instructions-full-${at}`, line, true))}
               {help('instructions-help', editor.instructionsHelp)}
               <Box key="actions" flexDirection="row">
                 <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
