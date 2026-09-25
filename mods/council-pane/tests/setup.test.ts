@@ -122,7 +122,7 @@ const ready: SetupState = { catalog: { models } }
 
 test('the roster is a table: a row per specialist, zebra on every other one, its own colour and its effort coloured', () => {
   const view = setupView(ready, two)
-  expect(view.header).toBe('SPECIALISTS 2')
+  expect(view.header).toBe('SPECIALISTS (2)')
   expect(view.roster).toEqual([
     { kind: 'ok', index: 0, name: 'sec', color: 'rgb(70,130,180)', zebra: false, editing: false, model: 'gpt-6-sol', effort: 'high', effortStyle: { color: 'warning' }, when: 'auth, crypto' },
     { kind: 'ok', index: 1, name: 'mig', color: 'rgb(150,90,170)', zebra: true, editing: false, model: 'gpt-6-luna', effort: 'default', when: 'schema changes', instructions: 'Review migrations for locks and rollbacks.' },
@@ -166,7 +166,7 @@ test('an entry that does not parse stays in the roster with its problem and what
 
 test('with no specialists the roster says what to do', () => {
   expect(setupView(ready, []).empty).toBe('No specialists yet. Add one, and Claude offers it when a task matches its use-when.')
-  expect(setupView(ready, []).header).toBe('SPECIALISTS 0')
+  expect(setupView(ready, []).header).toBe('SPECIALISTS (0)')
 })
 
 test('the editor explains effort, use-when and instructions and counts the use-when', () => {

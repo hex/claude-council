@@ -240,7 +240,7 @@ function columnsOf(roster: RosterEntry[]): Columns {
 export function setupView(setup: SetupState, entries: unknown[], problem?: string): SetupView {
   const roster = entries.map((entry, index) => rosterRow(entry, index, setup.draft?.index === index))
   return {
-    header: `SPECIALISTS ${roster.length}`,
+    header: `SPECIALISTS (${roster.length})`,
     roster,
     columns: columnsOf(roster),
     ...(problem ? { problem } : {}),
