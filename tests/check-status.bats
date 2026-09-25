@@ -3,6 +3,7 @@
 # ABOUTME: Hermetic via fake CLIs and a shadow curl; no real keys or network
 
 load test_helper
+bats_require_minimum_version 1.5.0
 load fixtures/fake-clis
 load fixtures/status-fakes
 
