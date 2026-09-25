@@ -1086,8 +1086,7 @@ export const register: Register = (on, options) => {
     const width = Math.max(30, e.props.bodyColumns - 2)
     const press = (work: () => Promise<void>) => () => { void setupAction($, state, work) }
     const edit = (patch: Partial<Fields>) => { void setupAction($, state, () => editSetup($, state, patch)) }
-    // A help line sits under the values and keeps to one row: a pane taller than
-    // the terminal hands the keyboard back to the prompt.
+    // Help sits under its field in the light hint grey and wraps, so it always reads whole.
     // A table cell keeps its width; only the last column gives way.
     const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
     // A dim bar between two columns.
@@ -1105,7 +1104,7 @@ export const register: Register = (on, options) => {
       </Box>
     )
     const help = (key: string, text: string) => (
-      <Text key={key} dimColor italic wrap="truncate-end">{text}</Text>
+      <Text key={key} color={COLOR.hint} italic wrap="wrap">{text}</Text>
     )
     // Each field: its label in the roster's column name, anything about it on
     // the right, and the value on a tinted well that says where to type

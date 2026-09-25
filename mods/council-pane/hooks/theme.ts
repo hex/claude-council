@@ -16,6 +16,8 @@ export const COLOR = {
   muted: 'inactive',
   // Table bars and rules: decoration only, 2:1.
   line: 'subtle',
+  // Form help: lighter than dimColor on the user's own call, below 4.5:1 (DESIGN.md).
+  hint: 'subtle',
   // The top of a scale, such as the highest effort.
   peak: 'merged',
   model: 'planMode',
