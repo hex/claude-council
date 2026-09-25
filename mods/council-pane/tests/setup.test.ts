@@ -166,7 +166,7 @@ test('an entry that does not parse stays in the roster with its problem and what
 test('with no specialists the roster says what to do and offers the templates', () => {
   expect(setupView(ready, []).empty).toBe('No specialists yet. Start from a template, add one, or describe one to Claude. Claude offers a specialist when a task matches its use-when.')
   expect(setupView(ready, []).header).toBe('SPECIALISTS (0)')
-  expect(setupView(ready, []).templates).toEqual(['test-writer', 'bug-fixer'])
+  expect(setupView(ready, []).templates).toEqual(['bug-fixer', 'ci-fixer', 'refactorer', 'test-writer', 'test-pruner', 'docs-updater'])
   expect(setupView(ready, two).templates).toBeUndefined()
 })
 
@@ -178,7 +178,7 @@ test('a template opens as a new draft on the first listed model, and saves as it
     expect(checkSpecialist(draft, 0, context)).toEqual({ entry: { name: template.name, model: 'gpt-6-sol', when: template.when, instructions: template.instructions } })
   }
   expect(templateDraft('nope', 0, models)).toBeUndefined()
-  expect(draftAt({ template: 'test-writer' }, two, models)).toEqual({ index: 2, baseline: '', model: 'gpt-6-sol', effort: '', ...TEMPLATES[0] })
+  expect(draftAt({ template: 'test-writer' }, two, models)).toEqual({ index: 2, baseline: '', model: 'gpt-6-sol', effort: '', ...TEMPLATES.find(t => t.name === 'test-writer') })
   expect(() => draftAt({ template: 'nope' }, [], models)).toThrow('no template named nope')
 })
 

@@ -1092,11 +1092,9 @@ export const register: Register = (on, options) => {
         <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={width}>
           {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
           {view.templates ? (
-            <Box key="templates" flexDirection="row" marginTop={1}>
-              {view.templates.map((name, at) => (
-                <Box key={`template:${name}`} marginLeft={at > 0 ? 1 : 0}>
-                  <Button key="use" label={`Use ${name}`} onPress={press(() => openRow($, state, options, { template: name }))} />
-                </Box>
+            <Box key="templates" flexDirection="row" flexWrap="wrap" columnGap={1} marginTop={1}>
+              {view.templates.map(name => (
+                <Button key={`template:${name}`} label={`Use ${name}`} onPress={press(() => openRow($, state, options, { template: name }))} />
               ))}
             </Box>
           ) : null}

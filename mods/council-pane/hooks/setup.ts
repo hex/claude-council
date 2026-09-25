@@ -125,14 +125,34 @@ export function blankDraft(index: number, models: CatalogModel[], prefill: Parti
 // depends on the user's Codex, so the draft takes the first listed one like Add does.
 export const TEMPLATES: Pick<Fields, 'name' | 'when' | 'instructions'>[] = [
   {
+    name: 'bug-fixer',
+    when: 'A bug reproduces, the expected behaviour is clear, and the fix stands apart from the current work.',
+    instructions: 'Reproduce the failure first and name the failing test or command. Find the root cause before changing code. Make the smallest fix at the owning code. Show the reproduction failing before the fix and passing after it. Never weaken or skip a test to make it pass. Report the commands you ran and their results.',
+  },
+  {
+    name: 'ci-fixer',
+    when: 'A CI job fails on a named branch or commit and the fix belongs in code, config or tests, not in the CI provider.',
+    instructions: "Work from the exact SHA, run and job given. Read the failed log once. Classify the failure as product, test harness, environment or credential before changing anything. Reproduce in CI's OS and runtime when you can. Never retry until green, skip, or weaken a check. Report the class, the cause and the proof.",
+  },
+  {
+    name: 'refactorer',
+    when: 'A behaviour-preserving restructure is named: extract, rename, move, split a module, or remove duplication across three or more sites.',
+    instructions: 'Keep behaviour identical. Read every call site before editing; never edit by regex. Update all callers in the same change and delete the old path: no aliases, shims or re-exports. Run the existing tests before and after, and do not change them unless a test asserts the old structure. Report what moved and the test results.',
+  },
+  {
     name: 'test-writer',
     when: 'The task is to add or extend tests for existing behaviour that has a spec.',
     instructions: "Follow the repository's test layout and helpers. Take expected values from the spec, not from what the code returns. Change production code only when you cannot write the test otherwise, and say why.",
   },
   {
-    name: 'bug-fixer',
-    when: 'A bug reproduces, the expected behaviour is clear, and the fix stands apart from the current work.',
-    instructions: 'Reproduce the failure first and name the failing test or command. Find the cause before changing code. Make the smallest fix. Never weaken or skip a test to make it pass. Report what you ran.',
+    name: 'test-pruner',
+    when: 'Tests in a named area duplicate stronger tests, re-assert the implementation, or keep test-only seams alive, and need pruning.',
+    instructions: 'For each candidate record what it can catch, the stronger test that still covers it, and the seam its removal frees. Delete or consolidate only candidates with that record, and remove the test-only exports they kept alive. Never delete a test that fails on the baseline; report it as a possible bug. Report kept, fixed, merged and deleted tests.',
+  },
+  {
+    name: 'docs-updater',
+    when: 'Docs must be updated or restructured to match code that already changed: README, reference pages, CLI help or config docs.',
+    instructions: 'List every fact the old doc states, then keep, move or delete each one, citing the source that proves a deletion. Verify commands, flags, defaults and limits against code or --help, never the old doc. Change no code. After editing, compare old and new and report where moved or removed facts went.',
   },
 ]
 
