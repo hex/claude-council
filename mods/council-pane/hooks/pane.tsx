@@ -17,7 +17,7 @@ import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
-import { blankDraft, draftFor, dropEntry, putEntry, checkSpecialist, HEADERS, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
+import { blankDraft, draftFor, dropEntry, putEntry, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, withModel, type Fields, type SetupState, type Status } from './setup'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -53,12 +53,11 @@ const SETUP_COMMAND = 'specialists'
 // under the pointer takes the selection's.
 const ZEBRA_BG = 'userMessageBackground'
 const SELECTED_BG = 'selectionBg'
-// The header takes the theme's subtle grey, a shade apart from both.
-const HEADER_BG = 'subtle'
-const SWATCH_WIDTH = 2
-// A column's cell is its widest text plus one space; a separator follows it.
-const PAD = 1
-const SEPARATOR = '\u2502 '
+// A dark neutral grey under white letters reads on a light and a dark theme
+// alike (about 7:1).
+const HEADER_BG = 'rgb(88,88,88)'
+// Table lines take the theme's subtle grey, fainter than dim text.
+const RULE_COLOR = 'subtle'
 const STATUS_RGB: Record<Status['kind'], string> = { saved: 'rgb(46,120,72)', error: 'rgb(178,58,52)', note: 'rgb(150,100,20)' }
 const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: ' ERROR ', note: ' NOTE ' }
 // Help lines start under the field values: the labels are 13 wide plus ': '.
@@ -971,7 +970,7 @@ export const register: Register = (on, options) => {
     const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
     // A dim bar between two columns.
     const separator = (key: string) => (
-      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" dimColor>{SEPARATOR}</Text></Box>
+      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={RULE_COLOR}>{SEPARATOR}</Text></Box>
     )
     // A row's second line starts under the model column.
     const under = (key: string, text: string) => (
@@ -996,16 +995,17 @@ export const register: Register = (on, options) => {
           {view.roster.length > 0 ? (
             <Box key="head" flexDirection="row" backgroundColor={HEADER_BG}>
               {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
-              {cell('name', view.columns.name + PAD, <Text key="text" bold>{HEADERS.name}</Text>)}
+              {cell('name', view.columns.name + PAD, <Text key="text" bold color="white">{HEADERS.name}</Text>)}
               {separator('sep-1')}
-              {cell('model', view.columns.model + PAD, <Text key="text" bold>{HEADERS.model}</Text>)}
+              {cell('model', view.columns.model + PAD, <Text key="text" bold color="white">{HEADERS.model}</Text>)}
               {separator('sep-2')}
-              {cell('effort', view.columns.effort + PAD, <Text key="text" bold>{HEADERS.effort}</Text>)}
+              {cell('effort', view.columns.effort + PAD, <Text key="text" bold color="white">{HEADERS.effort}</Text>)}
               {separator('sep-3')}
-              <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold wrap="truncate-end">{HEADERS.when}</Text></Box>
+              <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color="white" wrap="truncate-end">{HEADERS.when}</Text></Box>
             </Box>
           ) : null}
-          {view.roster.map(entry => (
+          {view.roster.map((entry, at) => [
+            at > 0 ? <Text key={`rule:${entry.index}`} color={RULE_COLOR} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
             <Box key={`entry:${entry.index}`} flexDirection="column" hover={{ backgroundColor: SELECTED_BG }}
               {...(entry.editing ? { backgroundColor: SELECTED_BG } : entry.zebra ? { backgroundColor: ZEBRA_BG } : {})}>
               <Box key="line" flexDirection="row">
@@ -1026,8 +1026,8 @@ export const register: Register = (on, options) => {
               </Box>
               {entry.kind === 'ok' && entry.instructions ? under('instructions', `↳ ${entry.instructions}`) : null}
               {entry.kind === 'broken' ? under('stored', entry.stored) : null}
-            </Box>
-          ))}
+            </Box>,
+          ])}
           <Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} />
         </Box>
         {editor && draft ? (

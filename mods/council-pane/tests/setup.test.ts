@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { parseSpecialist } from '../hooks/specialist'
-import { parseCatalog, checkSpecialist, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
+import { parseCatalog, checkSpecialist, putEntry, dropEntry, draftFor, blankDraft, withModel, staleMessage, restoreSetup, ruleLine, setupView, isDirty, type Fields, type SetupState } from '../hooks/setup'
 
 const catalogText = readFileSync(`${import.meta.dir}/fixtures/codex-models.json`, 'utf8')
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' })
@@ -237,4 +237,11 @@ test('a saved screen is read back only when its shape is right; an older or brok
   expect(restoreSetup(perspectiveDraft, two)).toEqual(setAside)
   expect(restoreSetup('junk', two)).toEqual(setAside)
   expect(restoreSetup({ draft, catalog: { models } }, [{ name: 'changed', model: 'gpt-6-sol', when: 'w' }])).toEqual({ catalog: { models }, status: { kind: 'note', text: 'The specialists changed while you edited; your draft was set aside.' } })
+})
+
+test('a rule between rows crosses each column bar and runs to the given width', () => {
+  // swatch 2 + name 4+1, bar, model 10+1, bar, effort 7+1, bar, the rest
+  expect(ruleLine({ name: 4, model: 10, effort: 7 }, 40)).toBe('─'.repeat(7) + '┼─' + '─'.repeat(11) + '┼─' + '─'.repeat(8) + '┼─' + '─'.repeat(8))
+  expect(ruleLine({ name: 4, model: 10, effort: 7 }, 40)).toHaveLength(40)
+  expect(ruleLine({ name: 4, model: 10, effort: 7 }, 10)).toBe('─'.repeat(7) + '┼──')
 })

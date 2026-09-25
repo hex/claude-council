@@ -201,6 +201,20 @@ const EFFORT_RGB: Record<string, string> = {
   low: 'rgb(96,140,72)', medium: 'rgb(90,110,200)', high: 'rgb(190,120,30)', xhigh: 'rgb(210,95,40)', max: 'rgb(190,55,55)', ultra: 'rgb(170,60,160)',
 }
 export const HEADERS = { name: 'NAME', model: 'MODEL', effort: 'EFFORT', when: 'USE WHEN' }
+// The table's geometry: a swatch, then each column's widest text plus PAD,
+// then a bar before the next column.
+export const SWATCH_WIDTH = 2
+export const PAD = 1
+export const SEPARATOR = '│ '
+
+// The rule drawn between rows, crossing each bar where it stands; cut or
+// filled to the given width.
+export function ruleLine(columns: Columns, width: number): string {
+  const cross = '┼' + '─'.repeat(SEPARATOR.length - 1)
+  const line = '─'.repeat(SWATCH_WIDTH + columns.name + PAD) + cross +
+    '─'.repeat(columns.model + PAD) + cross + '─'.repeat(columns.effort + PAD) + cross
+  return line.length >= width ? line.slice(0, width) : line + '─'.repeat(width - line.length)
+}
 
 function rosterRow(entry: unknown, index: number, editing: boolean): RosterEntry {
   const base = { index, color: SPECIALIST_RGB[index % SPECIALIST_RGB.length] ?? '', zebra: index % 2 === 1, editing }
