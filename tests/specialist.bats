@@ -235,6 +235,22 @@ requires_symlinks() {
     [ -z "$(git -C "$wt" status --porcelain)" ]
 }
 
+@test "commit refuses a round that wrote into the hooks directory, before any hook runs" {
+    git -C "$REPO" config core.hooksPath .husky/_
+    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    wt="$(field worktree)"
+    mkdir -p "$wt/.husky/_"
+    printf '*\n' > "$wt/.husky/_/.gitignore"
+    printf '#!/bin/sh\ntouch "%s"\n' "${BATS_TEST_TMPDIR}/hook-ran" > "$wt/.husky/_/pre-commit"
+    chmod +x "$wt/.husky/_/pre-commit"
+    echo 'new' > "$wt/src/b.txt"
+    run "$SPECIALIST" commit "$wt" "specialist sec: harden login"
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: refusing to commit: the round changed files git runs as hooks here: .husky/_/.gitignore .husky/_/pre-commit" ]
+    [ ! -e "${BATS_TEST_TMPDIR}/hook-ran" ]
+    [ "$(git -C "$wt" rev-list --count HEAD)" = "1" ]
+}
+
 @test "report shows the round, the total and the status" {
     run "$SPECIALIST" start "$REPO" sec 20260923-151204
     wt="$(field worktree)"; base="$(field base)"
@@ -321,6 +337,21 @@ start_run() {
     [ "$(cat "$WT/src/c.txt")" = "new" ]
     [ ! -f "$REPO/src/b.txt" ]
     git -C "$REPO" rev-parse --verify -q "$BR" >/dev/null
+}
+
+@test "merge is refused when the branch changes files git runs as hooks" {
+    git -C "$REPO" config core.hooksPath .githooks
+    start_run
+    mkdir -p "$WT/.githooks"
+    printf '#!/bin/sh\ntouch "%s"\n' "${BATS_TEST_TMPDIR}/hook-ran" > "$WT/.githooks/pre-merge-commit"
+    chmod +x "$WT/.githooks/pre-merge-commit"
+    git -C "$WT" add -A && git -C "$WT" -c core.hooksPath=/dev/null commit -qm hooks
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
+    [ "$status" -eq 8 ]
+    [ "$output" = "hook=.githooks/pre-merge-commit" ]
+    [ ! -e "${BATS_TEST_TMPDIR}/hook-ran" ]
+    [ ! -e "$REPO/.githooks/pre-merge-commit" ]
+    [ -d "$WT" ]
 }
 
 @test "merge is refused on a detached HEAD; discard still works there" {

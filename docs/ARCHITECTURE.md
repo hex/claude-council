@@ -386,7 +386,9 @@ state dir holds prompt.txt, events.jsonl, last-message.md and the
 pids; the exit file is written last and marks the round over. finish
 merge exits 3 on a conflict (aborted), 4 on uncommitted edits to the
 branch's files, 5 on a detached HEAD, 6 when git refuses to start,
-7 while the worktree holds changes no round committed.
+7 while the worktree holds changes no round committed, 8 when the
+branch changes files inside an in-tree hooks directory. commit refuses
+a round that wrote into that directory.
 ```
 
 ### Stop Gate (`hooks/hooks.json`, `scripts/stop-review-gate.sh`)

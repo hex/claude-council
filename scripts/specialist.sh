@@ -89,8 +89,29 @@ cmd_start() {
         "$root" "$worktree" "$branch" "$base" "$short" "$state" "$dirty"
 }
 
+# The hooks directory as a path inside the tree, or nothing when git keeps
+# the hooks outside it (the default .git/hooks). A relative core.hooksPath
+# such as .husky/_ puts them in the tree, where a round can write them.
+hooks_in_tree() {
+    local tree="$1" top hooks
+    top="$(git -C "$tree" rev-parse --show-toplevel)"
+    hooks="$(git -C "$tree" rev-parse --path-format=absolute --git-path hooks)"
+    if [[ "$hooks" == "$top" ]]; then echo "."; return; fi
+    case "$hooks" in
+        "${top}/"*) printf '%s\n' "${hooks#"$top"/}" ;;
+    esac
+}
+
+# The commit runs on this machine, outside Codex's sandbox, and git runs the
+# hooks it finds at commit time. Files in the hooks directory are checked
+# ignored or not: husky's .husky/_ ignores itself.
 cmd_commit() {
-    local worktree="$1" message="$2"
+    local worktree="$1" message="$2" hooks edited
+    hooks="$(hooks_in_tree "$worktree")"
+    if [[ -n "$hooks" ]]; then
+        edited="$( { git -C "$worktree" diff --name-only HEAD -- "$hooks"; git -C "$worktree" ls-files --others -- "$hooks"; } | sort -u)"
+        [[ -z "$edited" ]] || die "refusing to commit: the round changed files git runs as hooks here: $(printf '%s' "$edited" | tr '\n' ' ')"
+    fi
     if [[ -z "$(git -C "$worktree" status --porcelain)" ]]; then echo "committed=no"; return; fi
     git -C "$worktree" add -A
     git -C "$worktree" commit -q -m "$message"
@@ -157,7 +178,7 @@ remove_run() {
 }
 
 cmd_finish() {
-    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal uncommitted
+    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal uncommitted hooks fork
     [[ ( "$worktree" == /* || "$worktree" =~ ^[A-Za-z]:/ ) && "${worktree##*/}" =~ ^[a-z][a-z0-9-]*-[0-9]{8}-[0-9]{6}$ ]] || die "invalid worktree path '${worktree}': expected an absolute path ending in a run id"
     root="$(repo_root "$root")"
     if [[ "$how" == discard ]]; then
@@ -172,7 +193,14 @@ cmd_finish() {
         if [[ -n "$uncommitted" ]]; then while IFS= read -r f; do echo "uncommitted=$f"; done <<< "$uncommitted"; exit 7; fi
     fi
     if ! git -C "$root" symbolic-ref --quiet HEAD >/dev/null; then echo "detached=yes"; exit 5; fi
-    touched="$(git -C "$root" diff --name-only "$(git -C "$root" merge-base HEAD "$branch")" "$branch")"
+    fork="$(git -C "$root" merge-base HEAD "$branch")"
+    # git runs the merge's hooks from the files the merge has just brought in.
+    hooks="$(hooks_in_tree "$root")"
+    if [[ -n "$hooks" ]]; then
+        hooks="$(git -C "$root" diff --name-only "$fork" "$branch" -- "$hooks")"
+        if [[ -n "$hooks" ]]; then while IFS= read -r f; do echo "hook=$f"; done <<< "$hooks"; exit 8; fi
+    fi
+    touched="$(git -C "$root" diff --name-only "$fork" "$branch")"
     dirty="$( { git -C "$root" diff --name-only; git -C "$root" diff --name-only --cached; } | sort -u | grep -Fxf <(printf '%s\n' "$touched") || true)"
     if [[ -n "$dirty" ]]; then while IFS= read -r f; do echo "dirty=$f"; done <<< "$dirty"; exit 4; fi
     if ! refusal="$(git -C "$root" merge -q --no-ff --no-edit "$branch" 2>&1)"; then
