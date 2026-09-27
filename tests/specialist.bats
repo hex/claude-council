@@ -25,6 +25,8 @@ setup() {
 
 teardown() {
     if [ -d "${BATS_TEST_TMPDIR}/bin" ]; then touch "${BATS_TEST_TMPDIR}/go"; fi
+    # A fake codex that ignores go would outlive a failed test and hold bats open.
+    if [ -n "${STATE:-}" ] && [ -f "$STATE/codex-pid" ]; then kill -9 "$(cat "$STATE/codex-pid")" 2>/dev/null || true; fi
 }
 
 field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
@@ -446,11 +448,11 @@ start_run() {
 }
 
 @test "codex refuses a missing worktree before starting anything" {
-    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol '' < /dev/null
+    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol '' 0 < /dev/null
     [ "$status" -eq 1 ]
     [ "$output" = "specialist: no worktree at ${BATS_TEST_TMPDIR}/nope" ]
     # The effort goes into a -c value, so only Codex's own words get through.
-    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol 'high" -c x="y' < /dev/null
+    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol 'high" -c x="y' 0 < /dev/null
     [ "$status" -eq 1 ]
     [ "$output" = "specialist: invalid effort 'high\" -c x=\"y': must be lowercase letters" ]
     [ ! -e "${BATS_TEST_TMPDIR}/state" ]
@@ -513,7 +515,7 @@ wait_round() {
 }
 
 launch() {
-    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol "${EFFORT:-}" "$@" <<< "the task"
+    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol "${EFFORT:-}" "${LIMIT:-0}" "$@" <<< "the task"
 }
 
 @test "codex returns at once with the round's pid, and the round writes its exit code when codex ends" {
@@ -605,14 +607,56 @@ launch() {
 @test "codex clears the previous round's files before it starts" {
     start_run
     mkdir -p "$STATE"
-    for f in last-message.md stderr.txt exit thread; do echo 'round 1' > "$STATE/$f"; done
+    for f in last-message.md stderr.txt exit thread reason; do echo 'round 1' > "$STATE/$f"; done
     mkdir "$STATE/closing"
     fake_codex "while [ ! -f '${BATS_TEST_TMPDIR}/go' ]; do sleep 0.1; done"
     launch
-    for f in last-message.md exit thread closing; do [ ! -e "$STATE/$f" ] || return 1; done
+    for f in last-message.md exit thread reason closing; do [ ! -e "$STATE/$f" ] || return 1; done
     [ ! -s "$STATE/stderr.txt" ]
     touch "${BATS_TEST_TMPDIR}/go"
     wait_round
+}
+
+# Codex answers SIGTERM by exiting 0, which would pass for a finished round.
+@test "a round past its time limit is ended, and says so whatever codex exits with" {
+    start_run
+    fake_codex "trap 'exit 0' TERM; while :; do sleep 0.1; done"
+    LIMIT=1 launch
+    [ "$status" -eq 0 ]
+    wait_round
+    [ "$(cat "$STATE/exit")" = "143" ]
+    [ "$(cat "$STATE/reason")" = "timeout" ]
+}
+
+@test "stop ends a running round and records that it was asked to" {
+    start_run
+    fake_codex "trap 'exit 0' TERM; while :; do sleep 0.1; done"
+    launch
+    run "$SPECIALIST" stop "$STATE"
+    [ "$status" -eq 0 ]
+    [ "$output" = "stopped=yes" ]
+    wait_round
+    [ "$(cat "$STATE/exit")" = "143" ]
+    [ "$(cat "$STATE/reason")" = "stopped" ]
+    run "$SPECIALIST" stop "$STATE"
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: the round in ${STATE} has already ended" ]
+}
+
+@test "a round that ends inside its limit records no reason" {
+    start_run
+    fake_codex "exit 0"
+    LIMIT=60 launch
+    wait_round
+    [ "$(cat "$STATE/exit")" = "0" ]
+    [ ! -e "$STATE/reason" ]
+}
+
+@test "codex refuses a time limit that is not whole seconds" {
+    start_run
+    LIMIT=1m launch
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: invalid time limit '1m': must be whole seconds, 0 for none" ]
 }
 
 @test "killing the codex pid ends the round with codex's exit code" {
@@ -639,7 +683,7 @@ launch() {
 @test "codex receives the prompt on stdin" {
     start_run
     fake_codex "cat > '${BATS_TEST_TMPDIR}/seen-prompt'"
-    printf 'line one\nline two' | PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol '' >/dev/null
+    printf 'line one\nline two' | PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol '' 0 >/dev/null
     wait_round
     [ "$(cat "${BATS_TEST_TMPDIR}/seen-prompt")" = "$(printf 'line one\nline two')" ]
 }

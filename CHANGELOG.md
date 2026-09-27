@@ -6,6 +6,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Features
+- Specialist rounds have a time limit: `specialist_round_limit` in `/config`, in minutes, default 60, 0 for none. A round still running at the limit is stopped and nothing it did is committed; the result says it reached the limit. You can also ask Claude to stop a running round (`{run, stop: true}`, confirmed in a dialog). While a round runs, the band adds `no output for m:ss` once Codex has written nothing for two minutes.
+
 ### Fixes
 - `/claude-council:advise` digests no longer show cs's rotation launch line ("Continue from the pending rotation handoff: read .cs/handoffs/… first.") as something you typed. Only that exact line is dropped.
 - Specialist commits and merges run on your machine, outside Codex's sandbox, and git runs the repository's hooks at that moment. When `core.hooksPath` points inside the repository (`.githooks`, husky's `.husky/_`), a round could write a hook that then ran on the host. The commit now refuses a round that changed anything in that directory, ignored files included, and a merge refuses a branch that changes it. Hooks that run other repository files, such as husky's `.husky/pre-commit`, lint-staged or a `scripts/` file, still run the round's version of those files.

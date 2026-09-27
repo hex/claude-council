@@ -57,6 +57,12 @@
       "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Let the model call the council as a tool. Every call first asks you to confirm, because the council sends the question to third-party providers.",
       "default": true
     },
+    "specialist_round_limit": {
+      "type": "number",
+      "title": "Specialist round limit (minutes)",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. A specialist round still running after this many minutes is stopped, and nothing it did is committed. 0 means no limit.",
+      "default": 60
+    },
     "specialists": {
       "type": "string",
       "title": "Specialists",

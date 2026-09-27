@@ -36,7 +36,7 @@ WT="$(field "$out" worktree)"; BR="$(field "$out" branch)"; STATE="$(field "$out
 echo "   branch=$BR"
 
 echo "2. round 1: write answer.sh"
-out="$(printf '%s' "Create answer.sh that prints 42. Then run: bash test.sh. Do not commit." | "$SPECIALIST" codex "$WT" "$STATE" "$MODEL")"
+out="$(printf '%s' "Create answer.sh that prints 42. Then run: bash test.sh. Do not commit." | "$SPECIALIST" codex "$WT" "$STATE" "$MODEL" '' 0)"
 [ -n "$(field "$out" pid)" ] || fail "round 1 printed no pid: $out"
 wait_round
 THREAD="$(cat "${STATE}/thread")"
@@ -52,7 +52,7 @@ echo "   $out, branch commits since base: $commits"
 [ -f "${WT}/answer.sh" ] || fail "round 1 did not create answer.sh"
 
 echo "4. round 2 (resume): network reachable from the sandbox"
-printf '%s' "Run: curl -sS -o /dev/null -w '%{http_code}' https://example.com and reply with only the code" | "$SPECIALIST" codex "$WT" "$STATE" "$MODEL" "$THREAD" >/dev/null
+printf '%s' "Run: curl -sS -o /dev/null -w '%{http_code}' https://example.com and reply with only the code" | "$SPECIALIST" codex "$WT" "$STATE" "$MODEL" '' 0 "$THREAD" >/dev/null
 wait_round
 echo "   exit=$(cat "${STATE}/exit") same-thread=$([ "$(cat "${STATE}/thread")" = "$THREAD" ] && echo yes || echo no) reply=$(tr -d '\n' < "${STATE}/last-message.md")"
 [ "$(cat "${STATE}/exit")" = 0 ] || fail "round 2 exit $(cat "${STATE}/exit")"

@@ -370,7 +370,8 @@ shapes, dialog text, prompts, report parsing). Subcommands:
   report <worktree> <round-base> <run-base>   diff --stat, round and total
   counts <repo> <branch> <run-base>           commits, files, merge target
   finish <repo> <worktree> <branch> merge|discard
-  codex <worktree> <state> <model> <effort|''> [thread]
+  codex <worktree> <state> <model> <effort|''> <limit-seconds> [thread]
+  stop <state>                  ends the running round: reason=stopped
 Per run, beside the repository:
   worktree  ../<repo>.specialists/<name>-<ts>
   branch    specialist/<name>/<ts>
@@ -381,7 +382,11 @@ round's commit would carry it) into the new worktree, so gitignored
 local files reach it. codex runs the round detached under codex exec
 (or exec resume <thread>) with --output-schema
 scripts/specialist-report.schema.json, the round report's contract:
-summary, tests[] (command, result, detail) and open_questions. The
+summary, tests[] (command, result, detail) and open_questions. A
+watchdog ends a round still running at its limit (0 = none), and
+stop ends one on request; each writes a reason file (timeout or
+stopped) before signalling Codex, and the round's exit is then 143
+whatever Codex returned, since Codex exits 0 on SIGTERM. The
 state dir holds prompt.txt, events.jsonl, last-message.md and the
 pids; the exit file is written last and marks the round over. finish
 merge exits 3 on a conflict (aborted), 4 on uncommitted edits to the

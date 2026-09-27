@@ -125,7 +125,7 @@ export function specialistDescription(all: Specialist[], hasRuns = false): strin
   const off = all.filter(s => !isOn(s)).map(s => s.name).join(', ')
   if (list.length === 0) {
     const open = hasRuns
-      ? ' A run started before its specialist was removed still takes {run, message}, {run, result: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.'
+      ? ' A run started before its specialist was removed still takes {run, message}, {run, result: true}, {run, stop: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.'
       : ''
     return (
       'Set up a specialist: a coding agent that works in its own git worktree with its own model. ' +
@@ -146,8 +146,8 @@ export function specialistDescription(all: Specialist[], hasRuns = false): strin
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
-    'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +
-    'A start or follow-up runs at once; the user confirms every finish. A refusal comes back as the result; do not retry unless the reply asks for a change.'
+    'close a run with {run, finish: "merge"|"discard"} only after the user chose; end a running round early with {run, stop: true} only when the user asks. ' +
+    'A start or follow-up runs at once; the user confirms every finish and stop. A refusal comes back as the result; do not retry unless the reply asks for a change.'
   )
 }
 
@@ -174,6 +174,7 @@ export function specialistSchema(all: Specialist[], hasRuns = false): Record<str
       message: { type: 'string', description: 'Follow-up: feedback for the specialist, e.g. a failing test.' },
       finish: { type: 'string', enum: ['merge', 'discard'] },
       result: { type: 'boolean', description: 'Fetch the last round\'s result: {run, result: true}, after the prompt saying the round ended.' },
+      stop: { type: 'boolean', description: 'End the running round early: {run, stop: true}, only when the user asked; the user confirms.' },
       setup,
     },
     additionalProperties: false,
@@ -225,23 +226,28 @@ export type SpecialistCall =
   | { kind: 'start'; specialist: Specialist; task: string }
   | { kind: 'followUp'; run: string; message: string }
   | { kind: 'finish'; run: string; finish: 'merge' | 'discard' }
+  | { kind: 'stop'; run: string }
   | { kind: 'result'; run: string }
   | { kind: 'setup'; fields: Partial<Fields> }
 
-const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
+const SHAPES = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, stop: true}, {run, result: true} or {setup}'
 const SETUP_FIELDS = ['name', 'model', 'effort', 'when', 'skills']
 const filled = (value: unknown) => typeof value === 'string' && value.trim() !== ''
 
 export function specialistCall(input: Record<string, unknown>, list: Specialist[]): SpecialistCall | { deny: string } {
-  const { specialist, task, run, message, finish, result } = input
+  const { specialist, task, run, message, finish, result, stop } = input
   const has = (v: unknown) => v !== undefined
   if (has(input.setup)) {
-    if (has(specialist) || has(task) || has(run) || has(message) || has(finish) || has(result)) return { deny: SHAPES }
+    if (has(specialist) || has(task) || has(run) || has(message) || has(finish) || has(result) || has(stop)) return { deny: SHAPES }
     const fields = input.setup
     const isFields = typeof fields === 'object' && fields !== null && !Array.isArray(fields) &&
       Object.entries(fields).every(([key, value]) => SETUP_FIELDS.includes(key) && typeof value === 'string')
     if (!isFields) return { deny: `setup fields must be strings: ${SETUP_FIELDS.join(', ')}` }
     return { kind: 'setup', fields: fields as Partial<Fields> }
+  }
+  if (has(stop)) {
+    if (stop !== true || !filled(run) || has(specialist) || has(task) || has(message) || has(finish) || has(result)) return { deny: SHAPES }
+    return { kind: 'stop', run: run as string }
   }
   if (has(result)) {
     if (result !== true || !filled(run) || has(specialist) || has(task) || has(message) || has(finish)) return { deny: SHAPES }
@@ -371,11 +377,17 @@ export function roundResult(r: {
   record: RunRecord; exitCode: number; lastMessage: string; roundStat: string; totalStat: string
   // The short sha of the commit the tool made for this round; '' when it made none.
   commit: string; status: string; stderrTail: string; commitError: string
+  // Why the round was ended early: its time limit, or a stop request; '' when it ended by itself.
+  reason: '' | 'timeout' | 'stopped'
 }): { result: string; isError: boolean } {
   const { record } = r
-  const head = `Run ${record.id} (${record.specialist}, round ${record.rounds}) ${r.exitCode === 0 ? 'finished' : 'failed'}.\nBranch: ${record.branch}\nWorktree: ${record.worktree}`
-  if (r.exitCode !== 0) {
-    const parts = [head, `Codex exited ${r.exitCode}; nothing was committed.`]
+  const how = r.reason ? 'stopped' : r.exitCode === 0 ? 'finished' : 'failed'
+  const head = `Run ${record.id} (${record.specialist}, round ${record.rounds}) ${how}.\nBranch: ${record.branch}\nWorktree: ${record.worktree}`
+  if (r.reason || r.exitCode !== 0) {
+    const why = r.reason === 'timeout' ? 'It reached the round time limit (specialist_round_limit in /config) and was stopped'
+      : r.reason === 'stopped' ? 'It was stopped on request'
+      : `Codex exited ${r.exitCode}`
+    const parts = [head, `${why}; nothing was committed.`]
     if (r.status) parts.push(`Uncommitted in the worktree:\n${r.status}`)
     if (r.lastMessage) parts.push(`Specialist's last message:\n${r.lastMessage}`)
     if (r.stderrTail) parts.push(`Codex stderr (tail):\n${r.stderrTail}`)
@@ -505,6 +517,12 @@ export function roundClock(startedMs: number, nowMs: number): string {
   const mins = Math.floor((secs % 3600) / 60)
   const ss = String(secs % 60).padStart(2, '0')
   return hours > 0 ? `${hours}:${String(mins).padStart(2, '0')}:${ss}` : `${mins}:${ss}`
+}
+
+// Codex writes an event only when a step ends, so a long test run is silent
+// too; past two minutes the band says so rather than guessing it is stuck.
+export function quietNote(lastOutputMs: number, nowMs: number): string {
+  return nowMs - lastOutputMs < 120_000 ? '' : `no output for ${roundClock(lastOutputMs, nowMs)}`
 }
 
 // The pane's last line while a round runs, so it moves even while Codex

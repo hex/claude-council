@@ -5,6 +5,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/deadline.sh
+source "${SCRIPT_DIR}/lib/deadline.sh"
 
 die() { echo "specialist: $*" >&2; exit 1; }
 
@@ -137,6 +139,26 @@ cmd_identity() {
     printf 'proc:%s\n' "${fields[19]}"
 }
 
+# Ends a round's Codex and records why: timeout or stopped. The reason is
+# written first, so the round reads it once Codex exits. Codex gets five
+# seconds to leave after SIGTERM before it is killed.
+end_round() {
+    local state="$1" pid="$2" reason="$3" ticks=50
+    echo "$reason" > "${state}/reason.tmp" && mv "${state}/reason.tmp" "${state}/reason"
+    signal_tree TERM "$pid"
+    while (( ticks-- > 0 )) && kill -0 "$pid" 2>/dev/null; do sleep 0.1; done
+    if kill -0 "$pid" 2>/dev/null; then signal_tree KILL "$pid"; fi
+}
+
+cmd_stop() {
+    local state="$1" pid
+    [[ ! -f "${state}/exit" ]] || die "the round in ${state} has already ended"
+    [[ -f "${state}/codex-pid" ]] || die "no round has started in ${state}"
+    pid="$(cat "${state}/codex-pid")"
+    end_round "$state" "$pid" stopped
+    echo "stopped=yes"
+}
+
 # Every session follows a live round, so each may see it end: mkdir is atomic,
 # and only the session that creates the claim closes the round. A claim older
 # than a minute belongs to a closer that died midway and is taken over.
@@ -220,14 +242,15 @@ cmd_finish() {
 }
 
 cmd_codex() {
-    local worktree="$1" state="$2" model="$3" effort="$4" thread="${5:-}"
+    local worktree="$1" state="$2" model="$3" effort="$4" limit="$5" thread="${6:-}"
     # The effort goes into a -c value, so only a bare lowercase word gets through;
     # which efforts a model offers is checked when the row is saved.
     [[ -z "$effort" || "$effort" =~ ^[a-z]+$ ]] || die "invalid effort '${effort}': must be lowercase letters"
+    [[ "$limit" =~ ^[0-9]+$ ]] || die "invalid time limit '${limit}': must be whole seconds, 0 for none"
     [[ -d "$worktree" ]] || die "no worktree at ${worktree}"
     mkdir -p "$state"
     # Each round's files describe that round only.
-    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/start.tmp" "${state}/codex-pid" "${state}/exit" "${state}/thread"
+    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/start.tmp" "${state}/codex-pid" "${state}/exit" "${state}/thread" "${state}/reason" "${state}/reason.tmp"
     rmdir "${state}/closing" 2>/dev/null || true
     cat > "${state}/prompt.txt"
     local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'model_reasoning_summary="concise"' --output-schema "${SCRIPT_DIR}/specialist-report.schema.json" -o "${state}/last-message.md")
@@ -245,8 +268,26 @@ cmd_codex() {
         # then still writes the exit file, so the round reports how it ended.
         if cd "$worktree"; then
             codex "${args[@]}" < "${state}/prompt.txt" > "${state}/events.jsonl" 2> "${state}/stderr.txt" &
-            echo "$!" > "${state}/codex-pid"
-            wait "$!" || code=$?
+            codex_pid="$!"
+            echo "$codex_pid" > "${state}/codex-pid"
+            watchdog=""
+            # Ticks, not a SECONDS deadline, which can come due early.
+            if (( limit > 0 )); then
+                (
+                    ticks="$limit"
+                    while (( ticks-- > 0 )); do
+                        sleep 1
+                        kill -0 "$codex_pid" 2>/dev/null || exit 0
+                    done
+                    end_round "$state" "$codex_pid" timeout
+                ) &
+                watchdog="$!"
+            fi
+            wait "$codex_pid" || code=$?
+            if [[ -n "$watchdog" ]]; then kill "$watchdog" 2>/dev/null || true; fi
+            # Codex answers SIGTERM by exiting 0, which would pass for a
+            # finished round: an ended round reports 143 whatever it exited with.
+            if [[ -f "${state}/reason" ]]; then code=143; fi
         else
             code=1
         fi
@@ -281,7 +322,8 @@ main() {
         report) [[ $# -eq 3 ]] || die "usage: report <worktree> <round-base> <run-base>"; cmd_report "$@" ;;
         counts) [[ $# -eq 3 ]] || die "usage: counts <repo> <branch> <run-base>"; cmd_counts "$@" ;;
         finish) [[ $# -eq 4 ]] || die "usage: finish <repo> <worktree> <branch> merge|discard"; cmd_finish "$@" ;;
-        codex)  [[ $# -eq 4 || $# -eq 5 ]] || die "usage: codex <worktree> <state> <model> <effort|''> [thread]"; cmd_codex "$@" ;;
+        codex)  [[ $# -eq 5 || $# -eq 6 ]] || die "usage: codex <worktree> <state> <model> <effort|''> <limit-seconds> [thread]"; cmd_codex "$@" ;;
+        stop)   [[ $# -eq 1 ]] || die "usage: stop <state>"; cmd_stop "$@" ;;
         *) die "unknown subcommand '${sub}'" ;;
     esac
 }

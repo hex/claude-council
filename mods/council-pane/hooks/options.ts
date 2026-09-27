@@ -8,6 +8,12 @@ export type PaneOptions = {
   collapsesWhenDone: boolean
   wakesOnAsyncDone: boolean
   offersTool: boolean
+  // How long a specialist round may run, in whole minutes; 0 means no limit.
+  roundLimitMinutes: number
+}
+
+function wholeMinutes(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fallback
 }
 
 function flag(value: unknown, fallback: boolean): boolean {
@@ -20,5 +26,6 @@ export function paneOptions(options: Record<string, unknown>): PaneOptions {
     collapsesWhenDone: flag(options.collapse_when_done, true),
     wakesOnAsyncDone: flag(options.wake_on_async_done, false),
     offersTool: flag(options.council_tool, true),
+    roundLimitMinutes: wholeMinutes(options.specialist_round_limit, 60),
   }
 }
