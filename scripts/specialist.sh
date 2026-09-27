@@ -53,7 +53,7 @@ cmd_start() {
                     die "symlink in worktree destination for '${entry}': ${link}"
                 fi
             done || exit 1
-            includes[$count]="$entry"
+            includes[count]="$entry"
             count=$((count + 1))
         done < "$root/.worktreeinclude"
     fi

@@ -24,6 +24,8 @@ mkdir -p "$REPO"
 git -C "$REPO" init -q -b main
 git -C "$REPO" config user.email e2e@example.com
 git -C "$REPO" config user.name E2E
+# The repo's own test script, written literally: its $(...) runs inside that repo later.
+# shellcheck disable=SC2016
 printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' '[ "$(bash answer.sh)" = "42" ] && echo "test: pass"' > "$REPO/test.sh"
 git -C "$REPO" add -A && git -C "$REPO" commit -qm init
 echo "repo: $REPO (model $MODEL)"
