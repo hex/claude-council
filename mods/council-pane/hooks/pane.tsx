@@ -584,9 +584,9 @@ async function roundState($: EngineInterface, state: PaneState, record: RunRecor
       presence = roundProcessPresence(alive.exitCode, alive.stderr)
       if (presence === 'unknown') failure = `kill -0 exited ${alive.exitCode}: ${alive.stderr.trim()}`
       if (presence === 'present' && recordedIdentity !== undefined) {
-        const observed = await $.process.run(['ps', '-o', 'lstart=', '-p', pid], { env: { LC_ALL: 'C' } })
+        const observed = await specialistRun($, ['identity', pid])
         if (observed.exitCode === 0) observedIdentity = observed.stdout
-        else failure = `ps exited ${observed.exitCode}: ${observed.stderr.trim()}`
+        else failure = `identity exited ${observed.exitCode}: ${observed.stderr.trim()}`
       }
     } catch (error) {
       presence = 'unknown'
@@ -595,7 +595,7 @@ async function roundState($: EngineInterface, state: PaneState, record: RunRecor
   }
   const identity = roundProcessIdentity(recordedIdentity, observedIdentity, presence)
   if (identity === 'unknown') {
-    const reason = failure || (recordedIdentity?.trim() === '' ? 'recorded start time is empty' : 'ps start time is empty or unparseable')
+    const reason = failure || (recordedIdentity?.trim() === '' ? 'recorded start time is empty' : 'observed start time is empty or unparseable')
     const message = `specialist round ${record.id} pid ${pid}: ${reason}`
     const key = `${record.id}:${pid}`
     if (!state.identityFailures.has(key)) {
