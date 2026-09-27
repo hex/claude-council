@@ -528,6 +528,8 @@ claude-council/
 │       └── tests.yml            # bats on ubuntu, macos and 4 windows shards; shellcheck blocks a merge
 ├── agents/
 │   └── council-advisor.md       # Proactive suggestions
+├── assets/
+│   └── icon.png                 # 512x512 listing icon, named by plugin.json's icon
 ├── commands/
 │   ├── advise.md                # /advise — put this conversation to the council
 │   ├── ask.md                   # Main /ask command

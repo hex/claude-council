@@ -9,6 +9,7 @@
   "license": "MIT",
   "homepage": "https://github.com/hex/claude-council",
   "repository": "https://github.com/hex/claude-council",
+  "icon": "./assets/icon.png",
   "keywords": [
     "multi-agent",
     "council",

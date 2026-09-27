@@ -6,6 +6,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Other
+- The plugin has an icon (`assets/icon.png`, named by `icon` in `plugin.json`) for its directory listing.
+
 ### Fixes
 - The `pane_host` setting no longer declares a fixed list of values, which the plugin directory's manifest check rejects and Claude Code before 2.1.271 cannot load. In `/config` it is now a text field: `ask`, `claude-code` or `tmux`, and anything else counts as `ask`, as before.
 
