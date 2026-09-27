@@ -108,7 +108,9 @@ cmd_identity() {
     local -a fields
     [[ "$pid" =~ ^[0-9]+$ ]] || die "invalid pid '${pid}'"
     if LC_ALL=C ps -o lstart= -p "$pid" 2>/dev/null; then return 0; fi
-    [[ -r "/proc/${pid}/stat" ]] && IFS= read -r stat < "/proc/${pid}/stat" || die "no start time for pid ${pid}"
+    if [[ ! -r "/proc/${pid}/stat" ]] || ! IFS= read -r stat < "/proc/${pid}/stat"; then
+        die "no start time for pid ${pid}"
+    fi
     read -ra fields <<< "${stat##*) }"
     [[ "${fields[19]:-}" =~ ^[0-9]+$ ]] || die "no start time for pid ${pid}"
     printf 'proc:%s\n' "${fields[19]}"
