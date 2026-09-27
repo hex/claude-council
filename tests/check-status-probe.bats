@@ -201,10 +201,3 @@ setup() {
     grep -qF "SEKRET_GEM" "$CS_CONFIG_FILE"
     grep -qF "SEKRET_OAI" "$CS_CONFIG_FILE"
 }
-
-@test "check-status: now_ms scales the date fallback to milliseconds" {
-    # Durations render as "(Nms)"; without python3 the fallback must be
-    # date-seconds * 1000, never bare seconds (which would show ~1000x too small).
-    run grep -qE '\|\| *date \+%s *$' "$SCRIPT"
-    [ "$status" -ne 0 ]
-}

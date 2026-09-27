@@ -86,9 +86,14 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 
 @test "start refuses a tracked symlink in an include destination parent" {
     mkdir "$ROOT/outside"
-    ln -s ../outside "$REPO/cfg"
+    ln -s "$ROOT/outside" "$REPO/cfg"
     git -C "$REPO" add cfg
     git -C "$REPO" commit -qm link
+    # The base commit keeps the link while the main tree holds an ignored,
+    # untracked directory there, so only the symlink check stands between
+    # the copy and $ROOT/outside.
+    git -C "$REPO" rm -q --cached cfg
+    printf 'cfg/\n' >> "$REPO/.git/info/exclude"
     rm "$REPO/cfg"
     mkdir "$REPO/cfg"
     printf 'private\n' > "$REPO/cfg/secret"
@@ -109,17 +114,22 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 }
 
 @test "start refuses a tracked symlink within an included directory" {
+    # GNU cp writes through a destination link to an existing target; BSD cp
+    # refuses, so only a GNU runner shows the escape without the guard.
+    printf 'original\n' > "$ROOT/outside.txt"
     mkdir "$REPO/shared"
     ln -s "$ROOT/outside.txt" "$REPO/shared/file.txt"
     git -C "$REPO" add shared
     git -C "$REPO" commit -qm link
+    git -C "$REPO" rm -q --cached shared/file.txt
+    printf 'shared/\n' >> "$REPO/.git/info/exclude"
     rm "$REPO/shared/file.txt"
     printf 'private\n' > "$REPO/shared/file.txt"
     printf 'shared\n' > "$REPO/.worktreeinclude"
     run "$SPECIALIST" start "$REPO" sec 20260923-151204
     [ "$status" -eq 1 ]
     [ "$output" = "specialist: symlink in worktree destination for 'shared': shared/file.txt" ]
-    [ ! -e "$ROOT/outside.txt" ]
+    [ "$(cat "$ROOT/outside.txt")" = original ]
     [ ! -e "${ROOT}/app.specialists" ]
     [ -z "$(git -C "$REPO" branch --list 'specialist/*')" ]
 }

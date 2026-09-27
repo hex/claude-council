@@ -313,7 +313,6 @@ test('a saved screen is read back only when its shape is right; an older or brok
 test('a rule between rows crosses each column bar and runs to the given width', () => {
   // swatch 2 + name 4+1, bar, model 10+1, bar, effort 7+1, bar, the rest
   expect(ruleLine({ name: 4, model: 10, effort: 7 }, 40)).toBe('─'.repeat(7) + '┼─' + '─'.repeat(11) + '┼─' + '─'.repeat(8) + '┼─' + '─'.repeat(8))
-  expect(ruleLine({ name: 4, model: 10, effort: 7 }, 40)).toHaveLength(40)
   expect(ruleLine({ name: 4, model: 10, effort: 7 }, 10)).toBe('─'.repeat(7) + '┼──')
 })
 
