@@ -15,6 +15,9 @@ setup() {
     git -C "$REPO" init -q -b main
     git -C "$REPO" config user.email t@example.com
     git -C "$REPO" config user.name Test
+    # Git for Windows turns autocrlf on system-wide, and its line-ending warning
+    # on stderr would land in every captured $output.
+    git -C "$REPO" config core.autocrlf false
     mkdir -p "$REPO/src"
     echo 'one' > "$REPO/src/a.txt"
     git -C "$REPO" add -A && git -C "$REPO" commit -qm init
@@ -34,7 +37,7 @@ native_path() {
 
 # Git Bash without developer mode copies instead of linking.
 requires_symlinks() {
-    ln -s target "${BATS_TEST_TMPDIR}/symlink-probe" 2>/dev/null
+    ln -s target "${BATS_TEST_TMPDIR}/symlink-probe" 2>/dev/null || true
     [ -L "${BATS_TEST_TMPDIR}/symlink-probe" ] || skip "this filesystem makes no symlinks"
     rm -f "${BATS_TEST_TMPDIR}/symlink-probe"
 }
@@ -489,6 +492,7 @@ launch() {
 }
 
 @test "codex launch stops the round when its start time cannot be recorded" {
+    [ ! -r /proc/self/stat ] || skip "procfs gives the start time, which a fake ps cannot hide"
     start_run
     mkdir -p "${BATS_TEST_TMPDIR}/bin"
     for code in 42 0; do
