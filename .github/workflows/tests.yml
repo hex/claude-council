@@ -58,36 +58,6 @@ jobs:
       - name: Show bash version
         run: /bin/bash --version | head -1
 
-      # TEMPORARY probe for the specialist port: what identifies a process and
-      # which path form git returns under Git Bash.
-      - name: Probe process identity and paths (Windows)
-        if: runner.os == 'Windows' && matrix.shard == 3
-        continue-on-error: true
-        run: |
-          set +e
-          sleep 300 & p=$!
-          echo "--- ps -o lstart"; LC_ALL=C ps -o lstart= -p "$p"; echo "exit=$?"
-          echo "--- ps -p"; ps -p "$p"; echo "exit=$?"
-          echo "--- ps -l -p"; ps -l -p "$p"; echo "exit=$?"
-          echo "--- /proc/$p"; ls /proc/"$p" 2>&1 | head -30
-          echo "--- /proc/$p/stat"; cat /proc/"$p"/stat 2>&1; echo
-          echo "--- /proc/$p/stat field 22"; awk '{print $22}' /proc/"$p"/stat 2>&1
-          echo "--- /proc/$p/winpid"; cat /proc/"$p"/winpid 2>&1; echo
-          echo "--- kill -0"; kill -0 "$p"; echo "exit=$?"
-          kill "$p"; wait "$p" 2>/dev/null; echo "--- dead kill -0"; kill -0 "$p" 2>&1; echo "exit=$?"
-          d="$(mktemp -d)"; git -C "$d" init -q
-          echo "--- mktemp dir: $d"; echo "--- pwd -P: $(cd "$d" && pwd -P)"
-          echo "--- toplevel: $(git -C "$d" rev-parse --show-toplevel)"
-          echo "--- cygpath -m: $(cygpath -m "$d" 2>&1)"; echo "--- cygpath -u of toplevel: $(cygpath -u "$(git -C "$d" rev-parse --show-toplevel)" 2>&1)"
-          echo "--- identity of a live pid"; sleep 300 & q=$!; bash scripts/specialist.sh identity "$q"; echo "exit=$?"; kill "$q"
-          r="$(mktemp -d)/app"; mkdir -p "$r"; git -C "$r" init -q -b main; git -C "$r" config user.email t@example.com; git -C "$r" config user.name T
-          echo one > "$r/a.txt"; git -C "$r" add -A; git -C "$r" commit -qm init
-          echo "--- start"; out="$(bash scripts/specialist.sh start "$r" sec 20260923-151204 2>&1)"; echo "exit=$? $out"
-          wt="$(printf '%s\n' "$out" | sed -n 's/^worktree=//p')"; echo "--- worktree=$wt"
-          echo two >> "$wt/a.txt"; echo "--- status"; git -C "$wt" status --porcelain; echo "--- diff"; git -C "$wt" diff --stat
-          echo "--- commit"; bash scripts/specialist.sh commit "$wt" "round 1"; echo "exit=$?"
-          echo "--- finish discard"; bash scripts/specialist.sh finish "$r" "$wt" specialist/sec/20260923-151204 discard; echo "exit=$?"
-
       # A hung test fails after two minutes instead of stalling the job (bats
       # 1.7+; older builds ignore the variable).
       - name: Run bats suite
