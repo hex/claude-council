@@ -4,6 +4,13 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixes
+- Specialists start and finish on Windows. Git Bash's `ps` cannot print a start time, so every start failed there; a round's start time now comes from procfs when `ps` has none, and finishing accepts the `C:/` worktree path git reports.
+- The provider template in the `provider-integration` skill names `claude-sonnet-5` instead of a retired model, and checks for an empty answer with the regex the providers use, not the substitution that hangs bash 3.2 on a long answer.
+- The `council-execution` skill describes provider headers as the formatter prints them (a colour dot, the name, role and model) instead of emoji prefixes the output no longer uses, and `/claude-council:ask` takes its synthesis sections from `prompts/synthesis.md` alone.
+
 ## 2026.9.16
 
 ### Fixes
