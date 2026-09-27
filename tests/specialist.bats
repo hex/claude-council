@@ -15,6 +15,9 @@ setup() {
     git -C "$REPO" init -q -b main
     git -C "$REPO" config user.email t@example.com
     git -C "$REPO" config user.name Test
+    # Git for Windows turns autocrlf on system-wide, and its line-ending warning
+    # on stderr would land in every captured $output.
+    git -C "$REPO" config core.autocrlf false
     mkdir -p "$REPO/src"
     echo 'one' > "$REPO/src/a.txt"
     git -C "$REPO" add -A && git -C "$REPO" commit -qm init
@@ -26,7 +29,21 @@ teardown() {
 
 field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 
+# git reports a path as C:/... under Git Bash, where the shell's own paths look
+# POSIX; elsewhere the two are the same.
+native_path() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi
+}
+
+# Git Bash without developer mode copies instead of linking.
+requires_symlinks() {
+    ln -s target "${BATS_TEST_TMPDIR}/symlink-probe" 2>/dev/null || true
+    [ -L "${BATS_TEST_TMPDIR}/symlink-probe" ] || skip "this filesystem makes no symlinks"
+    rm -f "${BATS_TEST_TMPDIR}/symlink-probe"
+}
+
 @test "start creates the worktree and branch beside the repo, even from a subdirectory and a path with spaces" {
+    requires_symlinks
     printf 'ignored.txt\r\n# comment\n\nmissing.txt\nignored-dir' > "$REPO/.worktreeinclude"
     printf 'file contents\n' > "$REPO/ignored.txt"
     mkdir -p "$REPO/ignored-dir/nested"
@@ -37,12 +54,12 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     git -C "$REPO" commit -qm includes
     run "$SPECIALIST" start "$REPO/src" sec 20260923-151204
     [ "$status" -eq 0 ]
-    [ "$(field repo)" = "$REPO" ]
-    [ "$(field worktree)" = "${ROOT}/app.specialists/sec-20260923-151204" ]
+    [ "$(field repo)" = "$(native_path "$REPO")" ]
+    [ "$(field worktree)" = "$(native_path "${ROOT}/app.specialists/sec-20260923-151204")" ]
     [ "$(field branch)" = "specialist/sec/20260923-151204" ]
     [ "$(field base)" = "$(git -C "$REPO" rev-parse HEAD)" ]
     [ "$(field short)" = "$(git -C "$REPO" rev-parse --short=7 HEAD)" ]
-    [ "$(field state)" = "${ROOT}/app.specialists/.state/sec-20260923-151204" ]
+    [ "$(field state)" = "$(native_path "${ROOT}/app.specialists/.state/sec-20260923-151204")" ]
     [ "$(field dirty)" = "no" ]
     [ -d "$(field state)" ]
     [ "$(git -C "$(field worktree)" rev-parse --abbrev-ref HEAD)" = "specialist/sec/20260923-151204" ]
@@ -85,10 +102,16 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 }
 
 @test "start refuses a tracked symlink in an include destination parent" {
+    requires_symlinks
     mkdir "$ROOT/outside"
-    ln -s ../outside "$REPO/cfg"
+    ln -s "$ROOT/outside" "$REPO/cfg"
     git -C "$REPO" add cfg
     git -C "$REPO" commit -qm link
+    # The base commit keeps the link while the main tree holds an ignored,
+    # untracked directory there, so only the symlink check stands between
+    # the copy and $ROOT/outside.
+    git -C "$REPO" rm -q --cached cfg
+    printf 'cfg/\n' >> "$REPO/.git/info/exclude"
     rm "$REPO/cfg"
     mkdir "$REPO/cfg"
     printf 'private\n' > "$REPO/cfg/secret"
@@ -109,22 +132,29 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
 }
 
 @test "start refuses a tracked symlink within an included directory" {
+    requires_symlinks
+    # GNU cp writes through a destination link to an existing target; BSD cp
+    # refuses, so only a GNU runner shows the escape without the guard.
+    printf 'original\n' > "$ROOT/outside.txt"
     mkdir "$REPO/shared"
     ln -s "$ROOT/outside.txt" "$REPO/shared/file.txt"
     git -C "$REPO" add shared
     git -C "$REPO" commit -qm link
+    git -C "$REPO" rm -q --cached shared/file.txt
+    printf 'shared/\n' >> "$REPO/.git/info/exclude"
     rm "$REPO/shared/file.txt"
     printf 'private\n' > "$REPO/shared/file.txt"
     printf 'shared\n' > "$REPO/.worktreeinclude"
     run "$SPECIALIST" start "$REPO" sec 20260923-151204
     [ "$status" -eq 1 ]
     [ "$output" = "specialist: symlink in worktree destination for 'shared': shared/file.txt" ]
-    [ ! -e "$ROOT/outside.txt" ]
+    [ "$(cat "$ROOT/outside.txt")" = original ]
     [ ! -e "${ROOT}/app.specialists" ]
     [ -z "$(git -C "$REPO" branch --list 'specialist/*')" ]
 }
 
 @test "start does not follow a symlink in an include source parent" {
+    requires_symlinks
     mkdir "$ROOT/external"
     printf 'private\n' > "$ROOT/external/file.txt"
     ln -s "$ROOT/external" "$REPO/shared"
@@ -150,12 +180,12 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     [ ! -e "$REPO/.worktreeinclude" ]
     run /bin/bash "$SPECIALIST" start "$REPO" sec-2 20260923-151204
     [ "$status" -eq 0 ]
-    [ "$(field repo)" = "$REPO" ]
-    [ "$(field worktree)" = "${ROOT}/app.specialists/sec-2-20260923-151204" ]
+    [ "$(field repo)" = "$(native_path "$REPO")" ]
+    [ "$(field worktree)" = "$(native_path "${ROOT}/app.specialists/sec-2-20260923-151204")" ]
     [ "$(field branch)" = "specialist/sec-2/20260923-151204" ]
     [ "$(field base)" = "$(git -C "$REPO" rev-parse HEAD)" ]
     [ "$(field short)" = "$(git -C "$REPO" rev-parse --short=7 HEAD)" ]
-    [ "$(field state)" = "${ROOT}/app.specialists/.state/sec-2-20260923-151204" ]
+    [ "$(field state)" = "$(native_path "${ROOT}/app.specialists/.state/sec-2-20260923-151204")" ]
     [ "$(field dirty)" = "no" ]
     [ -d "$(field state)" ]
 }
@@ -167,12 +197,12 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
     echo 'two' >> "$REPO/src/a.txt"
     run /bin/bash "$SPECIALIST" start "$REPO" sec 20260923-151204
     [ "$status" -eq 0 ]
-    [ "$(field repo)" = "$REPO" ]
-    [ "$(field worktree)" = "${ROOT}/app.specialists/sec-20260923-151204" ]
+    [ "$(field repo)" = "$(native_path "$REPO")" ]
+    [ "$(field worktree)" = "$(native_path "${ROOT}/app.specialists/sec-20260923-151204")" ]
     [ "$(field branch)" = "specialist/sec/20260923-151204" ]
     [ "$(field base)" = "$(git -C "$REPO" rev-parse HEAD)" ]
     [ "$(field short)" = "$(git -C "$REPO" rev-parse --short=7 HEAD)" ]
-    [ "$(field state)" = "${ROOT}/app.specialists/.state/sec-20260923-151204" ]
+    [ "$(field state)" = "$(native_path "${ROOT}/app.specialists/.state/sec-20260923-151204")" ]
     [ "$(field dirty)" = "yes" ]
     [ -d "$(field state)" ]
 }
@@ -356,6 +386,21 @@ start_run() {
     [ "$output" = "claimed=yes" ]
 }
 
+@test "identity prints a live process's start time and refuses a finished one" {
+    run "$SPECIALIST" identity "$$"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ [^[:space:]] ]]
+    sleep 0 &
+    local gone=$!
+    wait "$gone"
+    run "$SPECIALIST" identity "$gone"
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: no start time for pid ${gone}" ]
+    run "$SPECIALIST" identity 12x
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: invalid pid '12x'" ]
+}
+
 @test "codex refuses a missing worktree before starting anything" {
     run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol '' < /dev/null
     [ "$status" -eq 1 ]
@@ -435,7 +480,7 @@ launch() {
     local round_pid recorded_start observed_start
     round_pid="$(cat "$STATE/pid")"
     recorded_start="$(cat "$STATE/start")"
-    observed_start="$(LC_ALL=C ps -o lstart= -p "$round_pid")"
+    observed_start="$("$SPECIALIST" identity "$round_pid")"
     [ "$output" = "pid=$round_pid" ]
     kill -0 "$round_pid"
     [ ! -e "$STATE/exit" ]
@@ -447,6 +492,7 @@ launch() {
 }
 
 @test "codex launch stops the round when its start time cannot be recorded" {
+    [ ! -r /proc/self/stat ] || skip "procfs gives the start time, which a fake ps cannot hide"
     start_run
     mkdir -p "${BATS_TEST_TMPDIR}/bin"
     for code in 42 0; do

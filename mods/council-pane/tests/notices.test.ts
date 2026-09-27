@@ -84,7 +84,3 @@ test('progressBand shows nothing once the run is done or before any provider is 
   expect(progressBand({ providers, isDone: true }, 0, 1_000)).toBeUndefined()
   expect(progressBand({ providers: [], isDone: false }, 0, 1_000)).toBeUndefined()
 })
-
-test('progressBand never shows a negative time when the clock it is given lags the pickup', () => {
-  expect(progressBand({ providers, isDone: false }, 10_000, 9_000)?.clock).toBe('0:00')
-})

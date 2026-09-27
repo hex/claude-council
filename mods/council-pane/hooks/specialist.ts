@@ -489,8 +489,12 @@ export function roundProcessIdentity(
   if (recordedIdentity === undefined) return 'same'
   const recorded = recordedIdentity.trim().replace(/\s+/g, ' ')
   const observed = observedIdentity?.trim().replace(/\s+/g, ' ')
-  const startTime = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}$/
-  if (!startTime.test(recorded) || observed === undefined || !startTime.test(observed)) return 'unknown'
+  // ps's lstart where ps has -o; Git Bash's procfs start time (`proc:<ticks>`) elsewhere.
+  const kindOf = (text: string) =>
+    /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}$/.test(text) ? 'lstart'
+      : /^proc:[0-9]+$/.test(text) ? 'proc' : undefined
+  const kind = kindOf(recorded)
+  if (kind === undefined || observed === undefined || kindOf(observed) !== kind) return 'unknown'
   return recorded === observed ? 'same' : 'gone'
 }
 

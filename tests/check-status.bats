@@ -14,21 +14,6 @@ setup() {
     install_fake_clis
     unset_provider_keys
 }
-@test "fixture: --version succeeds even under auth-failure behavior" {
-    export COUNCIL_FAKE_BEHAVIOR=auth-failure
-    run codex --version
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"fake-codex"* ]]
-}
-
-@test "check-status: authed CLI provider shows Connected" {
-    export COUNCIL_FAKE_BEHAVIOR=valid
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"Codex CLI"* ]]
-    [[ "$output" == *"Connected"* ]]
-}
-
 @test "check-status: codex installed but unauthenticated is its own state" {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"

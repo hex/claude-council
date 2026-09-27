@@ -409,6 +409,13 @@ test('a round belongs only to the process whose start time was recorded', () => 
   expect(roundProcessIdentity(undefined, undefined, 'unknown')).toBe('unknown')
 })
 
+test('under Git Bash a round is identified by its procfs start time', () => {
+  expect(roundProcessIdentity('proc:84512\n', 'proc:84512', 'present')).toBe('same')
+  expect(roundProcessIdentity('proc:84512', 'proc:90001', 'present')).toBe('gone')
+  expect(roundProcessIdentity('proc:84512', 'proc:', 'present')).toBe('unknown')
+  expect(roundProcessIdentity('proc:84512', 'Wed Sep 24 12:34:56 2026', 'present')).toBe('unknown')
+})
+
 test('kill result distinguishes a missing or reused pid from a failed check', () => {
   expect(roundProcessPresence(0, '')).toBe('present')
   expect(roundProcessPresence(1, 'kill: 99999: No such process')).toBe('absent')

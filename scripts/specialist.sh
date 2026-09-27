@@ -53,7 +53,7 @@ cmd_start() {
                     die "symlink in worktree destination for '${entry}': ${link}"
                 fi
             done || exit 1
-            includes[$count]="$entry"
+            includes[count]="$entry"
             count=$((count + 1))
         done < "$root/.worktreeinclude"
     fi
@@ -99,6 +99,23 @@ cmd_commit() {
 
 cmd_head() { git -C "$1" rev-parse HEAD; }
 
+# A process's start time, which tells the round's own process apart from a
+# later one that reused its pid. Git Bash's ps has no -o; its procfs keeps
+# the start time in field 22 of /proc/<pid>/stat, after a name that may
+# hold spaces.
+cmd_identity() {
+    local pid="$1" stat
+    local -a fields
+    [[ "$pid" =~ ^[0-9]+$ ]] || die "invalid pid '${pid}'"
+    if LC_ALL=C ps -o lstart= -p "$pid" 2>/dev/null; then return 0; fi
+    if [[ ! -r "/proc/${pid}/stat" ]] || ! IFS= read -r stat < "/proc/${pid}/stat"; then
+        die "no start time for pid ${pid}"
+    fi
+    read -ra fields <<< "${stat##*) }"
+    [[ "${fields[19]:-}" =~ ^[0-9]+$ ]] || die "no start time for pid ${pid}"
+    printf 'proc:%s\n' "${fields[19]}"
+}
+
 # Every session follows a live round, so each may see it end: mkdir is atomic,
 # and only the session that creates the claim closes the round. A claim older
 # than a minute belongs to a closer that died midway and is taken over.
@@ -141,7 +158,7 @@ remove_run() {
 
 cmd_finish() {
     local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal
-    [[ "$worktree" == /* && "${worktree##*/}" =~ ^[a-z][a-z0-9-]*-[0-9]{8}-[0-9]{6}$ ]] || die "invalid worktree path '${worktree}': expected an absolute path ending in a run id"
+    [[ ( "$worktree" == /* || "$worktree" =~ ^[A-Za-z]:/ ) && "${worktree##*/}" =~ ^[a-z][a-z0-9-]*-[0-9]{8}-[0-9]{6}$ ]] || die "invalid worktree path '${worktree}': expected an absolute path ending in a run id"
     root="$(repo_root "$root")"
     if [[ "$how" == discard ]]; then
         remove_run "$root" "$worktree" "$branch"
@@ -207,7 +224,7 @@ cmd_codex() {
     ) < /dev/null > /dev/null 2>&1 &
     local round_pid="$!"
     if echo "$round_pid" > "${state}/pid" \
-        && LC_ALL=C ps -o lstart= -p "$round_pid" > "${state}/start.tmp" 2>/dev/null \
+        && ( cmd_identity "$round_pid" ) > "${state}/start.tmp" 2>/dev/null \
         && grep -q '[^[:space:]]' "${state}/start.tmp" \
         && mv "${state}/start.tmp" "${state}/start"; then
         echo "pid=$round_pid"
@@ -225,6 +242,7 @@ main() {
         start)  [[ $# -eq 3 ]] || die "usage: start <dir> <name> <ts>"; cmd_start "$@" ;;
         commit) [[ $# -eq 2 ]] || die "usage: commit <worktree> <message>"; cmd_commit "$@" ;;
         head)   [[ $# -eq 1 ]] || die "usage: head <worktree>"; cmd_head "$@" ;;
+        identity) [[ $# -eq 1 ]] || die "usage: identity <pid>"; cmd_identity "$@" ;;
         claim)  [[ $# -eq 1 ]] || die "usage: claim <state>"; cmd_claim "$@" ;;
         report) [[ $# -eq 3 ]] || die "usage: report <worktree> <round-base> <run-base>"; cmd_report "$@" ;;
         counts) [[ $# -eq 3 ]] || die "usage: counts <repo> <branch> <run-base>"; cmd_counts "$@" ;;
