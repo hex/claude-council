@@ -135,6 +135,11 @@ EXIT:   0 = success, non-zero = failure (error to stderr)
         3 = the requested model is unavailable for this key/region — the
             orchestrator's model-fallback wrapper retries with a fallback
             model instead of surfacing the error (see Model Fallback below)
+ENV:    scrubbed by provider_env_scrub (lib/providers.sh) in the subshell
+        that execs the script: base, proxy/CA and Windows variables,
+        COUNCIL_*, the provider's vendor prefixes and COUNCIL_PASS_ENV
+        names stay; every other exported variable is unset. Nothing goes
+        on an env -i argv, where ps would show a key.
 ```
 
 Two flavors share the interface:

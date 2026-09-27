@@ -101,6 +101,44 @@ provider_env_prefix() {
     echo "$1" | tr '[:lower:]-' '[:upper:]_'
 }
 
+# Unsets every exported variable a provider has no use for; called in the
+# subshell that then execs the provider. A shell that loads every secret at
+# start would otherwise hand each provider, and each CLI agent, every other
+# vendor's key. What stays: the base a process needs, proxy and CA settings,
+# the Windows variables Git Bash's node CLIs need, COUNCIL_*, the provider's
+# own vendor prefixes, and any names listed in COUNCIL_PASS_ENV
+# (comma-separated). Windows keeps some of these names in mixed case, so the
+# match ignores case.
+# Usage: provider_env_scrub <provider>
+provider_env_scrub() {
+    local provider="$1" name prefix keep families pass=",${COUNCIL_PASS_ENV:-},"
+    case "$provider" in
+        gemini|antigravity)         families="GEMINI_ GOOGLE_ ANTIGRAVITY_" ;;
+        openai|codex)               families="OPENAI_ CODEX_" ;;
+        grok|grok-cli)              families="GROK_ XAI_" ;;
+        kimi|kimi-cli)              families="KIMI_ MOONSHOT_" ;;
+        cursor-cli)                 families="CURSOR_" ;;
+        openrouter|openrouter-*)    families="OPENROUTER_" ;;
+        *)                          families="$(provider_env_prefix "$provider")_" ;;
+    esac
+    shopt -s nocasematch
+    for name in $(compgen -e); do
+        keep=0
+        case "$name" in
+            PATH|HOME|USER|LOGNAME|SHELL|TMPDIR|TERM|COLORTERM|LANG|LANGUAGE|TZ|PWD|SHLVL|PROVIDERS_DIR) keep=1 ;;
+            LC_*|XDG_*|COUNCIL_*|CLAUDE_PLUGIN_*) keep=1 ;;
+            HTTP_PROXY|HTTPS_PROXY|NO_PROXY|ALL_PROXY|SSL_CERT_FILE|SSL_CERT_DIR|CURL_CA_BUNDLE|REQUESTS_CA_BUNDLE|NODE_EXTRA_CA_CERTS) keep=1 ;;
+            SYSTEMROOT|WINDIR|SYSTEMDRIVE|APPDATA|LOCALAPPDATA|USERPROFILE|PROGRAMDATA|PROGRAMFILES|COMMONPROGRAMFILES|PATHEXT|COMSPEC|TEMP|TMP|MSYSTEM|HOMEDRIVE|HOMEPATH|USERNAME|USERDOMAIN|COMPUTERNAME|OS|PROCESSOR_ARCHITECTURE|NUMBER_OF_PROCESSORS) keep=1 ;;
+        esac
+        for prefix in $families; do
+            if [[ "$name" == "$prefix"* ]]; then keep=1; fi
+        done
+        if [[ "$pass" == *",${name},"* ]]; then keep=1; fi
+        if (( keep == 0 )); then unset "$name" 2>/dev/null || true; fi
+    done
+    shopt -u nocasematch
+}
+
 # True (exit 0) if the API key env var for an API provider is set. Uses the
 # same <NAME>_API_KEY convention discover_providers gates on, so any API
 # provider is covered without a per-provider case arm.

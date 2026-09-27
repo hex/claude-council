@@ -253,7 +253,7 @@ cmd_codex() {
     rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/start.tmp" "${state}/codex-pid" "${state}/exit" "${state}/thread" "${state}/reason" "${state}/reason.tmp"
     rmdir "${state}/closing" 2>/dev/null || true
     cat > "${state}/prompt.txt"
-    local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'model_reasoning_summary="concise"' --output-schema "${SCRIPT_DIR}/specialist-report.schema.json" -o "${state}/last-message.md")
+    local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'model_reasoning_summary="concise"' -c 'shell_environment_policy.inherit="core"' --output-schema "${SCRIPT_DIR}/specialist-report.schema.json" -o "${state}/last-message.md")
     if [[ -n "$effort" ]]; then flags+=(-c "model_reasoning_effort=\"${effort}\""); fi
     local args=(exec "${flags[@]}" -)
     if [[ -n "$thread" ]]; then args=(exec resume "${flags[@]}" "$thread" -); fi

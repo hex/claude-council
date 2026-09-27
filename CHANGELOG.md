@@ -6,6 +6,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Security
+- Providers no longer inherit your whole environment. Each runs with the basics, proxy and CA settings, `COUNCIL_*` and its own vendor's variables; another vendor's key, and any other secret your shell exports, stays out. `COUNCIL_PASS_ENV` (comma-separated names) passes extra variables a CLI provider needs. Specialist rounds run Codex with `shell_environment_policy.inherit="core"`, so the commands it runs get only core variables too.
+
 ### Features
 - Specialist rounds have a time limit: `specialist_round_limit` in `/config`, in minutes, default 60, 0 for none. A round still running at the limit is stopped and nothing it did is committed; the result says it reached the limit. You can also ask Claude to stop a running round (`{run, stop: true}`, confirmed in a dialog). While a round runs, the band adds `no output for m:ss` once Codex has written nothing for two minutes.
 

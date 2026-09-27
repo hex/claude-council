@@ -586,6 +586,8 @@ launch() {
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" != *model_reasoning_effort* ]]
     # Short reasoning summaries give the pane something to show between commands.
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *' -c model_reasoning_summary="concise" '* ]]
+    # Commands Codex runs get only the core variables, none of the user's secrets.
+    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *' -c shell_environment_policy.inherit="core" '* ]]
     # The last message is the report in the shape the pane parses. Codex runs in
     # the worktree, so the schema path must be absolute.
     schema="$(cd "$SCRIPTS_DIR" && pwd)/specialist-report.schema.json"
