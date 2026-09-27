@@ -338,12 +338,8 @@ MUST reach the script, or Step 3's debate synthesis has nothing to summarize.
 
 ## Step 3: Generate Synthesis (standard mode only)
 
-After the formatted output, generate synthesis analyzing the provider responses:
-
-1. **Consensus**: Points where providers agree
-2. **Divergence**: Where they disagree and why
-3. **Unique insights**: Notable points from each provider
-4. **Recommendation**: Strongest approach for the situation
+After the formatted output, write the synthesis as `prompts/synthesis.md`
+describes it (the `council-execution` skill loads that file).
 
 ### If Debate Mode Was Used
 

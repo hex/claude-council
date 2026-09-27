@@ -47,7 +47,7 @@ TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 ENDPOINT="https://api.anthropic.com/v1/messages"
 
 PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" '{
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-5",
     max_tokens: 1024,
     messages: [{role: "user", content: $prompt}]
 }')
@@ -105,9 +105,11 @@ RESPONSE=$(curl -s -X POST "https://api.provider.com/v1/completions" \
 
 TEXT=$(echo "$RESPONSE" | jq -r '(.choices[0].message.content)? // empty')
 
-# Whitespace-stripped, not a bare -z: a model that answers with a single space
-# would otherwise be cached and weighed in the synthesis as a real vote.
-if [[ -z "${TEXT//[[:space:]]/}" ]]; then
+# A search for any non-space, not a bare -z: a model that answers with a single
+# space would otherwise be cached and weighed in the synthesis as a real vote.
+# Not ${TEXT//[[:space:]]/} either: bash 3.2 runs that substitution in
+# quadratic time over multibyte text, and a long answer hangs the seat.
+if [[ ! "$TEXT" =~ [^[:space:]] ]]; then
     # Branch on the type before indexing. .error is an object for most vendors
     # and a bare string for some; indexing a string raises in jq rather than
     # yielding null, `//` does not catch a raise, and under set -eo pipefail

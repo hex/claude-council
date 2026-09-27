@@ -68,12 +68,6 @@ This lets them review the complete responses later.
 
 ## Output Format: Provider Names
 
-The output file uses emoji prefixes to visually distinguish providers.
-Preserve this format when displaying results:
-
-| Provider | Prefix |
-|----------|--------|
-| Gemini | 🟦 Gemini |
-| OpenAI | 🔳 OpenAI |
-| Grok | 🟥 Grok |
-| Perplexity | 🟩 Perplexity |
+Each provider section opens with a `## ● <Provider> (<role>) - <model>`
+header, where the dot is the provider's colour swatch. Display the header as
+written.
