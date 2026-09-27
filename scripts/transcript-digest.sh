@@ -135,10 +135,14 @@ refuse_on_jq_error() {
 # require the positive human marker rather than inferring one from absence.
 # Without the isMeta clause, cross-session peer messages enter the digest as
 # fabricated human turns — they carry another Claude's prose in message.content.
+# cs opens a rotated conversation with a fixed line that Claude Code records as
+# typed. Only that exact template is dropped, so a person quoting it stays.
 HUMAN_FILTER='.type == "user"
     and (.isMeta != true)
     and (has("toolUseResult") | not)
-    and (.origin.kind == "human")'
+    and (.origin.kind == "human")
+    and ((.message.content | type == "string"
+          and test("^Continue from the pending rotation handoff: read \\.cs/handoffs/[^ ]+ first\\.$")) | not)'
 
 # Emitted in file order. Walking the parentUuid chain back from the last prompt
 # is the intuitive traversal and it silently begins at the most recent compact

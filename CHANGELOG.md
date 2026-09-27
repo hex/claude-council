@@ -7,6 +7,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Fixes
+- `/claude-council:advise` digests no longer show cs's rotation launch line ("Continue from the pending rotation handoff: read .cs/handoffs/… first.") as something you typed. Only that exact line is dropped.
 - Specialist commits and merges run on your machine, outside Codex's sandbox, and git runs the repository's hooks at that moment. When `core.hooksPath` points inside the repository (`.githooks`, husky's `.husky/_`), a round could write a hook that then ran on the host. The commit now refuses a round that changed anything in that directory, ignored files included, and a merge refuses a branch that changes it. Hooks that run other repository files, such as husky's `.husky/pre-commit`, lint-staged or a `scripts/` file, still run the round's version of those files.
 - A specialist merge no longer deletes changes no round committed. A round that failed, or whose commit was refused, leaves its edits in the worktree, and the merge removed the worktree with them. The merge is now refused and names the files.
 - Specialists start and finish on Windows. Git Bash's `ps` cannot print a start time, so every start failed there; a round's start time now comes from procfs when `ps` has none, and finishing accepts the `C:/` worktree path git reports.
