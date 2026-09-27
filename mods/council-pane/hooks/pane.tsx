@@ -991,6 +991,7 @@ export const register: Register = (on, options) => {
       : finished.exitCode === 4 ? `your uncommitted changes touch the branch's files; commit or stash them first:\n${lines}`
       : finished.exitCode === 5 ? 'the repository is on a detached HEAD; check out a branch to merge into'
       : finished.exitCode === 6 ? `git refused the merge:\n${finished.stderr.trim()}`
+      : finished.exitCode === 7 ? `the worktree holds changes no round committed (a round failed or its commit was refused); commit them in ${current.worktree} or ask for another round, or discard the run:\n${lines}`
       : finished.stderr.trim() || 'finish failed'
     return { result: `Run ${current.id} not finished: ${why}`, isError: true }
   })

@@ -310,6 +310,19 @@ start_run() {
     [ -d "$WT" ]
 }
 
+@test "merge is refused while the worktree holds changes no round committed" {
+    start_run
+    echo 'b' > "$WT/src/b.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
+    echo 'edited' >> "$WT/src/a.txt"
+    echo 'new' > "$WT/src/c.txt"
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
+    [ "$status" -eq 7 ]
+    [ "$output" = "$(printf 'uncommitted=src/a.txt\nuncommitted=src/c.txt')" ]
+    [ "$(cat "$WT/src/c.txt")" = "new" ]
+    [ ! -f "$REPO/src/b.txt" ]
+    git -C "$REPO" rev-parse --verify -q "$BR" >/dev/null
+}
+
 @test "merge is refused on a detached HEAD; discard still works there" {
     start_run
     echo 'b' > "$WT/src/b.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null

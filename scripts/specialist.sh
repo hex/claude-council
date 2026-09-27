@@ -157,7 +157,7 @@ remove_run() {
 }
 
 cmd_finish() {
-    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal
+    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal uncommitted
     [[ ( "$worktree" == /* || "$worktree" =~ ^[A-Za-z]:/ ) && "${worktree##*/}" =~ ^[a-z][a-z0-9-]*-[0-9]{8}-[0-9]{6}$ ]] || die "invalid worktree path '${worktree}': expected an absolute path ending in a run id"
     root="$(repo_root "$root")"
     if [[ "$how" == discard ]]; then
@@ -165,6 +165,12 @@ cmd_finish() {
         echo "finished=discard"; return 0
     fi
     [[ "$how" == merge ]] || die "finish takes merge or discard, not '${how}'"
+    # A round that failed, or whose commit was refused, leaves its edits
+    # uncommitted; merging would delete them with the worktree.
+    if [[ -d "$worktree" ]]; then
+        uncommitted="$(git -C "$worktree" status --porcelain -uall | cut -c4-)"
+        if [[ -n "$uncommitted" ]]; then while IFS= read -r f; do echo "uncommitted=$f"; done <<< "$uncommitted"; exit 7; fi
+    fi
     if ! git -C "$root" symbolic-ref --quiet HEAD >/dev/null; then echo "detached=yes"; exit 5; fi
     touched="$(git -C "$root" diff --name-only "$(git -C "$root" merge-base HEAD "$branch")" "$branch")"
     dirty="$( { git -C "$root" diff --name-only; git -C "$root" diff --name-only --cached; } | sort -u | grep -Fxf <(printf '%s\n' "$touched") || true)"

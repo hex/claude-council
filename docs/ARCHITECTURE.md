@@ -385,7 +385,8 @@ summary, tests[] (command, result, detail) and open_questions. The
 state dir holds prompt.txt, events.jsonl, last-message.md and the
 pids; the exit file is written last and marks the round over. finish
 merge exits 3 on a conflict (aborted), 4 on uncommitted edits to the
-branch's files, 5 on a detached HEAD, 6 when git refuses to start.
+branch's files, 5 on a detached HEAD, 6 when git refuses to start,
+7 while the worktree holds changes no round committed.
 ```
 
 ### Stop Gate (`hooks/hooks.json`, `scripts/stop-review-gate.sh`)
