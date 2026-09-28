@@ -33,19 +33,19 @@ export OPENAI_API_KEY="..."         # or GEMINI_API_KEY, XAI_API_KEY, PERPLEXITY
 You get side-by-side responses from each configured provider:
 
 ```
-🔳 Codex - default
+● Codex - default
    Use UUID primary keys — they avoid enumeration, work across distributed
    services, and survive imports/exports cleanly.
 
-🟦 Antigravity - default
+● Antigravity - default
    UUIDv7 specifically: security of non-guessable IDs plus the index
    locality of time-ordered sequences.
 
-🟥 Grok - grok-latest
+● Grok - grok-latest
    BIGINT autoincrement — smaller index, faster joins. Handle public-
    exposure concerns with a separate UUID slug column.
 
-🟩 Perplexity - sonar-reasoning-pro
+● Perplexity - sonar-reasoning-pro
    BIGINT: 25% smaller than UUID, better cache locality, with citations
    to Postgres benchmarks.
 
@@ -708,7 +708,7 @@ council answers with a verified fallback model instead of failing, and says so
 in the response header:
 
 ```
-## 🟥 Grok - grok-4.6 (grok-latest unavailable)
+## ● Grok - grok-4.6 (grok-latest unavailable)
 ```
 
 | Provider | Default | Fallback |

@@ -376,7 +376,8 @@ shapes, dialog text, prompts, report parsing). Subcommands:
   counts <repo> <branch> <run-base>           commits, files, merge target
   finish <repo> <worktree> <branch> merge|discard
   codex <worktree> <state> <model> <effort|''> <limit-seconds> [thread]
-  stop <state> <pid> <start>    ends the running round if it is that round
+  stop <state> <round-pid> <start>  ends the running round if it is that round
+  identity <pid>                a live process's start time (ps, else procfs)
 Per run, beside the repository:
   worktree  ../<repo>.specialists/<name>-<ts>
   branch    specialist/<name>/<ts>
@@ -727,10 +728,11 @@ claude-council/
 | `COUNCIL_JOBS_DIR` | per-workspace under `$CLAUDE_PLUGIN_DATA` | Background job state location |
 | `COUNCIL_MAX_JOBS` | 20 | Terminal-status jobs kept before pruning |
 | `COUNCIL_PROMPTS_DIR` | prompts/ | Prompt template location |
+| `COUNCIL_PASS_ENV` | - | Comma-separated variable names every provider receives on top of its scrubbed environment (see `provider_env_scrub`) |
 | `COUNCIL_DEBUG` | - | Enable debug output |
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
 | `COUNCIL_MOD_PANE_DIR` | - | An existing directory a run writes its watch dir into, opening no tmux pane. Only the council-pane mod sets it; `COUNCIL_NO_PANE` still wins |
-| `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `specialists` | ask, on, off, on, `[]` | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each |
+| `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `specialist_round_limit`, `specialists` | ask, on, off, on, 60, `[]` | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each |
 | `COUNCIL_RENDERER` | auto | `perl` forces the built-in perl renderer; otherwise the pane prefers Rich when a Rich-capable Python exists (python3 with a modern rich, else `uv run --no-project --with rich`), with perl as the fallback |
 | `COUNCIL_RICH_PROBE_TIMEOUT` | 10 | Seconds before the pane-open uv probe for Rich is abandoned (guards against a cold uv cache on a dead network stalling pane opening) |
 | `COUNCIL_THEME` | auto-detected | Force pane render palette (emphasis + muted text): `light` / `dark` (else OSC 11 query; `COLORFGBG` only asserts `light`, never `dark` since it goes stale; otherwise attribute-only emphasis that inherits the foreground, and muted text keeps faint/bright-black) |
