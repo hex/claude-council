@@ -546,8 +546,8 @@ env_reporting_provider() {
 @test "query-council: a provider gets its own key and the base environment, no other secret" {
     local fakedir="${BATS_TEST_TMPDIR}/env-scrub"
     env_reporting_provider "$fakedir" gemini
-    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" GEMINI_MODEL=gemini-x \
-        OPENAI_API_KEY="other-key" BWS_ACCESS_TOKEN="vault" EXAMPLE_DB_PASSWORD="pw" \
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY=example-key GEMINI_MODEL=gemini-x \
+        OPENAI_API_KEY=other-key BWS_ACCESS_TOKEN=vault EXAMPLE_DB_PASSWORD=pw \
         "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=gemini "ping"
     [ "$status" -eq 0 ]
     local seen
@@ -563,8 +563,8 @@ env_reporting_provider() {
 @test "query-council: COUNCIL_PASS_ENV lets named variables through to every provider" {
     local fakedir="${BATS_TEST_TMPDIR}/env-pass"
     env_reporting_provider "$fakedir" gemini
-    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
-        EXAMPLE_CA_PATH=/etc/ca EXAMPLE_DB_PASSWORD="pw" COUNCIL_PASS_ENV="EXAMPLE_CA_PATH" \
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY=example-key \
+        EXAMPLE_CA_PATH=/etc/ca EXAMPLE_DB_PASSWORD=pw COUNCIL_PASS_ENV="EXAMPLE_CA_PATH" \
         "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=gemini "ping"
     [ "$status" -eq 0 ]
     local seen
@@ -576,7 +576,7 @@ env_reporting_provider() {
 @test "query-council: grok gets the xAI key it is issued under" {
     local fakedir="${BATS_TEST_TMPDIR}/env-grok"
     env_reporting_provider "$fakedir" grok
-    run --separate-stderr env PROVIDERS_DIR="$fakedir" XAI_API_KEY="example-key" GEMINI_API_KEY="other-key" \
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" XAI_API_KEY=example-key GEMINI_API_KEY=other-key \
         "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=grok "ping"
     [ "$status" -eq 0 ]
     local seen
