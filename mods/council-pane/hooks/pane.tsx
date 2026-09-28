@@ -919,7 +919,7 @@ export const register: Register = (on, options) => {
       const roundBase = (await sh(['head', record.worktree])).stdout.trim()
       const running: RunRecord = { ...record, rounds: record.rounds + 1, state: 'running', startedMs: await $.clock.now(), roundBase, subject }
       const stateDir = stateDirOf(running)
-      const limit = String(settings.roundLimitMinutes * 60)
+      const limit = String(settings.roundLimitSeconds)
       const launched = await sh(['codex', record.worktree, stateDir, record.model, record.effort ?? '', limit, ...(thread ? [thread] : [])], { stdin: prompt })
       if (launched.exitCode !== 0) {
         await saveRun($, record)

@@ -60,7 +60,7 @@
     "specialist_round_limit": {
       "type": "number",
       "title": "Specialist round limit (minutes)",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. A specialist round still running after this many minutes is stopped, and nothing it did is committed. 0 means no limit.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. A specialist round still running after this many minutes is stopped, and nothing it did is committed. Fractions count to the second. 0 means no limit.",
       "default": 60
     },
     "specialists": {

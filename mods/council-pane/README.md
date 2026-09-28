@@ -57,7 +57,7 @@ They show up in `/config`. Changing one reloads the mod.
 | `collapse_when_done` | on | Off keeps the full status list after a run. |
 | `wake_on_async_done` | off | Submits a prompt when a background job's result can be fetched. That starts a model turn and costs tokens. A job that fails wakes nobody. |
 | `council_tool` | on | Registers `mcp__claude-council__ask` so the model can call the council as a tool. Each call asks you first. |
-| `specialist_round_limit` | 60 | Minutes a specialist round may run before it is stopped, with nothing committed. 0 for no limit. |
+| `specialist_round_limit` | 60 | Minutes a specialist round may run before it is stopped, with nothing committed. Fractions count to the second (0.5 is 30 seconds); 0 for no limit. |
 | `specialists` | `[]` | Every Codex specialist, as a JSON list of objects. Hidden from the menu; set up with `/specialists`. See [Specialists](#specialists). |
 
 The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. Every call opens a dialog quoting the question and naming the providers, and nothing leaves the machine unless you choose `Send to the council`. `Don't send` or dismissing the dialog refuses the call. Anything you type under Other goes back to the model as a plain tool result, not a refusal, so it reads as your answer rather than an error. The specialist's finish dialog does the same. A `claude -p` run has no one to ask and gets the same refusal.
@@ -142,7 +142,7 @@ The mod records the detached round subshell's pid and process start time before 
 - One specialist round runs at a time, across every session: they share the run records. A round outlives the session that started it: the next session that loads the mod follows it, or closes it if it ended meanwhile.
 - A mod reload does not stop Codex. One round, measured, kept running through a reload.
 - The specialist tests pass on Windows CI, but nobody has run a live round on Windows.
-- The mod commits each round on your machine, where git runs the repository's hooks. It refuses a round that changed the hooks directory itself, but a hook that runs other repository files (husky's `.husky/pre-commit`, lint-staged's config in `package.json`, a `scripts/` file) runs the round's version of them.
+- The mod commits each round on your machine, where git runs the repository's hooks. It refuses a round that changed the hooks directory itself, but a hook that runs other repository files (husky's `.husky/pre-commit`, lint-staged's config in `package.json`, a `scripts/` file) runs the round's version of them. The refusal covers ignored files too, so a round that runs `npm install` in a husky repository, which regenerates `.husky/_`, has every commit refused and its run cannot merge. Delete `.husky/_` in the worktree to let the next round commit, or discard the run.
 - The drawing has no automated test. The docs describe `claude plugin test`, but 2.1.278 does not have it. `bun test` covers the logic. Only a person looking at the pane checks the drawing.
 
 ## Development
