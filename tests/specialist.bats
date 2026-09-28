@@ -27,6 +27,7 @@ teardown() {
     if [ -d "${BATS_TEST_TMPDIR}/bin" ]; then touch "${BATS_TEST_TMPDIR}/go"; fi
     # A fake codex that ignores go would outlive a failed test and hold bats open.
     if [ -n "${STATE:-}" ] && [ -f "$STATE/codex-pid" ]; then kill -9 "$(cat "$STATE/codex-pid")" 2>/dev/null || true; fi
+    if [ -f "${BATS_TEST_TMPDIR}/child" ]; then kill -9 "$(cat "${BATS_TEST_TMPDIR}/child")" 2>/dev/null || true; fi
 }
 
 field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
@@ -634,15 +635,46 @@ launch() {
     start_run
     fake_codex "trap 'exit 0' TERM; while :; do sleep 0.1; done"
     launch
-    run "$SPECIALIST" stop "$STATE"
+    run "$SPECIALIST" stop "$STATE" "$(cat "$STATE/pid")" "$(cat "$STATE/start")"
     [ "$status" -eq 0 ]
     [ "$output" = "stopped=yes" ]
     wait_round
     [ "$(cat "$STATE/exit")" = "143" ]
     [ "$(cat "$STATE/reason")" = "stopped" ]
-    run "$SPECIALIST" stop "$STATE"
+    run "$SPECIALIST" stop "$STATE" "$(cat "$STATE/pid")" "$(cat "$STATE/start")"
     [ "$status" -eq 1 ]
     [ "$output" = "specialist: the round in ${STATE} has already ended" ]
+}
+
+# A stop confirmed for one round must not land on the next round in the same
+# state dir, which a follow-up can start while the dialog is open.
+@test "stop refuses when the running round is not the one it was asked to stop" {
+    start_run
+    fake_codex "exit 0"
+    launch
+    wait_round
+    local first_pid first_start
+    first_pid="$(cat "$STATE/pid")"; first_start="$(cat "$STATE/start")"
+    fake_codex "trap 'exit 0' TERM; while :; do sleep 0.1; done"
+    launch
+    [ "$(cat "$STATE/pid")" != "$first_pid" ]
+    run "$SPECIALIST" stop "$STATE" "$first_pid" "$first_start"
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: the round in ${STATE} is not the one asked to stop" ]
+    [ ! -e "$STATE/reason" ]
+    kill -0 "$(cat "$STATE/codex-pid")"
+}
+
+# A command Codex runs can ignore SIGTERM and outlive it; the round is over
+# only once nothing it started is left writing to the worktree.
+@test "an ended round's exit is written only after every process it started is gone" {
+    start_run
+    fake_codex "sh -c 'trap \"\" TERM; while :; do sleep 0.1; done' & echo \$! > '${BATS_TEST_TMPDIR}/child'; trap 'exit 0' TERM; while :; do sleep 0.1; done"
+    LIMIT=1 launch
+    wait_round
+    [ "$(cat "$STATE/reason")" = "timeout" ]
+    run kill -0 "$(cat "${BATS_TEST_TMPDIR}/child")"
+    [ "$status" -ne 0 ]
 }
 
 @test "a round that ends inside its limit records no reason" {

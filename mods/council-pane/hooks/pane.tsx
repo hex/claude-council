@@ -979,11 +979,15 @@ export const register: Register = (on, options) => {
 
     if (call.kind === 'stop') {
       if (!record || record.state !== 'running') return { deny: `run ${call.run} has no round running` }
+      // The round the user is asked about, by its pid and start time: a
+      // follow-up may start another in the same state dir while the dialog is open.
+      const roundPid = (await readText(files($), `${stateDirOf(record)}/pid`)).trim()
+      const roundStart = (await readText(files($), `${stateDirOf(record)}/start`)).trim()
       const question = `Stop ${record.specialist}'s round ${record.rounds} on run ${record.id}? Its edits so far stay uncommitted in the worktree.`
       const outcome = dialogOutcome(await ask(question, 'Stop it', 'Let it run'), 'Stop it', 'Let it run', `let run ${record.id} keep running`)
       if ('deny' in outcome) return { deny: outcome.deny }
       if ('reply' in outcome) return { result: outcome.reply }
-      const stopped = await sh(['stop', stateDirOf(record)])
+      const stopped = await sh(['stop', stateDirOf(record), roundPid, roundStart])
       if (stopped.exitCode !== 0) return { result: `Run ${record.id} not stopped: ${stopped.stderr.trim()}`, isError: true }
       return { result: `Stopped the round on run ${record.id}; a prompt arrives with its result once the round has closed.` }
     }

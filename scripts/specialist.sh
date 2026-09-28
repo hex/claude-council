@@ -139,21 +139,48 @@ cmd_identity() {
     printf 'proc:%s\n' "${fields[19]}"
 }
 
-# Ends a round's Codex and records why: timeout or stopped. The reason is
-# written first, so the round reads it once Codex exits. Codex gets five
-# seconds to leave after SIGTERM before it is killed.
-end_round() {
-    local state="$1" pid="$2" reason="$3" ticks=50
-    echo "$reason" > "${state}/reason.tmp" && mv "${state}/reason.tmp" "${state}/reason"
-    signal_tree TERM "$pid"
-    while (( ticks-- > 0 )) && kill -0 "$pid" 2>/dev/null; do sleep 0.1; done
-    if kill -0 "$pid" 2>/dev/null; then signal_tree KILL "$pid"; fi
+# A process and everything under it, found through pgrep; Git Bash ships
+# none, so there only the process itself is found.
+process_tree() {
+    local child
+    echo "$1"
+    for child in $(pgrep -P "$1" 2>/dev/null); do process_tree "$child"; done
 }
 
+any_alive() {
+    local p
+    for p in "$@"; do if kill -0 "$p" 2>/dev/null; then return 0; fi; done
+    return 1
+}
+
+# Ends a round's Codex and every process under it, and records why: timeout
+# or stopped. The reason is written first, so the round reads it once Codex
+# exits; the round then waits for the ended file, written only once nothing
+# it started is left, because a command that ignores SIGTERM can outlive
+# Codex and keep writing to the worktree. The tree is taken before the
+# signal: a child left behind is reparented and no longer found under Codex.
+# Five seconds after SIGTERM, whatever remains is killed.
+end_round() {
+    local state="$1" pid="$2" reason="$3" ticks=50 p
+    local -a tree
+    echo "$reason" > "${state}/reason.tmp" && mv "${state}/reason.tmp" "${state}/reason"
+    # shellcheck disable=SC2207 # pids hold no spaces or globs
+    tree=($(process_tree "$pid"))
+    for p in "${tree[@]}"; do kill -TERM "$p" 2>/dev/null || true; done
+    while (( ticks-- > 0 )) && any_alive "${tree[@]}"; do sleep 0.1; done
+    for p in "${tree[@]}"; do if kill -0 "$p" 2>/dev/null; then signal_tree KILL "$p"; fi; done
+    touch "${state}/ended"
+}
+
+# The round's pid and start time name the round the caller confirmed
+# stopping: a follow-up can start another in the same state dir meanwhile.
+# Both are needed, since ps gives start times to the second.
 cmd_stop() {
-    local state="$1" pid
+    local state="$1" round_pid="$2" start="$3" pid
     [[ ! -f "${state}/exit" ]] || die "the round in ${state} has already ended"
     [[ -f "${state}/codex-pid" ]] || die "no round has started in ${state}"
+    [[ "$(cat "${state}/pid" 2>/dev/null)" == "$round_pid" && "$(cat "${state}/start" 2>/dev/null)" == "$start" ]] \
+        || die "the round in ${state} is not the one asked to stop"
     pid="$(cat "${state}/codex-pid")"
     end_round "$state" "$pid" stopped
     echo "stopped=yes"
@@ -250,7 +277,7 @@ cmd_codex() {
     [[ -d "$worktree" ]] || die "no worktree at ${worktree}"
     mkdir -p "$state"
     # Each round's files describe that round only.
-    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/start.tmp" "${state}/codex-pid" "${state}/exit" "${state}/thread" "${state}/reason" "${state}/reason.tmp"
+    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/start.tmp" "${state}/codex-pid" "${state}/exit" "${state}/thread" "${state}/reason" "${state}/reason.tmp" "${state}/ended"
     rmdir "${state}/closing" 2>/dev/null || true
     cat > "${state}/prompt.txt"
     local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'model_reasoning_summary="concise"' -c 'shell_environment_policy.inherit="core"' --output-schema "${SCRIPT_DIR}/specialist-report.schema.json" -o "${state}/last-message.md")
@@ -284,6 +311,11 @@ cmd_codex() {
                 watchdog="$!"
             fi
             wait "$codex_pid" || code=$?
+            # An ended round closes only once end_round has cleared what Codex left.
+            if [[ -f "${state}/reason" ]]; then
+                ticks=150
+                while (( ticks-- > 0 )) && [[ ! -f "${state}/ended" ]]; do sleep 0.1; done
+            fi
             if [[ -n "$watchdog" ]]; then kill "$watchdog" 2>/dev/null || true; fi
             # Codex answers SIGTERM by exiting 0, which would pass for a
             # finished round: an ended round reports 143 whatever it exited with.
@@ -323,7 +355,7 @@ main() {
         counts) [[ $# -eq 3 ]] || die "usage: counts <repo> <branch> <run-base>"; cmd_counts "$@" ;;
         finish) [[ $# -eq 4 ]] || die "usage: finish <repo> <worktree> <branch> merge|discard"; cmd_finish "$@" ;;
         codex)  [[ $# -eq 5 || $# -eq 6 ]] || die "usage: codex <worktree> <state> <model> <effort|''> <limit-seconds> [thread]"; cmd_codex "$@" ;;
-        stop)   [[ $# -eq 1 ]] || die "usage: stop <state>"; cmd_stop "$@" ;;
+        stop)   [[ $# -eq 3 ]] || die "usage: stop <state> <round-pid> <start>"; cmd_stop "$@" ;;
         *) die "unknown subcommand '${sub}'" ;;
     esac
 }
