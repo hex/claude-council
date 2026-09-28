@@ -4,23 +4,31 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.9.17
 
 ### Security
-- Providers no longer inherit your whole environment. Each runs with the basics, proxy and CA settings, `COUNCIL_*` and its own vendor's variables; another vendor's key, and any other secret your shell exports, stays out. That includes the stop-gate reviewer, which ran its provider directly and missed the scrub. `COUNCIL_PASS_ENV` (comma-separated names) passes extra variables a CLI provider needs. Specialist rounds run Codex with `shell_environment_policy.inherit="core"`, so the commands it runs get only core variables too.
+- Providers no longer get your whole environment. Each one runs with the basics, proxy and CA settings, `COUNCIL_*` and its own vendor's variables. Another vendor's key, or any other secret your shell exports, stays out. This covers the stop-gate reviewer too, which called its provider directly and skipped the scrub. If a CLI provider needs something else, name it in `COUNCIL_PASS_ENV` (comma-separated).
+- Specialist rounds run Codex with `shell_environment_policy.inherit="core"`, so the commands it runs get only core variables.
 
 ### Features
-- Specialist rounds have a time limit: `specialist_round_limit` in `/config`, in minutes (fractions count to the second), default 60, 0 for none. A round still running at the limit is stopped and nothing it did is committed; the result says it reached the limit. You can also ask Claude to stop a running round (`{run, stop: true}`, confirmed in a dialog). While a round runs, the band adds `no output for m:ss` once Codex has written nothing for two minutes.
+- Specialist rounds have a time limit: `specialist_round_limit` in `/config`, in minutes (fractions count to the second), default 60, 0 for none. A round still running at the limit is stopped, nothing it did is committed, and the result says it hit the limit.
+- You can ask Claude to stop a running round (`{run, stop: true}`, confirmed in a dialog).
+- While a round runs, the band shows `no output for m:ss` once Codex has written nothing for two minutes.
 
 ### Fixes
-- `/claude-council:advise` digests no longer show cs's rotation launch line ("Continue from the pending rotation handoff: read .cs/handoffs/… first.") as something you typed. Only that exact line is dropped.
-- Specialist commits and merges run on your machine, outside Codex's sandbox, and git runs the repository's hooks at that moment. When `core.hooksPath` points inside the repository (`.githooks`, husky's `.husky/_`), a round could write a hook that then ran on the host. The commit now refuses a round that changed anything in that directory, ignored files included, and a merge refuses a branch that changes it. Hooks that run other repository files, such as husky's `.husky/pre-commit`, lint-staged or a `scripts/` file, still run the round's version of those files.
-- A specialist merge no longer deletes changes no round committed. A round that failed, or whose commit was refused, leaves its edits in the worktree, and the merge removed the worktree with them. The merge is now refused and names the files.
-- A specialist round whose Codex was killed by hand is no longer reported as finished and committed. Codex answers SIGTERM by exiting 0, so a zero exit now counts only when Codex completed its turn; otherwise the round reports exit 143 and nothing is committed.
-- On Windows, a CLI provider past the council deadline has its child processes ended too. Git Bash has no `pgrep`, so children are now found through procfs.
-- Specialists start and finish on Windows. Git Bash's `ps` cannot print a start time, so every start failed there; a round's start time now comes from procfs when `ps` has none, and finishing accepts the `C:/` worktree path git reports.
-- The provider template in the `provider-integration` skill names `claude-sonnet-5` instead of a retired model, and checks for an empty answer with the regex the providers use, not the substitution that hangs bash 3.2 on a long answer.
-- The `council-execution` skill describes provider headers as the formatter prints them (a colour dot, the name, role and model) instead of emoji prefixes the output no longer uses, and `/claude-council:ask` takes its synthesis sections from `prompts/synthesis.md` alone.
+- Specialist commits and merges run on your machine, outside Codex's sandbox, and git runs the repository's hooks there. With `core.hooksPath` inside the repository (`.githooks`, husky's `.husky/_`), a round could write a hook that then ran on the host. The commit now refuses a round that changed anything in that directory, ignored files included, and a merge refuses a branch that changes it. Hooks that run other repository files (husky's `.husky/pre-commit`, lint-staged, a `scripts/` file) still run the round's version of them.
+- A specialist merge no longer deletes changes no round committed. A failed round, or one whose commit was refused, leaves its edits in the worktree, and the merge used to remove the worktree with them. It now refuses and names the files.
+- A round whose Codex was killed by hand is no longer reported as finished and committed. Codex exits 0 on SIGTERM, so a zero exit now counts only when Codex completed its turn.
+- A stop that lands just after Codex finished no longer reports "stopped, nothing committed" for a round that was committed.
+- Specialists start and finish on Windows. Git Bash's `ps` can't print a start time, so every start failed there. The start time now comes from procfs, and finishing accepts the `C:/` worktree path git reports.
+- On Windows, a CLI provider past the council deadline has its child processes ended too. Git Bash has no `pgrep`, so children are found through procfs.
+- `/claude-council:advise` digests no longer show cs's rotation launch line as something you typed. Only that exact line is dropped.
+- The `provider-integration` skill template names `claude-sonnet-5` instead of a retired model, and checks for an empty answer with the same regex the providers use.
+- The `council-execution` skill describes provider headers as the formatter prints them (a colour dot, name, role and model), and `/claude-council:ask` takes its synthesis sections from `prompts/synthesis.md` only.
+
+### Other
+- Windows CI runs the specialist tests, and a test-audit pass removed four tests that another test already proves or that never ran the script.
+- Bumped `hashgraph-online/ai-plugin-scanner-action` (#39), and test placeholder keys no longer trip its secret check.
 
 ## 2026.9.16
 
