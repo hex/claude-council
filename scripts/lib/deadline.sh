@@ -24,17 +24,32 @@
 # provider's error text.
 # Send a signal to a process and everything under it, children first, so a
 # CLI's own child (the binary a node wrapper spawns, the sleep a shell script
-# is in) cannot outlive it holding the caller's captured stdout open. pgrep
-# finds the children; Git Bash ships none, so there only the process itself
-# is signalled. Never fails: a process that is already gone is the outcome
-# wanted, and callers run under errexit.
+# is in) cannot outlive it holding the caller's captured stdout open. Never
+# fails: a process that is already gone is the outcome wanted, and callers run
+# under errexit.
 # Usage: signal_tree <SIG> <pid>
 signal_tree() {
     local sig="$1" pid="$2" child
-    for child in $(pgrep -P "$pid" 2>/dev/null); do
+    for child in $(children_of "$pid"); do
         signal_tree "$sig" "$child"
     done
     kill "-$sig" "$pid" 2>/dev/null || true
+}
+
+# The direct children of a process. pgrep finds them where it exists; Git
+# Bash ships none, and there the parent is read from each /proc/<pid>/stat,
+# field 4, after a name that may hold spaces.
+# Usage: children_of <pid>
+children_of() {
+    local parent="$1" dir stat
+    local -a fields
+    if command -v pgrep >/dev/null 2>&1; then pgrep -P "$parent" 2>/dev/null || true; return 0; fi
+    for dir in /proc/[0-9]*; do
+        if [[ ! -r "${dir}/stat" ]] || ! IFS= read -r stat < "${dir}/stat"; then continue; fi
+        read -ra fields <<< "${stat##*) }"
+        if [[ "${fields[1]:-}" == "$parent" ]]; then echo "${dir#/proc/}"; fi
+    done
+    return 0
 }
 
 # Usage: run_with_deadline <seconds> <command> [args...]

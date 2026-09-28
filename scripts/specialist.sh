@@ -139,12 +139,11 @@ cmd_identity() {
     printf 'proc:%s\n' "${fields[19]}"
 }
 
-# A process and everything under it, found through pgrep; Git Bash ships
-# none, so there only the process itself is found.
+# A process and everything under it.
 process_tree() {
     local child
     echo "$1"
-    for child in $(pgrep -P "$1" 2>/dev/null); do process_tree "$child"; done
+    for child in $(children_of "$1"); do process_tree "$child"; done
 }
 
 any_alive() {
