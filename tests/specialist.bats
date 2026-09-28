@@ -636,6 +636,7 @@ launch() {
     fake_codex "trap 'exit 0' TERM; while :; do sleep 0.1; done"
     launch
     run "$SPECIALIST" stop "$STATE" "$(cat "$STATE/pid")" "$(cat "$STATE/start")"
+    echo "stop said: $output"
     [ "$status" -eq 0 ]
     [ "$output" = "stopped=yes" ]
     wait_round

@@ -175,8 +175,11 @@ end_round() {
 # stopping: a follow-up can start another in the same state dir meanwhile.
 # Both are needed, since ps gives start times to the second.
 cmd_stop() {
-    local state="$1" round_pid="$2" start="$3" pid
+    local state="$1" round_pid="$2" start="$3" pid ticks=50
     [[ ! -f "${state}/exit" ]] || die "the round in ${state} has already ended"
+    # The round records its start before it launches Codex, so a stop can
+    # arrive in between.
+    while (( ticks-- > 0 )) && [[ ! -f "${state}/codex-pid" ]]; do sleep 0.1; done
     [[ -f "${state}/codex-pid" ]] || die "no round has started in ${state}"
     [[ "$(cat "${state}/pid" 2>/dev/null)" == "$round_pid" && "$(cat "${state}/start" 2>/dev/null)" == "$start" ]] \
         || die "the round in ${state} is not the one asked to stop"
