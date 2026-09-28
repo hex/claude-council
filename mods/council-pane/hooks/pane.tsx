@@ -1065,6 +1065,7 @@ export const register: Register = (on, options) => {
     if (working) {
       const ui = $.ui.resolve(e)
       const clock = roundClock(working.startedMs, state.nowMs)
+      const quiet = quietNote(working.outputAtMs, state.nowMs)
       return (
         <ui.Box key="specialist" flexDirection="row" marginTop={1}>
           {/* Only the step gives way when the band is narrow, as beside an open pane. */}
@@ -1074,7 +1075,7 @@ export const register: Register = (on, options) => {
               <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
               <ui.Text color={COLOR.model}>{`  ${working.record.model}`}</ui.Text>
               <ui.Text bold color={roundStatus(true, undefined, clock).color}>{`  \u25cf ${clock}`}</ui.Text>
-              {quietNote(working.outputAtMs, state.nowMs) && <ui.Text color={COLOR.hint}>{`  ${quietNote(working.outputAtMs, state.nowMs)}`}</ui.Text>}
+              {quiet && <ui.Text color={COLOR.hint}>{`  ${quiet}`}</ui.Text>}
             </ui.Text>
           </ui.Box>
           <ui.Box flexGrow={1} flexShrink={1}>

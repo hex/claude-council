@@ -436,7 +436,7 @@ start_run() {
 @test "identity prints a live process's start time and refuses a finished one" {
     run "$SPECIALIST" identity "$$"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ [^[:space:]] ]]
+    assert_not_blank "$output"
     sleep 0 &
     local gone=$!
     wait "$gone"

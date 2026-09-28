@@ -229,7 +229,7 @@ remove_run() {
 }
 
 cmd_finish() {
-    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal uncommitted hooks fork
+    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal uncommitted hooks edited fork
     [[ ( "$worktree" == /* || "$worktree" =~ ^[A-Za-z]:/ ) && "${worktree##*/}" =~ ^[a-z][a-z0-9-]*-[0-9]{8}-[0-9]{6}$ ]] || die "invalid worktree path '${worktree}': expected an absolute path ending in a run id"
     root="$(repo_root "$root")"
     if [[ "$how" == discard ]]; then
@@ -248,8 +248,8 @@ cmd_finish() {
     # git runs the merge's hooks from the files the merge has just brought in.
     hooks="$(hooks_in_tree "$root")"
     if [[ -n "$hooks" ]]; then
-        hooks="$(git -C "$root" diff --name-only "$fork" "$branch" -- "$hooks")"
-        if [[ -n "$hooks" ]]; then while IFS= read -r f; do echo "hook=$f"; done <<< "$hooks"; exit 8; fi
+        edited="$(git -C "$root" diff --name-only "$fork" "$branch" -- "$hooks")"
+        if [[ -n "$edited" ]]; then while IFS= read -r f; do echo "hook=$f"; done <<< "$edited"; exit 8; fi
     fi
     touched="$(git -C "$root" diff --name-only "$fork" "$branch")"
     dirty="$( { git -C "$root" diff --name-only; git -C "$root" diff --name-only --cached; } | sort -u | grep -Fxf <(printf '%s\n' "$touched") || true)"

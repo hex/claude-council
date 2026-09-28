@@ -368,14 +368,12 @@ fi
 # list too long". Providers still accept a literal prompt as $1 for direct use.
 # Merges stderr into stdout, matching the callers' original `2>&1` capture.
 run_provider_script() {
-    local provider="$1" script="$2" prompt="$3" image_file="${4:-}" image_mime="${5:-}" pfile rc
+    local provider="$1" script="$2" prompt="$3" image_file="${4:-}" image_mime="${5:-}" pfile rc args
     pfile=$(mktemp "${TEMP_DIR}/prompt.XXXXXX")
     printf '%s' "$prompt" > "$pfile"
-    if [[ -n "$image_file" ]]; then
-        ( provider_env_scrub "$provider"; exec "$script" --prompt-file "$pfile" --image-file "$image_file" --image-mime "$image_mime" ) 2>&1
-    else
-        ( provider_env_scrub "$provider"; exec "$script" --prompt-file "$pfile" ) 2>&1
-    fi
+    args=(--prompt-file "$pfile")
+    if [[ -n "$image_file" ]]; then args+=(--image-file "$image_file" --image-mime "$image_mime"); fi
+    ( provider_env_scrub "$provider"; exec "$script" "${args[@]}" ) 2>&1
     rc=$?
     rm -f "$pfile"
     return $rc
