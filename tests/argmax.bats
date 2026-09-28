@@ -45,7 +45,7 @@ PROVIDER
     write_big_provider "$fakedir/antigravity.sh"
 
     run --separate-stderr env PROVIDERS_DIR="$fakedir" \
-        FAKE_START="$MARK_START" FAKE_END="$MARK_END" FAKE_BYTES="$BIG_BYTES" \
+        FAKE_START="$MARK_START" FAKE_END="$MARK_END" FAKE_BYTES="$BIG_BYTES" COUNCIL_PASS_ENV=FAKE_START,FAKE_END,FAKE_BYTES \
         bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
 
     [ "$status" -eq 0 ]
@@ -122,7 +122,7 @@ PROVIDER
     write_big_provider "$fakedir/antigravity.sh"
 
     run --separate-stderr env PROVIDERS_DIR="$fakedir" \
-        FAKE_START="$MARK_START" FAKE_END="$MARK_END" FAKE_BYTES="$BIG_BYTES" \
+        FAKE_START="$MARK_START" FAKE_END="$MARK_END" FAKE_BYTES="$BIG_BYTES" COUNCIL_PASS_ENV=FAKE_START,FAKE_END,FAKE_BYTES \
         bash "$SCRIPT" --no-cache --no-pane --debate --providers=antigravity "ping"
 
     [ "$status" -eq 0 ]

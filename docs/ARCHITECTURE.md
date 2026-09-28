@@ -135,6 +135,11 @@ EXIT:   0 = success, non-zero = failure (error to stderr)
         3 = the requested model is unavailable for this key/region — the
             orchestrator's model-fallback wrapper retries with a fallback
             model instead of surfacing the error (see Model Fallback below)
+ENV:    scrubbed by provider_env_scrub (lib/providers.sh) in the subshell
+        that execs the script: base, proxy/CA and Windows variables,
+        COUNCIL_*, the provider's vendor prefixes and COUNCIL_PASS_ENV
+        names stay; every other exported variable is unset. Nothing goes
+        on an env -i argv, where ps would show a key.
 ```
 
 Two flavors share the interface:
@@ -370,7 +375,8 @@ shapes, dialog text, prompts, report parsing). Subcommands:
   report <worktree> <round-base> <run-base>   diff --stat, round and total
   counts <repo> <branch> <run-base>           commits, files, merge target
   finish <repo> <worktree> <branch> merge|discard
-  codex <worktree> <state> <model> <effort|''> [thread]
+  codex <worktree> <state> <model> <effort|''> <limit-seconds> [thread]
+  stop <state> <pid> <start>    ends the running round if it is that round
 Per run, beside the repository:
   worktree  ../<repo>.specialists/<name>-<ts>
   branch    specialist/<name>/<ts>
@@ -381,11 +387,19 @@ round's commit would carry it) into the new worktree, so gitignored
 local files reach it. codex runs the round detached under codex exec
 (or exec resume <thread>) with --output-schema
 scripts/specialist-report.schema.json, the round report's contract:
-summary, tests[] (command, result, detail) and open_questions. The
+summary, tests[] (command, result, detail) and open_questions. A
+watchdog ends a round still running at its limit (0 = none), and
+stop ends one on request; each writes a reason file (timeout or
+stopped) before signalling Codex and everything under it, and the
+round writes its exit only once that tree is gone; the exit is then
+143 whatever Codex returned, since Codex exits 0 on SIGTERM. The
 state dir holds prompt.txt, events.jsonl, last-message.md and the
 pids; the exit file is written last and marks the round over. finish
 merge exits 3 on a conflict (aborted), 4 on uncommitted edits to the
-branch's files, 5 on a detached HEAD, 6 when git refuses to start.
+branch's files, 5 on a detached HEAD, 6 when git refuses to start,
+7 while the worktree holds changes no round committed, 8 when the
+branch changes files inside an in-tree hooks directory. commit refuses
+a round that wrote into that directory.
 ```
 
 ### Stop Gate (`hooks/hooks.json`, `scripts/stop-review-gate.sh`)

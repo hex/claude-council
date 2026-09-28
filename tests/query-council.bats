@@ -535,3 +535,52 @@ setup_pane() {
     [ ! -f "$PANE/status" ]
     [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
 }
+
+# A provider script that answers with the names of the variables it received.
+env_reporting_provider() {
+    mkdir -p "$1"
+    printf '#!/bin/bash\nenv | cut -d= -f1 | sort | tr "\\n" " "\n' > "$1/$2.sh"
+    chmod +x "$1/$2.sh"
+}
+
+@test "query-council: a provider gets its own key and the base environment, no other secret" {
+    local fakedir="${BATS_TEST_TMPDIR}/env-scrub"
+    env_reporting_provider "$fakedir" gemini
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY=example-key GEMINI_MODEL=gemini-x \
+        OPENAI_API_KEY=other-key BWS_ACCESS_TOKEN=vault EXAMPLE_DB_PASSWORD=pw \
+        "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=gemini "ping"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=" $(echo "$output" | jq -r '.round1.gemini.response') "
+    for name in GEMINI_API_KEY GEMINI_MODEL PATH HOME COUNCIL_SEAT; do
+        [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
+    done
+    for name in OPENAI_API_KEY BWS_ACCESS_TOKEN EXAMPLE_DB_PASSWORD PROVIDERS_DIR_REAL; do
+        [[ "$seen" != *" $name "* ]] || { echo "leaked $name in:$seen"; return 1; }
+    done
+}
+
+@test "query-council: COUNCIL_PASS_ENV lets named variables through to every provider" {
+    local fakedir="${BATS_TEST_TMPDIR}/env-pass"
+    env_reporting_provider "$fakedir" gemini
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY=example-key \
+        EXAMPLE_CA_PATH=/etc/ca EXAMPLE_DB_PASSWORD=pw COUNCIL_PASS_ENV="EXAMPLE_CA_PATH" \
+        "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=gemini "ping"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=" $(echo "$output" | jq -r '.round1.gemini.response') "
+    [[ "$seen" == *" EXAMPLE_CA_PATH "* ]]
+    [[ "$seen" != *" EXAMPLE_DB_PASSWORD "* ]]
+}
+
+@test "query-council: grok gets the xAI key it is issued under" {
+    local fakedir="${BATS_TEST_TMPDIR}/env-grok"
+    env_reporting_provider "$fakedir" grok
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" XAI_API_KEY=example-key GEMINI_API_KEY=other-key \
+        "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=grok "ping"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=" $(echo "$output" | jq -r '.round1.grok.response') "
+    [[ "$seen" == *" XAI_API_KEY "* ]]
+    [[ "$seen" != *" GEMINI_API_KEY "* ]]
+}

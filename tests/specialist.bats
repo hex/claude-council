@@ -25,6 +25,9 @@ setup() {
 
 teardown() {
     if [ -d "${BATS_TEST_TMPDIR}/bin" ]; then touch "${BATS_TEST_TMPDIR}/go"; fi
+    # A fake codex that ignores go would outlive a failed test and hold bats open.
+    if [ -n "${STATE:-}" ] && [ -f "$STATE/codex-pid" ]; then kill -9 "$(cat "$STATE/codex-pid")" 2>/dev/null || true; fi
+    if [ -f "${BATS_TEST_TMPDIR}/child" ]; then kill -9 "$(cat "${BATS_TEST_TMPDIR}/child")" 2>/dev/null || true; fi
 }
 
 field() { printf '%s\n' "$output" | sed -n "s/^$1=//p"; }
@@ -235,6 +238,22 @@ requires_symlinks() {
     [ -z "$(git -C "$wt" status --porcelain)" ]
 }
 
+@test "commit refuses a round that wrote into the hooks directory, before any hook runs" {
+    git -C "$REPO" config core.hooksPath .husky/_
+    run "$SPECIALIST" start "$REPO" sec 20260923-151204
+    wt="$(field worktree)"
+    mkdir -p "$wt/.husky/_"
+    printf '*\n' > "$wt/.husky/_/.gitignore"
+    printf '#!/bin/sh\ntouch "%s"\n' "${BATS_TEST_TMPDIR}/hook-ran" > "$wt/.husky/_/pre-commit"
+    chmod +x "$wt/.husky/_/pre-commit"
+    echo 'new' > "$wt/src/b.txt"
+    run "$SPECIALIST" commit "$wt" "specialist sec: harden login"
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: refusing to commit: the round changed files git runs as hooks here: .husky/_/.gitignore .husky/_/pre-commit" ]
+    [ ! -e "${BATS_TEST_TMPDIR}/hook-ran" ]
+    [ "$(git -C "$wt" rev-list --count HEAD)" = "1" ]
+}
+
 @test "report shows the round, the total and the status" {
     run "$SPECIALIST" start "$REPO" sec 20260923-151204
     wt="$(field worktree)"; base="$(field base)"
@@ -307,6 +326,34 @@ start_run() {
     run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
     [ "$status" -eq 4 ]
     [ "$output" = "dirty=src/a.txt" ]
+    [ -d "$WT" ]
+}
+
+@test "merge is refused while the worktree holds changes no round committed" {
+    start_run
+    echo 'b' > "$WT/src/b.txt"; "$SPECIALIST" commit "$WT" r1 >/dev/null
+    echo 'edited' >> "$WT/src/a.txt"
+    echo 'new' > "$WT/src/c.txt"
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
+    [ "$status" -eq 7 ]
+    [ "$output" = "$(printf 'uncommitted=src/a.txt\nuncommitted=src/c.txt')" ]
+    [ "$(cat "$WT/src/c.txt")" = "new" ]
+    [ ! -f "$REPO/src/b.txt" ]
+    git -C "$REPO" rev-parse --verify -q "$BR" >/dev/null
+}
+
+@test "merge is refused when the branch changes files git runs as hooks" {
+    git -C "$REPO" config core.hooksPath .githooks
+    start_run
+    mkdir -p "$WT/.githooks"
+    printf '#!/bin/sh\ntouch "%s"\n' "${BATS_TEST_TMPDIR}/hook-ran" > "$WT/.githooks/pre-merge-commit"
+    chmod +x "$WT/.githooks/pre-merge-commit"
+    git -C "$WT" add -A && git -C "$WT" -c core.hooksPath=/dev/null commit -qm hooks
+    run "$SPECIALIST" finish "$REPO" "$WT" "$BR" merge
+    [ "$status" -eq 8 ]
+    [ "$output" = "hook=.githooks/pre-merge-commit" ]
+    [ ! -e "${BATS_TEST_TMPDIR}/hook-ran" ]
+    [ ! -e "$REPO/.githooks/pre-merge-commit" ]
     [ -d "$WT" ]
 }
 
@@ -402,11 +449,11 @@ start_run() {
 }
 
 @test "codex refuses a missing worktree before starting anything" {
-    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol '' < /dev/null
+    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol '' 0 < /dev/null
     [ "$status" -eq 1 ]
     [ "$output" = "specialist: no worktree at ${BATS_TEST_TMPDIR}/nope" ]
     # The effort goes into a -c value, so only Codex's own words get through.
-    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol 'high" -c x="y' < /dev/null
+    run "$SPECIALIST" codex "${BATS_TEST_TMPDIR}/nope" "${BATS_TEST_TMPDIR}/state" gpt-6-sol 'high" -c x="y' 0 < /dev/null
     [ "$status" -eq 1 ]
     [ "$output" = "specialist: invalid effort 'high\" -c x=\"y': must be lowercase letters" ]
     [ ! -e "${BATS_TEST_TMPDIR}/state" ]
@@ -469,7 +516,7 @@ wait_round() {
 }
 
 launch() {
-    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol "${EFFORT:-}" "$@" <<< "the task"
+    PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol "${EFFORT:-}" "${LIMIT:-0}" "$@" <<< "the task"
 }
 
 @test "codex returns at once with the round's pid, and the round writes its exit code when codex ends" {
@@ -540,6 +587,8 @@ launch() {
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" != *model_reasoning_effort* ]]
     # Short reasoning summaries give the pane something to show between commands.
     [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *' -c model_reasoning_summary="concise" '* ]]
+    # Commands Codex runs get only the core variables, none of the user's secrets.
+    [[ "$(cat "${BATS_TEST_TMPDIR}/argv")" == *' -c shell_environment_policy.inherit="core" '* ]]
     # The last message is the report in the shape the pane parses. Codex runs in
     # the worktree, so the schema path must be absolute.
     schema="$(cd "$SCRIPTS_DIR" && pwd)/specialist-report.schema.json"
@@ -561,14 +610,88 @@ launch() {
 @test "codex clears the previous round's files before it starts" {
     start_run
     mkdir -p "$STATE"
-    for f in last-message.md stderr.txt exit thread; do echo 'round 1' > "$STATE/$f"; done
+    for f in last-message.md stderr.txt exit thread reason; do echo 'round 1' > "$STATE/$f"; done
     mkdir "$STATE/closing"
     fake_codex "while [ ! -f '${BATS_TEST_TMPDIR}/go' ]; do sleep 0.1; done"
     launch
-    for f in last-message.md exit thread closing; do [ ! -e "$STATE/$f" ] || return 1; done
+    for f in last-message.md exit thread reason closing; do [ ! -e "$STATE/$f" ] || return 1; done
     [ ! -s "$STATE/stderr.txt" ]
     touch "${BATS_TEST_TMPDIR}/go"
     wait_round
+}
+
+# Codex answers SIGTERM by exiting 0, which would pass for a finished round.
+@test "a round past its time limit is ended, and says so whatever codex exits with" {
+    start_run
+    fake_codex "trap 'exit 0' TERM; while :; do sleep 0.1; done"
+    LIMIT=1 launch
+    [ "$status" -eq 0 ]
+    wait_round
+    [ "$(cat "$STATE/exit")" = "143" ]
+    [ "$(cat "$STATE/reason")" = "timeout" ]
+}
+
+@test "stop ends a running round and records that it was asked to" {
+    start_run
+    fake_codex "trap 'exit 0' TERM; while :; do sleep 0.1; done"
+    launch
+    run "$SPECIALIST" stop "$STATE" "$(cat "$STATE/pid")" "$(cat "$STATE/start")"
+    echo "stop said: $output"
+    [ "$status" -eq 0 ]
+    [ "$output" = "stopped=yes" ]
+    wait_round
+    [ "$(cat "$STATE/exit")" = "143" ]
+    [ "$(cat "$STATE/reason")" = "stopped" ]
+    run "$SPECIALIST" stop "$STATE" "$(cat "$STATE/pid")" "$(cat "$STATE/start")"
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: the round in ${STATE} has already ended" ]
+}
+
+# A stop confirmed for one round must not land on the next round in the same
+# state dir, which a follow-up can start while the dialog is open.
+@test "stop refuses when the running round is not the one it was asked to stop" {
+    start_run
+    fake_codex "exit 0"
+    launch
+    wait_round
+    local first_pid first_start
+    first_pid="$(cat "$STATE/pid")"; first_start="$(cat "$STATE/start")"
+    fake_codex "trap 'exit 0' TERM; while :; do sleep 0.1; done"
+    launch
+    [ "$(cat "$STATE/pid")" != "$first_pid" ]
+    run "$SPECIALIST" stop "$STATE" "$first_pid" "$first_start"
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: the round in ${STATE} is not the one asked to stop" ]
+    [ ! -e "$STATE/reason" ]
+    kill -0 "$(cat "$STATE/codex-pid")"
+}
+
+# A command Codex runs can ignore SIGTERM and outlive it; the round is over
+# only once nothing it started is left writing to the worktree.
+@test "an ended round's exit is written only after every process it started is gone" {
+    start_run
+    fake_codex "sh -c 'trap \"\" TERM; while :; do sleep 0.1; done' & echo \$! > '${BATS_TEST_TMPDIR}/child'; trap 'exit 0' TERM; while :; do sleep 0.1; done"
+    LIMIT=1 launch
+    wait_round
+    [ "$(cat "$STATE/reason")" = "timeout" ]
+    run kill -0 "$(cat "${BATS_TEST_TMPDIR}/child")"
+    [ "$status" -ne 0 ]
+}
+
+@test "a round that ends inside its limit records no reason" {
+    start_run
+    fake_codex "exit 0"
+    LIMIT=60 launch
+    wait_round
+    [ "$(cat "$STATE/exit")" = "0" ]
+    [ ! -e "$STATE/reason" ]
+}
+
+@test "codex refuses a time limit that is not whole seconds" {
+    start_run
+    LIMIT=1m launch
+    [ "$status" -eq 1 ]
+    [ "$output" = "specialist: invalid time limit '1m': must be whole seconds, 0 for none" ]
 }
 
 @test "killing the codex pid ends the round with codex's exit code" {
@@ -595,7 +718,7 @@ launch() {
 @test "codex receives the prompt on stdin" {
     start_run
     fake_codex "cat > '${BATS_TEST_TMPDIR}/seen-prompt'"
-    printf 'line one\nline two' | PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol '' >/dev/null
+    printf 'line one\nline two' | PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" "$SPECIALIST" codex "$WT" "$STATE" gpt-6-sol '' 0 >/dev/null
     wait_round
     [ "$(cat "${BATS_TEST_TMPDIR}/seen-prompt")" = "$(printf 'line one\nline two')" ]
 }

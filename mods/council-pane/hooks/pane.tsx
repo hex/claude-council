@@ -9,7 +9,7 @@ import { readText, readView, type Files } from './snapshot'
 import {
   dialogOutcome, finishQuestion, introNotice, followUpRefusal, LIST_FIELD, freshList, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
   specialistDescription, specialistPrompt, specialistRoster, specialistSchema,
-  commitSubject, latestStep, lostResult, readRuns, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd,
+  commitSubject, latestStep, lostResult, readRuns, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd, quietNote,
   type RunRecord, type Specialist, type Step,
 } from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -81,7 +81,9 @@ type PaneState = {
   fitted: Map<string, { columns: number; text: string; blocks: string[] }>
   specialists: Specialist[]
   // The specialist round this session is waiting on; the band's subject.
-  specialist?: { record: RunRecord; startedMs: number; stateDir: string }
+  // outputLength and outputAtMs: how much of events.jsonl the last tick saw and
+  // when it last grew, for the band's no-output note; -1 until the first tick.
+  specialist?: { record: RunRecord; startedMs: number; stateDir: string; outputLength: number; outputAtMs: number }
   // What the last specialist round did, step by step; the pane's subject. It
   // outlives the round so the pane can still be read after it ends.
   specialistLog?: { record: RunRecord; steps: Step[]; isLive: boolean }
@@ -641,6 +643,8 @@ async function finishRound($: EngineInterface, state: PaneState, record: RunReco
       outcome = lostResult(record, (await report()).status)
     } else {
       const exitCode = Number((await readText(files($), `${stateDir}/exit`)).trim())
+      const ended = (await readText(files($), `${stateDir}/reason`)).trim()
+      const reason = ended === 'timeout' || ended === 'stopped' ? ended : ''
       thread = (await readText(files($), `${stateDir}/thread`)).trim() || record.thread
       const commit = exitCode === 0 ? await specialistRun($, ['commit', record.worktree, record.subject]) : undefined
       const didCommit = commit !== undefined && keyValues(commit.stdout).committed === 'yes'
@@ -648,7 +652,7 @@ async function finishRound($: EngineInterface, state: PaneState, record: RunReco
       const commitError = commit && commit.exitCode !== 0 ? commit.stderr.trim() || `commit exited ${commit.exitCode}` : ''
       const section = await report()
       outcome = roundResult({
-        record, exitCode, commit: committed, commitError,
+        record, exitCode, commit: committed, commitError, reason,
         lastMessage: (await readText(files($), `${stateDir}/last-message.md`)).trim(),
         roundStat: section.round, totalStat: section.total, status: section.status,
         stderrTail: (await readText(files($), `${stateDir}/stderr.txt`)).split('\n').slice(-15).join('\n').trim(),
@@ -671,8 +675,13 @@ async function followSpecialist($: EngineInterface, state: PaneState): Promise<v
   const working = state.specialist
   if (!working) return
   state.nowMs = await $.clock.now()
-  const steps = specialistSteps(await readText(files($), `${working.stateDir}/events.jsonl`), working.record.worktree)
+  const events = await readText(files($), `${working.stateDir}/events.jsonl`)
+  const steps = specialistSteps(events, working.record.worktree)
   if (state.specialist !== working) return
+  if (events.length !== working.outputLength) {
+    working.outputLength = events.length
+    working.outputAtMs = state.nowMs
+  }
   state.specialistLog = { record: working.record, steps, isLive: true }
   $.ui.invalidate('ui.render')
   // The exit file is read every tick; the process check costs two execs, so
@@ -707,7 +716,7 @@ async function recoverRounds($: EngineInterface, state: PaneState): Promise<void
   for (const record of Object.values(await loadRuns($))) {
     if (record.state !== 'running') continue
     const now = await roundState($, state, record)
-    if (now === 'running') state.specialist = { record, startedMs: record.startedMs, stateDir: stateDirOf(record) }
+    if (now === 'running') state.specialist = { record, startedMs: record.startedMs, stateDir: stateDirOf(record), outputLength: -1, outputAtMs: record.startedMs }
     else await finishRound($, state, record, now)
   }
 }
@@ -910,13 +919,14 @@ export const register: Register = (on, options) => {
       const roundBase = (await sh(['head', record.worktree])).stdout.trim()
       const running: RunRecord = { ...record, rounds: record.rounds + 1, state: 'running', startedMs: await $.clock.now(), roundBase, subject }
       const stateDir = stateDirOf(running)
-      const launched = await sh(['codex', record.worktree, stateDir, record.model, record.effort ?? '', ...(thread ? [thread] : [])], { stdin: prompt })
+      const limit = String(settings.roundLimitMinutes * 60)
+      const launched = await sh(['codex', record.worktree, stateDir, record.model, record.effort ?? '', limit, ...(thread ? [thread] : [])], { stdin: prompt })
       if (launched.exitCode !== 0) {
         await saveRun($, record)
         return { result: `Run ${record.id}: the round did not start: ${launched.stderr.trim()}`, isError: true as const }
       }
       await saveRun($, running)
-      state.specialist = { record: running, startedMs: running.startedMs, stateDir }
+      state.specialist = { record: running, startedMs: running.startedMs, stateDir, outputLength: -1, outputAtMs: running.startedMs }
       state.specialistLog = { record: running, steps: [], isLive: true }
       $.ui.invalidate('ui.render')
       // An open pane follows the new round; a closed one refuses, and follows
@@ -967,6 +977,21 @@ export const register: Register = (on, options) => {
       return await round(record, call.message, record.thread, `specialist ${record.specialist}: round ${record.rounds + 1}`)
     }
 
+    if (call.kind === 'stop') {
+      if (!record || record.state !== 'running') return { deny: `run ${call.run} has no round running` }
+      // The round the user is asked about, by its pid and start time: a
+      // follow-up may start another in the same state dir while the dialog is open.
+      const roundPid = (await readText(files($), `${stateDirOf(record)}/pid`)).trim()
+      const roundStart = (await readText(files($), `${stateDirOf(record)}/start`)).trim()
+      const question = `Stop ${record.specialist}'s round ${record.rounds} on run ${record.id}? Its edits so far stay uncommitted in the worktree.`
+      const outcome = dialogOutcome(await ask(question, 'Stop it', 'Let it run'), 'Stop it', 'Let it run', `let run ${record.id} keep running`)
+      if ('deny' in outcome) return { deny: outcome.deny }
+      if ('reply' in outcome) return { result: outcome.reply }
+      const stopped = await sh(['stop', stateDirOf(record), roundPid, roundStart])
+      if (stopped.exitCode !== 0) return { result: `Run ${record.id} not stopped: ${stopped.stderr.trim()}`, isError: true }
+      return { result: `Stopped the round on run ${record.id}; a prompt arrives with its result once the round has closed.` }
+    }
+
     if (!record || record.state === 'finished') return { deny: `no open run ${call.run}` }
     if (record.state === 'running') return { deny: `${record.specialist} is still working on run ${record.id}` }
     const counted = await sh(['counts', record.repo, record.branch, record.base])
@@ -991,6 +1016,8 @@ export const register: Register = (on, options) => {
       : finished.exitCode === 4 ? `your uncommitted changes touch the branch's files; commit or stash them first:\n${lines}`
       : finished.exitCode === 5 ? 'the repository is on a detached HEAD; check out a branch to merge into'
       : finished.exitCode === 6 ? `git refused the merge:\n${finished.stderr.trim()}`
+      : finished.exitCode === 8 ? `the branch changes files git runs as hooks, which would run on this machine as the merge commits; review them and merge by hand if they are safe:\n${lines}`
+      : finished.exitCode === 7 ? `the worktree holds changes no round committed (a round failed or its commit was refused); commit them in ${current.worktree} or ask for another round, or discard the run:\n${lines}`
       : finished.stderr.trim() || 'finish failed'
     return { result: `Run ${current.id} not finished: ${why}`, isError: true }
   })
@@ -1047,6 +1074,7 @@ export const register: Register = (on, options) => {
               <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
               <ui.Text color={COLOR.model}>{`  ${working.record.model}`}</ui.Text>
               <ui.Text bold color={roundStatus(true, undefined, clock).color}>{`  \u25cf ${clock}`}</ui.Text>
+              {quietNote(working.outputAtMs, state.nowMs) && <ui.Text color={COLOR.hint}>{`  ${quietNote(working.outputAtMs, state.nowMs)}`}</ui.Text>}
             </ui.Text>
           </ui.Box>
           <ui.Box flexGrow={1} flexShrink={1}>

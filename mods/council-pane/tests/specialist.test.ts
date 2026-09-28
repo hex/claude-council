@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import {
   parseSpecialist, specialistRoster, specialistEntries, freshList, specialistDescription, specialistSchema,
-  specialistCall, introNotice, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, commitSubject, specialistSteps, latestStep, roundLiveness, readRuns, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd,
+  specialistCall, introNotice, runStamp, finishQuestion, dialogOutcome, specialistPrompt, followUpRefusal, parseSpecialistReport, roundResult, commitSubject, specialistSteps, latestStep, roundLiveness, readRuns, roundProcessIdentity, roundProcessPresence, specialistWake, startedReply, lostResult, roundClock, roundStatus, parseRoundReport, workingLine, landsAtEnd, quietNote,
   type RunRecord,
 } from '../hooks/specialist'
 
@@ -105,8 +105,8 @@ test('the description lists every specialist and what the user confirms', () => 
     'Start with {specialist, task}; send review feedback with {run, message}; ' +
     'rounds run in the background and a prompt arrives when one ends, then fetch it with {run, result: true}; ' +
     'the tool commits each round itself, so never tell a specialist to commit; ' +
-    'close a run with {run, finish: "merge"|"discard"} only after the user chose. ' +
-    'A start or follow-up runs at once; the user confirms every finish. A refusal comes back as the result; do not retry unless the reply asks for a change.',
+    'close a run with {run, finish: "merge"|"discard"} only after the user chose; end a running round early with {run, stop: true} only when the user asks. ' +
+    'A start or follow-up runs at once; the user confirms every finish and stop. A refusal comes back as the result; do not retry unless the reply asks for a change.',
   )
 })
 
@@ -148,7 +148,7 @@ test('a switched-off specialist is never offered or started; the refusal says wh
   )
   expect(Object.keys((specialistSchema([off]) as any).properties)).toEqual(['setup'])
 })
-const SHAPES_TEXT = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, result: true} or {setup}'
+const SHAPES_TEXT = 'give one of {specialist, task}, {run, message}, {run, finish}, {run, stop: true}, {run, result: true} or {setup}'
 const SETUP_DENY = 'setup fields must be strings: name, model, effort, when, skills'
 const record: RunRecord = {
   id: 'sec-20260923-151204', specialist: 'sec', model: 'gpt-6-sol', skills: [],
@@ -166,6 +166,9 @@ test('each call shape is recognised, and nothing else is', () => {
   expect(specialistCall({ run: 'sec-1', finish: 'keep' }, [sec])).toEqual({ deny: 'finish must be merge or discard' })
   expect(specialistCall({}, [sec])).toEqual({ deny: SHAPES_TEXT })
   expect(specialistCall({ run: 'sec-1', result: true }, [sec])).toEqual({ kind: 'result', run: 'sec-1' })
+  expect(specialistCall({ run: 'sec-1', stop: true }, [sec])).toEqual({ kind: 'stop', run: 'sec-1' })
+  expect(specialistCall({ run: 'sec-1', stop: false }, [sec])).toEqual({ deny: SHAPES_TEXT })
+  expect(specialistCall({ run: 'sec-1', stop: true, message: 'm' }, [sec])).toEqual({ deny: SHAPES_TEXT })
   expect(specialistCall({ run: 'sec-1', result: true, message: 'm' }, [sec])).toEqual({ deny: SHAPES_TEXT })
   expect(specialistCall({ setup: { name: 'perf', when: 'hot loops', skills: 'web-perf, test-audit' } }, [sec])).toEqual({ kind: 'setup', fields: { name: 'perf', when: 'hot loops', skills: 'web-perf, test-audit' } })
   expect(specialistCall({ setup: {} }, [sec])).toEqual({ kind: 'setup', fields: {} })
@@ -245,7 +248,7 @@ test('a round report is read only when it has exactly the schema\'s shape', () =
 })
 
 test('a round result carries what Claude needs to review', () => {
-  const base = { record, lastMessage: 'Added a rate limit.', roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '' }
+  const base = { record, lastMessage: 'Added a rate limit.', roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '', reason: '' as const }
   expect(roundResult({ ...base, exitCode: 0, commit: '31db1a2' })).toEqual({
     isError: false,
     result: `Run ${record.id} (sec, round 1) finished.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\n` +
@@ -263,13 +266,31 @@ test('a round result carries what Claude needs to review', () => {
   expect(failed.result).toContain('Codex stderr (tail):\nboom')
 })
 
+// Codex exits 0 on SIGTERM, so the round reports 143 and the reason says why.
+test('a round that was ended says whether its limit or a request ended it', () => {
+  const base = { record, lastMessage: '', roundStat: '', totalStat: '', status: ' M src/login.ts', stderrTail: '', commitError: '', exitCode: 143, commit: '' }
+  const timedOut = roundResult({ ...base, reason: 'timeout' })
+  expect(timedOut.isError).toBe(true)
+  expect(timedOut.result).toBe(
+    `Run ${record.id} (sec, round 1) stopped.\nBranch: ${record.branch}\nWorktree: ${record.worktree}\n\n` +
+    'It reached the round time limit (specialist_round_limit in /config) and was stopped; nothing was committed.\n\n' +
+    'Uncommitted in the worktree:\n M src/login.ts')
+  expect(roundResult({ ...base, reason: 'stopped' }).result).toContain('It was stopped on request; nothing was committed.')
+})
+
+test('the band notes a round that has written nothing for two minutes', () => {
+  expect(quietNote(0, 119_000)).toBe('')
+  expect(quietNote(0, 120_000)).toBe('no output for 2:00')
+  expect(quietNote(10_000, 3_735_000)).toBe('no output for 1:02:05')
+})
+
 test('a schema-shaped report is rendered as summary, tests and open questions', () => {
   const lastMessage = JSON.stringify({
     summary: 'Added a rate limit to login.',
     tests: [{ command: 'bun test', result: 'pass', detail: 'line one\n  line two\r\nline three' }, { command: 'bats tests/login.bats', result: 'not_run', detail: 'bats is not installed' }],
     open_questions: ['first\n\nsecond'],
   })
-  const base = { record, lastMessage, roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '', exitCode: 0, commit: '31db1a2' }
+  const base = { record, lastMessage, roundStat: ' src/login.ts | 12 +++', totalStat: ' src/login.ts | 12 +++', status: '', stderrTail: '', commitError: '', reason: '' as const, exitCode: 0, commit: '31db1a2' }
   expect(roundResult(base).result).toEndWith(
     "The specialist's own report (written before the tool committed):\n" +
     'Added a rate limit to login.\n\n' +
@@ -485,15 +506,15 @@ test('use-when keeps to one line, since the form cannot show more', () => {
   expect(parseSpecialist({ ...sec, when: 'auth\ncrypto' })).toEqual({ error: 'use-when must be one line' })
 })
 
-test('with no specialists but a run still open, the tool keeps follow-up, result and finish', () => {
+test('with no specialists but a run still open, the tool keeps follow-up, result, stop and finish', () => {
   const schema = specialistSchema([], true) as any
-  expect(Object.keys(schema.properties)).toEqual(['run', 'message', 'finish', 'result', 'setup'])
+  expect(Object.keys(schema.properties)).toEqual(['run', 'message', 'finish', 'result', 'stop', 'setup'])
   expect(specialistDescription([], true)).toBe(
     'Set up a specialist: a coding agent that works in its own git worktree with its own model. None are set up yet. ' +
     'When the user asks for one, call {setup: {name, model, effort, when, skills}} with what they described; ' +
     'it opens a screen with those fields filled in and nothing is saved until the user presses Save. ' +
     SETUP_HINT + ' ' +
-    'A run started before its specialist was removed still takes {run, message}, {run, result: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.',
+    'A run started before its specialist was removed still takes {run, message}, {run, result: true}, {run, stop: true} and {run, finish: "merge"|"discard"}; close it only after the user chose.',
   )
   expect(Object.keys((specialistSchema([], false) as any).properties)).toEqual(['setup'])
   expect(specialistCall({ run: 'sec-1', result: true }, [])).toEqual({ kind: 'result', run: 'sec-1' })

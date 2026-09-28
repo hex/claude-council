@@ -820,6 +820,21 @@ so one shared number would give a CLI a deadline four times stricter. Setting
 CLI providers reading a large `--file` are the ones that hit this — a 64KB
 payload has taken kimi past fifteen minutes.
 
+### Provider environment
+
+Each provider runs with only the environment it needs: the basics (`PATH`,
+`HOME`, `USER`, `TMPDIR`, `TERM`, `LANG`, `LC_*`, `XDG_*` and a few more),
+proxy and CA-bundle settings, the Windows variables Git Bash needs, every
+`COUNCIL_*` setting, and its own vendor's variables (`GEMINI_*` and
+`GOOGLE_*` for Gemini and Antigravity, `XAI_*` and `GROK_*` for Grok, and so
+on). Another vendor's key, and any other secret your shell exports, does not
+reach it. If a CLI provider needs something else from your environment, name
+it:
+
+```bash
+export COUNCIL_PASS_ENV=NODE_OPTIONS,EXAMPLE_VAR   # comma-separated names passed to every provider
+```
+
 ### Display & Terminal Integration
 
 When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `cached`, `error` with timing) and renders each response as it lands. Rendering prefers [Rich](https://github.com/Textualize/rich) when a Rich-capable Python is available (`python3` with a modern `rich` installed, or [`uv`](https://docs.astral.sh/uv/), which fetches it on demand): word-wrapped prose, tables fitted to the pane width, syntax-highlighted code, clickable links — styled with your terminal's own palette (cyan headings, yellow code, vendor-colored banners). Without one, a built-in dependency-free perl markdown renderer takes over with the same visual language, so nothing needs to be installed. Press **Esc** or **Ctrl-D** to close the pane.

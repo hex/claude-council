@@ -368,13 +368,13 @@ fi
 # list too long". Providers still accept a literal prompt as $1 for direct use.
 # Merges stderr into stdout, matching the callers' original `2>&1` capture.
 run_provider_script() {
-    local script="$1" prompt="$2" image_file="${3:-}" image_mime="${4:-}" pfile rc
+    local provider="$1" script="$2" prompt="$3" image_file="${4:-}" image_mime="${5:-}" pfile rc
     pfile=$(mktemp "${TEMP_DIR}/prompt.XXXXXX")
     printf '%s' "$prompt" > "$pfile"
     if [[ -n "$image_file" ]]; then
-        "$script" --prompt-file "$pfile" --image-file "$image_file" --image-mime "$image_mime" 2>&1
+        ( provider_env_scrub "$provider"; exec "$script" --prompt-file "$pfile" --image-file "$image_file" --image-mime "$image_mime" ) 2>&1
     else
-        "$script" --prompt-file "$pfile" 2>&1
+        ( provider_env_scrub "$provider"; exec "$script" --prompt-file "$pfile" ) 2>&1
     fi
     rc=$?
     rm -f "$pfile"
@@ -414,7 +414,7 @@ run_provider_with_model_fallback() {
     # An explicit override is respected verbatim, and a provider with no
     # configured fallback has nothing to degrade to: one plain attempt.
     if [[ -n "${!override_var:-}" || -z "$fallback" ]]; then
-        resp=$(run_provider_script "$script" "$prompt" "$img" "$mime") || rc=$?
+        resp=$(run_provider_script "$provider" "$script" "$prompt" "$img" "$mime") || rc=$?
         [[ $rc -eq 0 ]] || { printf '%s' "$resp"; return "$rc"; }
         printf '%s' "$resp" | jq -Rs --arg m "$preferred" '{response: ., model: $m, model_fallback: null}'
         return 0
@@ -426,14 +426,14 @@ run_provider_with_model_fallback() {
     # straight to the fallback rather than spend a call that would fail again.
     if model_unavailable_cached "$provider" "$preferred" "$keyhash"; then
         model_fallback_notice "$provider" "$preferred" "$fallback"
-        resp=$(export "${override_var}=${fallback}"; run_provider_script "$script" "$prompt" "$img" "$mime") || rc=$?
+        resp=$(export "${override_var}=${fallback}"; run_provider_script "$provider" "$script" "$prompt" "$img" "$mime") || rc=$?
         [[ $rc -eq 0 ]] || { printf '%s' "$resp"; return "$rc"; }
         printf '%s' "$resp" | jq -Rs --arg m "$fallback" --arg p "$preferred" \
             '{response: ., model: $m, model_fallback: $p}'
         return 0
     fi
 
-    resp=$(run_provider_script "$script" "$prompt" "$img" "$mime") || rc=$?
+    resp=$(run_provider_script "$provider" "$script" "$prompt" "$img" "$mime") || rc=$?
     if [[ $rc -eq 0 ]]; then
         printf '%s' "$resp" | jq -Rs --arg m "$preferred" '{response: ., model: $m, model_fallback: null}'
         return 0
@@ -447,7 +447,7 @@ run_provider_with_model_fallback() {
 
     model_fallback_notice "$provider" "$preferred" "$fallback"
     local fb_resp fb_rc=0
-    fb_resp=$(export "${override_var}=${fallback}"; run_provider_script "$script" "$prompt" "$img" "$mime") || fb_rc=$?
+    fb_resp=$(export "${override_var}=${fallback}"; run_provider_script "$provider" "$script" "$prompt" "$img" "$mime") || fb_rc=$?
     if [[ $fb_rc -ne 0 ]]; then
         # The fallback failed too, so this is account-level, not model-level.
         # Remembering it would downgrade this provider for a whole TTL.

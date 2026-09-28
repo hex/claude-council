@@ -157,6 +157,19 @@ compact_summary() {
     [[ "$output" != *"being continued from a previous"* ]]
 }
 
+@test "digest: cs's rotation launch line is not a human turn, but a person quoting it is" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "Continue from the pending rotation handoff: read .cs/handoffs/2026-09-27-x.md first."
+        human_turn "why did it say Continue from the pending rotation handoff: read .cs/handoffs/2026-09-27-x.md first."
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" "$t"
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "rotation handoff" <<< "$output")" -eq 1 ]
+    [[ "$output" == *"why did it say Continue"* ]]
+}
+
 @test "digest: thinking blocks are not emitted" {
     local t="${BATS_TEST_TMPDIR}/session.jsonl"
     {

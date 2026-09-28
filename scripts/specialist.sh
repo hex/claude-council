@@ -5,6 +5,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/deadline.sh
+source "${SCRIPT_DIR}/lib/deadline.sh"
 
 die() { echo "specialist: $*" >&2; exit 1; }
 
@@ -89,8 +91,29 @@ cmd_start() {
         "$root" "$worktree" "$branch" "$base" "$short" "$state" "$dirty"
 }
 
+# The hooks directory as a path inside the tree, or nothing when git keeps
+# the hooks outside it (the default .git/hooks). A relative core.hooksPath
+# such as .husky/_ puts them in the tree, where a round can write them.
+hooks_in_tree() {
+    local tree="$1" top hooks
+    top="$(git -C "$tree" rev-parse --show-toplevel)"
+    hooks="$(git -C "$tree" rev-parse --path-format=absolute --git-path hooks)"
+    if [[ "$hooks" == "$top" ]]; then echo "."; return; fi
+    case "$hooks" in
+        "${top}/"*) printf '%s\n' "${hooks#"$top"/}" ;;
+    esac
+}
+
+# The commit runs on this machine, outside Codex's sandbox, and git runs the
+# hooks it finds at commit time. Files in the hooks directory are checked
+# ignored or not: husky's .husky/_ ignores itself.
 cmd_commit() {
-    local worktree="$1" message="$2"
+    local worktree="$1" message="$2" hooks edited
+    hooks="$(hooks_in_tree "$worktree")"
+    if [[ -n "$hooks" ]]; then
+        edited="$( { git -C "$worktree" diff --name-only HEAD -- "$hooks"; git -C "$worktree" ls-files --others -- "$hooks"; } | sort -u)"
+        [[ -z "$edited" ]] || die "refusing to commit: the round changed files git runs as hooks here: $(printf '%s' "$edited" | tr '\n' ' ')"
+    fi
     if [[ -z "$(git -C "$worktree" status --porcelain)" ]]; then echo "committed=no"; return; fi
     git -C "$worktree" add -A
     git -C "$worktree" commit -q -m "$message"
@@ -114,6 +137,55 @@ cmd_identity() {
     read -ra fields <<< "${stat##*) }"
     [[ "${fields[19]:-}" =~ ^[0-9]+$ ]] || die "no start time for pid ${pid}"
     printf 'proc:%s\n' "${fields[19]}"
+}
+
+# A process and everything under it.
+process_tree() {
+    local child
+    echo "$1"
+    for child in $(children_of "$1"); do process_tree "$child"; done
+}
+
+any_alive() {
+    local p
+    for p in "$@"; do if kill -0 "$p" 2>/dev/null; then return 0; fi; done
+    return 1
+}
+
+# Ends a round's Codex and every process under it, and records why: timeout
+# or stopped. The reason is written first, so the round reads it once Codex
+# exits; the round then waits for the ended file, written only once nothing
+# it started is left, because a command that ignores SIGTERM can outlive
+# Codex and keep writing to the worktree. The tree is taken before the
+# signal: a child left behind is reparented and no longer found under Codex.
+# Five seconds after SIGTERM, whatever remains is killed.
+end_round() {
+    local state="$1" pid="$2" reason="$3" ticks=50 p
+    local -a tree
+    echo "$reason" > "${state}/reason.tmp" && mv "${state}/reason.tmp" "${state}/reason"
+    # shellcheck disable=SC2207 # pids hold no spaces or globs
+    tree=($(process_tree "$pid"))
+    for p in "${tree[@]}"; do kill -TERM "$p" 2>/dev/null || true; done
+    while (( ticks-- > 0 )) && any_alive "${tree[@]}"; do sleep 0.1; done
+    for p in "${tree[@]}"; do if kill -0 "$p" 2>/dev/null; then signal_tree KILL "$p"; fi; done
+    touch "${state}/ended"
+}
+
+# The round's pid and start time name the round the caller confirmed
+# stopping: a follow-up can start another in the same state dir meanwhile.
+# Both are needed, since ps gives start times to the second.
+cmd_stop() {
+    local state="$1" round_pid="$2" start="$3" pid ticks=50
+    [[ ! -f "${state}/exit" ]] || die "the round in ${state} has already ended"
+    # The round records its start before it launches Codex, so a stop can
+    # arrive in between.
+    while (( ticks-- > 0 )) && [[ ! -f "${state}/codex-pid" ]]; do sleep 0.1; done
+    [[ -f "${state}/codex-pid" ]] || die "no round has started in ${state}"
+    [[ "$(cat "${state}/pid" 2>/dev/null)" == "$round_pid" && "$(cat "${state}/start" 2>/dev/null)" == "$start" ]] \
+        || die "the round in ${state} is not the one asked to stop"
+    pid="$(cat "${state}/codex-pid")"
+    end_round "$state" "$pid" stopped
+    echo "stopped=yes"
 }
 
 # Every session follows a live round, so each may see it end: mkdir is atomic,
@@ -157,7 +229,7 @@ remove_run() {
 }
 
 cmd_finish() {
-    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal
+    local root="$1" worktree="$2" branch="$3" how="$4" touched dirty conflicts refusal uncommitted hooks fork
     [[ ( "$worktree" == /* || "$worktree" =~ ^[A-Za-z]:/ ) && "${worktree##*/}" =~ ^[a-z][a-z0-9-]*-[0-9]{8}-[0-9]{6}$ ]] || die "invalid worktree path '${worktree}': expected an absolute path ending in a run id"
     root="$(repo_root "$root")"
     if [[ "$how" == discard ]]; then
@@ -165,8 +237,21 @@ cmd_finish() {
         echo "finished=discard"; return 0
     fi
     [[ "$how" == merge ]] || die "finish takes merge or discard, not '${how}'"
+    # A round that failed, or whose commit was refused, leaves its edits
+    # uncommitted; merging would delete them with the worktree.
+    if [[ -d "$worktree" ]]; then
+        uncommitted="$(git -C "$worktree" status --porcelain -uall | cut -c4-)"
+        if [[ -n "$uncommitted" ]]; then while IFS= read -r f; do echo "uncommitted=$f"; done <<< "$uncommitted"; exit 7; fi
+    fi
     if ! git -C "$root" symbolic-ref --quiet HEAD >/dev/null; then echo "detached=yes"; exit 5; fi
-    touched="$(git -C "$root" diff --name-only "$(git -C "$root" merge-base HEAD "$branch")" "$branch")"
+    fork="$(git -C "$root" merge-base HEAD "$branch")"
+    # git runs the merge's hooks from the files the merge has just brought in.
+    hooks="$(hooks_in_tree "$root")"
+    if [[ -n "$hooks" ]]; then
+        hooks="$(git -C "$root" diff --name-only "$fork" "$branch" -- "$hooks")"
+        if [[ -n "$hooks" ]]; then while IFS= read -r f; do echo "hook=$f"; done <<< "$hooks"; exit 8; fi
+    fi
+    touched="$(git -C "$root" diff --name-only "$fork" "$branch")"
     dirty="$( { git -C "$root" diff --name-only; git -C "$root" diff --name-only --cached; } | sort -u | grep -Fxf <(printf '%s\n' "$touched") || true)"
     if [[ -n "$dirty" ]]; then while IFS= read -r f; do echo "dirty=$f"; done <<< "$dirty"; exit 4; fi
     if ! refusal="$(git -C "$root" merge -q --no-ff --no-edit "$branch" 2>&1)"; then
@@ -186,17 +271,18 @@ cmd_finish() {
 }
 
 cmd_codex() {
-    local worktree="$1" state="$2" model="$3" effort="$4" thread="${5:-}"
+    local worktree="$1" state="$2" model="$3" effort="$4" limit="$5" thread="${6:-}"
     # The effort goes into a -c value, so only a bare lowercase word gets through;
     # which efforts a model offers is checked when the row is saved.
     [[ -z "$effort" || "$effort" =~ ^[a-z]+$ ]] || die "invalid effort '${effort}': must be lowercase letters"
+    [[ "$limit" =~ ^[0-9]+$ ]] || die "invalid time limit '${limit}': must be whole seconds, 0 for none"
     [[ -d "$worktree" ]] || die "no worktree at ${worktree}"
     mkdir -p "$state"
     # Each round's files describe that round only.
-    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/start.tmp" "${state}/codex-pid" "${state}/exit" "${state}/thread"
+    rm -f "${state}/last-message.md" "${state}/stderr.txt" "${state}/events.jsonl" "${state}/pid" "${state}/start" "${state}/start.tmp" "${state}/codex-pid" "${state}/exit" "${state}/thread" "${state}/reason" "${state}/reason.tmp" "${state}/ended"
     rmdir "${state}/closing" 2>/dev/null || true
     cat > "${state}/prompt.txt"
-    local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'model_reasoning_summary="concise"' --output-schema "${SCRIPT_DIR}/specialist-report.schema.json" -o "${state}/last-message.md")
+    local flags=(--json -m "$model" -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' -c 'model_reasoning_summary="concise"' -c 'shell_environment_policy.inherit="core"' --output-schema "${SCRIPT_DIR}/specialist-report.schema.json" -o "${state}/last-message.md")
     if [[ -n "$effort" ]]; then flags+=(-c "model_reasoning_effort=\"${effort}\""); fi
     local args=(exec "${flags[@]}" -)
     if [[ -n "$thread" ]]; then args=(exec resume "${flags[@]}" "$thread" -); fi
@@ -211,8 +297,31 @@ cmd_codex() {
         # then still writes the exit file, so the round reports how it ended.
         if cd "$worktree"; then
             codex "${args[@]}" < "${state}/prompt.txt" > "${state}/events.jsonl" 2> "${state}/stderr.txt" &
-            echo "$!" > "${state}/codex-pid"
-            wait "$!" || code=$?
+            codex_pid="$!"
+            echo "$codex_pid" > "${state}/codex-pid"
+            watchdog=""
+            # Ticks, not a SECONDS deadline, which can come due early.
+            if (( limit > 0 )); then
+                (
+                    ticks="$limit"
+                    while (( ticks-- > 0 )); do
+                        sleep 1
+                        kill -0 "$codex_pid" 2>/dev/null || exit 0
+                    done
+                    end_round "$state" "$codex_pid" timeout
+                ) &
+                watchdog="$!"
+            fi
+            wait "$codex_pid" || code=$?
+            # An ended round closes only once end_round has cleared what Codex left.
+            if [[ -f "${state}/reason" ]]; then
+                ticks=150
+                while (( ticks-- > 0 )) && [[ ! -f "${state}/ended" ]]; do sleep 0.1; done
+            fi
+            if [[ -n "$watchdog" ]]; then kill "$watchdog" 2>/dev/null || true; fi
+            # Codex answers SIGTERM by exiting 0, which would pass for a
+            # finished round: an ended round reports 143 whatever it exited with.
+            if [[ -f "${state}/reason" ]]; then code=143; fi
         else
             code=1
         fi
@@ -247,7 +356,8 @@ main() {
         report) [[ $# -eq 3 ]] || die "usage: report <worktree> <round-base> <run-base>"; cmd_report "$@" ;;
         counts) [[ $# -eq 3 ]] || die "usage: counts <repo> <branch> <run-base>"; cmd_counts "$@" ;;
         finish) [[ $# -eq 4 ]] || die "usage: finish <repo> <worktree> <branch> merge|discard"; cmd_finish "$@" ;;
-        codex)  [[ $# -eq 4 || $# -eq 5 ]] || die "usage: codex <worktree> <state> <model> <effort|''> [thread]"; cmd_codex "$@" ;;
+        codex)  [[ $# -eq 5 || $# -eq 6 ]] || die "usage: codex <worktree> <state> <model> <effort|''> <limit-seconds> [thread]"; cmd_codex "$@" ;;
+        stop)   [[ $# -eq 3 ]] || die "usage: stop <state> <round-pid> <start>"; cmd_stop "$@" ;;
         *) die "unknown subcommand '${sub}'" ;;
     esac
 }
