@@ -151,6 +151,30 @@ CURL
     [[ "$output" == *"openrouter"* ]]
 }
 
+@test "stop-gate: the reviewer gets its own key and no other secret" {
+    jq -n '{enabled: true, provider: "openrouter", max_iterations: 1}' \
+        > "$REPO/.claude/council-stop-gate.json"
+    dirty_diff
+    local dir="${BATS_TEST_TMPDIR}/envcurl"
+    mkdir -p "$dir"
+    cat > "$dir/curl" <<'CURL'
+#!/bin/bash
+outfile=""; prev=""
+for a in "$@"; do
+    [[ "$prev" == "-o" ]] && outfile="$a"
+    prev="$a"
+done
+seen="own=${OPENROUTER_API_KEY:+set} other=${OPENAI_API_KEY:+set} secret=${EXAMPLE_DB_PASSWORD:+set}"
+[[ -n "$outfile" ]] && printf '{"choices":[{"message":{"content":"BLOCK: %s"}}]}' "$seen" > "$outfile"
+printf '200'
+CURL
+    chmod +x "$dir/curl"
+    PATH="$dir:$PATH" OPENROUTER_API_KEY=k OPENAI_API_KEY=other EXAMPLE_DB_PASSWORD=pw \
+        run bash "$GATE" <<< "$(stop_event)"
+    [ "$status" -eq 0 ]
+    [[ "$(echo "$output" | jq -r '.reason')" == *"BLOCK: own=set other= secret="* ]]
+}
+
 @test "stop-gate: a slow reviewer times out and fails open instead of hanging" {
     enable_gate
     dirty_diff

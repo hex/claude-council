@@ -57,6 +57,7 @@ PROVIDER_SCRIPT="${SCRIPT_DIR}/providers/${PROVIDER}.sh"
 [[ -f "$PROVIDER_SCRIPT" ]] || exit 0
 
 source "${SCRIPT_DIR}/lib/prompts.sh"
+source "${SCRIPT_DIR}/lib/providers.sh"
 TEMPLATE=$(load_prompt_template stop-review-gate)
 PROMPT=$(interpolate_template "$TEMPLATE" "DIFF=$DIFF")
 
@@ -68,7 +69,7 @@ if (( COUNCIL_TIMEOUT > 90 )); then COUNCIL_TIMEOUT=90; fi
 export COUNCIL_TIMEOUT
 
 # A reviewer failure must never trap the user at the stop
-REVIEW=$(bash "$PROVIDER_SCRIPT" "$PROMPT" 2>/dev/null) || exit 0
+REVIEW=$( ( provider_env_scrub "$PROVIDER"; exec bash "$PROVIDER_SCRIPT" "$PROMPT" ) 2>/dev/null) || exit 0
 
 # Verdict contract: the reply's very first characters decide
 if [[ "$REVIEW" == BLOCK:* ]]; then
