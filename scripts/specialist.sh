@@ -320,8 +320,10 @@ cmd_codex() {
             fi
             if [[ -n "$watchdog" ]]; then kill "$watchdog" 2>/dev/null || true; fi
             # Codex answers SIGTERM by exiting 0, which would pass for a
-            # finished round: an ended round reports 143 whatever it exited with.
-            if [[ -f "${state}/reason" ]]; then code=143; fi
+            # finished round: an ended round reports 143 whatever it exited
+            # with, and so does one killed by hand, which never completed its turn.
+            if [[ -f "${state}/reason" ]]; then code=143
+            elif (( code == 0 )) && ! grep -q '"type":"turn.completed"' "${state}/events.jsonl"; then code=143; fi
         else
             code=1
         fi

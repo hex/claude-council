@@ -521,7 +521,7 @@ launch() {
 
 @test "codex returns at once with the round's pid, and the round writes its exit code when codex ends" {
     start_run
-    fake_codex "while [ ! -f '${BATS_TEST_TMPDIR}/go' ]; do sleep 0.1; done"
+    fake_codex "while [ ! -f '${BATS_TEST_TMPDIR}/go' ]; do sleep 0.1; done; echo '{\"type\":\"turn.completed\"}'"
     launch
     [ "$status" -eq 0 ]
     local round_pid recorded_start observed_start
@@ -680,7 +680,7 @@ launch() {
 
 @test "a round that ends inside its limit records no reason" {
     start_run
-    fake_codex "exit 0"
+    fake_codex "echo '{\"type\":\"turn.completed\"}'"
     LIMIT=60 launch
     wait_round
     [ "$(cat "$STATE/exit")" = "0" ]
@@ -694,9 +694,11 @@ launch() {
     [ "$output" = "specialist: invalid time limit '1m': must be whole seconds, 0 for none" ]
 }
 
-@test "killing the codex pid ends the round with codex's exit code" {
+# Codex answers SIGTERM by exiting 0 without finishing its turn (measured on
+# codex exec --json: no turn.completed event, no last message).
+@test "killing the codex pid ends the round as interrupted, though codex exits 0" {
     start_run
-    fake_codex "echo \$\$ > '${BATS_TEST_TMPDIR}/seen-pid'; n=0; while [ \$n -lt 100 ]; do sleep 0.1; n=\$((n + 1)); done"
+    fake_codex "echo \$\$ > '${BATS_TEST_TMPDIR}/seen-pid'; trap 'exit 0' TERM; n=0; while [ \$n -lt 100 ]; do sleep 0.1; n=\$((n + 1)); done"
     launch
     local tick=0
     while [ ! -s "${BATS_TEST_TMPDIR}/seen-pid" ] && [ "$tick" -lt 100 ]; do sleep 0.1; tick=$((tick + 1)); done
@@ -708,7 +710,7 @@ launch() {
 
 @test "a round whose events repeat thread.started still ends with its thread and exit code" {
     start_run
-    fake_codex "i=0; while [ \$i -lt 20000 ]; do echo '{\"type\":\"thread.started\",\"thread_id\":\"01a0ce2a-1d08-76c0-a6ef-8340b581212d\"}'; i=\$((i + 1)); done"
+    fake_codex "i=0; while [ \$i -lt 20000 ]; do echo '{\"type\":\"thread.started\",\"thread_id\":\"01a0ce2a-1d08-76c0-a6ef-8340b581212d\"}'; i=\$((i + 1)); done; echo '{\"type\":\"turn.completed\"}'"
     launch
     wait_round
     [ "$(cat "$STATE/exit")" = "0" ]
