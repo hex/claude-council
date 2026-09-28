@@ -381,9 +381,11 @@ export function roundResult(r: {
   reason: '' | 'timeout' | 'stopped'
 }): { result: string; isError: boolean } {
   const { record } = r
-  const how = r.reason ? 'stopped' : r.exitCode === 0 ? 'finished' : 'failed'
+  // A reason written after Codex finished on its own does not undo the finish:
+  // the exit code decided the commit, so it decides the report.
+  const how = r.exitCode === 0 ? 'finished' : r.reason ? 'stopped' : 'failed'
   const head = `Run ${record.id} (${record.specialist}, round ${record.rounds}) ${how}.\nBranch: ${record.branch}\nWorktree: ${record.worktree}`
-  if (r.reason || r.exitCode !== 0) {
+  if (r.exitCode !== 0) {
     const why = r.reason === 'timeout' ? 'It reached the round time limit (specialist_round_limit in /config) and was stopped'
       : r.reason === 'stopped' ? 'It was stopped on request'
       : `Codex exited ${r.exitCode}`

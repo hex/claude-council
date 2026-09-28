@@ -278,6 +278,15 @@ test('a round that was ended says whether its limit or a request ended it', () =
   expect(roundResult({ ...base, reason: 'stopped' }).result).toContain('It was stopped on request; nothing was committed.')
 })
 
+// A stop can land after Codex finished and before the round wrote its exit:
+// the exit code, which decided the commit, decides the report too.
+test('a round that exited 0 reads as finished even when a stop reason arrived late', () => {
+  const late = roundResult({ record, lastMessage: 'Done.', roundStat: ' a | 1 +', totalStat: ' a | 1 +', status: '', stderrTail: '', commitError: '', exitCode: 0, commit: '31db1a2', reason: 'stopped' })
+  expect(late.isError).toBe(false)
+  expect(late.result).toContain(`Run ${record.id} (sec, round 1) finished.`)
+  expect(late.result).toContain('The tool committed this round on the branch as 31db1a2.')
+})
+
 test('the band notes a round that has written nothing for two minutes', () => {
   expect(quietNote(0, 119_000)).toBe('')
   expect(quietNote(0, 120_000)).toBe('no output for 2:00')
