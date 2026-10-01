@@ -124,6 +124,41 @@ test('parseColors keeps the last colour written for each provider', () => {
   expect(parseColors('grok\t1;2;3\nkimi\t63;63;70\ngrok\t239;68;68\nbad line\n')).toEqual({ grok: '239;68;68', kimi: '63;63;70' })
 })
 
+test('paneSections keeps the whole pane under the engine\'s text limit by clipping long answers evenly', () => {
+  // Claude Code refuses a Pane render carrying more than 100000 characters
+  // and draws its own; ten answers of 15k each would. The synthesis is read
+  // last and is never cut; the answers share what is left.
+  const names = Array.from({ length: 10 }, (_, i) => `seat${i}`)
+  const sections = paneSections({
+    providers: names.map(name => ({ name, state: 'complete', ms: 1000, model: 'm' })),
+    responses: Object.fromEntries(names.map(name => [name, `${name} says `.padEnd(15000, 'x')])),
+    errors: {},
+    colors: {},
+    isDone: false,
+    synthesis: 'S'.repeat(3000),
+  })
+  const text = (section: { kind: string }) => Object.values(section).filter((v): v is string => typeof v === 'string').join('')
+  const total = sections.reduce((sum, section) => sum + text(section).length, 0)
+  expect(total).toBeLessThanOrEqual(80000)
+  const bodies = sections.filter(section => section.kind === 'body') as { kind: 'body'; text: string }[]
+  expect(bodies).toHaveLength(10)
+  for (const body of bodies) {
+    expect(body.text.startsWith('seat')).toBe(true)
+    expect(body.text).toMatch(/\n\n_\u2026 \d+ more characters; the whole answer is in the result \(\/claude-council:result\)_$/)
+  }
+  const synthesis = sections.find(section => section.kind === 'synthesis') as { kind: 'synthesis'; text: string }
+  expect(synthesis.text).toBe('S'.repeat(3000))
+  // An answer that fits its share is left alone, cut or not elsewhere.
+  const mixed = paneSections({
+    providers: [{ name: 'a', state: 'complete' }, { name: 'b', state: 'complete' }],
+    responses: { a: 'short', b: 'y'.repeat(90000) },
+    errors: {}, colors: {}, isDone: false,
+  })
+  const [first, second] = mixed.filter(section => section.kind === 'body') as { kind: 'body'; text: string }[]
+  expect(first.text).toBe('short')
+  expect(second.text.length).toBeLessThan(80000)
+})
+
 test('markdownBlocks keeps a short text whole and drops control characters Markdown refuses', () => {
   expect(markdownBlocks('ok\r\n\tdone\u001b[0m\u0007', 100)).toEqual(['ok\n\tdone[0m'])
 })

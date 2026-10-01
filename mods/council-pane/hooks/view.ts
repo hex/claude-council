@@ -162,7 +162,44 @@ export function paneSections(
       strip.items.push({ glyph: '\u2261', color: `rgb(${NEUTRAL_RGB.replaceAll(';', ',')})`, name: 'synthesis', hotkey: '0', target: jumpKey('synthesis') })
     }
   }
-  return sections
+  return withinTextBudget(sections)
+}
+
+// Claude Code refuses a Pane render carrying more than 100000 characters of
+// text and draws its own. The budget sits under that with room for the table
+// rewrite, which a render does at its own width and which can lengthen a body.
+const PANE_TEXT_BUDGET = 80000
+const CLIPPED = (more: number) => `\n\n_\u2026 ${more} more characters; the whole answer is in the result (/claude-council:result)_`
+
+const sectionText = (section: Section) => Object.values(section).filter((v): v is string => typeof v === 'string').join('')
+
+// Cuts the answer bodies, and only them, until the pane fits the budget: the
+// synthesis, banners, status rows and errors keep their text, and what is left
+// is shared evenly among the bodies. A body within its share is left whole, and
+// its unused share goes to the ones that need it, so one long answer beside
+// short ones is cut only as far as the budget demands.
+export function withinTextBudget(sections: Section[], budget: number = PANE_TEXT_BUDGET): Section[] {
+  const total = sections.reduce((sum, section) => sum + sectionText(section).length, 0)
+  if (total <= budget) return sections
+  const bodies = sections.filter((section): section is Extract<Section, { kind: 'body' }> => section.kind === 'body')
+  let room = budget - (total - bodies.reduce((sum, body) => sum + body.text.length, 0))
+  const pending = [...bodies].sort((a, b) => a.text.length - b.text.length)
+  const share = new Map<Section, number>()
+  for (let i = 0; i < pending.length; i++) {
+    const body = pending[i]!
+    const fair = Math.max(0, Math.floor(room / (pending.length - i)))
+    const kept = Math.min(body.text.length, fair)
+    share.set(body, kept)
+    room -= kept
+  }
+  return sections.map(section => {
+    if (section.kind !== 'body') return section
+    const kept = share.get(section) ?? section.text.length
+    if (kept >= section.text.length) return section
+    // The note's own length comes out of the share; its count is then exact.
+    const cut = Math.max(0, kept - CLIPPED(section.text.length - kept).length)
+    return { kind: 'body', text: section.text.slice(0, cut) + CLIPPED(section.text.length - cut) }
+  })
 }
 
 // A Markdown element takes at most this many characters, tab and newline its

@@ -11,6 +11,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - `codex exec` reads stdin whenever it is not a terminal, so a seat launched from a shell whose stdin stayed open waited on it until the deadline. The codex provider now gives it no stdin. (#45)
 - A seat whose API sibling answered in its place now says so everywhere. The pane row reads `fallback` with `<model> via <sibling> API` and shows the CLI's error as the reason (it used to read `complete` under the CLI's name with the API's model swapped in), the result carries `fallback_reason`, and the formatted output prints the reason under the "fell back to … API" header. grok-cli had been failing on every run on a Mac with Docker Desktop (grok refuses its sandbox when `/var/run/docker.sock` is a symlink) and nothing said the grok API, at `GROK_MODEL`, was answering instead.
 - `/claude-council:status` probes grok-cli with one short sandboxed run instead of `grok models`, so a sandbox grok cannot apply shows as `Sandbox refused` with a pointer to the README, where before it read Connected.
+- The council pane no longer loses its layout on a large run. Claude Code refuses to draw a pane carrying more than 100,000 characters (`ui.render (Pane) refused: more than 100000 characters of text; the engine drew its own`), which ten long answers plus rebuttals reached. The pane now keeps itself under 80,000: the answers are cut to an even share, each ending with how many characters were left out and where the whole answer is; the synthesis is never cut.
 
 ## 2026.9.17
 
