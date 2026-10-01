@@ -14,6 +14,11 @@
 #   hang-handled   - sleep COUNCIL_FAKE_SLEEP but exit 0, silently, on SIGTERM:
 #                    the codex wrapper's response to the deadline
 #   error          - generic failure on stderr, exit 1
+#   noisy-error    - 70 KB of stderr ahead of the cause on its last line, exit 1:
+#                    a CLI that echoes its banner and the whole prompt first,
+#                    and colours the cause the way codex and agy do
+#   stdin-echo     - answers with whatever arrived on stdin, so a test can see
+#                    whether the caller's stdin reached the CLI
 #   dirty-stream   - kimi only: an unstructured notice line ahead of the JSONL,
 #                    which a real CLI is free to print (upgrade notices etc.)
 #   array-content  - kimi only: content as a [{type,text}] array rather than a
@@ -156,6 +161,9 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     hang)           exec sleep "\${COUNCIL_FAKE_SLEEP:-300}" ;;
     hang-handled)   trap 'exit 0' TERM; sleep "\${COUNCIL_FAKE_SLEEP:-300}" & wait ;;
     error)          echo "Error: fake provider failure" >&2; exit 1 ;;
+    noisy-error)    head -c 70000 /dev/zero | tr '\\0' 'x' >&2; echo >&2
+                    printf '\\033[1m\\033[31mError:\\033[0m cause after the noise\\n' >&2; exit 1 ;;
+    stdin-echo)     echo "$marker: stdin=[\$(cat)]" ;;
     *)              echo "Unknown COUNCIL_FAKE_BEHAVIOR: \${COUNCIL_FAKE_BEHAVIOR}" >&2; exit 64 ;;
 esac
 EOF

@@ -4,6 +4,12 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixes
+- A CLI provider that fails after writing a lot to stderr now reports why. The error excerpt was the first 500 bytes of the stream, which for codex is its banner and the prompt echoed back, and with a large `--file` prompt the script itself died of SIGPIPE under `pipefail` and left `Error:` blank. The excerpt is now the last 500 bytes, where the cause is, with colour codes removed; the same line was in antigravity, grok-cli, kimi-cli and cursor-cli. (#45)
+- `codex exec` reads stdin whenever it is not a terminal, so a seat launched from a shell whose stdin stayed open waited on it until the deadline. The codex provider now gives it no stdin. (#45)
+
 ## 2026.9.17
 
 ### Security

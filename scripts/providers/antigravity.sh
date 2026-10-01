@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
+source "$SCRIPT_DIR/../lib/cli-stderr.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -135,7 +136,7 @@ else
     if [[ $rc -eq 143 ]]; then
         echo "Error from antigravity CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
     else
-        ERR_MSG=$(tr '\n' ' ' < "$ERR_TMP" | head -c 500)
+        ERR_MSG=$(stderr_excerpt "$ERR_TMP")
         echo "Error from antigravity CLI: ${ERR_MSG:-non-zero exit}" >&2
     fi
     exit 1

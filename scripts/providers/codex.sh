@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
+source "$SCRIPT_DIR/../lib/cli-stderr.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -56,14 +57,17 @@ COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
 ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-codex-err.XXXXXX")
 trap 'rm -f "$ERR_TMP"' EXIT
 
-if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" codex "${ARGS[@]}" 2>"$ERR_TMP"); then
+# The prompt rides argv, and `codex exec` reads stdin whenever it is not a
+# TTY: launched from a shell whose stdin stays open it would wait on it until
+# the deadline, so it gets none.
+if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" codex "${ARGS[@]}" 2>"$ERR_TMP" </dev/null); then
     echo "$RESPONSE"
 else
     rc=$?
     if [[ $rc -eq 143 ]]; then
         echo "Error from codex CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
     else
-        ERR_MSG=$(tr '\n' ' ' < "$ERR_TMP" | head -c 500)
+        ERR_MSG=$(stderr_excerpt "$ERR_TMP")
         echo "Error from codex CLI: ${ERR_MSG:-non-zero exit}" >&2
     fi
     exit 1
