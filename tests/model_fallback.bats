@@ -119,7 +119,7 @@ mf() {
 
 @test "model_fallback_for: each API provider has its verified fallback" {
     mf 'model_fallback_for openai'
-    [ "$output" = "gpt-6-sol" ]
+    [ "$output" = "gpt-6.1-sol" ]
     mf 'model_fallback_for openrouter'
     [ "$output" = "anthropic/claude-opus-5.5" ]
     mf 'model_fallback_for grok'

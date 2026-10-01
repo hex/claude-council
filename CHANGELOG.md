@@ -13,6 +13,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - grok-cli works again beside Docker Desktop. grok now runs with `--deny '*' --no-subagents` as well as `--sandbox read-only`: every tool call is refused at grok's permission layer, so when grok refuses the sandbox profile (`sandbox could not be applied`), the provider runs once more on the deny rules alone instead of failing over to the paid API. Any other failure still falls back as before.
 - The council pane no longer loses its layout on a large run. Claude Code refuses to draw a pane carrying more than 100,000 characters (`ui.render (Pane) refused: more than 100000 characters of text; the engine drew its own`), which ten long answers plus rebuttals reached. The pane now keeps itself under 80,000: the answers are cut to an even share, each ending with how many characters were left out and where the whole answer is; the synthesis is never cut.
 
+### Other
+- OpenAI's fallback model is `gpt-6.1-sol` (was `gpt-6-sol`), verified with a live completion.
+
 ## 2026.9.17
 
 ### Security

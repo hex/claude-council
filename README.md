@@ -715,7 +715,7 @@ in the response header:
 
 | Provider | Default | Fallback |
 |---|---|---|
-| openai | `gpt-6-astra` | `gpt-6-sol` |
+| openai | `gpt-6-astra` | `gpt-6.1-sol` |
 | grok | `grok-latest` | `grok-4.6` |
 | gemini | `gemini-flash-latest` | `gemini-3.8-flash` |
 | perplexity | `sonar-reasoning-pro` | `sonar-pro` |
