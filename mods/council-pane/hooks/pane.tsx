@@ -1519,12 +1519,12 @@ export const register: Register = (on, options) => {
             </Box>
           )
         case 'reason':
-          return <Text key={key} color={COLOR.warning} dimColor>{(markdownBlocks(section.text, 2000)[0] ?? '')}</Text>
+          return <Text key={key} color={COLOR.warning} dimColor>{section.text}</Text>
         case 'error':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
               <Text bold color={COLOR.danger}>{`\u2717 ${section.title}`}</Text>
-              <Text color={COLOR.danger} dimColor>{(markdownBlocks(section.text, 2000)[0] ?? '')}</Text>
+              <Text color={COLOR.danger} dimColor>{section.text}</Text>
             </Box>
           )
       }

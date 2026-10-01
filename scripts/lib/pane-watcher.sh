@@ -167,13 +167,14 @@ print_response() {
 
 # Print the notice for a provider that failed without producing a response,
 # with the error text in $2 (a file; defaults to the provider's live one).
-# $3 is the provider's state: "error" (red) for a seat with no answer,
-# "fallback" (amber, "fell back") for a seat whose API sibling answered,
-# where the text is the reason the seat itself did not.
+# $3 is the provider's state: "error" (red, ✗) for a seat with no answer,
+# "fallback" (amber, ↪ "fell back") for a seat whose API sibling answered,
+# where the text is the reason the seat itself did not. That reason is not
+# always a failure: a CLI that cannot read an image is routed there by design.
 print_error_notice() {
-    local name="$1" file="${2:-$WATCH/errors/${1}.txt}" state="${3:-error}" err_line label='error' rgb='185;28;28'
-    if [[ "$state" == fallback ]]; then label='fell back'; rgb='180;83;9'; fi
-    printf '\n\033[1;38;2;%sm✗ %s %s\033[0m\n' "$rgb" "$name" "$label"
+    local name="$1" file="${2:-$WATCH/errors/${1}.txt}" state="${3:-error}" err_line glyph='✗' label='error' rgb='185;28;28'
+    if [[ "$state" == fallback ]]; then glyph='↪'; label='fell back'; rgb='180;83;9'; fi
+    printf '\n\033[1;38;2;%sm%s %s %s\033[0m\n' "$rgb" "$glyph" "$name" "$label"
     if [[ -f "$file" ]]; then
         # `|| -n` keeps the last line: the producer stores a command
         # substitution, which has no trailing newline, so a plain read loop

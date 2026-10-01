@@ -230,7 +230,7 @@ blank_lines_before() {
     run_watcher
     [ "$status" -eq 0 ]
     [[ "$output" == *"GROK-CLI"*"grok-4.6 via grok API"*"(1.2s, fell back)"* ]]
-    [[ "$output" == *"grok-cli fell back"*"sandbox could not be applied"* ]]
+    [[ "$output" == *"↪ grok-cli fell back"*"sandbox could not be applied"* ]]
     [[ "$output" == *"FALLBACK-GROK-ANSWER"* ]]
     [[ "$output" != *"grok-cli error"* ]]
 }

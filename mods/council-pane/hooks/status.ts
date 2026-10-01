@@ -30,7 +30,8 @@ const EVENT: Record<string, (name: string) => string> = {
   complete: name => `${name} answered`,
   cached: name => `${name} answered from cache`,
   error: name => `${name} failed`,
-  fallback: name => `${name} failed, its API answered`,
+  // Not always a failure: a CLI that cannot read an image is routed to its API by design.
+  fallback: name => `${name} answered through its API`,
   querying: name => `asking ${name}`,
 }
 

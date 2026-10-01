@@ -1,7 +1,7 @@
 // ABOUTME: Tests for choosing which council run the pane shows and the markdown it draws
 // ABOUTME: Expected strings are written out by hand, never rebuilt from the code under test
 import { test, expect } from 'bun:test'
-import { unseenRun, paneSections, parseColors, markdownBlocks, queryingSince } from '../hooks/view'
+import { unseenRun, paneSections, parseColors, markdownBlocks, queryingSince, withinTextBudget } from '../hooks/view'
 
 test('unseenRun names the first run dir not shown before, ignoring other entries', () => {
   const entries = [
@@ -123,6 +123,48 @@ test('paneSections shows why a seat fell back, between its banner and the answer
     responses: { kimi: 'x' }, errors: { kimi: 'HTTP 429' }, colors: {}, isDone: false,
   })
   expect(retried.map(section => section.kind)).toEqual(['status', 'banner', 'body'])
+})
+
+test('a fallback seat whose answer has not landed yet shows nothing, not an error', () => {
+  // The run writes the reason and the fallback status before the answer; a
+  // poll in between must not paint the seat red.
+  const sections = paneSections({
+    providers: [{ name: 'grok-cli', state: 'fallback' }],
+    responses: {}, errors: { 'grok-cli': 'sandbox could not be applied' }, colors: {}, isDone: false,
+  })
+  expect(sections.map(section => section.kind)).toEqual(['status'])
+})
+
+test('an error is carried at the length the pane draws, so a huge one does not squeeze the answers', () => {
+  const sections = paneSections({
+    providers: [{ name: 'openai', state: 'error' }, { name: 'gemini', state: 'complete' }],
+    responses: { gemini: 'g'.repeat(20000) },
+    errors: { openai: 'Raw response: ' + '<html>'.repeat(15000) },
+    colors: {}, isDone: false,
+  })
+  const error = sections.find(section => section.kind === 'error') as { kind: 'error'; text: string }
+  expect(error.text.length).toBe(2000)
+  expect(error.text.startsWith('Raw response: <html><html>')).toBe(true)
+  const body = sections.find(section => section.kind === 'body') as { kind: 'body'; text: string }
+  expect(body.text).toBe('g'.repeat(20000))
+})
+
+test('a cut inside a code block closes the block before the note, and never splits a character', () => {
+  const code = 'intro\n\n```js\n' + 'x = 1\n'.repeat(400) + '```\n'
+  const [clipped] = withinTextBudget([{ kind: 'body', text: code }], 600) as { kind: 'body'; text: string }[]
+  expect(clipped!.text.length).toBeLessThanOrEqual(600)
+  // The block is closed on its own line, straight before the note.
+  expect(clipped!.text).toMatch(/\n```\n\n_\u2026 \d+ more characters;/)
+  expect((clipped!.text.match(/^```/gm) ?? []).length % 2).toBe(0)
+  // Two UTF-16 units per face: whichever budget puts the cut between them,
+  // the kept text still holds whole faces only.
+  const faces = '\u{1F600}'.repeat(500)
+  for (const budget of [300, 301]) {
+    const [cut] = withinTextBudget([{ kind: 'body', text: faces }], budget) as { kind: 'body'; text: string }[]
+    const kept = cut!.text.split('\n\n_')[0]!
+    expect(kept.length % 2).toBe(0)
+    expect(cut!.text.length).toBeLessThanOrEqual(budget)
+  }
 })
 
 test('the done summary says how many seats their API sibling answered', () => {

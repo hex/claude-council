@@ -107,7 +107,9 @@ envelope_with_entry() {
     run bash "$SCRIPT" "$json"
     [ "$status" -eq 0 ]
     [[ "$output" == *"fell back to grok API"* ]]
-    [[ "$output" == *"grok-cli: Error from grok CLI: sandbox could not be applied"* ]]
+    # A quoted line of its own: error text is arbitrary, and emphasis markers
+    # around it break on a trailing space or an underscore.
+    [[ $'\n'"$output"$'\n' == *$'\n'"> grok-cli: Error from grok CLI: sandbox could not be applied"$'\n'* ]]
 }
 
 @test "format-output: a round-2 fallback prints its reason under the rebuttal header too" {

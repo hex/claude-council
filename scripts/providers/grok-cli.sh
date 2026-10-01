@@ -46,8 +46,9 @@ ${PROMPT}"
 # --sandbox read-only: grok's own read-only OS profile on top of that, as
 # codex's -s read-only and agy's --sandbox. grok refuses to start at all when
 # it cannot apply the profile (1.0.46 does while /var/run/docker.sock is a
-# symlink, which Docker Desktop makes it), and that refusal alone earns one
-# retry on the deny rules only, below.
+# symlink, which Docker Desktop makes it), and that refusal alone ("could not
+# apply the ... sandbox profile ... Refusing to start") earns one retry on the
+# deny rules only, below. A sandbox warning beside any other failure does not.
 # --no-plan disables plan mode structurally: without it grok can answer a
 # complex prompt with only its plan narration. The prompt guard still covers
 # non-plan tool use.
@@ -69,7 +70,7 @@ ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-grok-cli-err.XXXXXX")
 trap 'rm -f "$ERR_TMP"' EXIT
 
 if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" grok "${ARGS[@]}" "${SANDBOX[@]}" 2>"$ERR_TMP"); then rc=0; else rc=$?; fi
-if [[ $rc -ne 0 && $rc -ne 143 ]] && grep -q "sandbox could not be applied" "$ERR_TMP"; then
+if [[ $rc -ne 0 && $rc -ne 143 ]] && grep -q "sandbox profile.*Refusing to start" "$ERR_TMP"; then
     if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" grok "${ARGS[@]}" 2>"$ERR_TMP"); then rc=0; else rc=$?; fi
 fi
 if [[ $rc -eq 0 ]]; then

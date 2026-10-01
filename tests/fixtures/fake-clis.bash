@@ -20,7 +20,11 @@
 #                    apply a --sandbox profile, exit 1; other fakes answer
 #   noisy-error    - 70 KB of stderr ahead of the cause on its last line, exit 1:
 #                    a CLI that echoes its banner and the whole prompt first,
-#                    and colours the cause the way codex and agy do
+#                    clears its progress line and hides the cursor, and
+#                    colours the cause the way codex and agy do
+#   binary-error   - a cause holding a byte that is not valid UTF-8, exit 1
+#   sandbox-warning - grok only: the sandbox warning alone, then an unrelated
+#                    failure, exit 1; other fakes answer
 #   stdin-echo     - answers with whatever arrived on stdin, so a test can see
 #                    whether the caller's stdin reached the CLI
 #   dirty-stream   - kimi only: an unstructured notice line ahead of the JSONL,
@@ -151,6 +155,11 @@ if [[ "\${1:-}" == "models" && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failu
     echo "You are not authenticated."
     exit 0
 fi
+if [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "sandbox-warning" ]]; then
+    echo "warning: sandbox could not be applied: partial protection only" >&2
+    echo "Error: 429 Too Many Requests" >&2
+    exit 1
+fi
 if [[ " \$* " == *" --sandbox "* && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "sandbox-failure" ]]; then
     echo "warning: sandbox could not be applied: socket deny resolution failed: could not resolve runtime-socket deny path /var/run/docker.sock: endpoint is a symlink" >&2
     echo "error: could not apply the 'read-only' sandbox profile; see the warning above for the cause. Refusing to start with its protections missing." >&2
@@ -173,7 +182,9 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     error)          echo "Error: fake provider failure" >&2; exit 1 ;;
     sandbox-failure) echo "$marker: deterministic answer" ;;
     noisy-error)    printf '%070000d\\n' 0 >&2
-                    printf '\\033[1m\\033[31mError:\\033[0m cause after the noise\\n' >&2; exit 1 ;;
+                    printf '\\033[2K\\033[?25l\\033[1m\\033[31mError:\\033[0m cause after the noise\\n' >&2; exit 1 ;;
+    binary-error)   printf 'Error: caf\\351 broke\\n' >&2; exit 1 ;;
+    sandbox-warning) echo "$marker: deterministic answer" ;;
     stdin-echo)     echo "$marker: stdin=[\$(cat)]" ;;
     *)              echo "Unknown COUNCIL_FAKE_BEHAVIOR: \${COUNCIL_FAKE_BEHAVIOR}" >&2; exit 64 ;;
 esac

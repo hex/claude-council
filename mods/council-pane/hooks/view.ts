@@ -155,13 +155,15 @@ export function paneSections(
       // the seat itself did not, and it belongs above that answer. The state
       // decides, since a seat that failed and then answered on a retry keeps
       // its first attempt's error file.
-      if (state === 'fallback' && error !== undefined) sections.push({ kind: 'reason', text: `${name} fell back: ${error}` })
+      if (state === 'fallback' && error !== undefined) sections.push({ kind: 'reason', text: noticeText(`${name} fell back: ${error}`) })
       // fitText rewrites an answer for the pane's width before the budget is
       // counted: a wide table becomes records that repeat every header, which
       // can lengthen it several times over.
       sections.push({ kind: 'body', text: fitText(response) })
-    } else if (error !== undefined) {
-      sections.push({ kind: 'error', key: jumpKey(name), title: `${name} error`, text: error })
+    } else if (error !== undefined && state !== 'fallback') {
+      // A fallback seat's error file is its reason, written just before the
+      // answer its API gave: with no answer yet there is nothing to show.
+      sections.push({ kind: 'error', key: jumpKey(name), title: `${name} error`, text: noticeText(error) })
     }
   }
   if (synthesis) {
@@ -180,6 +182,12 @@ export function paneSections(
 // pane draws around the sections (the retry row, the jump strip's names).
 const PANE_TEXT_BUDGET = 80000
 const CLIPPED = (more: number) => `\n\n_\u2026 ${more} more characters; the whole answer is in the result (/claude-council:result)_`
+
+// An error or a fallback reason is drawn as its opening only: a provider can
+// hand back a whole HTML error page. The section carries what is drawn, so
+// the budget below counts that and no more.
+const NOTICE_LIMIT = 2000
+const noticeText = (text: string) => markdownBlocks(text, NOTICE_LIMIT)[0] ?? ''
 
 // Every string a section carries, counted without copying any of them: this
 // runs on each frame of a live pane.
@@ -206,13 +214,24 @@ export function withinTextBudget(sections: Section[], budget: number = PANE_TEXT
     left--
   }
   const cap = Math.max(0, Math.floor(room / Math.max(1, left)))
-  return sections.map(section => {
-    if (section.kind !== 'body' || section.text.length <= cap) return section
-    // The note for the whole length is the longest the note can be, so the
-    // cut text and its note together stay within the cap.
-    const cut = Math.max(0, cap - CLIPPED(section.text.length).length)
-    return { kind: 'body', text: section.text.slice(0, cut) + CLIPPED(section.text.length - cut) }
-  })
+  return sections.map(section => (section.kind !== 'body' || section.text.length <= cap ? section : { kind: 'body', text: clipped(section.text, cap) }))
+}
+
+const FENCE_CLOSE = '\n```'
+
+// The opening of an answer and a note saying how much is left out, together
+// within `room`. The room set aside is for the longest the note can be and a
+// closing fence, so the result never runs past it. The cut does not fall
+// between the two halves of one character, and a code block it lands in is
+// closed first (a backtick fence; a tilde one is rare enough to leave), so the
+// note reads as text and the rest of the pane is not drawn as code.
+function clipped(text: string, room: number): string {
+  let cut = Math.max(0, room - CLIPPED(text.length).length - FENCE_CLOSE.length)
+  const last = cut > 0 ? text.charCodeAt(cut - 1) : 0
+  if (last >= 0xd800 && last <= 0xdbff) cut--
+  const kept = text.slice(0, cut)
+  const isInsideFence = (kept.match(/^ {0,3}```/gm)?.length ?? 0) % 2 === 1
+  return kept + (isInsideFence ? FENCE_CLOSE : '') + CLIPPED(text.length - cut)
 }
 
 // A Markdown element takes at most this many characters, tab and newline its

@@ -22,9 +22,12 @@ assert_cause_after_noise() {
     export COUNCIL_FAKE_BEHAVIOR=noisy-error
     run --separate-stderr "${PROVIDERS_DIR_REAL}/$1" "test prompt"
     [ "$status" -eq 1 ]
-    [[ "$stderr" == "Error from $2 CLI: "*"Error: cause after the noise"* ]]
+    [[ "$stderr" == "Error from $2 CLI: "*"Error: cause after the noise" ]]
     [ "${#stderr}" -lt 600 ]
+    # No escape byte, and nothing left of the codes that clear a line or hide
+    # the cursor either.
     [[ "$stderr" != *$'\e'* ]]
+    [[ "$stderr" != *"[2K"* && "$stderr" != *"[?25l"* ]]
 }
 
 # The directory handed to agy via --add-dir. jq evaluates null+1 as 1, so a
@@ -165,6 +168,16 @@ teardown() {
     assert_cause_after_noise codex.sh codex
 }
 
+@test "codex.sh: a failure whose stderr is not valid UTF-8 still reports its cause" {
+    # BSD sed refuses an invalid byte under a UTF-8 locale; the excerpt is
+    # taken byte-wise so the cause still comes out.
+    export COUNCIL_FAKE_BEHAVIOR=binary-error
+    run --separate-stderr env LC_ALL=en_US.UTF-8 "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == "Error from codex CLI: Error: caf"* ]]
+    [[ "$stderr" == *" broke" ]]
+}
+
 @test "codex.sh: the caller's stdin never reaches the CLI" {
     # `codex exec` reads stdin whenever it is not a TTY, so a seat launched
     # from a shell whose stdin stays open would block until the deadline.
@@ -301,6 +314,16 @@ teardown() {
     [[ "$(echo "$second" | jq -r '.args | index("--sandbox")')" == "null" ]]
     [[ "$(echo "$second" | jq -r '.args | index("--deny") as $i | .[$i+1]')" == "*" ]]
     [[ "$(echo "$second" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"the user question"* ]]
+}
+
+@test "grok-cli.sh: a sandbox warning beside another failure is not a refusal, and is not retried" {
+    # Only grok's refusal to start earns the run without the OS sandbox; a
+    # warning it printed on the way to a rate limit does not.
+    export COUNCIL_FAKE_BEHAVIOR=sandbox-warning
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
+    [ "$status" -eq 1 ]
+    [ "$(jq -c 'select(.bin == "grok")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -l | tr -d ' ')" -eq 1 ]
+    [[ "$stderr" == *"429 Too Many Requests" ]]
 }
 
 @test "grok-cli.sh: a failure other than the sandbox is not retried" {

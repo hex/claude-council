@@ -67,14 +67,16 @@ draw_header() {
 # Why a seat's API sibling answered in its place, under the header that says
 # it did: the CLI's own error text, or that the image needed a vision model.
 # Only a fallback slot carries a reason, so the entry is read for one only
-# when the slot names a sibling. Args: provider fallback entry
+# when the slot names a sibling. The reason is quoted, not emphasised: it is
+# arbitrary error text, and emphasis markers break on a space or an
+# underscore at its edge. Args: provider fallback entry
 draw_fallback_reason() {
     local provider="$1" fallback="$2" entry="$3" reason
     [[ -n "$fallback" ]] || return 0
     reason=$(jq -r '.fallback_reason // empty' <<<"$entry")
     [[ -n "$reason" ]] || return 0
     echo ""
-    echo "_${provider}: ${reason}_"
+    echo "> ${provider}: ${reason}"
 }
 
 # Draw synthesis header (markdown compatible)
