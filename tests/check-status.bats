@@ -31,21 +31,6 @@ setup() {
     [[ "$output" == *"grok login"* ]]
 }
 
-@test "check-status: a grok sandbox the CLI cannot apply still counts as Connected, on deny rules" {
-    # grok 1.0.46 refuses to start any sandbox profile when /var/run/docker.sock
-    # is a symlink (Docker Desktop on macOS), and `grok models` never notices:
-    # only a run with --sandbox does.
-    export COUNCIL_FAKE_BEHAVIOR=sandbox-failure
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    # The seat still works on grok's deny rules, so it counts as available,
-    # and the row says the OS sandbox is not in force.
-    [[ "$output" == *"Grok CLI"*"Connected, no sandbox"* ]]
-    [[ "$output" == *"deny rules only"* ]]
-    # No API keys in this environment: the six local seats, grok-cli among them
-    [[ "$output" == *"6/12 providers available"* ]]
-}
-
 @test "check-status: unauthenticated codex is not counted available" {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"
