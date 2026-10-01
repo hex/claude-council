@@ -319,10 +319,23 @@ check_cli_provider() {
         probe_err=$(mktemp "${TMPDIR:-/tmp}/council-probe-err.XXXXXX")
         if ! probe_out=$("$binary" "$@" 2>"$probe_err"); then
             if grep -q "sandbox could not be applied" "$probe_err"; then
-                echo "sandbox_failed"
-            else
-                echo "unauthed"
+                # The provider retries on grok's deny rules alone; so does the
+                # probe, and a seat that answers that way is available.
+                local -a bare=()
+                local arg
+                for arg in "$@"; do
+                    case "$arg" in --sandbox|read-only) ;; *) bare+=("$arg") ;; esac
+                done
+                rm -f "$probe_err"
+                if probe_out=$("$binary" "${bare[@]}" 2>/dev/null); then
+                    end_time=$(now_ms)
+                    echo "ok_nosandbox:$((end_time - start_time)):${version:-cli}"
+                else
+                    echo "sandbox_failed"
+                fi
+                return
             fi
+            echo "unauthed"
             rm -f "$probe_err"
             return
         fi
@@ -361,7 +374,7 @@ remediation_for() {
         ollama:no_binary)     echo "install Ollama (ollama.com)" ;;
         ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;
-        grok-cli:sandbox_failed) echo "grok cannot apply its sandbox here; see README, Grok CLI" ;;
+        grok-cli:sandbox_failed) echo "grok cannot apply its sandbox here and does not answer without it; see README, Grok CLI" ;;
         *:auth_error)         echo "key rejected - regenerate it" ;;
         *:inference_blocked)  echo "check the account's billing or credits" ;;
         *:rate_limited)       echo "rate limited - check again in a minute" ;;
@@ -399,7 +412,7 @@ antigravity_status=$(check_cli_provider "antigravity" "agy")
 # The one CLI probed with a real (billable, few-token) run: only a run with
 # --sandbox shows whether grok can start here at all, and the flags are the
 # ones grok-cli.sh sends.
-grokcli_status=$(check_cli_provider "grok-cli" "grok" -p "Reply with the single word ok." --output-format plain --sandbox read-only --no-plan)
+grokcli_status=$(check_cli_provider "grok-cli" "grok" -p "Reply with the single word ok." --output-format plain --no-plan --deny '*' --no-subagents --sandbox read-only)
 kimicli_status=$(check_cli_provider "kimi-cli" "kimi")
 cursorcli_status=$(check_cli_provider "cursor-cli" "cursor-agent" status)
 ollama_status=$(check_cli_provider "ollama" "ollama" list)
@@ -413,8 +426,8 @@ ollama_status=$(check_cli_provider "ollama" "ollama" list)
 # carry SGR escape bytes that occupy no width, so measuring them would pad every
 # row by a different wrong amount.
 STATUS_NAME_W=14    # fits "OpenRouter 10" and "Antigravity"
-STATUS_STATE_W=28   # fits the longest states, "Installed, not authenticated" and
-                    # "Inference blocked (HTTP 429)"
+STATUS_STATE_W=33   # fits the longest states, "Connected, no sandbox (1299ms)" and
+                    # "Installed, not authenticated"
 
 format_status() {
     local name="$1"
@@ -458,6 +471,15 @@ format_status() {
         sandbox_failed)
             icon="${RED}✗ ${RESET}"
             plain_state="Sandbox refused";    painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        ok_nosandbox:*)
+            local rest="${status#ok_nosandbox:}"
+            local duration="${rest%%:*}"
+            local model="${rest#*:}"
+            icon="${GREEN}✓ ${RESET}"
+            plain_state="Connected, no sandbox (${duration}ms)"
+            painted_state="${GREEN}Connected, no sandbox${RESET} ${DIM}(${duration}ms)${RESET}"
+            plain_detail="$model; deny rules only, see README, Grok CLI"; painted_detail="${DIM}${plain_detail}${RESET}"
             ;;
         timeout)
             icon="${RED}✗ ${RESET}"
@@ -564,7 +586,7 @@ echo ""
 [[ "$ollama_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))
-[[ "$grokcli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$grokcli_status" == ok:* || "$grokcli_status" == ok_nosandbox:* ]] && available_count=$((available_count + 1))
 
 echo -e "${DIM}${available_count}/${provider_total} providers available${RESET}"
 echo ""

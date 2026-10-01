@@ -275,6 +275,33 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args | index("--output-format") as $i | .[$i+1]')" == "plain" ]]
     [[ "$(echo "$call" | jq -r '.args | index("-m") as $i | .[$i+1]')" == "test-model-g" ]]
     [[ "$(echo "$call" | jq -r '.args | index("--sandbox") as $i | .[$i+1]')" == "read-only" ]]
+    # Tool use is denied at grok's permission layer as well: the one guard that
+    # holds where the OS sandbox cannot be applied.
+    [[ "$(echo "$call" | jq -r '.args | index("--deny") as $i | .[$i+1]')" == "*" ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--no-subagents")')" != "null" ]]
+}
+
+@test "grok-cli.sh: a sandbox grok refuses to apply is dropped for one retry, deny rules kept" {
+    # grok 1.0.46 refuses every --sandbox profile while /var/run/docker.sock is
+    # a symlink (Docker Desktop). The seat then runs on the deny rules alone
+    # rather than failing over to the paid API.
+    export COUNCIL_FAKE_BEHAVIOR=sandbox-failure
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"FAKE-GROK-RESPONSE"* ]]
+    [ "$(jq -c 'select(.bin == "grok")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -l | tr -d ' ')" -eq 2 ]
+    local second
+    second=$(jq -c 'select(.bin == "grok")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | tail -1)
+    [[ "$(echo "$second" | jq -r '.args | index("--sandbox")')" == "null" ]]
+    [[ "$(echo "$second" | jq -r '.args | index("--deny") as $i | .[$i+1]')" == "*" ]]
+    [[ "$(echo "$second" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"the user question"* ]]
+}
+
+@test "grok-cli.sh: a failure other than the sandbox is not retried" {
+    export COUNCIL_FAKE_BEHAVIOR=error
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
+    [ "$status" -eq 1 ]
+    [ "$(jq -c 'select(.bin == "grok")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -l | tr -d ' ')" -eq 1 ]
 }
 
 @test "grok-cli.sh: passes no -m when GROK_CLI_MODEL is unset, deferring to the CLI's own default" {

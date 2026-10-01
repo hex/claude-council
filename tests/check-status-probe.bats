@@ -78,6 +78,7 @@ setup() {
     [ -n "$call" ]
     [[ "$(echo "$call" | jq -r '.args | index("--sandbox") as $i | .[$i+1]')" == "read-only" ]]
     [[ "$(echo "$call" | jq -r '.args | index("--no-plan")')" != "null" ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--deny") as $i | .[$i+1]')" == "*" ]]
 }
 
 @test "check-status: a router roster gets a row per seat, each naming its model" {
