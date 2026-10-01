@@ -4,19 +4,23 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.10.1
 
 ### Fixes
 - A CLI provider that fails after writing a lot to stderr now reports why. The error excerpt was the first 500 bytes of the stream, which for codex is its banner and the prompt echoed back, and with a large `--file` prompt the script itself died of SIGPIPE under `pipefail` and left `Error:` blank. The excerpt is now the last 500 bytes, where the cause is, with terminal control codes removed, and a byte that is not valid UTF-8 in that stderr no longer hides the cause; the same line was in antigravity, grok-cli, kimi-cli and cursor-cli. (#45)
 - `codex exec` reads stdin whenever it is not a terminal, so a seat launched from a shell whose stdin stayed open waited on it until the deadline. The codex provider now gives it no stdin. (#45)
-- A seat whose API sibling answered in its place now says so everywhere. The pane row reads `fallback` with `<model> via <sibling> API` and shows the CLI's error as the reason (it used to read `complete` under the CLI's name with the API's model swapped in), the result carries `fallback_reason`, the formatted output prints the reason under the "fell back to … API" header in both rounds, and the pane's summary counts the seat as answered and says how many fell back. grok-cli had been failing on every run on a Mac with Docker Desktop (grok refuses its sandbox when `/var/run/docker.sock` is a symlink) and nothing said the grok API, at `GROK_MODEL`, was answering instead.
-- grok-cli works again beside Docker Desktop. grok now runs with `--deny '*' --no-subagents` as well as `--sandbox read-only`: every tool call is refused at grok's permission layer, so when grok refuses the sandbox profile (`sandbox could not be applied`), the provider runs once more on the deny rules alone instead of failing over to the paid API. Any other failure still falls back as before.
+- A seat whose API sibling answered in its place now says so everywhere. The pane row reads `fallback` with `<model> via <sibling> API` and shows the reason (it used to read `complete` under the CLI's name with the API's model swapped in), the result carries `fallback_reason`, the formatted output prints the reason under the "fell back to … API" header in both rounds, and the pane's summary counts the seat as answered and says how many fell back. grok-cli had been failing on every run on a Mac with Docker Desktop (grok refuses its sandbox when `/var/run/docker.sock` is a symlink) and nothing said the grok API, at `GROK_MODEL`, was answering instead.
+- grok-cli works again beside Docker Desktop. grok now runs with `--deny '*' --no-subagents` as well as `--sandbox read-only`: every tool call is refused at grok's permission layer, so when grok refuses to start because it cannot apply the sandbox profile, the provider runs once more on the deny rules alone instead of failing over to the paid API. Any other failure still falls back as before.
 - The council pane no longer loses its layout on a large run. Claude Code refuses to draw a pane carrying more than 100,000 characters (`ui.render (Pane) refused: more than 100000 characters of text; the engine drew its own`), which ten long answers plus rebuttals reached. The pane now keeps itself under 80,000, counted after wide tables are rewritten for its width: the answers are cut to an even share, each ending with how many characters were left out and where the whole answer is; the synthesis is never cut.
-- The grok-cli seat no longer runs the user's Claude Code or Cursor configuration. grok imports another vendor's hooks, rules, skills, agents, MCP servers and sessions by default, so a seat ran the user's SessionStart and Stop hooks (a cs session had its session id rebound to grok's) and answered under the user's CLAUDE.md. The provider now exports `GROK_{CLAUDE,CURSOR}_{SKILLS,RULES,AGENTS,MCPS,HOOKS,SESSIONS}_ENABLED=0`; grok's own `~/.grok` configuration still applies.
+- The grok-cli seat no longer runs your Claude Code or Cursor configuration. grok imports another vendor's hooks, rules, skills, agents, MCP servers and sessions by default, so a seat ran your SessionStart and Stop hooks (a cs session had its session id rebound to grok's) and answered under your CLAUDE.md. The provider now exports `GROK_{CLAUDE,CURSOR}_{SKILLS,RULES,AGENTS,MCPS,HOOKS,SESSIONS}_ENABLED=0`; grok's own `~/.grok` configuration still applies.
 - The stop gate blocks on a long BLOCK reply too. Past about 130 KB the `echo | head` that trimmed the reason died of SIGPIPE and the hook exited without its verdict, letting the stop through.
+
+### Docs
+- README lists every field of the JSON result, names `cursor-agent` beside the other CLIs, and gives the reasoning-token pattern that covers `gpt-6` and later. ARCHITECTURE says how a fallback is reported and how a CLI provider reports a failure. The test counts and the fake-CLI behaviours in TESTING.md are current.
 
 ### Other
 - OpenAI's fallback model is `gpt-6.1-sol` (was `gpt-6-sol`), verified with a live completion.
+- CI's plugin scanner action goes from 1.2.689 to 1.2.704 (#42).
 
 ## 2026.9.17
 
