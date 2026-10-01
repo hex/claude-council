@@ -29,6 +29,7 @@ export type Section =
   | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string }[] }
   | { kind: 'banner'; key: string; title: string; subtitle: string; background: string }
   | { kind: 'body'; text: string }
+  | { kind: 'reason'; text: string }
   | { kind: 'synthesis'; key: string; text: string }
   | { kind: 'error'; key: string; title: string; text: string }
 
@@ -149,6 +150,9 @@ export function paneSections(
         subtitle: [model, timing].filter(Boolean).join(' '),
         background: vendor(name),
       })
+      // A seat whose API sibling answered has both files: the error is why
+      // the seat itself did not, and it belongs above that answer.
+      if (error !== undefined) sections.push({ kind: 'reason', text: `${name} fell back: ${error}` })
       sections.push({ kind: 'body', text: response })
     } else if (error !== undefined) {
       sections.push({ kind: 'error', key: jumpKey(name), title: `${name} error`, text: error })

@@ -97,6 +97,27 @@ test('paneSections shows the synthesis after the provider answers, with a jump t
   })
 })
 
+test('paneSections shows why a seat fell back, between its banner and the answer its API gave', () => {
+  const sections = paneSections({
+    providers: [{ name: 'grok-cli', state: 'fallback', ms: 1200, model: 'grok-4.6 via grok API' }],
+    responses: { 'grok-cli': 'Use Postgres.' },
+    errors: { 'grok-cli': 'Error from grok CLI: sandbox could not be applied' },
+    colors: {},
+    isDone: false,
+  })
+  expect(sections.slice(1)).toEqual([
+    { kind: 'banner', key: 'jump:grok-cli', title: 'GROK-CLI', subtitle: 'grok-4.6 via grok API (1.2s)', background: 'rgb(113,113,122)' },
+    { kind: 'reason', text: 'grok-cli fell back: Error from grok CLI: sandbox could not be applied' },
+    { kind: 'body', text: 'Use Postgres.' },
+  ])
+  // A plain answer with no error on disk gets no reason line.
+  const plain = paneSections({
+    providers: [{ name: 'codex', state: 'complete' }],
+    responses: { codex: 'x' }, errors: {}, colors: {}, isDone: false,
+  })
+  expect(plain.map(section => section.kind)).toEqual(['status', 'banner', 'body'])
+})
+
 test('a querying provider spins and counts up; a settled one keeps its dot and final time', () => {
   const view = {
     providers: [
