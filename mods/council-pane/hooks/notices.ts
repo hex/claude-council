@@ -9,11 +9,15 @@ type RunProgress = { providers: ProviderStatus[]; isDone: boolean }
 const count = (providers: ProviderStatus[], ...states: string[]) =>
   providers.filter(provider => states.includes(provider.state)).length
 
+// The states in which a seat has an answer on disk: its own, a cached one, or
+// its API sibling's after the seat itself failed.
+const ANSWERED = ['complete', 'cached', 'fallback']
+
 export function finishNotice({ providers }: RunProgress, jobId = ''): string {
   const errors = count(providers, 'error')
   // The band draws a COUNCIL badge ahead of this, so the text does not repeat the name.
   const subject = jobId ? `job ${jobId} finished` : 'finished'
-  const answered = `${count(providers, 'complete', 'cached')} of ${providers.length} answered`
+  const answered = `${count(providers, ...ANSWERED)} of ${providers.length} answered`
   return `${subject}: ${answered}${errors > 0 ? `, ${errors} error` : ''}`
 }
 
@@ -30,7 +34,7 @@ export function progressBand(
   nowMs: number,
 ): { count: string; bar: string; clock?: string; event?: string } | undefined {
   if (isDone || providers.length === 0) return undefined
-  const finished = count(providers, 'complete', 'cached', 'error')
+  const finished = count(providers, ...ANSWERED, 'error')
   const filled = Math.floor((finished / providers.length) * PROGRESS_CELLS)
   return {
     count: `${finished} of ${providers.length}`,
@@ -43,7 +47,7 @@ export function progressBand(
 // A run whose process died without writing .done: what the band says instead.
 export function abandonedNotice({ providers }: RunProgress, jobId = ''): string {
   const subject = jobId ? `job ${jobId} stopped` : 'stopped'
-  return `${subject} before it finished: ${count(providers, 'complete', 'cached')} of ${providers.length} answered`
+  return `${subject} before it finished: ${count(providers, ...ANSWERED)} of ${providers.length} answered`
 }
 
 // The pid a run left in its watch dir, fit to hand to kill -0: digits, not zero.

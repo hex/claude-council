@@ -4,6 +4,15 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixes
+- A CLI provider that fails after writing a lot to stderr now reports why. The error excerpt was the first 500 bytes of the stream, which for codex is its banner and the prompt echoed back, and with a large `--file` prompt the script itself died of SIGPIPE under `pipefail` and left `Error:` blank. The excerpt is now the last 500 bytes, where the cause is, with colour codes removed; the same line was in antigravity, grok-cli, kimi-cli and cursor-cli. (#45)
+- `codex exec` reads stdin whenever it is not a terminal, so a seat launched from a shell whose stdin stayed open waited on it until the deadline. The codex provider now gives it no stdin. (#45)
+- A seat whose API sibling answered in its place now says so everywhere. The pane row reads `fallback` with `<model> via <sibling> API` and shows the CLI's error as the reason (it used to read `complete` under the CLI's name with the API's model swapped in), the result carries `fallback_reason`, and the formatted output prints the reason under the "fell back to … API" header. grok-cli had been failing on every run on a Mac with Docker Desktop (grok refuses its sandbox when `/var/run/docker.sock` is a symlink) and nothing said the grok API, at `GROK_MODEL`, was answering instead.
+- grok-cli works again beside Docker Desktop. grok now runs with `--deny '*' --no-subagents` as well as `--sandbox read-only`: every tool call is refused at grok's permission layer, so when grok refuses the sandbox profile (`sandbox could not be applied`), the provider runs once more on the deny rules alone instead of failing over to the paid API. Any other failure still falls back as before.
+- The council pane no longer loses its layout on a large run. Claude Code refuses to draw a pane carrying more than 100,000 characters (`ui.render (Pane) refused: more than 100000 characters of text; the engine drew its own`), which ten long answers plus rebuttals reached. The pane now keeps itself under 80,000: the answers are cut to an even share, each ending with how many characters were left out and where the whole answer is; the synthesis is never cut.
+
 ## 2026.9.17
 
 ### Security

@@ -26,6 +26,7 @@ const EVENT: Record<string, (name: string) => string> = {
   complete: name => `${name} answered`,
   cached: name => `${name} answered from cache`,
   error: name => `${name} failed`,
+  fallback: name => `${name} failed, its API answered`,
   querying: name => `asking ${name}`,
 }
 

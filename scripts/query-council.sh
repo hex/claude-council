@@ -519,11 +519,27 @@ attempt_api_fallback() {
 }
 
 # Compose a success slot from an attempt_api_fallback object ({response, model,
-# fallback}), adding the common status/cached/role fields. Single definition so
-# round 1 and round 2 build the fallback slot identically. Args: fb_json role
+# fallback}), adding the common status/cached/role fields and the reason the
+# seat did not answer itself (its CLI's error text, or why the image went
+# elsewhere). Single definition so round 1 and round 2 build the fallback slot
+# identically. Args: fb_json role reason
 fallback_slot_json() {
-    jq --arg role "$2" \
-        '. + {status: "success", cached: false, role: (if $role == "" then null else $role end)}' <<<"$1"
+    jq --arg role "$2" --arg reason "$3" \
+        '. + {status: "success", cached: false, role: (if $role == "" then null else $role end),
+              fallback_reason: $reason}' <<<"$1"
+}
+
+# Tell the pane a seat's answer came from its API sibling: the row's state is
+# "fallback", its model column names the API beside the model, and the reason
+# is stored where the pane shows a provider's error text. The CLI's name stays
+# on the row, so the reader sees which seat it was. Args: pane_dir provider
+# elapsed_ms fb_json reason
+pane_fallback_events() {
+    local pane_dir="$1" provider="$2" elapsed="$3" fb_json="$4" reason="$5"
+    pane_error_write "$pane_dir" "$provider" "$reason"
+    pane_status_event "$pane_dir" "$provider" fallback "$elapsed" \
+        "$(jq -r '"\(.model) via \(.fallback) API"' <<<"$fb_json")"
+    pane_response_write "$pane_dir" "$provider" "$(jq -r '.response' <<<"$fb_json")"
 }
 
 # Handle a CLI provider that is unusable (missing script or runtime failure):
@@ -536,12 +552,9 @@ finish_with_fallback_or_error() {
     local fb_json
     fb_json=$(attempt_api_fallback "$provider" "$final_prompt")
     if [[ -n "$fb_json" ]]; then
-        fallback_slot_json "$fb_json" "$role" > "$output_file"
+        fallback_slot_json "$fb_json" "$role" "$error_msg" > "$output_file"
         if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
-            local elapsed
-            elapsed=$(( $(now_ms) - start_ms ))
-            pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed" "$(jq -r '.model' <<<"$fb_json")"
-            pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$(jq -r '.response' <<<"$fb_json")"
+            pane_fallback_events "$COUNCIL_PANE_DIR" "$provider" "$(( $(now_ms) - start_ms ))" "$fb_json" "$error_msg"
         fi
         return 0
     fi
@@ -619,11 +632,10 @@ query_provider() {
                 local fb_json
                 fb_json=$(attempt_api_fallback "$provider" "$final_prompt")
                 if [[ -n "$fb_json" ]]; then
-                    fallback_slot_json "$fb_json" "$role" > "$output_file"
+                    local image_reason="${provider} cannot read images; the ${sibling} API answered with the image"
+                    fallback_slot_json "$fb_json" "$role" "$image_reason" > "$output_file"
                     if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
-                        local elapsed2=$(( $(now_ms) - start_ms ))
-                        pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed2" "$(jq -r '.model' <<<"$fb_json")"
-                        pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$(jq -r '.response' <<<"$fb_json")"
+                        pane_fallback_events "$COUNCIL_PANE_DIR" "$provider" "$(( $(now_ms) - start_ms ))" "$fb_json" "$image_reason"
                     fi
                     return
                 fi
@@ -949,7 +961,7 @@ if [[ "$DEBATE_MODE" == true ]]; then
                 else
                     fb_json=$(attempt_api_fallback "$provider" "$debate_prompt")
                     if [[ -n "$fb_json" ]]; then
-                        fallback_slot_json "$fb_json" "" > "$output_file"
+                        fallback_slot_json "$fb_json" "" "$envelope" > "$output_file"
                     else
                         printf '%s' "$envelope" | jq -Rs '{status: "error", error: .}' > "$output_file"
                     fi

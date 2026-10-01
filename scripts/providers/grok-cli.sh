@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
+source "$SCRIPT_DIR/../lib/cli-stderr.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -38,14 +39,20 @@ ${PROMPT}"
 
 # -p: single-turn prompt — grok prints the answer to stdout and exits, no TUI.
 # --output-format plain: bare text, so the response needs no JSON unwrapping.
-# --sandbox read-only: the council only reads stdout, so pin grok's built-in
-# read-only profile rather than inherit a permissive user config — a defense
-# against model-generated file writes or shell from an adversarial prompt
-# (mirrors codex's -s read-only and agy's --sandbox guard).
+# --deny '*' --no-subagents: every tool call is refused at grok's permission
+# layer and no subagent can be spawned, so a model-generated file write or
+# shell from an adversarial prompt has nowhere to go; the council only reads
+# stdout. (--tools '' and --permission-mode plan do not stop a tool call.)
+# --sandbox read-only: grok's own read-only OS profile on top of that, as
+# codex's -s read-only and agy's --sandbox. grok refuses to start at all when
+# it cannot apply the profile (1.0.46 does while /var/run/docker.sock is a
+# symlink, which Docker Desktop makes it), and that refusal alone earns one
+# retry on the deny rules only, below.
 # --no-plan disables plan mode structurally: without it grok can answer a
 # complex prompt with only its plan narration. The prompt guard still covers
 # non-plan tool use.
-ARGS=(-p "$FULL_PROMPT" --output-format plain --sandbox read-only --no-plan)
+ARGS=(-p "$FULL_PROMPT" --output-format plain --no-plan --deny '*' --no-subagents)
+SANDBOX=(--sandbox read-only)
 # -m only on an explicit override: the CLI's default model differs by auth
 # mode, and a pinned id is rejected ("unknown model id") under XAI_API_KEY
 # env auth, so an unset GROK_CLI_MODEL defers to the CLI's own default.
@@ -61,14 +68,17 @@ COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
 ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-grok-cli-err.XXXXXX")
 trap 'rm -f "$ERR_TMP"' EXIT
 
-if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" grok "${ARGS[@]}" 2>"$ERR_TMP"); then
+if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" grok "${ARGS[@]}" "${SANDBOX[@]}" 2>"$ERR_TMP"); then rc=0; else rc=$?; fi
+if [[ $rc -ne 0 && $rc -ne 143 ]] && grep -q "sandbox could not be applied" "$ERR_TMP"; then
+    if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" grok "${ARGS[@]}" 2>"$ERR_TMP"); then rc=0; else rc=$?; fi
+fi
+if [[ $rc -eq 0 ]]; then
     echo "$RESPONSE"
 else
-    rc=$?
     if [[ $rc -eq 143 ]]; then
         echo "Error from grok CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
     else
-        ERR_MSG=$(tr '\n' ' ' < "$ERR_TMP" | head -c 500)
+        ERR_MSG=$(stderr_excerpt "$ERR_TMP")
         echo "Error from grok CLI: ${ERR_MSG:-non-zero exit}" >&2
     fi
     exit 1

@@ -604,6 +604,7 @@ claude-council/
 │   │   └── ollama.sh            # Local (no key, no sibling)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
+│       ├── cli-stderr.sh        # One-line error excerpt from a CLI provider's stderr (its end, colour codes removed)
 │       ├── deadline.sh          # Wall-clock bound for a command (no GNU timeout on macOS or Git Bash)
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export

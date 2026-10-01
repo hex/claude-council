@@ -29,10 +29,11 @@ export type Section =
   | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string }[] }
   | { kind: 'banner'; key: string; title: string; subtitle: string; background: string }
   | { kind: 'body'; text: string }
+  | { kind: 'reason'; text: string }
   | { kind: 'synthesis'; key: string; text: string }
   | { kind: 'error'; key: string; title: string; text: string }
 
-const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger }
+const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger, fallback: COLOR.warning }
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
 const SPINNER = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f']
@@ -84,7 +85,7 @@ function doneSummary(
   hasSection: (name: string) => boolean,
 ): Section[] {
   const count = (state: string) => providers.filter(provider => provider.state === state).length
-  const answered = count('complete') + count('cached')
+  const answered = count('complete') + count('cached') + count('fallback')
   const slowest = Math.max(0, ...providers.map(provider => provider.ms ?? 0))
   const parts = [
     `${answered} of ${providers.length} answered`,
@@ -149,6 +150,9 @@ export function paneSections(
         subtitle: [model, timing].filter(Boolean).join(' '),
         background: vendor(name),
       })
+      // A seat whose API sibling answered has both files: the error is why
+      // the seat itself did not, and it belongs above that answer.
+      if (error !== undefined) sections.push({ kind: 'reason', text: `${name} fell back: ${error}` })
       sections.push({ kind: 'body', text: response })
     } else if (error !== undefined) {
       sections.push({ kind: 'error', key: jumpKey(name), title: `${name} error`, text: error })
@@ -162,7 +166,44 @@ export function paneSections(
       strip.items.push({ glyph: '\u2261', color: `rgb(${NEUTRAL_RGB.replaceAll(';', ',')})`, name: 'synthesis', hotkey: '0', target: jumpKey('synthesis') })
     }
   }
-  return sections
+  return withinTextBudget(sections)
+}
+
+// Claude Code refuses a Pane render carrying more than 100000 characters of
+// text and draws its own. The budget sits under that with room for the table
+// rewrite, which a render does at its own width and which can lengthen a body.
+const PANE_TEXT_BUDGET = 80000
+const CLIPPED = (more: number) => `\n\n_\u2026 ${more} more characters; the whole answer is in the result (/claude-council:result)_`
+
+const sectionText = (section: Section) => Object.values(section).filter((v): v is string => typeof v === 'string').join('')
+
+// Cuts the answer bodies, and only them, until the pane fits the budget: the
+// synthesis, banners, status rows and errors keep their text, and what is left
+// is shared evenly among the bodies. A body within its share is left whole, and
+// its unused share goes to the ones that need it, so one long answer beside
+// short ones is cut only as far as the budget demands.
+export function withinTextBudget(sections: Section[], budget: number = PANE_TEXT_BUDGET): Section[] {
+  const total = sections.reduce((sum, section) => sum + sectionText(section).length, 0)
+  if (total <= budget) return sections
+  const bodies = sections.filter((section): section is Extract<Section, { kind: 'body' }> => section.kind === 'body')
+  let room = budget - (total - bodies.reduce((sum, body) => sum + body.text.length, 0))
+  const pending = [...bodies].sort((a, b) => a.text.length - b.text.length)
+  const share = new Map<Section, number>()
+  for (let i = 0; i < pending.length; i++) {
+    const body = pending[i]!
+    const fair = Math.max(0, Math.floor(room / (pending.length - i)))
+    const kept = Math.min(body.text.length, fair)
+    share.set(body, kept)
+    room -= kept
+  }
+  return sections.map(section => {
+    if (section.kind !== 'body') return section
+    const kept = share.get(section) ?? section.text.length
+    if (kept >= section.text.length) return section
+    // The note's own length comes out of the share; its count is then exact.
+    const cut = Math.max(0, kept - CLIPPED(section.text.length - kept).length)
+    return { kind: 'body', text: section.text.slice(0, cut) + CLIPPED(section.text.length - cut) }
+  })
 }
 
 // A Markdown element takes at most this many characters, tab and newline its

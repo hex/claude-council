@@ -150,6 +150,24 @@ teardown() {
     [[ "$output" == *"429"* ]]
 }
 
+@test "codex.sh: a failure buried under a long stderr still reports its cause" {
+    export COUNCIL_FAKE_BEHAVIOR=noisy-error
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == "Error from codex CLI: "*"Error: cause after the noise"* ]]
+    [ "${#stderr}" -lt 600 ]
+    [[ "$stderr" != *$'\e'* ]]
+}
+
+@test "codex.sh: the caller's stdin never reaches the CLI" {
+    # `codex exec` reads stdin whenever it is not a TTY, so a seat launched
+    # from a shell whose stdin stays open would block until the deadline.
+    export COUNCIL_FAKE_BEHAVIOR=stdin-echo
+    run bash -c "echo leaked | '${PROVIDERS_DIR_REAL}/codex.sh' 'test prompt'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"stdin=[]"* ]]
+}
+
 @test "codex.sh: empty response passes through with exit 0" {
     export COUNCIL_FAKE_BEHAVIOR=empty
     run "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
@@ -257,6 +275,33 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args | index("--output-format") as $i | .[$i+1]')" == "plain" ]]
     [[ "$(echo "$call" | jq -r '.args | index("-m") as $i | .[$i+1]')" == "test-model-g" ]]
     [[ "$(echo "$call" | jq -r '.args | index("--sandbox") as $i | .[$i+1]')" == "read-only" ]]
+    # Tool use is denied at grok's permission layer as well: the one guard that
+    # holds where the OS sandbox cannot be applied.
+    [[ "$(echo "$call" | jq -r '.args | index("--deny") as $i | .[$i+1]')" == "*" ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--no-subagents")')" != "null" ]]
+}
+
+@test "grok-cli.sh: a sandbox grok refuses to apply is dropped for one retry, deny rules kept" {
+    # grok 1.0.46 refuses every --sandbox profile while /var/run/docker.sock is
+    # a symlink (Docker Desktop). The seat then runs on the deny rules alone
+    # rather than failing over to the paid API.
+    export COUNCIL_FAKE_BEHAVIOR=sandbox-failure
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"FAKE-GROK-RESPONSE"* ]]
+    [ "$(jq -c 'select(.bin == "grok")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -l | tr -d ' ')" -eq 2 ]
+    local second
+    second=$(jq -c 'select(.bin == "grok")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | tail -1)
+    [[ "$(echo "$second" | jq -r '.args | index("--sandbox")')" == "null" ]]
+    [[ "$(echo "$second" | jq -r '.args | index("--deny") as $i | .[$i+1]')" == "*" ]]
+    [[ "$(echo "$second" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"the user question"* ]]
+}
+
+@test "grok-cli.sh: a failure other than the sandbox is not retried" {
+    export COUNCIL_FAKE_BEHAVIOR=error
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
+    [ "$status" -eq 1 ]
+    [ "$(jq -c 'select(.bin == "grok")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -l | tr -d ' ')" -eq 1 ]
 }
 
 @test "grok-cli.sh: passes no -m when GROK_CLI_MODEL is unset, deferring to the CLI's own default" {
@@ -944,4 +989,44 @@ teardown() {
     run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" --prompt-file "$pf"
     [ "$status" -eq 0 ]
     [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"prompt from file"* ]]
+}
+
+# ============================================================================
+# A long stderr ahead of the cause, for the CLIs beside codex
+# ============================================================================
+
+@test "antigravity.sh: a failure buried under a long stderr still reports its cause" {
+    export COUNCIL_FAKE_BEHAVIOR=noisy-error
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/antigravity.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == "Error from antigravity CLI: "*"Error: cause after the noise"* ]]
+    [ "${#stderr}" -lt 600 ]
+    [[ "$stderr" != *$'\e'* ]]
+}
+
+@test "grok-cli.sh: a failure buried under a long stderr still reports its cause" {
+    export COUNCIL_FAKE_BEHAVIOR=noisy-error
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == "Error from grok CLI: "*"Error: cause after the noise"* ]]
+    [ "${#stderr}" -lt 600 ]
+    [[ "$stderr" != *$'\e'* ]]
+}
+
+@test "kimi-cli.sh: a failure buried under a long stderr still reports its cause" {
+    export COUNCIL_FAKE_BEHAVIOR=noisy-error
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == "Error from kimi CLI: "*"Error: cause after the noise"* ]]
+    [ "${#stderr}" -lt 600 ]
+    [[ "$stderr" != *$'\e'* ]]
+}
+
+@test "cursor-cli.sh: a failure buried under a long stderr still reports its cause" {
+    export COUNCIL_FAKE_BEHAVIOR=noisy-error
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == "Error from cursor-agent CLI: "*"Error: cause after the noise"* ]]
+    [ "${#stderr}" -lt 600 ]
+    [[ "$stderr" != *$'\e'* ]]
 }

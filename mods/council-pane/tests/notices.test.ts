@@ -17,6 +17,13 @@ test('finishNotice reports answers and errors, and names a background job', () =
   )
 })
 
+test('a seat answered by its API sibling counts as answered everywhere, not as an error', () => {
+  const withFallback = [...providers, { name: 'grok-cli', state: 'fallback', ms: 1200 }]
+  expect(finishNotice({ providers: withFallback, isDone: true })).toBe('finished: 3 of 5 answered, 1 error')
+  expect(abandonedNotice({ providers: withFallback, isDone: false })).toBe('stopped before it finished: 3 of 5 answered')
+  expect(progressBand({ providers: withFallback, isDone: false }, undefined, 0)?.count).toBe('4 of 5')
+})
+
 test('wakePrompt asks for the result of a background job only', () => {
   expect(wakePrompt('job-abc')).toBe('The background council job job-abc has finished. Fetch it with /claude-council:result job-abc and summarise it.')
   expect(wakePrompt('')).toBeUndefined()

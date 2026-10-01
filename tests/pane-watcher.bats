@@ -222,6 +222,19 @@ blank_lines_before() {
     [[ "$output" == *"API key missing"* ]]
 }
 
+@test "watcher: a seat that fell back to its API shows the answer, the API beside the model, and why" {
+    mkdir -p "$W/errors"
+    printf 'Error from grok CLI: sandbox could not be applied' > "$W/errors/grok-cli.txt"
+    printf 'FALLBACK-GROK-ANSWER\n' > "$W/responses/grok-cli.md"
+    printf 'grok-cli\tfallback\t1200\tgrok-4.6 via grok API\n' >> "$W/status"
+    run_watcher
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"GROK-CLI"*"grok-4.6 via grok API"*"(1.2s, fell back)"* ]]
+    [[ "$output" == *"grok-cli fell back"*"sandbox could not be applied"* ]]
+    [[ "$output" == *"FALLBACK-GROK-ANSWER"* ]]
+    [[ "$output" != *"grok-cli error"* ]]
+}
+
 @test "watcher: shows error text written the way the producer writes it, with no trailing newline" {
     # The fixture goes through pane_error_write, not a hand-written file: the
     # producer stores a command substitution, which has no trailing newline,

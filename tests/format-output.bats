@@ -97,6 +97,19 @@ envelope_with_entry() {
     [[ "$output" == *"fell back to gemini API"* ]]
 }
 
+@test "format-output: a fallback slot prints why the seat did not answer itself" {
+    local json
+    json=$(jq -n '{
+        metadata: {quiet_mode: false, debate_mode: false},
+        round1: {"grok-cli": {status: "success", model: "grok-4.6", response: "hi", fallback: "grok",
+                              fallback_reason: "Error from grok CLI: sandbox could not be applied"}}
+    }')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"fell back to grok API"* ]]
+    [[ "$output" == *"grok-cli: Error from grok CLI: sandbox could not be applied"* ]]
+}
+
 @test "format-output: fallback note absent when fallback field is not set" {
     local json
     json=$(jq -n '{

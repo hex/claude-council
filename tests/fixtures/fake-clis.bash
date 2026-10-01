@@ -14,6 +14,13 @@
 #   hang-handled   - sleep COUNCIL_FAKE_SLEEP but exit 0, silently, on SIGTERM:
 #                    the codex wrapper's response to the deadline
 #   error          - generic failure on stderr, exit 1
+#   sandbox-failure - grok only: the two lines grok 1.0.46 prints when it cannot
+#                    apply a --sandbox profile, exit 1; other fakes answer
+#   noisy-error    - 70 KB of stderr ahead of the cause on its last line, exit 1:
+#                    a CLI that echoes its banner and the whole prompt first,
+#                    and colours the cause the way codex and agy do
+#   stdin-echo     - answers with whatever arrived on stdin, so a test can see
+#                    whether the caller's stdin reached the CLI
 #   dirty-stream   - kimi only: an unstructured notice line ahead of the JSONL,
 #                    which a real CLI is free to print (upgrade notices etc.)
 #   array-content  - kimi only: content as a [{type,text}] array rather than a
@@ -142,6 +149,11 @@ if [[ "\${1:-}" == "models" && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failu
     echo "You are not authenticated."
     exit 0
 fi
+if [[ " \$* " == *" --sandbox "* && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "sandbox-failure" ]]; then
+    echo "warning: sandbox could not be applied: socket deny resolution failed: could not resolve runtime-socket deny path /var/run/docker.sock: endpoint is a symlink" >&2
+    echo "error: could not apply the 'read-only' sandbox profile; see the warning above for the cause. Refusing to start with its protections missing." >&2
+    exit 1
+fi
 EOF
     fi
     cat >> "$FAKE_BIN_DIR/$bin" <<EOF
@@ -156,6 +168,10 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     hang)           exec sleep "\${COUNCIL_FAKE_SLEEP:-300}" ;;
     hang-handled)   trap 'exit 0' TERM; sleep "\${COUNCIL_FAKE_SLEEP:-300}" & wait ;;
     error)          echo "Error: fake provider failure" >&2; exit 1 ;;
+    sandbox-failure) echo "$marker: deterministic answer" ;;
+    noisy-error)    head -c 70000 /dev/zero | tr '\\0' 'x' >&2; echo >&2
+                    printf '\\033[1m\\033[31mError:\\033[0m cause after the noise\\n' >&2; exit 1 ;;
+    stdin-echo)     echo "$marker: stdin=[\$(cat)]" ;;
     *)              echo "Unknown COUNCIL_FAKE_BEHAVIOR: \${COUNCIL_FAKE_BEHAVIOR}" >&2; exit 64 ;;
 esac
 EOF
