@@ -36,7 +36,7 @@
     "pane_host": {
       "type": "string",
       "title": "Pane opens in",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. claude-code draws the pane inside Claude Code; tmux leaves it to the tmux pane; ask puts the question once inside tmux and remembers the answer.",
+      "description": "One of: ask, claude-code, tmux. Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. claude-code draws the pane inside Claude Code; tmux leaves it to the tmux pane; ask puts the question once inside tmux and remembers the answer.",
       "default": "ask"
     },
     "collapse_when_done": {
