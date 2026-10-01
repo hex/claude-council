@@ -54,6 +54,18 @@ ${PROMPT}"
 # non-plan tool use.
 ARGS=(-p "$FULL_PROMPT" --output-format plain --no-plan --deny '*' --no-subagents)
 SANDBOX=(--sandbox read-only)
+# grok imports the user's Claude Code and Cursor configuration unless told
+# otherwise: their hooks run inside the seat (a Claude SessionStart hook then
+# rebinds the user's session state to grok's session id), their CLAUDE.md
+# and rules shape the answer, and their skills, agents and MCP servers load.
+# No flag turns that off; grok 1.0.46 reads these variables (`grok inspect`
+# then lists each surface as disabled by env). grok's own ~/.grok config
+# still applies. Exported, not set on argv, so they bind the retry below too.
+for vendor in CLAUDE CURSOR; do
+    for surface in SKILLS RULES AGENTS MCPS HOOKS SESSIONS; do
+        export "GROK_${vendor}_${surface}_ENABLED=0"
+    done
+done
 # -m only on an explicit override: the CLI's default model differs by auth
 # mode, and a pinned id is rejected ("unknown model id") under XAI_API_KEY
 # env auth, so an unset GROK_CLI_MODEL defers to the CLI's own default.

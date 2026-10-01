@@ -316,6 +316,20 @@ teardown() {
     [[ "$(echo "$second" | jq -r '.args | index("-p") as $i | .[$i+1]')" == *"the user question"* ]]
 }
 
+@test "grok-cli.sh: Claude's and Cursor's config stays out of the seat, on the retry too" {
+    # grok loads the user's Claude and Cursor hooks, rules, skills, agents, MCP
+    # servers and sessions by default, so a seat would run their session hooks
+    # and answer under their instructions. A switch the user exported the other
+    # way does not reopen one.
+    export COUNCIL_FAKE_BEHAVIOR=sandbox-failure
+    export GROK_CLAUDE_HOOKS_ENABLED=1
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "the user question"
+    [ "$status" -eq 0 ]
+    local off='{"GROK_CLAUDE_AGENTS_ENABLED":"0","GROK_CLAUDE_HOOKS_ENABLED":"0","GROK_CLAUDE_MCPS_ENABLED":"0","GROK_CLAUDE_RULES_ENABLED":"0","GROK_CLAUDE_SESSIONS_ENABLED":"0","GROK_CLAUDE_SKILLS_ENABLED":"0","GROK_CURSOR_AGENTS_ENABLED":"0","GROK_CURSOR_HOOKS_ENABLED":"0","GROK_CURSOR_MCPS_ENABLED":"0","GROK_CURSOR_RULES_ENABLED":"0","GROK_CURSOR_SESSIONS_ENABLED":"0","GROK_CURSOR_SKILLS_ENABLED":"0"}'
+    [ "$(tr -d '\r' < "$COUNCIL_FAKE_STATE_DIR/grok-imports.jsonl")" = "$off
+$off" ]
+}
+
 @test "grok-cli.sh: a sandbox warning beside another failure is not a refusal, and is not retried" {
     # Only grok's refusal to start earns the run without the OS sandbox; a
     # warning it printed on the way to a rate limit does not.

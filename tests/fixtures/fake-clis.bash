@@ -149,6 +149,11 @@ EOF
     fi
     if [[ "$bin" == "grok" ]]; then
         cat >> "$FAKE_BIN_DIR/$bin" <<EOF
+# The real grok CLI loads another vendor's hooks, rules, skills, agents, MCP
+# servers and sessions unless GROK_<VENDOR>_<SURFACE>_ENABLED turns one off;
+# keep each call's switches so a test can assert what the seat was given.
+jq -cnS 'env | with_entries(select(.key | test("^GROK_[A-Z]+_[A-Z]+_ENABLED\$")))' \\
+    >> "\${COUNCIL_FAKE_STATE_DIR:?}/grok-imports.jsonl"
 # The real grok CLI answers a logged-out "grok models" with "You are not
 # authenticated." on stdout and exit 0, never a non-zero exit
 if [[ "\${1:-}" == "models" && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then
