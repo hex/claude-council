@@ -473,6 +473,51 @@ EOF
     [[ "$(echo "$slot" | jq -r '.model')" == "gemini-flash-latest" ]]
 }
 
+@test "query-council: a fallback slot keeps the CLI's own failure as its reason" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-reason"
+    mkdir -p "$fakedir"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "Error from antigravity CLI: sandbox could not be applied" >&2
+exit 1
+EOF
+    cat > "$fakedir/gemini.sh" <<'EOF'
+#!/bin/bash
+echo "FALLBACK-GEMINI-ANSWER"
+EOF
+    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
+        bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    [[ "$(echo "$output" | jq -r '.round1.antigravity.fallback_reason')" == *"sandbox could not be applied"* ]]
+}
+
+@test "query-council: the pane learns a seat fell back, to which API, and why" {
+    local fakedir="${BATS_TEST_TMPDIR}/fallback-pane"
+    mkdir -p "$fakedir" "${BATS_TEST_TMPDIR}/pane/responses"
+    cat > "$fakedir/antigravity.sh" <<'EOF'
+#!/bin/bash
+echo "Error from antigravity CLI: sandbox could not be applied" >&2
+exit 1
+EOF
+    cat > "$fakedir/gemini.sh" <<'EOF'
+#!/bin/bash
+echo "FALLBACK-GEMINI-ANSWER"
+EOF
+    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
+        COUNCIL_PANE_DIR="${BATS_TEST_TMPDIR}/pane" \
+        bash "$SCRIPT" --no-cache --providers=antigravity "ping"
+    [ "$status" -eq 0 ]
+    # The row names the API that answered beside its model; a reader of the
+    # pane otherwise sees the CLI's name over a model it never ran.
+    local last
+    last=$(grep '^antigravity'$'\t' "${BATS_TEST_TMPDIR}/pane/status" | tail -1)
+    [[ "$last" == "antigravity"$'\t'"fallback"$'\t'*$'\t'"gemini-flash-latest via gemini API" ]]
+    [[ "$(cat "${BATS_TEST_TMPDIR}/pane/errors/antigravity.txt")" == *"sandbox could not be applied"* ]]
+    [[ "$(cat "${BATS_TEST_TMPDIR}/pane/responses/antigravity.md")" == *"FALLBACK-GEMINI-ANSWER"* ]]
+}
+
 @test "query-council: antigravity failure with no gemini key stays an error" {
     local fakedir="${BATS_TEST_TMPDIR}/fallback-nokey"
     mkdir -p "$fakedir"

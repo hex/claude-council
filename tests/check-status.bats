@@ -31,6 +31,18 @@ setup() {
     [[ "$output" == *"grok login"* ]]
 }
 
+@test "check-status: a grok sandbox the CLI cannot apply is reported, not Connected" {
+    # grok 1.0.46 refuses to start any sandbox profile when /var/run/docker.sock
+    # is a symlink (Docker Desktop on macOS), and `grok models` never notices:
+    # only a run with --sandbox does.
+    export COUNCIL_FAKE_BEHAVIOR=sandbox-failure
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Sandbox refused"* ]]
+    [[ "$output" == *"grok cannot apply its sandbox here"* ]]
+    [[ "$output" != *"Grok CLI"*"Connected"* ]]
+}
+
 @test "check-status: unauthenticated codex is not counted available" {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"

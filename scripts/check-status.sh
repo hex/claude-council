@@ -310,12 +310,23 @@ check_cli_provider() {
     # login status) or a message with exit 0 ("You are not authenticated." from
     # grok models, "Not logged in" from cursor-agent status), so both the exit
     # code and the output classify auth.
-    local probe_out
+    # grok refuses to start when it cannot apply its --sandbox profile (a
+    # symlinked /var/run/docker.sock does it), which `grok models` never
+    # notices: the probe is a sandboxed run, and that refusal is read off
+    # stderr before the exit code is taken for a logged-out CLI.
+    local probe_out probe_err
     if [[ $# -gt 0 ]]; then
-        if ! probe_out=$("$binary" "$@" 2>/dev/null); then
-            echo "unauthed"
+        probe_err=$(mktemp "${TMPDIR:-/tmp}/council-probe-err.XXXXXX")
+        if ! probe_out=$("$binary" "$@" 2>"$probe_err"); then
+            if grep -q "sandbox could not be applied" "$probe_err"; then
+                echo "sandbox_failed"
+            else
+                echo "unauthed"
+            fi
+            rm -f "$probe_err"
             return
         fi
+        rm -f "$probe_err"
         if echo "$probe_out" | grep -qiE "not authenticated|not logged in"; then
             echo "unauthed"
             return
@@ -350,6 +361,7 @@ remediation_for() {
         ollama:no_binary)     echo "install Ollama (ollama.com)" ;;
         ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;
+        grok-cli:sandbox_failed) echo "grok cannot apply its sandbox here; see README, Grok CLI" ;;
         *:auth_error)         echo "key rejected - regenerate it" ;;
         *:inference_blocked)  echo "check the account's billing or credits" ;;
         *:rate_limited)       echo "rate limited - check again in a minute" ;;
@@ -384,7 +396,10 @@ fi
 # probe's output match classifies, giving grok-cli the same two tiers as codex.
 codex_status=$(check_cli_provider "codex" "codex" login status)
 antigravity_status=$(check_cli_provider "antigravity" "agy")
-grokcli_status=$(check_cli_provider "grok-cli" "grok" models)
+# The one CLI probed with a real (billable, few-token) run: only a run with
+# --sandbox shows whether grok can start here at all, and the flags are the
+# ones grok-cli.sh sends.
+grokcli_status=$(check_cli_provider "grok-cli" "grok" -p "Reply with the single word ok." --output-format plain --sandbox read-only --no-plan)
 kimicli_status=$(check_cli_provider "kimi-cli" "kimi")
 cursorcli_status=$(check_cli_provider "cursor-cli" "cursor-agent" status)
 ollama_status=$(check_cli_provider "ollama" "ollama" list)
@@ -439,6 +454,10 @@ format_status() {
         unauthed)
             icon="${RED}✗ ${RESET}"
             plain_state="Installed, not authenticated"; painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        sandbox_failed)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Sandbox refused";    painted_state="${RED}${plain_state}${RESET}"
             ;;
         timeout)
             icon="${RED}✗ ${RESET}"

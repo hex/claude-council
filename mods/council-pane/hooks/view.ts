@@ -32,7 +32,7 @@ export type Section =
   | { kind: 'synthesis'; key: string; text: string }
   | { kind: 'error'; key: string; title: string; text: string }
 
-const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger }
+const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger, fallback: COLOR.warning }
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
 const SPINNER = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f']
@@ -84,7 +84,7 @@ function doneSummary(
   hasSection: (name: string) => boolean,
 ): Section[] {
   const count = (state: string) => providers.filter(provider => provider.state === state).length
-  const answered = count('complete') + count('cached')
+  const answered = count('complete') + count('cached') + count('fallback')
   const slowest = Math.max(0, ...providers.map(provider => provider.ms ?? 0))
   const parts = [
     `${answered} of ${providers.length} answered`,

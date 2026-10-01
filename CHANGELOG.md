@@ -9,6 +9,8 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ### Fixes
 - A CLI provider that fails after writing a lot to stderr now reports why. The error excerpt was the first 500 bytes of the stream, which for codex is its banner and the prompt echoed back, and with a large `--file` prompt the script itself died of SIGPIPE under `pipefail` and left `Error:` blank. The excerpt is now the last 500 bytes, where the cause is, with colour codes removed; the same line was in antigravity, grok-cli, kimi-cli and cursor-cli. (#45)
 - `codex exec` reads stdin whenever it is not a terminal, so a seat launched from a shell whose stdin stayed open waited on it until the deadline. The codex provider now gives it no stdin. (#45)
+- A seat whose API sibling answered in its place now says so everywhere. The pane row reads `fallback` with `<model> via <sibling> API` and shows the CLI's error as the reason (it used to read `complete` under the CLI's name with the API's model swapped in), the result carries `fallback_reason`, and the formatted output prints the reason under the "fell back to … API" header. grok-cli had been failing on every run on a Mac with Docker Desktop (grok refuses its sandbox when `/var/run/docker.sock` is a symlink) and nothing said the grok API, at `GROK_MODEL`, was answering instead.
+- `/claude-council:status` probes grok-cli with one short sandboxed run instead of `grok models`, so a sandbox grok cannot apply shows as `Sandbox refused` with a pointer to the README, where before it read Connected.
 
 ## 2026.9.17
 

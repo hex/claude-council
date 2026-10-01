@@ -21,6 +21,7 @@ test('the latest event is the log\'s last whole line, in words', () => {
   expect(lastEvent(log('gemini\tcomplete\t4210\tgemini-3-pro'))).toBe('gemini answered')
   expect(lastEvent(log('codex\tcached\t\t'))).toBe('codex answered from cache')
   expect(lastEvent(log('grok\terror\t\t'))).toBe('grok failed')
+  expect(lastEvent(log('grok-cli\tfallback\t1200\tgrok-4.6 via grok API'))).toBe('grok-cli failed, its API answered')
   expect(lastEvent(log('kimi\tquerying\t\t'))).toBe('asking kimi')
   expect(lastEvent('gemini\tcomplete\t4210\t\nopenai')).toBe('gemini answered')
   expect(lastEvent('')).toBeUndefined()

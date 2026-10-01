@@ -69,6 +69,17 @@ setup() {
 # A roster turns the one router script into several seats. /status has to show
 # each of them, or a user reading 12/12 cannot tell that two of their three
 # configured models are absent from the council.
+@test "check-status: the grok-cli probe runs the CLI the way the council does, sandbox included" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local call
+    call=$(jq -c 'select(.bin == "grok" and (.args | index("-p")) != null)' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | tail -1)
+    [ -n "$call" ]
+    [[ "$(echo "$call" | jq -r '.args | index("--sandbox") as $i | .[$i+1]')" == "read-only" ]]
+    [[ "$(echo "$call" | jq -r '.args | index("--no-plan")')" != "null" ]]
+}
+
 @test "check-status: a router roster gets a row per seat, each naming its model" {
     shadow_curl
     export OPENROUTER_MODELS="deepseek/deepseek-v3.2,z-ai/glm-5.3,qwen/qwen3-max"

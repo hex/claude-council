@@ -64,6 +64,16 @@ draw_header() {
     echo "## ${header_text}"
 }
 
+# Why a seat's API sibling answered in its place, under the header that says
+# it did: the CLI's own error text, or that the image needed a vision model.
+# Nothing is printed for a seat that answered itself. Args: provider reason
+draw_fallback_reason() {
+    local provider="$1" reason="$2"
+    [[ -n "$reason" && "$reason" != "null" ]] || return 0
+    echo ""
+    echo "_${provider}: ${reason}_"
+}
+
 # Draw synthesis header (markdown compatible)
 draw_synthesis_header() {
     echo ""
@@ -160,6 +170,7 @@ format_output() {
             entry=$(echo "$json" | jq -c ".round1[\"${provider}\"]")
 
             draw_header "$swatch" "$provider" "$model" "$role" "normal" "$fallback" "$model_fallback"
+            draw_fallback_reason "$provider" "$(echo "$json" | jq -r ".round1[\"${provider}\"].fallback_reason // empty")"
             render_response "$entry"
             echo ""
         done
