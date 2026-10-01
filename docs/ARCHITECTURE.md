@@ -165,8 +165,16 @@ Two flavors share the interface:
   cost. When both an API and CLI sibling exist (codex+openai, antigravity+gemini,
   grok-cli+grok, kimi-cli+kimi), the orchestrator prefers the CLI by default; explicit
   `--providers` wins over the policy. If a CLI provider fails at query time, the
-  council retries through its API sibling (when that key is set) and marks the
-  slot as a fallback. `cursor-cli` has no sibling: the council has no Cursor API
+  council retries through its API sibling (when that key is set and the sibling
+  is not already a selected provider) and marks the slot as a fallback: `fallback`
+  names the sibling and `fallback_reason` holds the CLI's error text.
+  `format-output.sh` prints the reason under the "fell back to … API" header in
+  both rounds, and the pane row's state is `fallback` with the model shown as
+  `<model> via <sibling> API`. A CLI that times out or fails reports one line,
+  `Error from <cli> CLI: …`, built by `cli_failure_message` (lib/cli-stderr.sh):
+  the timeout, or the last 500 bytes of the CLI's stderr with colour codes
+  removed. `codex` runs with stdin from `/dev/null`, since `codex exec` reads a
+  stdin that is not a terminal. `cursor-cli` has no sibling: the council has no Cursor API
   seat, so its failure is final. It is gated on `cursor-agent`, not the `agent`
   name the installer links beside it, because the grok CLI ships an `agent` too.
 - **`ollama`**, also gated on the binary being on `PATH`, but local and keyless:
@@ -195,8 +203,10 @@ Per-provider disposition when an image is attached:
 - **codex, antigravity, grok-cli, kimi-cli** (CLI, cannot accept an image) route
   to their vision API sibling — codex→openai, antigravity→gemini, grok-cli→grok,
   kimi-cli→kimi — with the image. The route is taken only when the sibling is
-  itself vision-capable and its key is set. **cursor-cli** has no sibling and
-  answers text-only.
+  itself vision-capable, its key is set and it is not already a selected
+  provider; otherwise the CLI answers text-only, prefixed with
+  `(answered without the image)`. **cursor-cli** has no sibling and answers
+  text-only.
 - **openrouter** accepts an image on its curated default, which is
   vision-capable. An `OPENROUTER_MODEL` override names one of hundreds of routed
   models whose modalities are not knowable from here, so it is treated as
@@ -557,6 +567,7 @@ claude-council/
 │   └── images/
 │       └── council-pane.png   # README screenshot of a five-provider run
 ├── evals/                       # `claude plugin eval` cases: prompt.md + graders/ per case
+│   ├── .gitignore               # Keeps eval run output (results/) out of the repo
 │   └── _shared/                 # Grader text the cases link to, file by file
 ├── hooks/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
@@ -604,7 +615,7 @@ claude-council/
 │   │   └── ollama.sh            # Local (no key, no sibling)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
-│       ├── cli-stderr.sh        # One-line error excerpt from a CLI provider's stderr (its end, colour codes removed)
+│       ├── cli-stderr.sh        # The error line a CLI provider reports on a timeout or failure (the end of its stderr, colour codes removed)
 │       ├── deadline.sh          # Wall-clock bound for a command (no GNU timeout on macOS or Git Bash)
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
@@ -678,6 +689,7 @@ claude-council/
 │   ├── verbosity.bats
 │   └── query-council.bats
 ├── .gitattributes
+├── .gitignore
 ├── .shellcheckrc               # Points shellcheck at the sourced libs
 ├── .worktreeinclude            # Gitignored paths copied into each specialist worktree; here .claude/types
 ├── CHANGELOG.md
