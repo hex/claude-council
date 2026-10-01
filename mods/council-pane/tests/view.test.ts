@@ -116,6 +116,25 @@ test('paneSections shows why a seat fell back, between its banner and the answer
     responses: { codex: 'x' }, errors: {}, colors: {}, isDone: false,
   })
   expect(plain.map(section => section.kind)).toEqual(['status', 'banner', 'body'])
+  // Nor does a seat that failed, was retried and then answered itself: the
+  // first attempt's error file stays on disk, and it is not why anything fell back.
+  const retried = paneSections({
+    providers: [{ name: 'kimi', state: 'complete' }],
+    responses: { kimi: 'x' }, errors: { kimi: 'HTTP 429' }, colors: {}, isDone: false,
+  })
+  expect(retried.map(section => section.kind)).toEqual(['status', 'banner', 'body'])
+})
+
+test('the done summary says how many seats their API sibling answered', () => {
+  const sections = paneSections({
+    providers: [
+      { name: 'codex', state: 'complete', ms: 2000 },
+      { name: 'grok-cli', state: 'fallback', ms: 1200 },
+      { name: 'kimi', state: 'error' },
+    ],
+    responses: { codex: 'a', 'grok-cli': 'b' }, errors: { 'grok-cli': 'sandbox', kimi: 'HTTP 429' }, colors: {}, isDone: true,
+  })
+  expect(sections[0]).toEqual({ kind: 'summary', text: '2 of 3 answered \u00b7 1 error \u00b7 1 fell back \u00b7 2.0s' })
 })
 
 test('a querying provider spins and counts up; a settled one keeps its dot and final time', () => {
@@ -178,6 +197,27 @@ test('paneSections keeps the whole pane under the engine\'s text limit by clippi
   const [first, second] = mixed.filter(section => section.kind === 'body') as { kind: 'body'; text: string }[]
   expect(first.text).toBe('short')
   expect(second.text.length).toBeLessThan(80000)
+  // Equal answers get equal room, and no clipped body runs past its share.
+  expect(new Set(bodies.map(body => body.text.length)).size).toBe(1)
+})
+
+test('paneSections counts the budget on the text as fitted to the pane, which can be longer', () => {
+  // Fitting a wide table to a narrow pane rewrites each row as a record that
+  // repeats every header, so an answer under the budget can be over it once
+  // fitted. The stand-in here triples the text.
+  const names = ['a', 'b', 'c']
+  const sections = paneSections({
+    providers: names.map(name => ({ name, state: 'complete' })),
+    responses: Object.fromEntries(names.map(name => [name, 'y'.repeat(15000)])),
+    errors: {}, colors: {}, isDone: false,
+    synthesis: 'S'.repeat(1000),
+  }, { fitText: text => text.repeat(3) })
+  const drawn = sections.reduce((sum, section) => sum + Object.values(section).filter((v): v is string => typeof v === 'string').join('').length, 0)
+  expect(drawn).toBeLessThanOrEqual(80000)
+  const bodies = sections.filter(section => section.kind === 'body') as { kind: 'body'; text: string }[]
+  expect(bodies.every(body => /more characters; the whole answer is in the result/.test(body.text))).toBe(true)
+  // The synthesis is fitted too, and still never cut.
+  expect(sections.find(section => section.kind === 'synthesis')).toEqual({ kind: 'synthesis', key: 'jump:synthesis', text: 'S'.repeat(3000) })
 })
 
 test('markdownBlocks keeps a short text whole and drops control characters Markdown refuses', () => {

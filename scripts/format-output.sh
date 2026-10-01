@@ -66,10 +66,13 @@ draw_header() {
 
 # Why a seat's API sibling answered in its place, under the header that says
 # it did: the CLI's own error text, or that the image needed a vision model.
-# Nothing is printed for a seat that answered itself. Args: provider reason
+# Only a fallback slot carries a reason, so the entry is read for one only
+# when the slot names a sibling. Args: provider fallback entry
 draw_fallback_reason() {
-    local provider="$1" reason="$2"
-    [[ -n "$reason" && "$reason" != "null" ]] || return 0
+    local provider="$1" fallback="$2" entry="$3" reason
+    [[ -n "$fallback" ]] || return 0
+    reason=$(jq -r '.fallback_reason // empty' <<<"$entry")
+    [[ -n "$reason" ]] || return 0
     echo ""
     echo "_${provider}: ${reason}_"
 }
@@ -170,7 +173,7 @@ format_output() {
             entry=$(echo "$json" | jq -c ".round1[\"${provider}\"]")
 
             draw_header "$swatch" "$provider" "$model" "$role" "normal" "$fallback" "$model_fallback"
-            draw_fallback_reason "$provider" "$(echo "$json" | jq -r ".round1[\"${provider}\"].fallback_reason // empty")"
+            draw_fallback_reason "$provider" "$fallback" "$entry"
             render_response "$entry"
             echo ""
         done
@@ -200,6 +203,7 @@ format_output() {
                     entry=$(echo "$json" | jq -c ".round2[\"${provider}\"] // {\"status\": \"error\"}")
 
                     draw_header "$swatch" "$provider" "$model" "" "rebuttal" "$fallback" "$model_fallback"
+                    draw_fallback_reason "$provider" "$fallback" "$entry"
                     render_response "$entry"
                     echo ""
                 done

@@ -81,6 +81,19 @@ dirty_diff() {
     [[ "$(echo "$output" | jq -r '.reason')" == *"tests are failing"* ]]
 }
 
+@test "stop-gate: a review several times what a pipe holds still blocks, with its opening as the reason" {
+    enable_gate
+    dirty_diff
+    export COUNCIL_FAKE_BEHAVIOR=long-block-verdict
+    run bash "$GATE" <<< "$(stop_event)"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.decision' "block"
+    local reason
+    reason=$(echo "$output" | jq -r '.reason')
+    [[ "$reason" == "Council stop-gate reviewer (codex): BLOCK: tests are failing in the changed module"* ]]
+    [ "${#reason}" -lt 1600 ]
+}
+
 @test "stop-gate: verdict survives a jq that emits CRLF" {
     # jq's Windows build CRLF-translates piped stdout, so the @tsv config read
     # hands the gate "1\r" as max_iterations and "test-session\r" as the

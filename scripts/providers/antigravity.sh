@@ -133,11 +133,6 @@ if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" agy "${ARGS[@]}" 2>"$ERR_TMP"
     echo "$RESPONSE"
 else
     rc=$?
-    if [[ $rc -eq 143 ]]; then
-        echo "Error from antigravity CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
-    else
-        ERR_MSG=$(stderr_excerpt "$ERR_TMP")
-        echo "Error from antigravity CLI: ${ERR_MSG:-non-zero exit}" >&2
-    fi
+    cli_failure_message "antigravity" "$rc" "$COUNCIL_TIMEOUT" "$ERR_TMP" >&2
     exit 1
 fi

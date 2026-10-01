@@ -97,11 +97,6 @@ if [[ $rc -eq 0 ]]; then
     fi
     echo "$RESPONSE"
 else
-    if [[ $rc -eq 143 ]]; then
-        echo "Error from kimi CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
-    else
-        ERR_MSG=$(stderr_excerpt "$ERR_TMP")
-        echo "Error from kimi CLI: ${ERR_MSG:-non-zero exit}" >&2
-    fi
+    cli_failure_message "kimi" "$rc" "$COUNCIL_TIMEOUT" "$ERR_TMP" >&2
     exit 1
 fi

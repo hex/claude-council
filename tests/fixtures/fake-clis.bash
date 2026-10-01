@@ -6,6 +6,8 @@
 #   empty          - exit 0 with no output
 #   malformed-json - syntactically broken JSON on stdout
 #   block-verdict  - stop-gate reviewer reply whose first line is BLOCK:
+#   long-block-verdict - the same verdict followed by 200 KB of review, several
+#                    times what a pipe holds
 #   rate-limit     - 429 message on stderr, exit 1
 #   auth-failure   - login-required message on stderr, exit 1
 #   slow           - sleep COUNCIL_FAKE_SLEEP (default 5s) then respond
@@ -162,6 +164,7 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     empty)          ;;
     malformed-json) echo '{"unterminated": ' ;;
     block-verdict)  echo "BLOCK: tests are failing in the changed module" ;;
+    long-block-verdict) echo "BLOCK: tests are failing in the changed module"; printf '%0200000d\\n' 0 ;;
     rate-limit)     echo "Error: 429 Too Many Requests" >&2; exit 1 ;;
     auth-failure)   echo "Error: not logged in" >&2; exit 1 ;;
     slow)           sleep "\${COUNCIL_FAKE_SLEEP:-5}"; echo "$marker: slow answer" ;;
@@ -169,7 +172,7 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     hang-handled)   trap 'exit 0' TERM; sleep "\${COUNCIL_FAKE_SLEEP:-300}" & wait ;;
     error)          echo "Error: fake provider failure" >&2; exit 1 ;;
     sandbox-failure) echo "$marker: deterministic answer" ;;
-    noisy-error)    head -c 70000 /dev/zero | tr '\\0' 'x' >&2; echo >&2
+    noisy-error)    printf '%070000d\\n' 0 >&2
                     printf '\\033[1m\\033[31mError:\\033[0m cause after the noise\\n' >&2; exit 1 ;;
     stdin-echo)     echo "$marker: stdin=[\$(cat)]" ;;
     *)              echo "Unknown COUNCIL_FAKE_BEHAVIOR: \${COUNCIL_FAKE_BEHAVIOR}" >&2; exit 64 ;;

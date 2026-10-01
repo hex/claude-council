@@ -74,7 +74,10 @@ REVIEW=$( ( provider_env_scrub "$PROVIDER"; exec bash "$PROVIDER_SCRIPT" "$PROMP
 # Verdict contract: the reply's very first characters decide
 if [[ "$REVIEW" == BLOCK:* ]]; then
     echo $((COUNT + 1)) > "$COUNTER"
-    REASON=$(echo "$REVIEW" | head -c 1500)
+    # Sliced in the shell: a review longer than a pipe holds would kill an
+    # `echo | head` with SIGPIPE, and under pipefail the gate would exit
+    # without its verdict.
+    REASON="${REVIEW:0:1500}"
     jq -n --arg r "Council stop-gate reviewer (${PROVIDER}): ${REASON}" \
         '{decision: "block", reason: $r}'
 fi

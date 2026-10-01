@@ -16,6 +16,17 @@ big_prompt() {
     head -c "${1:-500}" /dev/zero | tr '\0' 'Z'
 }
 
+# A failure under 70 KB of stderr: the provider script $1 reports the cause
+# under its "Error from $2 CLI" label, bounded, with no colour codes in it.
+assert_cause_after_noise() {
+    export COUNCIL_FAKE_BEHAVIOR=noisy-error
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/$1" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == "Error from $2 CLI: "*"Error: cause after the noise"* ]]
+    [ "${#stderr}" -lt 600 ]
+    [[ "$stderr" != *$'\e'* ]]
+}
+
 # The directory handed to agy via --add-dir. jq evaluates null+1 as 1, so a
 # missing flag would silently yield args[1] and every assertion downstream
 # would pass against the wrong value; the guard makes its absence a failure.
@@ -151,12 +162,7 @@ teardown() {
 }
 
 @test "codex.sh: a failure buried under a long stderr still reports its cause" {
-    export COUNCIL_FAKE_BEHAVIOR=noisy-error
-    run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
-    [ "$status" -eq 1 ]
-    [[ "$stderr" == "Error from codex CLI: "*"Error: cause after the noise"* ]]
-    [ "${#stderr}" -lt 600 ]
-    [[ "$stderr" != *$'\e'* ]]
+    assert_cause_after_noise codex.sh codex
 }
 
 @test "codex.sh: the caller's stdin never reaches the CLI" {
@@ -996,37 +1002,17 @@ teardown() {
 # ============================================================================
 
 @test "antigravity.sh: a failure buried under a long stderr still reports its cause" {
-    export COUNCIL_FAKE_BEHAVIOR=noisy-error
-    run --separate-stderr "${PROVIDERS_DIR_REAL}/antigravity.sh" "test prompt"
-    [ "$status" -eq 1 ]
-    [[ "$stderr" == "Error from antigravity CLI: "*"Error: cause after the noise"* ]]
-    [ "${#stderr}" -lt 600 ]
-    [[ "$stderr" != *$'\e'* ]]
+    assert_cause_after_noise antigravity.sh antigravity
 }
 
 @test "grok-cli.sh: a failure buried under a long stderr still reports its cause" {
-    export COUNCIL_FAKE_BEHAVIOR=noisy-error
-    run --separate-stderr "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
-    [ "$status" -eq 1 ]
-    [[ "$stderr" == "Error from grok CLI: "*"Error: cause after the noise"* ]]
-    [ "${#stderr}" -lt 600 ]
-    [[ "$stderr" != *$'\e'* ]]
+    assert_cause_after_noise grok-cli.sh grok
 }
 
 @test "kimi-cli.sh: a failure buried under a long stderr still reports its cause" {
-    export COUNCIL_FAKE_BEHAVIOR=noisy-error
-    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
-    [ "$status" -eq 1 ]
-    [[ "$stderr" == "Error from kimi CLI: "*"Error: cause after the noise"* ]]
-    [ "${#stderr}" -lt 600 ]
-    [[ "$stderr" != *$'\e'* ]]
+    assert_cause_after_noise kimi-cli.sh kimi
 }
 
 @test "cursor-cli.sh: a failure buried under a long stderr still reports its cause" {
-    export COUNCIL_FAKE_BEHAVIOR=noisy-error
-    run --separate-stderr "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
-    [ "$status" -eq 1 ]
-    [[ "$stderr" == "Error from cursor-agent CLI: "*"Error: cause after the noise"* ]]
-    [ "${#stderr}" -lt 600 ]
-    [[ "$stderr" != *$'\e'* ]]
+    assert_cause_after_noise cursor-cli.sh cursor-agent
 }

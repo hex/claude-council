@@ -64,11 +64,6 @@ if RESPONSE=$(run_with_deadline "$COUNCIL_TIMEOUT" codex "${ARGS[@]}" 2>"$ERR_TM
     echo "$RESPONSE"
 else
     rc=$?
-    if [[ $rc -eq 143 ]]; then
-        echo "Error from codex CLI: timed out after ${COUNCIL_TIMEOUT}s" >&2
-    else
-        ERR_MSG=$(stderr_excerpt "$ERR_TMP")
-        echo "Error from codex CLI: ${ERR_MSG:-non-zero exit}" >&2
-    fi
+    cli_failure_message "codex" "$rc" "$COUNCIL_TIMEOUT" "$ERR_TMP" >&2
     exit 1
 fi

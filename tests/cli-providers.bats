@@ -471,25 +471,8 @@ EOF
     [[ "$(echo "$slot" | jq -r '.response')" == *"FALLBACK-GEMINI-ANSWER"* ]]
     [[ "$(echo "$slot" | jq -r '.fallback')" == "gemini" ]]
     [[ "$(echo "$slot" | jq -r '.model')" == "gemini-flash-latest" ]]
-}
-
-@test "query-council: a fallback slot keeps the CLI's own failure as its reason" {
-    local fakedir="${BATS_TEST_TMPDIR}/fallback-reason"
-    mkdir -p "$fakedir"
-    cat > "$fakedir/antigravity.sh" <<'EOF'
-#!/bin/bash
-echo "Error from antigravity CLI: sandbox could not be applied" >&2
-exit 1
-EOF
-    cat > "$fakedir/gemini.sh" <<'EOF'
-#!/bin/bash
-echo "FALLBACK-GEMINI-ANSWER"
-EOF
-    chmod +x "$fakedir/antigravity.sh" "$fakedir/gemini.sh"
-    run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY="example-key" \
-        bash "$SCRIPT" --no-cache --no-pane --providers=antigravity "ping"
-    [ "$status" -eq 0 ]
-    [[ "$(echo "$output" | jq -r '.round1.antigravity.fallback_reason')" == *"sandbox could not be applied"* ]]
+    # The CLI's own failure rides along as the reason the seat did not answer.
+    [[ "$(echo "$slot" | jq -r '.fallback_reason')" == "Error from antigravity CLI: boom" ]]
 }
 
 @test "query-council: the pane learns a seat fell back, to which API, and why" {
@@ -514,7 +497,7 @@ EOF
     local last
     last=$(grep '^antigravity'$'\t' "${BATS_TEST_TMPDIR}/pane/status" | tail -1)
     [[ "$last" == "antigravity"$'\t'"fallback"$'\t'*$'\t'"gemini-flash-latest via gemini API" ]]
-    [[ "$(cat "${BATS_TEST_TMPDIR}/pane/errors/antigravity.txt")" == *"sandbox could not be applied"* ]]
+    [[ "$(cat "${BATS_TEST_TMPDIR}/pane/errors/antigravity.txt")" == "Error from antigravity CLI: sandbox could not be applied" ]]
     [[ "$(cat "${BATS_TEST_TMPDIR}/pane/responses/antigravity.md")" == *"FALLBACK-GEMINI-ANSWER"* ]]
 }
 

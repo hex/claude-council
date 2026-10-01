@@ -8,6 +8,10 @@ export type ProviderStatus = {
   model?: string
 }
 
+// The states in which a seat has an answer on disk: its own, a cached one, or
+// its API sibling's after the seat itself failed.
+export const ANSWERED_STATES = ['complete', 'cached', 'fallback']
+
 export function parseStatus(log: string): ProviderStatus[] {
   const byName = new Map<string, ProviderStatus>()
   for (const line of log.split('\n')) {

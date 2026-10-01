@@ -110,6 +110,21 @@ envelope_with_entry() {
     [[ "$output" == *"grok-cli: Error from grok CLI: sandbox could not be applied"* ]]
 }
 
+@test "format-output: a round-2 fallback prints its reason under the rebuttal header too" {
+    local json
+    json=$(jq -n '{
+        metadata: {quiet_mode: false, debate_mode: true},
+        round1: {"grok-cli": {status: "success", model: "grok-4.7", response: "first answer"}},
+        round2: {"grok-cli": {status: "success", model: "grok-4.6", response: "the rebuttal", fallback: "grok",
+                              fallback_reason: "Error from grok CLI: timed out after 1200s"}}
+    }')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"REBUTTAL"*"fell back to grok API"*"grok-cli: Error from grok CLI: timed out after 1200s"*"the rebuttal"* ]]
+    # Round 1 answered itself, so nothing is printed between its header and its answer.
+    [[ "$output" != *"grok-cli: Error"*"first answer"* ]]
+}
+
 @test "format-output: fallback note absent when fallback field is not set" {
     local json
     json=$(jq -n '{

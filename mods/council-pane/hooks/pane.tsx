@@ -76,9 +76,12 @@ type PaneState = {
   queryingSinceMs: Record<string, number>
   // When the pane picked the live run up; the progress band's clock.
   runStartedMs?: number
-  // Each section's fitted body, for the width and text it was fitted to: a
-  // frame redraws the tree, not the markdown, and a resize replaces the entry.
-  fitted: Map<string, { columns: number; text: string; blocks: string[] }>
+  // Each section's Markdown blocks, for the text they were cut from: a frame
+  // redraws the tree, not the markdown.
+  fitted: Map<string, { text: string; blocks: string[] }>
+  // Each answer as rewritten for the pane's width (wide tables as records),
+  // for the width it was rewritten at: a resize starts it over.
+  tableFit: { columns: number; byText: Map<string, string> }
   specialists: Specialist[]
   // The specialist round this session is waiting on; the band's subject.
   // outputLength and outputAtMs: how much of events.jsonl the last tick saw and
@@ -776,7 +779,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -1429,11 +1432,24 @@ export const register: Register = (on, options) => {
     if (e.requestId !== PANE_ID || !state.view) return next(e)
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
     const columns = e.props.bodyColumns
+    // Answers are rewritten for this width before the pane's text budget is
+    // counted, which only a render can do: it alone knows the width. The
+    // rewrites of the last frame are reused while the width holds, and only
+    // the ones this frame asked for are kept.
+    const lastFits = state.tableFit.columns === columns ? state.tableFit.byText : new Map<string, string>()
+    const fits = new Map<string, string>()
+    const fitText = (text: string) => {
+      const fitted = lastFits.get(text) ?? fitTables(text, columns)
+      fits.set(text, fitted)
+      return fitted
+    }
+    const sections = paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs, fitText })
+    state.tableFit = { columns, byText: fits }
     const fit = (sectionKey: string, text: string) => {
       const kept = state.fitted.get(sectionKey)
-      if (kept && kept.columns === columns && kept.text === text) return kept.blocks
-      const blocks = markdownBlocks(fitTables(text, columns))
-      state.fitted.set(sectionKey, { columns, text, blocks })
+      if (kept && kept.text === text) return kept.blocks
+      const blocks = markdownBlocks(text)
+      state.fitted.set(sectionKey, { text, blocks })
       return blocks
     }
     const draw = (section: Section, index: number) => {
@@ -1494,7 +1510,7 @@ export const register: Register = (on, options) => {
             </Box>
           )
         case 'body':
-          // Tables are fitted to the pane's width, which only a render knows.
+          // The text arrives fitted to the pane's width and within its budget.
           return (
             <Box key={key} flexDirection="column">
               {fit(key, section.text).map((block, part) => (
@@ -1518,7 +1534,7 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         {e.surface !== 'terminal' && retry && runDir ? [retryRow($.ui.resolve(e), retry, retryPresses($, runDir))] : []}
-        {paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs }).map(draw)}
+        {sections.map(draw)}
       </Box>
     )
   })

@@ -167,13 +167,13 @@ print_response() {
 
 # Print the notice for a provider that failed without producing a response,
 # with the error text in $2 (a file; defaults to the provider's live one).
-# $3 names the event: "error" (red) for a seat with no answer, "fell back"
-# (amber) for a seat whose API sibling answered, where the text is the
-# reason the seat itself did not.
+# $3 is the provider's state: "error" (red) for a seat with no answer,
+# "fallback" (amber, "fell back") for a seat whose API sibling answered,
+# where the text is the reason the seat itself did not.
 print_error_notice() {
-    local name="$1" file="${2:-$WATCH/errors/${1}.txt}" kind="${3:-error}" err_line rgb='185;28;28'
-    [[ "$kind" == "fell back" ]] && rgb='180;83;9'
-    printf '\n\033[1;38;2;%sm✗ %s %s\033[0m\n' "$rgb" "$name" "$kind"
+    local name="$1" file="${2:-$WATCH/errors/${1}.txt}" state="${3:-error}" err_line label='error' rgb='185;28;28'
+    if [[ "$state" == fallback ]]; then label='fell back'; rgb='180;83;9'; fi
+    printf '\n\033[1;38;2;%sm✗ %s %s\033[0m\n' "$rgb" "$name" "$label"
     if [[ -f "$file" ]]; then
         # `|| -n` keeps the last line: the producer stores a command
         # substitution, which has no trailing newline, so a plain read loop
@@ -202,13 +202,9 @@ redraw_all() {
     for event in "${display_events[@]}"; do
         case "$event" in
             response:*) print_response "${event#response:}" ;;
-            error:*)
-                IFS=$'\t' read -r name file <<<"${event#error:}"
-                print_error_notice "$name" "$file"
-                ;;
-            fallback:*)
-                IFS=$'\t' read -r name file <<<"${event#fallback:}"
-                print_error_notice "$name" "$file" "fell back"
+            error:*|fallback:*)
+                IFS=$'\t' read -r name file <<<"${event#*:}"
+                print_error_notice "$name" "$file" "${event%%:*}"
                 ;;
         esac
     done
@@ -376,11 +372,7 @@ while true; do
                 # arrives as a response file like any other.
                 snap="$WATCH/errors/${provider}.shown${#display_events[@]}.txt"
                 cp "$WATCH/errors/${provider}.txt" "$snap" 2>/dev/null || true
-                if [[ "$state" == "fallback" ]]; then
-                    print_error_notice "$provider" "$snap" "fell back"
-                else
-                    print_error_notice "$provider" "$snap"
-                fi
+                print_error_notice "$provider" "$snap" "$state"
                 display_events+=("${state}:${provider}"$'\t'"$snap")
             fi
         done
