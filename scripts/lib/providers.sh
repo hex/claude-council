@@ -5,6 +5,9 @@
 # Discover which provider scripts are available to query.
 # API providers are gated on their <NAME>_API_KEY env var; subscription-auth
 # CLI providers (codex, antigravity, grok-cli, kimi-cli, cursor-cli) are gated on their binary being on PATH.
+# claude-cli has no arm: claude is on PATH for every user of this plugin, so it
+# is seated only when named in --providers or COUNCIL_PROVIDERS. Under the
+# default arm it would need a CLAUDE_CLI_API_KEY, which no one sets.
 discover_providers() {
     local available=()
 
@@ -106,18 +109,27 @@ provider_env_prefix() {
 # start would otherwise hand each provider, and each CLI agent, every other
 # vendor's key. What stays: the base a process needs, proxy and CA settings,
 # the Windows variables Git Bash's node CLIs need, COUNCIL_*, the provider's
-# own vendor prefixes, and any names listed in COUNCIL_PASS_ENV
+# own vendor prefixes and exact names, and any names listed in COUNCIL_PASS_ENV
 # (comma-separated). Windows keeps some of these names in mixed case, so the
 # match ignores case.
 # Usage: provider_env_scrub <provider>
 provider_env_scrub() {
     local provider="$1" name prefix keep families pass=",${COUNCIL_PASS_ENV:-},"
+    # Names a provider keeps whole, for logins that live outside its prefix.
+    local exact=","
     case "$provider" in
         gemini|antigravity)         families="GEMINI_ GOOGLE_ ANTIGRAVITY_" ;;
         openai|codex)               families="OPENAI_ CODEX_" ;;
         grok|grok-cli)              families="GROK_ XAI_" ;;
         kimi|kimi-cli)              families="KIMI_ MOONSHOT_" ;;
         cursor-cli)                 families="CURSOR_" ;;
+        # The two variables a setup-token or relocated login authenticates
+        # through, by exact name: the driving session exports more under
+        # CLAUDE_CODE_ (its session id, its messaging socket and token), and
+        # none of that belongs in a seat. ANTHROPIC_API_KEY is dropped too, so
+        # the seat runs on the claude.ai login rather than billing the API.
+        claude-cli)                 families="CLAUDE_CLI_"
+                                    exact=",CLAUDE_CODE_OAUTH_TOKEN,CLAUDE_CONFIG_DIR," ;;
         openrouter|openrouter-*)    families="OPENROUTER_" ;;
         *)                          families="$(provider_env_prefix "$provider")_" ;;
     esac
@@ -133,7 +145,7 @@ provider_env_scrub() {
         for prefix in $families; do
             if [[ "$name" == "$prefix"* ]]; then keep=1; fi
         done
-        if [[ "$pass" == *",${name},"* ]]; then keep=1; fi
+        if [[ "$pass" == *",${name},"* || "$exact" == *",${name},"* ]]; then keep=1; fi
         if (( keep == 0 )); then unset "$name" 2>/dev/null || true; fi
     done
     shopt -u nocasematch
@@ -358,7 +370,10 @@ get_model() {
         kimi)       echo "${KIMI_MODEL:-kimi-k3}" ;;
         kimi-cli)   cli_model kimi-cli "${KIMI_CLI_MODEL:-}" ;;
         cursor-cli) cli_model cursor-cli "${CURSOR_CLI_MODEL:-}" ;;
-        ollama)     echo "${OLLAMA_MODEL:-local}" ;;
+        # No cli_config_model arm: the seat runs with --setting-sources "", so
+        # the model in Claude's settings.json is never what it uses.
+        claude-cli) cli_model claude-cli "${CLAUDE_CLI_MODEL:-}" ;;
+        ollama)    echo "${OLLAMA_MODEL:-local}" ;;
         # Pinned rather than an alias for the reason stated above, and pinned to
         # an Anthropic id because that is the one vendor the council otherwise
         # has no voice for. A router's default is retargetable by design:
@@ -453,7 +468,8 @@ provider_color() {
     case "$1" in
         gemini|antigravity) echo -e "${BLUE:-}" ;;
         openai|codex)      echo -e "${WHITE:-}" ;;
-        grok|grok-cli)     echo -e "${RED:-}" ;;
+        # claude-cli has no sixteen-colour coral, so it shares grok's red.
+        grok|grok-cli|claude-cli) echo -e "${RED:-}" ;;
         perplexity)        echo -e "${GREEN:-}" ;;
         kimi|kimi-cli)     echo -e "${BRIGHT_BLACK:-}" ;;
         ollama)            echo -e "${CYAN:-}" ;;
@@ -476,6 +492,7 @@ provider_color_rgb() {
         perplexity)        printf -v "$__out" '22;163;74'    ;;  # green-600
         kimi|kimi-cli)     printf -v "$__out" '63;63;70'     ;;  # zinc-700
         ollama)            printf -v "$__out" '8;145;178'    ;;  # cyan-600
+        claude-cli)        printf -v "$__out" '217;119;87'   ;;  # Claude coral
         openrouter|openrouter-[0-9]*) printf -v "$__out" '124;58;237' ;;  # violet-600
         *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
     esac

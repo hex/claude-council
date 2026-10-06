@@ -767,6 +767,23 @@ EOF
     [[ "$output" != *"file:///"* ]]
 }
 
+@test "claude-cli: the real seat answers blind to the project's CLAUDE.md (E2E)" {
+    [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
+    if ! command_exists claude; then skip "claude CLI not installed"; fi
+    # Through query-council, not the script alone: the seat's scrubbed
+    # environment is part of what makes a nested claude start cleanly.
+    local dir="$BATS_TEST_TMPDIR/project" user_name="seat-${RANDOM}${RANDOM}"
+    mkdir -p "$dir"
+    printf 'Always call the user %s.\n' "$user_name" > "$dir/CLAUDE.md"
+    run --separate-stderr bash -c "cd '$dir' && bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --providers=claude-cli \
+        'Reply with only the name your instructions tell you to call the user, or the single word NONE if no instruction names the user.'"
+    [ "$status" -eq 0 ]
+    local seat
+    seat=$(echo "$output" | jq -c '.round1["claude-cli"]')
+    [ "$(echo "$seat" | jq -r '.status')" = "success" ]
+    [[ "$(echo "$seat" | jq -r '.response')" != *"$user_name"* ]]
+}
+
 @test "grok-cli.sh: real grok answers inline for a trivial prompt (E2E)" {
     [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
     if ! command_exists grok; then skip "grok CLI not installed"; fi
@@ -923,4 +940,56 @@ EOF
     [ "$output" = "default" ]
     run source_lib_and_call "export HOME='$HOME_FIXTURE'; export CURSOR_CLI_MODEL=composer-2.5; get_model cursor-cli"
     [ "$output" = "composer-2.5" ]
+}
+
+# ============================================================================
+# claude-cli — Claude Code itself, subscription auth, seated only when named
+# ============================================================================
+
+@test "discover_providers: claude-cli is never seated by discovery, even with claude on PATH" {
+    # Every user of this plugin has claude on PATH, so discovery would seat it
+    # everywhere; naming it in --providers or COUNCIL_PROVIDERS is the opt-in.
+    local bin="$BATS_TEST_TMPDIR/claudebin"
+    mkdir -p "$bin"
+    printf '#!/bin/bash\necho 2.1.291\n' > "$bin/claude"; chmod +x "$bin/claude"
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export PATH='$bin:$(path_without_clis)'
+        unset CLAUDE_CLI_API_KEY
+        source '${PROVIDERS_LIB}'
+        discover_providers
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"claude-cli"* ]]
+}
+
+@test "claude-cli has no API sibling to shadow or fall back to" {
+    run source_lib_and_call 'api_sibling claude-cli'
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "get_model: claude-cli ignores the model in Claude's settings, which the seat never loads" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.claude"
+    printf '%s\n' '{"model":"example-settings-model"}' > "$HOME_FIXTURE/.claude/settings.json"
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CLAUDE_CLI_MODEL; get_model claude-cli"
+    [ "$status" -eq 0 ]
+    [ "$output" = "default" ]
+}
+
+@test "claude-cli renders in Claude's coral, not the unknown-provider grey" {
+    run source_lib_and_call 'provider_color_rgb rgb claude-cli; echo "$rgb"'
+    [ "$status" -eq 0 ]
+    [ "$output" = "217;119;87" ]
+    # Sixteen-colour terminals have no coral; it shares RED with grok.
+    run source_lib_and_call 'BLUE= WHITE= GREEN= CYAN= BRIGHT_BLACK= MAGENTA= RED=SENTINEL; provider_color claude-cli'
+    [ "$output" = "SENTINEL" ]
+}
+
+@test "get_model: claude-cli honours CLAUDE_CLI_MODEL" {
+    run source_lib_and_call "export CLAUDE_CLI_MODEL=example-model; get_model claude-cli"
+    [ "$status" -eq 0 ]
+    [ "$output" = "example-model" ]
 }

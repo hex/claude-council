@@ -137,7 +137,8 @@ EXIT:   0 = success, non-zero = failure (error to stderr)
             model instead of surfacing the error (see Model Fallback below)
 ENV:    scrubbed by provider_env_scrub (lib/providers.sh) in the subshell
         that execs the script: base, proxy/CA and Windows variables,
-        COUNCIL_*, the provider's vendor prefixes and COUNCIL_PASS_ENV
+        COUNCIL_*, the provider's vendor prefixes and exact names (claude-cli
+        keeps CLAUDE_CODE_OAUTH_TOKEN and CLAUDE_CONFIG_DIR), and COUNCIL_PASS_ENV
         names stay; every other exported variable is unset. Nothing goes
         on an env -i argv, where ps would show a key.
 ```
@@ -177,13 +178,27 @@ Two flavors share the interface:
   stdin that is not a terminal. `cursor-cli` has no sibling: the council has no Cursor API
   seat, so its failure is final. It is gated on `cursor-agent`, not the `agent`
   name the installer links beside it, because the grok CLI ships an `agent` too.
+- **`claude-cli`** runs Claude Code itself (`claude -p`) on the user's claude.ai
+  login. Discovery never seats it, unlike every other CLI provider: `claude` is
+  on `PATH` for every user of this plugin, so it joins only when named in
+  `--providers` or `COUNCIL_PROVIDERS`. It runs with `--safe-mode --setting-sources "" --tools ""
+  --no-session-persistence`, so no CLAUDE.md, settings file, plugin, hook or MCP
+  server reaches it; admin policy and an organisation's server-side instructions
+  still do. Its scrubbed environment keeps `CLAUDE_CLI_*`,
+  `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_CONFIG_DIR` and drops `ANTHROPIC_API_KEY`,
+  and `check-status.sh` probes `claude auth status` under that same environment.
+  `get_model` reports `CLAUDE_CLI_MODEL` or `default`, never the model in
+  `settings.json`, which the seat does not load. It has no API sibling, and the
+  synthesis prompt counts its agreement as one voice, since Claude writes the
+  synthesis too.
 - **`ollama`**, also gated on the binary being on `PATH`, but local and keyless:
   it shadows nothing, has no API sibling, and costs nothing per call.
 
 Environment-based configuration:
 - `{PROVIDER}_API_KEY` - Required authentication for API providers
 - `{PROVIDER}_MODEL` - Model override (also applies to CLI providers via
-  `CODEX_MODEL` / `ANTIGRAVITY_MODEL` / `GROK_CLI_MODEL` / `KIMI_CLI_MODEL` / `CURSOR_CLI_MODEL`)
+  `CODEX_MODEL` / `ANTIGRAVITY_MODEL` / `GROK_CLI_MODEL` / `KIMI_CLI_MODEL` / `CURSOR_CLI_MODEL` /
+  `CLAUDE_CLI_MODEL`)
 - `COUNCIL_MAX_TOKENS` - Response length limit (API providers only; `ollama`
   raises its own base to 4096)
 - `COUNCIL_DEBUG` - Enable verbose logging
@@ -205,8 +220,8 @@ Per-provider disposition when an image is attached:
   kimi-cli→kimi — with the image. The route is taken only when the sibling is
   itself vision-capable, its key is set and it is not already a selected
   provider; otherwise the CLI answers text-only, prefixed with
-  `(answered without the image)`. **cursor-cli** has no sibling and answers
-  text-only.
+  `(answered without the image)`. **cursor-cli** and **claude-cli** have no
+  sibling and answer text-only.
 - **openrouter** accepts an image on its curated default, which is
   vision-capable. An `OPENROUTER_MODEL` override names one of hundreds of routed
   models whose modalities are not knowable from here, so it is treated as
@@ -279,7 +294,7 @@ script: a preferred-model exit 3 (see Provider Scripts below), or a cached
 verdict, retries once with the fallback. The substitution is reported on the
 response header, on stderr, and folded into the synthesis prompt.
 
-### The Empty Answer (every API provider, plus cursor-cli, kimi-cli and ollama)
+### The Empty Answer (every API provider, plus cursor-cli, claude-cli, kimi-cli and ollama)
 
 A provider that returns no visible text is an error even when HTTP says the
 call succeeded, so each of these seats asks whether the answer holds any
@@ -612,6 +627,7 @@ claude-council/
 │   │   ├── grok-cli.sh          # CLI (subscription auth, shadows grok)
 │   │   ├── kimi-cli.sh          # CLI (subscription auth, shadows kimi)
 │   │   ├── cursor-cli.sh        # CLI (subscription auth, no API sibling)
+│   │   ├── claude-cli.sh        # CLI (Claude subscription, seated only when named)
 │   │   └── ollama.sh            # Local (no key, no sibling)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
@@ -661,7 +677,7 @@ claude-council/
 │   ├── cache.bats
 │   ├── check-status.bats
 │   ├── check-status-probe.bats  # The probes themselves: endpoints, --max-time, keys off the argv
-│   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli, kimi-cli, cursor-cli, ollama)
+│   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli, kimi-cli, cursor-cli, claude-cli, ollama)
 │   ├── deadline.bats            # run_with_deadline: stdin passthrough, own status, 143 at the deadline
 │   ├── display.bats
 │   ├── export.bats
@@ -718,6 +734,7 @@ claude-council/
 | `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
 | `KIMI_CLI_MODEL` | (unset) | Model passed to `kimi -m`, only when set (else the kimi CLI's own configured model) |
 | `CURSOR_CLI_MODEL` | (unset) | Model passed to `cursor-agent --model`, only when set (else the model picked in the CLI). The CLI writes the passed model into its own config as the picked model, even when the plan rejects it |
+| `CLAUDE_CLI_MODEL` | (unset) | Model passed to `claude --model`, only when set (else the account's default model; the seat does not read `settings.json`) |
 | `OPENROUTER_MODEL` | `anthropic/claude-fable-5.1` | Any id from openrouter.ai/models (single seat) |
 | `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
 | `OPENROUTER_<N>_MODEL` | (unset) | Overrides roster seat N's entry, as `<PROVIDER>_MODEL` does for any provider; the exit-3 degrade path sets it so a roster entry never resends the model that just failed |

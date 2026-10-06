@@ -347,6 +347,8 @@ remediation_for() {
         kimi-cli:unauthed)    echo "kimi login" ;;
         cursor-cli:no_binary) echo "install the Cursor CLI (cursor-agent)" ;;
         cursor-cli:unauthed)  echo "cursor-agent login" ;;
+        claude-cli:no_binary) echo "install Claude Code (claude)" ;;
+        claude-cli:unauthed)  echo "claude auth login" ;;
         ollama:no_binary)     echo "install Ollama (ollama.com)" ;;
         ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;
@@ -387,6 +389,12 @@ antigravity_status=$(check_cli_provider "antigravity" "agy")
 grokcli_status=$(check_cli_provider "grok-cli" "grok" models)
 kimicli_status=$(check_cli_provider "kimi-cli" "kimi")
 cursorcli_status=$(check_cli_provider "cursor-cli" "cursor-agent" status)
+# Probed under the seat's own scrubbed environment: an ANTHROPIC_API_KEY makes
+# `claude auth status` report logged in, but the seat never receives it and
+# runs on the claude.ai login. Logged out exits 1. Discovery never seats it,
+# so a healthy row says how to.
+claudecli_status=$(provider_env_scrub claude-cli; check_cli_provider "claude-cli" "claude" auth status)
+[[ "$claudecli_status" == ok:* ]] && claudecli_status="${claudecli_status} · seat with --providers=claude-cli"
 ollama_status=$(check_cli_provider "ollama" "ollama" list)
 
 # Format output
@@ -525,6 +533,7 @@ else
 fi
 format_status "Kimi CLI" "kimi-cli" "$kimicli_status"
 format_status "Cursor CLI" "cursor-cli" "$cursorcli_status"
+format_status "Claude CLI" "claude-cli" "$claudecli_status"
 format_status "Ollama" "ollama" "$ollama_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
 format_status "Antigravity" "antigravity" "$antigravity_status"
@@ -542,6 +551,7 @@ echo ""
 [[ "$kimi_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$kimicli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$cursorcli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$claudecli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$ollama_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))

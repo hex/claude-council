@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Features
+- A `claude-cli` seat puts Claude Code itself on the council, on the Claude subscription you are already logged in with. Discovery never seats it, so name it in `--providers` or `COUNCIL_PROVIDERS`. It runs `claude -p --safe-mode --setting-sources "" --tools "" --no-session-persistence`, so your CLAUDE.md, settings, plugins, hooks and MCP servers stay out of it, and it gets no tools. It keeps `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_CONFIG_DIR` through the env scrub and never gets `ANTHROPIC_API_KEY`. `/claude-council:status` shows it with a `claude auth status` probe. On a Team or Enterprise account the organisation's server-side instructions still reach it. The synthesis counts its agreement as one voice, since Claude writes the synthesis too. Proposed by @maximzah, who also found the setting-sources, org-instructions and OAuth-token gaps. (#44)
+
 ## 2026.10.1
 
 ### Fixes
