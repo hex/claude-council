@@ -20,7 +20,7 @@ INLINE_ANSWER_GUARD="IMPORTANT: Respond with your complete answer as plain text 
 
 # Anti-injection framing for the untrusted half of a prompt. A --file document
 # and, in debate mode, every other member's round-one answer are spliced into
-# the shared prompt, so the same material reaches all ten providers, but only
+# the shared prompt, so the same material reaches every provider, but only
 # antigravity applies this today and kimi enforces the equivalent through its
 # agent file. Extending it to the rest is a live question, not a settled one.
 # Kept here so the wording has one home; prompts/kimi-cli-agent.md states the
