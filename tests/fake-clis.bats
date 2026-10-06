@@ -1035,6 +1035,76 @@ $off" ]
 }
 
 # ============================================================================
+# claude-cli.sh against the fake binary
+# ============================================================================
+
+@test "fixture: fake claude shadows any real claude on PATH" {
+    run command -v claude
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$FAKE_BIN_DIR/claude" ]]
+}
+
+@test "claude-cli.sh: returns the CLI's text answer" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-CLAUDE-RESPONSE: deterministic answer" ]
+}
+
+@test "claude-cli.sh: runs a blind headless session with no tools, settings or saved transcript" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset CLAUDE_CLI_MODEL
+    run "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    # The whole argument list, so an empty --setting-sources or --tools value
+    # that went missing in quoting fails here instead of shifting every flag.
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
+      '["-p","--safe-mode","--setting-sources","","--tools","","--no-session-persistence","--output-format","text"]' ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"test prompt"* ]]
+}
+
+@test "claude-cli.sh: a prompt past the argument limit still reaches the CLI whole" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    big_prompt 300000 > "$pf"
+    run "${PROVIDERS_DIR_REAL}/claude-cli.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [ "$(wc -c < "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" -gt 300000 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -c)" -lt 1000 ]
+}
+
+@test "claude-cli.sh: passes --model only when CLAUDE_CLI_MODEL is set" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    export CLAUDE_CLI_MODEL=example-model
+    run "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("--model") as $i | .[$i+1]')" = "example-model" ]
+}
+
+@test "claude-cli.sh: an empty answer is an error, not a blank answer" {
+    export COUNCIL_FAKE_BEHAVIOR=empty
+    run "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error from claude CLI: no answer in response" ]
+}
+
+@test "claude-cli.sh: a hung CLI is ended at COUNCIL_TIMEOUT" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_TIMEOUT=1
+    run "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"timed out after 1s"* ]]
+}
+
+@test "claude-cli.sh: reads the prompt from --prompt-file" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    printf 'prompt from file' > "$pf"
+    run "${PROVIDERS_DIR_REAL}/claude-cli.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"prompt from file"* ]]
+}
+
+# ============================================================================
 # A long stderr ahead of the cause, for the CLIs beside codex
 # ============================================================================
 
@@ -1052,4 +1122,8 @@ $off" ]
 
 @test "cursor-cli.sh: a failure buried under a long stderr still reports its cause" {
     assert_cause_after_noise cursor-cli.sh cursor-agent
+}
+
+@test "claude-cli.sh: a failure buried under a long stderr still reports its cause" {
+    assert_cause_after_noise claude-cli.sh claude
 }

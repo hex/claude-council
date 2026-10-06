@@ -1,4 +1,4 @@
-# ABOUTME: Installs fake codex/agy/grok/kimi/cursor-agent/ollama CLI executables onto PATH for hermetic tests
+# ABOUTME: Installs fake codex/agy/grok/kimi/cursor-agent/claude/ollama CLI executables onto PATH for hermetic tests
 # ABOUTME: Behavior switches via COUNCIL_FAKE_BEHAVIOR; calls recorded as JSONL in COUNCIL_FAKE_STATE_DIR
 
 # Behaviors (COUNCIL_FAKE_BEHAVIOR):
@@ -44,7 +44,7 @@ install_fake_clis() {
     export FAKE_BIN_DIR COUNCIL_FAKE_STATE_DIR
 
     local bin
-    for bin in codex agy grok kimi cursor-agent ollama; do
+    for bin in codex agy grok kimi cursor-agent claude ollama; do
         write_fake_cli "$bin"
     done
     PATH="$FAKE_BIN_DIR:$PATH"
@@ -143,6 +143,26 @@ fi
 # "Not logged in" on stdout and exit 0, never a non-zero exit
 if [[ "\${1:-}" == "status" && "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then
     echo "Not logged in"
+    exit 0
+fi
+EOF
+    fi
+    if [[ "$bin" == "claude" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<EOF
+# -p with no prompt argument reads the prompt from stdin; keep a copy so a
+# test can assert what reached the CLI and that it never rode argv.
+if [[ " \$* " == *" -p "* ]]; then
+    cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
+fi
+# The real CLI answers "claude auth status" with JSON on stdout: logged out
+# is "loggedIn": false and exit 1, logged in is exit 0. An ANTHROPIC_API_KEY
+# in the environment counts as logged in, whatever the claude.ai login says.
+if [[ "\${1:-} \${2:-}" == "auth status" ]]; then
+    if [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" && -z "\${ANTHROPIC_API_KEY:-}" ]]; then
+        echo '{"loggedIn": false, "authMethod": "none"}'
+        exit 1
+    fi
+    echo '{"loggedIn": true, "authMethod": "claude.ai"}'
     exit 0
 fi
 EOF
