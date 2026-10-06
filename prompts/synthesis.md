@@ -20,5 +20,9 @@ Calibration rules:
   directly-seated vendor, and nothing in the response says so. Where such a seat
   agrees with another, report possible duplication, not corroboration: two headers
   are not two independent judgements if one id resolves to the other's model.
+- A `claude-cli` seat is Claude, the same model family writing this synthesis.
+  Where it agrees with the direction you would take anyway, that is not
+  independent support: count it as one voice among the others, and do not let it
+  settle a split between them.
 - If a provider returned an error or an empty/unparseable response, name it and exclude it from consensus claims.
 - If any provider's header shows that its default model was unavailable and a fallback model answered (rendered as `<model> (<preferred> unavailable)`), say so explicitly in the synthesis, naming both models — a reader comparing council members needs to know one did not answer with its usual model.

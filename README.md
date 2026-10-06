@@ -73,6 +73,7 @@ Inside tmux, results stream into a side pane in real time with vendor-colored ba
 - Seat any model OpenRouter routes to — Anthropic's Claude by default, so the council
   hears the one vendor it otherwise has no voice for
 - Use the `codex`, `agy` (Antigravity), `grok`, `kimi` (Kimi Code) and `cursor-agent` (Cursor) CLIs (subscription auth) when installed; the first four are preferred over their API siblings
+- Seat Claude Code itself (`claude-cli`) on your Claude subscription, opt-in, running without your CLAUDE.md, settings or plugins
 - Run a local `ollama` model as a council member — no key, no subscription, no network
 - Side-by-side comparison of responses with vendor-colored headers
 - Streaming tmux pane that renders responses as they land
@@ -555,6 +556,13 @@ If the `codex`, `agy`, `grok`, `kimi`, or `cursor-agent` CLIs are installed and 
 
 `ollama` is also discovered from `PATH`, but it is local and keyless rather than subscription-backed, so it shadows nothing and has no API sibling.
 
+**Claude CLI seat (`claude-cli`), opt-in.** Claude Code itself can sit on the council, on the Claude subscription you are already logged in with. Discovery never seats it, since every user of this plugin has `claude` on `PATH`; name it with `--providers=...,claude-cli` or in `COUNCIL_PROVIDERS`. It runs `claude -p --safe-mode --setting-sources "" --tools "" --no-session-persistence`, so it gets the same prompt as every other seat and none of your setup: no CLAUDE.md, settings, plugins, hooks (this plugin's Stop gate included), MCP servers or tools, and nothing lands in your session history. It uses the account's default model unless `CLAUDE_CLI_MODEL` is set, and has no API sibling to fall back to. Things to know before seating it:
+
+- It draws on the same subscription limits as the session you are driving it from, and `--debate` makes two calls per question.
+- It authenticates with your claude.ai login, or `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_CONFIG_DIR` when set. `ANTHROPIC_API_KEY` is never passed to it, so it never bills the API.
+- On a Team or Enterprise account it is not fully blind: your organisation's server-side instructions and managed policy settings still reach it, the same ones the driving session gets. No CLI flag removes them.
+- Claude writes the synthesis too, so it counts this seat's agreement as one voice, not independent support.
+
 CLI providers use your existing CLI subscription: no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai`, `--providers=gemini`, `--providers=grok`, or `--providers=kimi`. Listing both API and CLI together (e.g., `--providers=grok,grok-cli`) runs them side-by-side for comparison.
 
 If a CLI provider fails at query time and its API sibling's key is set, the council automatically retries through that API sibling and marks the slot as a fallback: the answer is shown under the CLI slot with the API model's name, a "fell back to … API" note, and the CLI's own error as the reason; the pane row reads `fallback` with `<model> via <sibling> API`. The fallback is skipped when the sibling is already in your selected providers, so you never get the same vendor's answer twice.
@@ -572,6 +580,7 @@ export ANTIGRAVITY_MODEL="Gemini 3.1 Pro (High)"  # default: the model selected 
 export GROK_CLI_MODEL="grok-4.3"                # default: the grok CLI's own default model
 export KIMI_CLI_MODEL="kimi-k3"                 # default: the kimi CLI's own configured model
 export CURSOR_CLI_MODEL="composer-2.5"          # default: the model picked in the Cursor CLI (paid plans only)
+export CLAUDE_CLI_MODEL="fable"                 # default: the account's default model (settings.json is not read)
 ```
 
 The Antigravity CLI cannot take its prompt on stdin — `--print` with no value
