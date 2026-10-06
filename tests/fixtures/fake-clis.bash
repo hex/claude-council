@@ -9,7 +9,10 @@
 #   long-block-verdict - the same verdict followed by 200 KB of review, several
 #                    times what a pipe holds
 #   rate-limit     - 429 message on stderr, exit 1
-#   auth-failure   - login-required message on stderr, exit 1
+#   auth-failure   - login-required message on stderr, exit 1; claude answers
+#                    `auth status` with loggedIn:false and exit 1, unless an
+#                    ANTHROPIC_API_KEY is set, which the real CLI counts as
+#                    logged in
 #   slow           - sleep COUNCIL_FAKE_SLEEP (default 5s) then respond
 #   hang           - exec sleep COUNCIL_FAKE_SLEEP (default 300s); replaces the
 #                    process so the deadline watchdog's SIGTERM kills it cleanly
