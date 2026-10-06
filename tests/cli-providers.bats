@@ -979,6 +979,15 @@ EOF
     [ "$output" = "default" ]
 }
 
+@test "claude-cli renders in Claude's coral, not the unknown-provider grey" {
+    run source_lib_and_call 'provider_color_rgb rgb claude-cli; echo "$rgb"'
+    [ "$status" -eq 0 ]
+    [ "$output" = "217;119;87" ]
+    # Sixteen-colour terminals have no coral; it shares RED with grok.
+    run source_lib_and_call 'BLUE= WHITE= GREEN= CYAN= BRIGHT_BLACK= MAGENTA= RED=SENTINEL; provider_color claude-cli'
+    [ "$output" = "SENTINEL" ]
+}
+
 @test "get_model: claude-cli honours CLAUDE_CLI_MODEL" {
     run source_lib_and_call "export CLAUDE_CLI_MODEL=example-model; get_model claude-cli"
     [ "$status" -eq 0 ]

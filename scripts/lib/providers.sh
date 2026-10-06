@@ -468,7 +468,8 @@ provider_color() {
     case "$1" in
         gemini|antigravity) echo -e "${BLUE:-}" ;;
         openai|codex)      echo -e "${WHITE:-}" ;;
-        grok|grok-cli)     echo -e "${RED:-}" ;;
+        # claude-cli has no sixteen-colour coral, so it shares grok's red.
+        grok|grok-cli|claude-cli) echo -e "${RED:-}" ;;
         perplexity)        echo -e "${GREEN:-}" ;;
         kimi|kimi-cli)     echo -e "${BRIGHT_BLACK:-}" ;;
         ollama)            echo -e "${CYAN:-}" ;;
@@ -491,6 +492,7 @@ provider_color_rgb() {
         perplexity)        printf -v "$__out" '22;163;74'    ;;  # green-600
         kimi|kimi-cli)     printf -v "$__out" '63;63;70'     ;;  # zinc-700
         ollama)            printf -v "$__out" '8;145;178'    ;;  # cyan-600
+        claude-cli)        printf -v "$__out" '217;119;87'   ;;  # Claude coral
         openrouter|openrouter-[0-9]*) printf -v "$__out" '124;58;237' ;;  # violet-600
         *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
     esac
