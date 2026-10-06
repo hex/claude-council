@@ -278,6 +278,20 @@ setup() {
     [[ "$output" == *"claude auth login"* ]]
 }
 
+@test "check-status: a missing claude names Claude Code as what to install" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    rm "$FAKE_BIN_DIR/claude"
+    # Drop only the directory a real claude lives in, so jq and bash stay
+    # reachable; on a machine without one the PATH is left alone.
+    local real_dir clean
+    real_dir=$(dirname "$(command -v claude 2>/dev/null)" 2>/dev/null || true)
+    clean=$PATH
+    [[ -n "$real_dir" ]] && clean=$(echo "$PATH" | tr ':' '\n' | grep -vxF -- "$real_dir" | paste -sd: -)
+    run bash -c "export PATH='$clean'; bash '$SCRIPT'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"install Claude Code (claude)"* ]]
+}
+
 @test "check-status: a missing cursor-agent names the binary to install" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     rm "$FAKE_BIN_DIR/cursor-agent"

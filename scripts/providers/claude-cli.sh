@@ -43,9 +43,12 @@ ${PROMPT}"
 # --tools "": the prompt can carry --file contents or another seat's answer,
 # so the seat gets no tool to act on them with.
 # --no-session-persistence: nothing of the run lands in the user's history.
+# --output-format json: an array of events whose "result" event carries the
+# answer. A reached usage limit or an API error still exits 0, with its message
+# as the result and is_error true; plain text could not tell the two apart.
 # A bare -p reads the prompt from stdin, which keeps the whole prompt off argv
 # (see cursor-cli.sh for the argument limit this avoids).
-ARGS=(-p --safe-mode --setting-sources "" --tools "" --no-session-persistence --output-format text)
+ARGS=(-p --safe-mode --setting-sources "" --tools "" --no-session-persistence --output-format json)
 # --model only on an explicit override, so an unset CLAUDE_CLI_MODEL defers to
 # the account's default model (mirrors codex.sh and cursor-cli.sh).
 [[ -n "${CLAUDE_CLI_MODEL:-}" ]] && ARGS+=(--model "$CLAUDE_CLI_MODEL")
@@ -63,7 +66,15 @@ trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
 if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" claude "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
 if [[ $rc -eq 0 ]]; then
-    RESPONSE=$(<"$OUT_TMP")
+    # The last result event, from an array or a lone object. Unparseable
+    # output reads as no answer rather than aborting under set -e.
+    RESULT=$(jq -c 'if type == "array" then .[] else . end
+                    | select(type == "object" and .type == "result")' "$OUT_TMP" 2>/dev/null | tail -1 || true)
+    RESPONSE=$(jq -r '.result // empty' <<<"$RESULT" 2>/dev/null || true)
+    if [[ "$(jq -r '.is_error // false' <<<"$RESULT" 2>/dev/null)" == "true" ]]; then
+        echo "Error from claude CLI: ${RESPONSE:-error result with no message}" >&2
+        exit 1
+    fi
     if [[ ! "$RESPONSE" =~ [^[:space:]] ]]; then
         echo "Error from claude CLI: no answer in response" >&2
         exit 1

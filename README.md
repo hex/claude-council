@@ -560,6 +560,7 @@ If the `codex`, `agy`, `grok`, `kimi`, or `cursor-agent` CLIs are installed and 
 
 - It draws on the same subscription limits as the session you are driving it from, and `--debate` makes two calls per question.
 - It authenticates with your claude.ai login, or `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_CONFIG_DIR` when set. `ANTHROPIC_API_KEY` is never passed to it, so it never bills the API.
+- If your Claude Code reaches Claude through Bedrock, Vertex or a gateway instead, the seat loses those settings to the same scrub. Name the variables it needs in `COUNCIL_PASS_ENV`, for example `COUNCIL_PASS_ENV=CLAUDE_CODE_USE_BEDROCK,AWS_REGION,AWS_PROFILE`.
 - On a Team or Enterprise account it is not fully blind: your organisation's server-side instructions and managed policy settings still reach it, the same ones the driving session gets. No CLI flag removes them.
 - Claude writes the synthesis too, so it counts this seat's agreement as one voice, not independent support.
 

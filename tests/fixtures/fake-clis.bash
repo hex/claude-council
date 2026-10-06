@@ -4,6 +4,7 @@
 # Behaviors (COUNCIL_FAKE_BEHAVIOR):
 #   valid          - deterministic success response (default)
 #   empty          - exit 0 with no output
+#   error-result   - claude only: a JSON result event with is_error true, exit 0
 #   malformed-json - syntactically broken JSON on stdout
 #   block-verdict  - stop-gate reviewer reply whose first line is BLOCK:
 #   long-block-verdict - the same verdict followed by 200 KB of review, several
@@ -156,6 +157,22 @@ EOF
 # test can assert what reached the CLI and that it never rode argv.
 if [[ " \$* " == *" -p "* ]]; then
     cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
+fi
+# The real CLI answers -p --output-format json with a JSON array of events;
+# the last, type "result", carries the answer, is_error and subtype. An API
+# error or a reached usage limit still exits 0, with is_error true.
+if [[ " \$* " == *" --output-format json "* ]]; then
+    case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
+        valid)
+            echo '[{"type":"system","subtype":"init"},{"type":"assistant"},{"type":"result","subtype":"success","is_error":false,"result":"$marker: deterministic answer"}]'
+            exit 0 ;;
+        empty)
+            echo '[{"type":"system","subtype":"init"},{"type":"result","subtype":"success","is_error":false,"result":""}]'
+            exit 0 ;;
+        error-result)
+            echo '[{"type":"system","subtype":"init"},{"type":"result","subtype":"success","is_error":true,"result":"API Error: 529 Overloaded"}]'
+            exit 0 ;;
+    esac
 fi
 # The real CLI answers "claude auth status" with JSON on stdout: logged out
 # is "loggedIn": false and exit 1, logged in is exit 0. An ANTHROPIC_API_KEY

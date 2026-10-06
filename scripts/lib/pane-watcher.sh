@@ -108,6 +108,7 @@ print_banner() {
         grok|grok-cli)     bg='185;28;28';   fg='255;255;255'; accent='252;165;165' ;;  # red-700/300
         perplexity)        bg='21;128;61';   fg='255;255;255'; accent='134;239;172' ;;  # green-700/300
         openrouter|openrouter-[0-9]*) bg='109;40;217'; fg='255;255;255'; accent='196;181;253' ;;  # violet-700/300
+        claude-cli)        bg='180;83;52';   fg='255;255;255'; accent='246;200;183' ;;  # Claude coral, darkened for white text
         # kimi and every unknown provider share the neutral gray.
         *)                 bg='55;65;81';    fg='255;255;255'; accent='156;163;175' ;;  # gray-700/400
     esac

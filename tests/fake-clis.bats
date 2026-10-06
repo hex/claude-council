@@ -1044,7 +1044,7 @@ $off" ]
     [[ "$output" == "$FAKE_BIN_DIR/claude" ]]
 }
 
-@test "claude-cli.sh: returns the CLI's text answer" {
+@test "claude-cli.sh: returns the answer from the result event" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     run "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
@@ -1059,7 +1059,7 @@ $off" ]
     # The whole argument list, so an empty --setting-sources or --tools value
     # that went missing in quoting fails here instead of shifting every flag.
     [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
-      '["-p","--safe-mode","--setting-sources","","--tools","","--no-session-persistence","--output-format","text"]' ]
+      '["-p","--safe-mode","--setting-sources","","--tools","","--no-session-persistence","--output-format","json"]' ]
     [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"test prompt"* ]]
 }
 
@@ -1086,6 +1086,16 @@ $off" ]
     run "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
     [ "$status" -eq 1 ]
     [ "$output" = "Error from claude CLI: no answer in response" ]
+}
+
+@test "claude-cli.sh: an error result is an error even though the CLI exits 0" {
+    # A reached usage limit or an API error comes back as the result text with
+    # is_error true; passing it on would seat an error message as an opinion.
+    export COUNCIL_FAKE_BEHAVIOR=error-result
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+    [ "$stderr" = "Error from claude CLI: API Error: 529 Overloaded" ]
 }
 
 @test "claude-cli.sh: a hung CLI is ended at COUNCIL_TIMEOUT" {

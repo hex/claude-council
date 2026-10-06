@@ -375,7 +375,7 @@ get_model() {
         # No cli_config_model arm: the seat runs with --setting-sources "", so
         # the model in Claude's settings.json is never what it uses.
         claude-cli) cli_model claude-cli "${CLAUDE_CLI_MODEL:-}" ;;
-        ollama)    echo "${OLLAMA_MODEL:-local}" ;;
+        ollama)     echo "${OLLAMA_MODEL:-local}" ;;
         # Pinned rather than an alias for the reason stated above, and pinned to
         # an Anthropic id because that is the one vendor the council otherwise
         # has no voice for. A router's default is retargetable by design:
