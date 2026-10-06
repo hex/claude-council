@@ -106,18 +106,27 @@ provider_env_prefix() {
 # start would otherwise hand each provider, and each CLI agent, every other
 # vendor's key. What stays: the base a process needs, proxy and CA settings,
 # the Windows variables Git Bash's node CLIs need, COUNCIL_*, the provider's
-# own vendor prefixes, and any names listed in COUNCIL_PASS_ENV
+# own vendor prefixes and exact names, and any names listed in COUNCIL_PASS_ENV
 # (comma-separated). Windows keeps some of these names in mixed case, so the
 # match ignores case.
 # Usage: provider_env_scrub <provider>
 provider_env_scrub() {
     local provider="$1" name prefix keep families pass=",${COUNCIL_PASS_ENV:-},"
+    # Names a provider keeps whole, for logins that live outside its prefix.
+    local exact=","
     case "$provider" in
         gemini|antigravity)         families="GEMINI_ GOOGLE_ ANTIGRAVITY_" ;;
         openai|codex)               families="OPENAI_ CODEX_" ;;
         grok|grok-cli)              families="GROK_ XAI_" ;;
         kimi|kimi-cli)              families="KIMI_ MOONSHOT_" ;;
         cursor-cli)                 families="CURSOR_" ;;
+        # The two variables a setup-token or relocated login authenticates
+        # through, by exact name: the driving session exports more under
+        # CLAUDE_CODE_ (its session id, its messaging socket and token), and
+        # none of that belongs in a seat. ANTHROPIC_API_KEY is dropped too, so
+        # the seat runs on the claude.ai login rather than billing the API.
+        claude-cli)                 families="CLAUDE_CLI_"
+                                    exact=",CLAUDE_CODE_OAUTH_TOKEN,CLAUDE_CONFIG_DIR," ;;
         openrouter|openrouter-*)    families="OPENROUTER_" ;;
         *)                          families="$(provider_env_prefix "$provider")_" ;;
     esac
@@ -133,7 +142,7 @@ provider_env_scrub() {
         for prefix in $families; do
             if [[ "$name" == "$prefix"* ]]; then keep=1; fi
         done
-        if [[ "$pass" == *",${name},"* ]]; then keep=1; fi
+        if [[ "$pass" == *",${name},"* || "$exact" == *",${name},"* ]]; then keep=1; fi
         if (( keep == 0 )); then unset "$name" 2>/dev/null || true; fi
     done
     shopt -u nocasematch

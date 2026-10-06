@@ -548,6 +548,7 @@ env_reporting_provider() {
     env_reporting_provider "$fakedir" gemini
     run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY=example-key GEMINI_MODEL=gemini-x \
         OPENAI_API_KEY=other-key BWS_ACCESS_TOKEN=vault EXAMPLE_DB_PASSWORD=pw \
+        CLAUDE_CODE_OAUTH_TOKEN=example-token \
         "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=gemini "ping"
     [ "$status" -eq 0 ]
     local seen
@@ -555,7 +556,7 @@ env_reporting_provider() {
     for name in GEMINI_API_KEY GEMINI_MODEL PATH HOME COUNCIL_SEAT; do
         [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
     done
-    for name in OPENAI_API_KEY BWS_ACCESS_TOKEN EXAMPLE_DB_PASSWORD PROVIDERS_DIR_REAL; do
+    for name in OPENAI_API_KEY BWS_ACCESS_TOKEN EXAMPLE_DB_PASSWORD CLAUDE_CODE_OAUTH_TOKEN PROVIDERS_DIR_REAL; do
         [[ "$seen" != *" $name "* ]] || { echo "leaked $name in:$seen"; return 1; }
     done
 }
@@ -571,6 +572,25 @@ env_reporting_provider() {
     seen=" $(echo "$output" | jq -r '.round1.gemini.response') "
     [[ "$seen" == *" EXAMPLE_CA_PATH "* ]]
     [[ "$seen" != *" EXAMPLE_DB_PASSWORD "* ]]
+}
+
+@test "query-council: claude-cli keeps its login variables and none of the driving session's" {
+    local fakedir="${BATS_TEST_TMPDIR}/env-claude-cli"
+    env_reporting_provider "$fakedir" claude-cli
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" CLAUDE_CLI_MODEL=example-model \
+        CLAUDE_CODE_OAUTH_TOKEN=example-token CLAUDE_CONFIG_DIR=/tmp/example-config \
+        CLAUDE_CODE_SESSION_ID=example-session CLAUDE_CODE_MESSAGING_SOCKET=/tmp/example.sock \
+        CLAUDECODE=1 ANTHROPIC_API_KEY=example-key \
+        "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=claude-cli "ping"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=" $(echo "$output" | jq -r '.round1["claude-cli"].response') "
+    for name in CLAUDE_CLI_MODEL CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CONFIG_DIR PATH HOME; do
+        [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
+    done
+    for name in CLAUDE_CODE_SESSION_ID CLAUDE_CODE_MESSAGING_SOCKET CLAUDECODE ANTHROPIC_API_KEY; do
+        [[ "$seen" != *" $name "* ]] || { echo "leaked $name in:$seen"; return 1; }
+    done
 }
 
 @test "query-council: grok gets the xAI key it is issued under" {
