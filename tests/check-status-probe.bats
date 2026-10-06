@@ -80,7 +80,7 @@ setup() {
     [[ "$output" == *"qwen/qwen3-max"* ]]
     # The single unnumbered row must be gone, not joined by three more.
     [[ "$output" != *"anthropic/claude-fable-5.1"* ]]
-    [[ "$output" == *"14/14 providers available"* ]]
+    [[ "$output" == *"15/15 providers available"* ]]
 }
 
 # The key is what the probe tests, and every seat shares it, so a roster must not
