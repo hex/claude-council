@@ -63,11 +63,12 @@ trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
 if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" claude "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
 if [[ $rc -eq 0 ]]; then
-    if ! grep -q '[^[:space:]]' "$OUT_TMP"; then
+    RESPONSE=$(<"$OUT_TMP")
+    if [[ ! "$RESPONSE" =~ [^[:space:]] ]]; then
         echo "Error from claude CLI: no answer in response" >&2
         exit 1
     fi
-    cat "$OUT_TMP"
+    echo "$RESPONSE"
 else
     cli_failure_message "claude" "$rc" "$COUNCIL_TIMEOUT" "$ERR_TMP" >&2
     exit 1

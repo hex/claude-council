@@ -778,10 +778,8 @@ EOF
     run --separate-stderr bash -c "cd '$dir' && bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --providers=claude-cli \
         'Reply with only the name your instructions tell you to call the user, or the single word NONE if no instruction names the user.'"
     [ "$status" -eq 0 ]
-    local seat
-    seat=$(echo "$output" | jq -c '.round1["claude-cli"]')
-    [ "$(echo "$seat" | jq -r '.status')" = "success" ]
-    [[ "$(echo "$seat" | jq -r '.response')" != *"$user_name"* ]]
+    assert_json_eq "$output" '.round1["claude-cli"].status' success
+    [[ "$(echo "$output" | jq -r '.round1["claude-cli"].response')" != *"$user_name"* ]]
 }
 
 @test "grok-cli.sh: real grok answers inline for a trivial prompt (E2E)" {

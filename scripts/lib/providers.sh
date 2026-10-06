@@ -5,9 +5,6 @@
 # Discover which provider scripts are available to query.
 # API providers are gated on their <NAME>_API_KEY env var; subscription-auth
 # CLI providers (codex, antigravity, grok-cli, kimi-cli, cursor-cli) are gated on their binary being on PATH.
-# claude-cli has no arm: claude is on PATH for every user of this plugin, so it
-# is seated only when named in --providers or COUNCIL_PROVIDERS. Under the
-# default arm it would need a CLAUDE_CLI_API_KEY, which no one sets.
 discover_providers() {
     local available=()
 
@@ -34,6 +31,11 @@ discover_providers() {
                 # cursor-agent, not the bare `agent` the installer also links:
                 # the grok CLI ships an `agent` too, so that name proves nothing.
                 command -v cursor-agent >/dev/null 2>&1 && is_available=true
+                ;;
+            claude-cli)
+                # Never discovered: claude is on PATH for every user of this
+                # plugin, so it is seated only when named in --providers or
+                # COUNCIL_PROVIDERS.
                 ;;
             ollama)
                 command -v ollama >/dev/null 2>&1 && is_available=true
