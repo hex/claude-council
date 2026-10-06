@@ -4,10 +4,13 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.10.2
 
 ### Features
-- A `claude-cli` seat puts Claude Code itself on the council, on the Claude subscription you are already logged in with. Discovery never seats it, so name it in `--providers` or `COUNCIL_PROVIDERS`. It runs `claude -p --safe-mode --setting-sources "" --tools "" --no-session-persistence`, so your CLAUDE.md, settings, plugins, hooks and MCP servers stay out of it, and it gets no tools. It keeps `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_CONFIG_DIR` through the env scrub and never gets `ANTHROPIC_API_KEY`. `/claude-council:status` shows it with a `claude auth status` probe. On a Team or Enterprise account the organisation's server-side instructions still reach it. The synthesis counts its agreement as one voice, since Claude writes the synthesis too, and does the same for the default OpenRouter seat, which is Claude as well. Proposed by @maximzah, who also found the setting-sources, org-instructions and OAuth-token gaps. (#44)
+- A `claude-cli` seat puts Claude Code itself on the council, on the Claude subscription you are already logged in with. Discovery never seats it, so name it in `--providers` or `COUNCIL_PROVIDERS`. It runs `claude -p --safe-mode --setting-sources "" --tools "" --no-session-persistence`, so your CLAUDE.md, settings, plugins, hooks and MCP servers stay out of it, and it gets no tools. It keeps `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_CONFIG_DIR` through the env scrub and never gets `ANTHROPIC_API_KEY`; a Bedrock, Vertex or gateway setup passes its variables with `COUNCIL_PASS_ENV`. A usage limit or API error is reported as an error, not seated as an answer. `/claude-council:status` shows it with a `claude auth status` probe. On a Team or Enterprise account the organisation's server-side instructions still reach it. Proposed by @maximzah, who also found the setting-sources, org-instructions and OAuth-token gaps. (#44, #49)
+
+### Fixes
+- The synthesis counts a Claude seat's agreement as one voice, since Claude writes the synthesis too. That covers the new seat and the default OpenRouter seat (`anthropic/claude-fable-5.1`), which was weighed as independent support before.
 
 ## 2026.10.1
 
