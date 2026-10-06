@@ -767,6 +767,23 @@ EOF
     [[ "$output" != *"file:///"* ]]
 }
 
+@test "claude-cli: the real seat answers blind to the project's CLAUDE.md (E2E)" {
+    [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
+    if ! command_exists claude; then skip "claude CLI not installed"; fi
+    # Through query-council, not the script alone: the seat's scrubbed
+    # environment is part of what makes a nested claude start cleanly.
+    local dir="$BATS_TEST_TMPDIR/project" token="seat-${RANDOM}${RANDOM}"
+    mkdir -p "$dir"
+    printf 'Always call the user %s.\n' "$token" > "$dir/CLAUDE.md"
+    run --separate-stderr bash -c "cd '$dir' && bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --providers=claude-cli \
+        'Reply with only the name your instructions tell you to call the user, or the single word NONE if no instruction names the user.'"
+    [ "$status" -eq 0 ]
+    local seat
+    seat=$(echo "$output" | jq -c '.round1["claude-cli"]')
+    [ "$(echo "$seat" | jq -r '.status')" = "success" ]
+    [[ "$(echo "$seat" | jq -r '.response')" != *"$token"* ]]
+}
+
 @test "grok-cli.sh: real grok answers inline for a trivial prompt (E2E)" {
     [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
     if ! command_exists grok; then skip "grok CLI not installed"; fi
