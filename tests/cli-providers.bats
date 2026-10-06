@@ -924,3 +924,46 @@ EOF
     run source_lib_and_call "export HOME='$HOME_FIXTURE'; export CURSOR_CLI_MODEL=composer-2.5; get_model cursor-cli"
     [ "$output" = "composer-2.5" ]
 }
+
+# ============================================================================
+# claude-cli — Claude Code itself, subscription auth, seated only when named
+# ============================================================================
+
+@test "discover_providers: claude-cli is never seated by discovery, even with claude on PATH" {
+    # Every user of this plugin has claude on PATH, so discovery would seat it
+    # everywhere; naming it in --providers or COUNCIL_PROVIDERS is the opt-in.
+    local bin="$BATS_TEST_TMPDIR/claudebin"
+    mkdir -p "$bin"
+    printf '#!/bin/bash\necho 2.1.291\n' > "$bin/claude"; chmod +x "$bin/claude"
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export PATH='$bin:$(path_without_clis)'
+        unset CLAUDE_CLI_API_KEY
+        source '${PROVIDERS_LIB}'
+        discover_providers
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"claude-cli"* ]]
+}
+
+@test "claude-cli has no API sibling to shadow or fall back to" {
+    run source_lib_and_call 'api_sibling claude-cli'
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "get_model: claude-cli ignores the model in Claude's settings, which the seat never loads" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.claude"
+    printf '%s\n' '{"model":"example-settings-model"}' > "$HOME_FIXTURE/.claude/settings.json"
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset CLAUDE_CLI_MODEL; get_model claude-cli"
+    [ "$status" -eq 0 ]
+    [ "$output" = "default" ]
+}
+
+@test "get_model: claude-cli honours CLAUDE_CLI_MODEL" {
+    run source_lib_and_call "export CLAUDE_CLI_MODEL=example-model; get_model claude-cli"
+    [ "$status" -eq 0 ]
+    [ "$output" = "example-model" ]
+}

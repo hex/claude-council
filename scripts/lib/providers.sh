@@ -5,6 +5,9 @@
 # Discover which provider scripts are available to query.
 # API providers are gated on their <NAME>_API_KEY env var; subscription-auth
 # CLI providers (codex, antigravity, grok-cli, kimi-cli, cursor-cli) are gated on their binary being on PATH.
+# claude-cli has no arm: claude is on PATH for every user of this plugin, so it
+# is seated only when named in --providers or COUNCIL_PROVIDERS. Under the
+# default arm it would need a CLAUDE_CLI_API_KEY, which no one sets.
 discover_providers() {
     local available=()
 
@@ -367,7 +370,10 @@ get_model() {
         kimi)       echo "${KIMI_MODEL:-kimi-k3}" ;;
         kimi-cli)   cli_model kimi-cli "${KIMI_CLI_MODEL:-}" ;;
         cursor-cli) cli_model cursor-cli "${CURSOR_CLI_MODEL:-}" ;;
-        ollama)     echo "${OLLAMA_MODEL:-local}" ;;
+        # No cli_config_model arm: the seat runs with --setting-sources "", so
+        # the model in Claude's settings.json is never what it uses.
+        claude-cli) cli_model claude-cli "${CLAUDE_CLI_MODEL:-}" ;;
+        ollama)    echo "${OLLAMA_MODEL:-local}" ;;
         # Pinned rather than an alias for the reason stated above, and pinned to
         # an Anthropic id because that is the one vendor the council otherwise
         # has no voice for. A router's default is retargetable by design:
