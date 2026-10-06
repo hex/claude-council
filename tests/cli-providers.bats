@@ -772,16 +772,16 @@ EOF
     if ! command_exists claude; then skip "claude CLI not installed"; fi
     # Through query-council, not the script alone: the seat's scrubbed
     # environment is part of what makes a nested claude start cleanly.
-    local dir="$BATS_TEST_TMPDIR/project" token="seat-${RANDOM}${RANDOM}"
+    local dir="$BATS_TEST_TMPDIR/project" user_name="seat-${RANDOM}${RANDOM}"
     mkdir -p "$dir"
-    printf 'Always call the user %s.\n' "$token" > "$dir/CLAUDE.md"
+    printf 'Always call the user %s.\n' "$user_name" > "$dir/CLAUDE.md"
     run --separate-stderr bash -c "cd '$dir' && bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --providers=claude-cli \
         'Reply with only the name your instructions tell you to call the user, or the single word NONE if no instruction names the user.'"
     [ "$status" -eq 0 ]
     local seat
     seat=$(echo "$output" | jq -c '.round1["claude-cli"]')
     [ "$(echo "$seat" | jq -r '.status')" = "success" ]
-    [[ "$(echo "$seat" | jq -r '.response')" != *"$token"* ]]
+    [[ "$(echo "$seat" | jq -r '.response')" != *"$user_name"* ]]
 }
 
 @test "grok-cli.sh: real grok answers inline for a trivial prompt (E2E)" {
