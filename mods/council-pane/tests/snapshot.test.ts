@@ -50,3 +50,13 @@ test('a run still going reads as not done', async () => {
   expect(view.isDone).toBe(false)
   expect(view.providers).toEqual([{ name: 'gemini', state: 'querying' }])
 })
+
+test('the names in the cancel folder are the seats pressed for cancel', async () => {
+  const fs = {
+    exists: async (path: string) => path === `${RUN}/cancel` || path === `${RUN}/status`,
+    read: async (path: string) => (path === `${RUN}/status` ? 'grok\tquerying\t\t\n' : ''),
+    list: async (dir: string) => (dir === `${RUN}/cancel` ? [{ kind: 'file', name: 'grok' }, { kind: 'file', name: '.tmp' }] : []),
+  }
+  expect((await readView(fs, RUN)).cancels).toEqual(['grok'])
+  expect((await readView(runEndingAfter(1000), RUN)).cancels).toEqual([])
+})

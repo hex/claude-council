@@ -1,7 +1,7 @@
 // ABOUTME: Tests for parsing the watch dir's status log into per-provider state
 // ABOUTME: Fixtures mirror the tab-separated lines pane_status_event appends
 import { test, expect } from 'bun:test'
-import { lastEvent, parseStatus } from '../hooks/status'
+import { count, ENDED_STATES, lastEvent, parseStatus } from '../hooks/status'
 
 test('the last line for a provider wins, in first-seen order', () => {
   const log = 'gemini\tquerying\t\t\nopenai\tquerying\t\t\ngemini\tcomplete\t4210\tgemini-3-pro\n'
@@ -26,4 +26,17 @@ test('the latest event is the log\'s last whole line, in words', () => {
   expect(lastEvent(log('grok-cli\tcancelled\t\tgrok-4.7'))).toBe('grok-cli cancelled')
   expect(lastEvent('gemini\tcomplete\t4210\t\nopenai')).toBe('gemini answered')
   expect(lastEvent('')).toBeUndefined()
+})
+
+test('count tallies the providers in any of the given states; an ended seat answered, failed or was cancelled', () => {
+  const providers = [
+    { name: 'gemini', state: 'complete' },
+    { name: 'codex', state: 'cached' },
+    { name: 'grok', state: 'error' },
+    { name: 'grok-cli', state: 'cancelled' },
+    { name: 'kimi', state: 'querying' },
+  ]
+  expect(count(providers, 'error', 'cancelled')).toBe(2)
+  expect(count(providers, ...ENDED_STATES)).toBe(4)
+  expect(ENDED_STATES).toEqual(['complete', 'cached', 'fallback', 'error', 'cancelled'])
 })

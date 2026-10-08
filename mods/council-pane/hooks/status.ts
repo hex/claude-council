@@ -11,6 +11,11 @@ export type ProviderStatus = {
 // The states in which a seat has an answer on disk: its own, a cached one, or
 // its API sibling's after the seat itself failed.
 export const ANSWERED_STATES = ['complete', 'cached', 'fallback']
+// The states in which a seat is over, answer or not.
+export const ENDED_STATES = [...ANSWERED_STATES, 'error', 'cancelled']
+
+export const count = (providers: ProviderStatus[], ...states: string[]) =>
+  providers.filter(provider => states.includes(provider.state)).length
 
 export function parseStatus(log: string): ProviderStatus[] {
   const byName = new Map<string, ProviderStatus>()

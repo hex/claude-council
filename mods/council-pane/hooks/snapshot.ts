@@ -19,7 +19,7 @@ async function readFolder(fs: Files, dir: string, suffix: string): Promise<Recor
   if (!(await fs.exists(dir))) return texts
   for (const entry of await fs.list(dir)) {
     if (entry.kind !== 'file' || entry.name.startsWith('.') || !entry.name.endsWith(suffix)) continue
-    texts[entry.name.slice(0, -suffix.length)] = await fs.read(`${dir}/${entry.name}`)
+    texts[entry.name.slice(0, entry.name.length - suffix.length)] = await fs.read(`${dir}/${entry.name}`)
   }
   return texts
 }
@@ -35,6 +35,8 @@ export async function readView(fs: Files, runDir: string): Promise<RunView> {
     providers: parseStatus(status),
     responses: await readFolder(fs, `${runDir}/responses`, '.md'),
     errors: await readFolder(fs, `${runDir}/errors`, '.txt'),
+    // The seats the pane pressed for cancel; a marker stays until the run logs the seat as cancelled.
+    cancels: Object.keys(await readFolder(fs, `${runDir}/cancel`, '')),
     colors: parseColors(await readText(fs, `${runDir}/colors`)),
     isDone,
     ...(latest ? { latest } : {}),

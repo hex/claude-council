@@ -1,12 +1,14 @@
 // ABOUTME: Decides which council run the pane shows and turns its state into the markdown drawn there
 // ABOUTME: Pure functions over plain values, so they run without the engine
-import { ANSWERED_STATES, type ProviderStatus } from './status'
+import { ANSWERED_STATES, count, type ProviderStatus } from './status'
 import { COLOR } from './theme'
 
 export type RunView = {
   providers: ProviderStatus[]
   responses: Record<string, string>
   errors: Record<string, string>
+  // Seats pressed for cancel in the pane, from the watch dir's cancel folder.
+  cancels?: string[]
   colors: Record<string, string>
   isDone: boolean
   // The status log's last event in words, for the band.
@@ -24,9 +26,9 @@ export function unseenRun(entries: readonly DirEntry[], shown: ReadonlySet<strin
 
 export type Section =
   | { kind: 'note'; text: string }
-  // cancellable: a querying row while the run is live, which draws the cancel
-  // button; cancel: its hotkey, a digit for the first nine rows only.
-  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; cancellable: boolean; cancel?: string }
+  // cancel: on a querying row while the run is live, the button's seat (the
+  // name unpadded) and, for the first nine rows, its digit.
+  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; cancel?: { seat: string; hotkey?: string } }
   | { kind: 'summary'; text: string }
   | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string }[] }
   | { kind: 'banner'; key: string; title: string; subtitle: string; background: string }
@@ -36,8 +38,6 @@ export type Section =
   | { kind: 'error'; key: string; title: string; text: string }
 
 const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger, fallback: COLOR.warning, cancelled: COLOR.muted, cancelling: COLOR.muted }
-// What the pane writes to a seat's row between the press and the run's answer.
-const CANCELLING = 'cancelling'
 export const CANCEL_HINT = 'click cancel on a row, or ctrl+x tab then its digit'
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
@@ -64,40 +64,33 @@ export function parseColors(log: string): Record<string, string> {
 const glyphColor = (name: string, state: string, vendor: (name: string) => string) =>
   state === 'error' ? COLOR.danger : state === 'cancelled' ? COLOR.muted : vendor(name)
 
-// A seat is drawn as cancelling from the press until the run's log says so;
-// the pane names which. Rows with a key get a hint line after them.
+// While the run is live each querying row carries a cancel button, with the
+// row's digit for the first nine (once the run is done the digits jump to
+// the answers instead), and a hint line follows the rows.
 function statusRows(
   providers: ProviderStatus[],
   vendor: (name: string) => string,
   glyph: (state: string) => string,
   elapsed: (name: string) => string,
-  cancellable: (state: string) => boolean,
-  cancelKey: (index: number) => string | undefined,
+  live: boolean,
 ): Section[] {
   const shownTime = ({ name, state, ms }: ProviderStatus) => (state === 'querying' ? elapsed(name) : seconds(ms))
   const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
   const names = width(providers.map(provider => provider.name))
   const states = width(providers.map(provider => provider.state))
   const times = width(providers.map(shownTime))
-  let keyed = false
-  const rows: Section[] = providers.map((provider, index) => {
-    const canCancel = cancellable(provider.state)
-    const cancel = canCancel ? cancelKey(index) : undefined
-    if (canCancel) keyed = true
-    return {
-      kind: 'status',
-      glyph: glyph(provider.state),
-      glyphColor: glyphColor(provider.name, provider.state, vendor),
-      name: provider.name.padEnd(names),
-      state: provider.state.padEnd(states),
-      stateColor: STATE_COLORS[provider.state] ?? COLOR.muted,
-      time: shownTime(provider).padStart(times),
-      model: provider.model ?? '',
-      cancellable: canCancel,
-      ...(cancel ? { cancel } : {}),
-    }
-  })
-  if (keyed) rows.push({ kind: 'note', text: CANCEL_HINT })
+  const rows: Section[] = providers.map((provider, index) => ({
+    kind: 'status',
+    glyph: glyph(provider.state),
+    glyphColor: glyphColor(provider.name, provider.state, vendor),
+    name: provider.name.padEnd(names),
+    state: provider.state.padEnd(states),
+    stateColor: STATE_COLORS[provider.state] ?? COLOR.muted,
+    time: shownTime(provider).padStart(times),
+    model: provider.model ?? '',
+    ...(live && provider.state === 'querying' ? { cancel: { seat: provider.name, ...(index < 9 ? { hotkey: String(index + 1) } : {}) } } : {}),
+  }))
+  if (rows.some(row => row.kind === 'status' && row.cancel)) rows.push({ kind: 'note', text: CANCEL_HINT })
   return rows
 }
 
@@ -107,15 +100,14 @@ function doneSummary(
   glyph: (state: string) => string,
   hasSection: (name: string) => boolean,
 ): Section[] {
-  const count = (state: string) => providers.filter(provider => provider.state === state).length
-  const answered = providers.filter(provider => ANSWERED_STATES.includes(provider.state)).length
+  const tally = (state: string, word: string) => (count(providers, state) > 0 ? `${count(providers, state)} ${word}` : '')
   const slowest = Math.max(0, ...providers.map(provider => provider.ms ?? 0))
   const parts = [
-    `${answered} of ${providers.length} answered`,
-    count('error') > 0 ? `${count('error')} error` : '',
-    count('cancelled') > 0 ? `${count('cancelled')} cancelled` : '',
-    count('fallback') > 0 ? `${count('fallback')} fell back` : '',
-    count('cached') > 0 ? `${count('cached')} cached` : '',
+    `${count(providers, ...ANSWERED_STATES)} of ${providers.length} answered`,
+    tally('error', 'error'),
+    tally('cancelled', 'cancelled'),
+    tally('fallback', 'fell back'),
+    tally('cached', 'cached'),
     slowest > 0 ? seconds(slowest) : '',
   ]
   return [
@@ -145,32 +137,28 @@ export function queryingSince(since: Record<string, number>, providers: Provider
 }
 
 export function paneSections(
-  { providers, responses, errors, colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
-  { collapsesWhenDone = true, frame = 0, nowMs = 0, fitText = (text: string) => text, cancelling = new Set<string>() }: { collapsesWhenDone?: boolean; frame?: number; nowMs?: number; fitText?: (text: string) => string; cancelling?: ReadonlySet<string> } = {},
+  { providers, responses, errors, cancels = [], colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
+  { collapsesWhenDone = true, frame = 0, nowMs = 0, fitText = (text: string) => text }: { collapsesWhenDone?: boolean; frame?: number; nowMs?: number; fitText?: (text: string) => string } = {},
 ): Section[] {
   if (providers.length === 0) {
     return [{ kind: 'note', text: isDone ? 'Council finished with no answers.' : 'Waiting for the council...' }]
   }
-  // A seat still querying as far as the log knows, but already pressed.
-  const shown = providers.map(provider => (provider.state === 'querying' && cancelling.has(provider.name) ? { ...provider, state: CANCELLING } : provider))
+  // A seat still querying as far as the log knows, with its marker in the
+  // watch dir, is cancelling: the run removes the marker once it logs the seat.
+  const shown = providers.map(provider => (provider.state === 'querying' && cancels.includes(provider.name) ? { ...provider, state: 'cancelling' } : provider))
   const vendor = (name: string) => `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`
   const glyph = (state: string) => {
     if (state === 'error') return '\u2717'
-    if (state === 'cancelled' || state === CANCELLING) return '\u25cb'
+    if (state === 'cancelled' || state === 'cancelling') return '\u25cb'
     return state === 'querying' ? spinner(frame) : '\u25cf'
   }
-  // The digit also jumps to the seat's section once the run is done, so it is only a cancel key while the run is live.
-  const cancellable = (state: string) => !isDone && state === 'querying'
-  const cancelKey = (index: number) => (index < 9 ? String(index + 1) : undefined)
   // A querying provider's time runs from when the pane first saw it, in whole tenths.
   const elapsed = (name: string) => {
     const since = queryingSinceMs[name]
     return since === undefined ? '' : `${(Math.floor(Math.max(0, nowMs - since) / 100) / 10).toFixed(1)}s`
   }
-  const stateOf = new Map(providers.map(provider => [provider.name, provider.state]))
-  // A cancelled seat's error file draws nothing (see below), so there is nothing to jump to.
-  const hasSection = (name: string) => responses[name] !== undefined || (errors[name] !== undefined && stateOf.get(name) !== 'cancelled')
-  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection) : statusRows(shown, vendor, glyph, elapsed, cancellable, cancelKey)
+  const hasSection = (name: string) => responses[name] !== undefined || errors[name] !== undefined
+  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection) : statusRows(shown, vendor, glyph, elapsed, !isDone)
   for (const { name, state, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]
@@ -192,10 +180,9 @@ export function paneSections(
       // counted: a wide table becomes records that repeat every header, which
       // can lengthen it several times over.
       sections.push({ kind: 'body', text: fitText(response) })
-    } else if (error !== undefined && state !== 'fallback' && state !== 'cancelled') {
+    } else if (error !== undefined && state !== 'fallback') {
       // A fallback seat's error file is its reason, written just before the
-      // answer its API gave: with no answer yet there is nothing to show. A
-      // cancelled seat's says only that the reader cancelled it; its row does.
+      // answer its API gave: with no answer yet there is nothing to show.
       sections.push({ kind: 'error', key: jumpKey(name), title: `${name} error`, text: noticeText(error) })
     }
   }
