@@ -172,11 +172,14 @@ print_response() {
 # "fallback" (amber, ↪ "fell back") for a seat whose API sibling answered,
 # where the text is the reason the seat itself did not. That reason is not
 # always a failure: a CLI that cannot read an image is routed there by design.
+# "cancelled" (grey, ○) is a seat the reader ended from the pane: the line
+# says so and its text, which says the same, is not repeated.
 print_error_notice() {
     local name="$1" file="${2:-$WATCH/errors/${1}.txt}" state="${3:-error}" err_line glyph='✗' label='error' rgb='185;28;28'
     if [[ "$state" == fallback ]]; then glyph='↪'; label='fell back'; rgb='180;83;9'; fi
+    if [[ "$state" == cancelled ]]; then glyph='○'; label='cancelled'; rgb='113;113;122'; file=''; fi
     printf '\n\033[1;38;2;%sm%s %s %s\033[0m\n' "$rgb" "$glyph" "$name" "$label"
-    if [[ -f "$file" ]]; then
+    if [[ -n "$file" && -f "$file" ]]; then
         # `|| -n` keeps the last line: the producer stores a command
         # substitution, which has no trailing newline, so a plain read loop
         # would return non-zero on it and show nothing for a one-line error.
@@ -204,7 +207,7 @@ redraw_all() {
     for event in "${display_events[@]}"; do
         case "$event" in
             response:*) print_response "${event#response:}" ;;
-            error:*|fallback:*)
+            error:*|fallback:*|cancelled:*)
                 IFS=$'\t' read -r name file <<<"${event#*:}"
                 print_error_notice "$name" "$file" "${event%%:*}"
                 ;;
@@ -365,7 +368,7 @@ while true; do
             provider_states[idx]="$state"
             [[ -n "$ms" ]] && provider_timings[idx]="$ms"
             [[ -n "$model" ]] && provider_models[idx]="$model"
-            if [[ "$state" == "error" || "$state" == "fallback" ]]; then
+            if [[ "$state" == "error" || "$state" == "fallback" || "$state" == "cancelled" ]]; then
                 clear_loading
                 # Replay from a snapshot of the text: a provider that fails
                 # again on retry overwrites errors/<name>.txt, and each

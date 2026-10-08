@@ -29,6 +29,7 @@ now_ms() {
 
 source "${SCRIPT_DIR}/lib/providers.sh"
 source "${SCRIPT_DIR}/lib/model_fallback.sh"
+source "${SCRIPT_DIR}/lib/deadline.sh"
 
 usage() {
     cat >&2 << 'EOF'
@@ -785,12 +786,89 @@ COUNCIL_START_MS=$(now_ms)
 # without bound (the prune-on-the-hot-path analog of jobs_prune in run_async).
 [[ "$USE_CACHE" == true ]] && cache_prune 2>/dev/null || true
 
+# The error text a cancelled seat's slot carries; the pane's distinct state
+# is in the status log, the slot stays a plain error so the synthesis, the
+# transcript and the formatter treat the seat as absent.
+CANCELLED_MSG="cancelled from the pane"
+# Seats the pane cancelled this run; round 2 leaves them out.
+CANCELLED=()
+
+# Whether the first argument names one of the rest. Args: name list...
+seat_in() {
+    local name="$1" seat
+    shift
+    for seat in "$@"; do [[ "$seat" == "$name" ]] && return 0; done
+    return 1
+}
+
+# The pane cancels a seat by dropping cancel-<provider> in the watch dir.
+seat_cancelled() {
+    [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/cancel-$1" ]]
+}
+
+# End a seat the pane cancelled: its whole process tree goes (the CLI, its
+# children, and the subshell that would otherwise try the API sibling next),
+# then its slot records the cancellation. The slot is written only after the
+# job is reaped, so nothing the seat was mid-way through writing lands on top
+# of it; and an answer that was already written when the press landed (the
+# job lives on a moment after it, streaming the answer to the pane and the
+# cache) is kept, since the reader cancelled a wait that was already over.
+# Args: provider pid output_file
+cancel_seat() {
+    local provider="$1" pid="$2" output_file="$3"
+    signal_tree TERM "$pid"
+    wait "$pid" 2>/dev/null || true
+    rm -f "${COUNCIL_PANE_DIR}/cancel-${provider}"
+    if [[ -f "$output_file" ]] && [[ "$(jq -r '.status' "$output_file" 2>/dev/null)" == "success" ]]; then
+        echo -e "$(provider_color "$provider")${provider}${RESET}: ${DIM}answered before the cancel landed${RESET}" >&2
+        return 0
+    fi
+    printf '%s' "$CANCELLED_MSG" | jq -Rs '{status: "error", error: ., cached: false}' > "$output_file"
+    pane_error_write "$COUNCIL_PANE_DIR" "$provider" "$CANCELLED_MSG"
+    pane_status_event "$COUNCIL_PANE_DIR" "$provider" cancelled "" "$(get_model "$provider")"
+    CANCELLED+=("$provider")
+    echo -e "$(provider_color "$provider")${provider}${RESET}: ${DIM}${CANCELLED_MSG}${RESET}" >&2
+}
+
+# Wait for the seats launched as background jobs, ending any the pane cancels
+# meanwhile. Polled in 0.2 s ticks rather than waited on: bash 3.2 has no
+# wait -n, and a blocking wait could not notice the marker. A seat that is
+# already gone when its marker lands keeps its answer. Args: output_suffix
+# provider=pid...
+await_seats() {
+    local suffix="$1"
+    shift
+    local -a seats=("$@")
+    local i provider pid live
+    while :; do
+        live=0
+        for i in "${!seats[@]}"; do
+            [[ -n "${seats[$i]}" ]] || continue
+            provider="${seats[$i]%%=*}"
+            pid="${seats[$i]#*=}"
+            if ! kill -0 "$pid" 2>/dev/null; then
+                wait "$pid" 2>/dev/null || true
+                # A press that found the seat already gone is spent too.
+                seat_cancelled "$provider" && rm -f "${COUNCIL_PANE_DIR}/cancel-${provider}"
+                seats[i]=""
+            elif seat_cancelled "$provider"; then
+                cancel_seat "$provider" "$pid" "${TEMP_DIR}/${provider}${suffix}.json"
+                seats[i]=""
+            else
+                live=1
+            fi
+        done
+        (( live )) || return 0
+        sleep 0.2
+    done
+}
+
 # Query the given providers in parallel with their round-1 roles and wait for
 # all of them. Shared by the first pass and the retry, so a retried provider
 # gets exactly the query it failed. Args: provider...
 query_round1() {
-    local provider provider_role pid
-    local pids=()
+    local provider provider_role
+    local seats=()
     for provider in "$@"; do
         # Get role for this provider (empty if no roles assigned)
         provider_role=""
@@ -799,11 +877,9 @@ query_round1() {
         fi
         rm -f "${TEMP_DIR}/${provider}.json"
         query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" "$provider_role" &
-        pids+=($!)
+        seats+=("${provider}=$!")
     done
-    for pid in "${pids[@]}"; do
-        wait "$pid" 2>/dev/null || true
-    done
+    await_seats "" "${seats[@]}"
 }
 
 # Launch all queries in parallel
@@ -855,7 +931,8 @@ collect_round1() {
                 error_msg=$(echo "$result" | jq -r '.error')
                 echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET} - ${DIM}${error_msg}${RESET}" >&2
                 ERRORS+=("$provider: $error_msg")
-                FAILED+=("$provider")
+                # A seat the reader cancelled is not offered back for retry.
+                [[ "$error_msg" == "$CANCELLED_MSG" ]] || FAILED+=("$provider")
             elif [[ "$cached" == "true" ]]; then
                 echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${CYAN}cached${RESET}" >&2
             else
@@ -933,9 +1010,13 @@ if [[ "$DEBATE_MODE" == true ]]; then
     debate_common+=$'\n'
     debate_common+="4. What would you change about your original recommendation after seeing these?"
 
-    # Query all providers for rebuttals (no roles, no cache)
-    ROUND2_PIDS=()
+    # Query all providers for rebuttals (no roles, no cache). A seat cancelled
+    # in round 1 has no answer to defend; one cancelled during this round
+    # still gets its slot collected below.
+    R1_CANCELLED=(${CANCELLED[@]+"${CANCELLED[@]}"})
+    ROUND2_SEATS=()
     for provider in "${PROVIDERS[@]}"; do
+        seat_in "$provider" ${R1_CANCELLED[@]+"${R1_CANCELLED[@]}"} && continue
         # Round 2: no role, skip cache (rebuttals depend on round 1 content)
         (
             script="$(provider_script_path "$provider")"
@@ -968,16 +1049,15 @@ if [[ "$DEBATE_MODE" == true ]]; then
                 fi
             fi
         ) &
-        ROUND2_PIDS+=($!)
+        ROUND2_SEATS+=("${provider}=$!")
     done
 
     # Wait for round 2
-    for pid in "${ROUND2_PIDS[@]}"; do
-        wait "$pid" 2>/dev/null || true
-    done
+    await_seats "_r2" ${ROUND2_SEATS[@]+"${ROUND2_SEATS[@]}"}
 
     # Collect round 2 results
     for provider in "${PROVIDERS[@]}"; do
+        seat_in "$provider" ${R1_CANCELLED[@]+"${R1_CANCELLED[@]}"} && continue
         result_file="${TEMP_DIR}/${provider}_r2.json"
         color=$(provider_color "$provider")
         model=$(get_model "$provider")

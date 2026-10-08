@@ -171,7 +171,13 @@ Two flavors share the interface:
   names the sibling and `fallback_reason` holds the CLI's error text.
   `format-output.sh` prints the reason under the "fell back to … API" header in
   both rounds, and the pane row's state is `fallback` with the model shown as
-  `<model> via <sibling> API`. A CLI that times out or fails reports one line,
+  `<model> via <sibling> API`. While its seats are out the orchestrator polls
+  for `cancel-<provider>` in the pane's watch dir (`await_seats`): the mod pane
+  writes it, `signal_tree` (lib/deadline.sh) ends the seat's whole process tree,
+  and the slot becomes an error reading `cancelled from the pane` with a
+  `cancelled` status line for the pane, unless the seat had already written its
+  answer. A cancelled seat is not offered for retry and sits out round 2. A
+  CLI that times out or fails reports one line,
   `Error from <cli> CLI: …`, built by `cli_failure_message` (lib/cli-stderr.sh):
   the timeout, or the last 500 bytes of the CLI's stderr with colour codes
   removed. `codex` runs with stdin from `/dev/null`, since `codex exec` reads a

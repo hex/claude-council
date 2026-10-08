@@ -24,6 +24,12 @@ test('a seat answered by its API sibling counts as answered everywhere, not as a
   expect(progressBand({ providers: withFallback, isDone: false }, undefined, 0)?.count).toBe('4 of 5')
 })
 
+test('a seat the reader cancelled is counted as finished, apart from the errors', () => {
+  const withCancel = [...providers, { name: 'grok-cli', state: 'cancelled' }]
+  expect(finishNotice({ providers: withCancel, isDone: true })).toBe('finished: 2 of 5 answered, 1 error, 1 cancelled')
+  expect(progressBand({ providers: withCancel, isDone: false }, undefined, 0)?.count).toBe('4 of 5')
+})
+
 test('wakePrompt asks for the result of a background job only', () => {
   expect(wakePrompt('job-abc')).toBe('The background council job job-abc has finished. Fetch it with /claude-council:result job-abc and summarise it.')
   expect(wakePrompt('')).toBeUndefined()

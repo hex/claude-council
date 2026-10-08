@@ -11,16 +11,17 @@ const count = (providers: ProviderStatus[], ...states: string[]) =>
 
 export function finishNotice({ providers }: RunProgress, jobId = ''): string {
   const errors = count(providers, 'error')
+  const cancelled = count(providers, 'cancelled')
   // The band draws a COUNCIL badge ahead of this, so the text does not repeat the name.
   const subject = jobId ? `job ${jobId} finished` : 'finished'
   const answered = `${count(providers, ...ANSWERED_STATES)} of ${providers.length} answered`
-  return `${subject}: ${answered}${errors > 0 ? `, ${errors} error` : ''}`
+  return `${subject}: ${answered}${errors > 0 ? `, ${errors} error` : ''}${cancelled > 0 ? `, ${cancelled} cancelled` : ''}`
 }
 
 const PROGRESS_CELLS = 8
 
 // The band above the prompt while a run is live, in the specialist band's
-// slots: how many providers finished (an error included), a thin line of the
+// slots: how many providers finished (an error or a cancel included), a thin line of the
 // same share, an m:ss clock and the latest event. Both counts round down, so
 // the line never reads full while a provider is still out. `startedAtMs` is
 // when the pane picked the run up; before that there is no clock.
@@ -30,7 +31,7 @@ export function progressBand(
   nowMs: number,
 ): { count: string; bar: string; clock?: string; event?: string } | undefined {
   if (isDone || providers.length === 0) return undefined
-  const finished = count(providers, ...ANSWERED_STATES, 'error')
+  const finished = count(providers, ...ANSWERED_STATES, 'error', 'cancelled')
   const filled = Math.floor((finished / providers.length) * PROGRESS_CELLS)
   return {
     count: `${finished} of ${providers.length}`,

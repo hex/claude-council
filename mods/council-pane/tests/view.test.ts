@@ -27,12 +27,76 @@ test('paneSections gives a coloured status row per provider, then a banner and b
     isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'success', time: '4.2s', model: 'gemini-3-pro' },
-    { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'warning', time: '    ', model: '' },
-    { kind: 'status', glyph: '\u2717', glyphColor: 'error', name: 'grok  ', state: 'error   ', stateColor: 'error', time: '0.9s', model: '' },
+    { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'success', time: '4.2s', model: 'gemini-3-pro', cancellable: false },
+    { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'warning', time: '    ', model: '', cancellable: true, cancel: '2' },
+    { kind: 'status', glyph: '\u2717', glyphColor: 'error', name: 'grok  ', state: 'error   ', stateColor: 'error', time: '0.9s', model: '', cancellable: false },
+    { kind: 'note', text: 'click cancel on a row, or ctrl+x tab then its digit' },
     { kind: 'banner', key: 'jump:gemini', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)' },
     { kind: 'body', text: 'Use Postgres.' },
     { kind: 'error', key: 'jump:grok', title: 'grok error', text: 'HTTP 429' },
+  ])
+})
+
+test('a querying row carries its digit as the cancel key while the run is live, and none once it is done', () => {
+  const view = {
+    providers: [
+      { name: 'gemini', state: 'complete', ms: 4210 },
+      { name: 'grok-cli', state: 'querying' },
+      { name: 'kimi', state: 'querying' },
+    ],
+    responses: {}, errors: {}, colors: {},
+    isDone: false,
+  }
+  const live = paneSections(view)
+  expect(live.map(section => section.kind === 'status' ? section.cancel : undefined)).toEqual([undefined, '2', '3'])
+  // The hint names the keys the way the retry row does, once per run.
+  expect(live.at(-1)).toEqual({ kind: 'note', text: 'click cancel on a row, or ctrl+x tab then its digit' })
+  // A seat whose cancel is on its way draws as cancelling, with no key.
+  const pending = paneSections(view, { cancelling: new Set(['grok-cli']) })
+  expect(pending[1]).toMatchObject({ kind: 'status', state: 'cancelling', stateColor: 'inactive', glyph: '\u25cb' })
+  expect(pending[1]).not.toHaveProperty('cancel')
+  const done = paneSections({ ...view, isDone: true }, { collapsesWhenDone: false })
+  expect(done.map(section => section.kind === 'status' ? section.cancel : undefined)).toEqual([undefined, undefined, undefined])
+  expect(done.map(section => section.kind === 'status' && section.cancellable)).toEqual([false, false, false])
+  expect(done.at(-1)?.kind).toBe('status')
+})
+
+test('every querying row can be cancelled by click; only the first nine carry a digit', () => {
+  const providers = Array.from({ length: 10 }, (_, index) => ({ name: `seat-${index + 1}`, state: 'querying' }))
+  const rows = paneSections({ providers, responses: {}, errors: {}, colors: {}, isDone: false }).filter(section => section.kind === 'status')
+  expect(rows.map(row => row.kind === 'status' && row.cancellable)).toEqual(Array(10).fill(true))
+  expect(rows.map(row => (row.kind === 'status' ? row.cancel : undefined))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', undefined])
+})
+
+test('a cancelled seat draws in grey and is counted apart in the summary', () => {
+  const sections = paneSections({
+    providers: [
+      { name: 'gemini', state: 'complete', ms: 4210 },
+      { name: 'grok-cli', state: 'cancelled', model: 'grok-4.7' },
+    ],
+    responses: { gemini: 'a' },
+    errors: { 'grok-cli': 'cancelled from the pane' },
+    colors: { gemini: '59;130;246' },
+    isDone: true,
+  })
+  expect(sections.slice(0, 2)).toEqual([
+    { kind: 'summary', text: '1 of 2 answered · 1 cancelled · 4.2s' },
+    {
+      kind: 'strip',
+      items: [
+        { glyph: '●', color: 'rgb(59,130,246)', name: 'gemini', hotkey: '1', target: 'jump:gemini' },
+        { glyph: '○', color: 'inactive', name: 'grok-cli', hotkey: '2' },
+      ],
+    },
+  ])
+  // Its error file says only that it was cancelled: no error section is drawn for it.
+  expect(sections.map(section => section.kind)).toEqual(['summary', 'strip', 'banner', 'body'])
+  const live = paneSections({
+    providers: [{ name: 'grok-cli', state: 'cancelled', model: 'grok-4.7' }],
+    responses: {}, errors: { 'grok-cli': 'cancelled from the pane' }, colors: {}, isDone: false,
+  })
+  expect(live).toEqual([
+    { kind: 'status', glyph: '○', glyphColor: 'inactive', name: 'grok-cli', state: 'cancelled', stateColor: 'inactive', time: '', model: 'grok-4.7', cancellable: false },
   ])
 })
 

@@ -74,6 +74,8 @@ type PaneState = {
   frame: number
   nowMs: number
   queryingSinceMs: Record<string, number>
+  // Seats pressed for cancel whose row the run's log still shows querying.
+  cancelling: Set<string>
   // When the pane picked the live run up; the progress band's clock.
   runStartedMs?: number
   // Each section's Markdown blocks, for the text they were cut from: a frame
@@ -418,6 +420,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.synthesis = undefined
     state.finished = undefined
     state.queryingSinceMs = {}
+    state.cancelling.clear()
     state.runStartedMs = now
     state.fitted.clear()
     await $.ui.open({ id: PANE_ID, title: 'Council' })
@@ -426,6 +429,9 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   state.view = await readView(files($), runDir)
   state.queryingSinceMs = queryingSince(state.queryingSinceMs, state.view.providers, now)
   state.view.queryingSinceMs = state.queryingSinceMs
+  // The run answers a press by logging the seat as cancelled; until then the
+  // row reads cancelling. A seat no longer querying is past pressing.
+  for (const { name, state: seatState } of state.view.providers) if (seatState !== 'querying') state.cancelling.delete(name)
   if (state.synthesis) state.view.synthesis = state.synthesis
   // The run waits on its offer for a window of seconds; the offer file going
   // away (accepted, declined or expired) withdraws the buttons.
@@ -433,7 +439,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   if (!offer) state.retry = undefined
   else if (!state.retry) state.retry = { offer, seenAtMs: now }
   state.retryShown = state.retry ? retrySection(state.retry.offer, state.retry.seenAtMs, now) : undefined
-  const text = JSON.stringify([state.view, state.retryShown])
+  const text = JSON.stringify([state.view, state.retryShown, [...state.cancelling]])
   if (text !== state.drawn) {
     state.drawn = text
     $.ui.invalidate('ui.render')
@@ -742,6 +748,16 @@ function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label
 }
 
 // What the offer's buttons do: the run waits on these two file names.
+// Cancel a seat: the marker query-council.sh polls for while the seat is
+// out; the row reads cancelling until its log line lands.
+function cancelSeat($: EngineInterface, state: PaneState, name: string): void {
+  const runDir = state.runDir
+  if (!runDir) return
+  state.cancelling.add(name)
+  void $.fs.write(`${runDir}/cancel-${name}`, '').catch((err: unknown) => $.ui.log(`cancel ${name}: ${String(err)}`))
+  $.ui.invalidate('ui.render')
+}
+
 function retryPresses($: EngineInterface, runDir: string) {
   return {
     accept: () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) },
@@ -779,7 +795,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, cancelling: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -833,7 +849,7 @@ export const register: Register = (on, options) => {
     if (view && synthesis) {
       state.synthesis = synthesis
       state.view = { ...view, synthesis }
-      state.drawn = JSON.stringify([state.view, state.retryShown])
+      state.drawn = JSON.stringify([state.view, state.retryShown, [...state.cancelling]])
       $.ui.invalidate('ui.render')
     }
     return result
@@ -1443,7 +1459,7 @@ export const register: Register = (on, options) => {
       fits.set(text, fitted)
       return fitted
     }
-    const sections = paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs, fitText })
+    const sections = paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs, fitText, cancelling: state.cancelling })
     state.tableFit = { columns, byText: fits }
     const fit = (sectionKey: string, text: string) => {
       const kept = state.fitted.get(sectionKey)
@@ -1457,7 +1473,8 @@ export const register: Register = (on, options) => {
       switch (section.kind) {
         case 'note':
           return <Text key={key} dimColor>{section.text}</Text>
-        case 'status':
+        case 'status': {
+          const seat = section.name.trimEnd()
           return (
             <Box key={key} flexDirection="row">
               <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
@@ -1465,8 +1482,15 @@ export const register: Register = (on, options) => {
               <Text color={section.stateColor}>{`${section.state}  `}</Text>
               <Text dimColor>{`${section.time}  `}</Text>
               <Text dimColor>{section.model}</Text>
+              {section.cancellable && (
+                <Box flexDirection="row" flexShrink={0}>
+                  <Text>{'  '}</Text>
+                  <Button key={`cancel:${seat}`} plain label="cancel" {...(section.cancel ? { hotkey: section.cancel } : {})} onPress={() => cancelSeat($, state, seat)} />
+                </Box>
+              )}
             </Box>
           )
+        }
         case 'summary':
           return <Text key={key} bold>{section.text}</Text>
         case 'strip':
