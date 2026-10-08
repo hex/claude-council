@@ -20,7 +20,7 @@ Most colours are engine theme keys. The engine resolves each one for the theme t
 | `danger` | `error` | 6.7 | 6.1 | Failed, errors, a refused field |
 | `warning` | `warning` | 4.7 | 10.2 | Running, live, querying, unsaved changes |
 | `info` | `suggestion` | 4.4 | 8.9 | A cached provider, effort medium |
-| `muted` | `inactive` | 5.7 | 5.9 | Secondary text that must stay readable, such as a branch or a worktree path |
+| `muted` | `inactive` | 5.7 | 5.9 | Secondary text that must stay readable, such as a branch or a worktree path; a seat the reader cancelled |
 | `line` | `subtle` | 2.2 | 2.1 | Table bars and rules: decoration only |
 | `hint` | `subtle` | 2.2 | 2.1 | The form's help lines: a deliberate exception to 4.5:1, chosen so help recedes behind the fields |
 | `model` | `planMode` | 6.8 | 4.8 | Model names |
@@ -61,7 +61,7 @@ Each glyph has one meaning.
 | `●` | A specialist that is on, a provider, or live when coloured `warning` |
 | `✓` | Done |
 | `✗` | Failed |
-| `○` | Switched off, or a seat the reader cancelled |
+| `○` | Set aside by the person: a specialist switched off, a seat cancelled |
 | `⋯` | Running |
 | `▶` | The row you are editing |
 | `↳` | A continuation of the row above |

@@ -171,13 +171,7 @@ Two flavors share the interface:
   names the sibling and `fallback_reason` holds the CLI's error text.
   `format-output.sh` prints the reason under the "fell back to … API" header in
   both rounds, and the pane row's state is `fallback` with the model shown as
-  `<model> via <sibling> API`. While its seats are out the orchestrator polls
-  for `cancel-<provider>` in the pane's watch dir (`await_seats`): the mod pane
-  writes it, `signal_tree` (lib/deadline.sh) ends the seat's whole process tree,
-  and the slot becomes an error reading `cancelled from the pane` with a
-  `cancelled` status line for the pane, unless the seat had already written its
-  answer. A cancelled seat is not offered for retry and sits out round 2. A
-  CLI that times out or fails reports one line,
+  `<model> via <sibling> API`. A CLI that times out or fails reports one line,
   `Error from <cli> CLI: …`, built by `cli_failure_message` (lib/cli-stderr.sh):
   the timeout, or the last 500 bytes of the CLI's stderr with colour codes
   removed. `codex` runs with stdin from `/dev/null`, since `codex exec` reads a
@@ -257,6 +251,23 @@ cache_clear()
 Storage: $COUNCIL_CACHE_DIR/{key}.json
 TTL: $COUNCIL_CACHE_TTL seconds (default 3600)
 ```
+
+### Cancelling a seat (`scripts/query-council.sh`, `mods/council-pane`)
+
+While a round's seats are out, `await_seats` polls them in 0.2 s ticks
+(bash 3.2 has no `wait -n`) and looks for `cancel/<provider>` in the pane's
+watch dir, which the mod pane writes when its cancel button is pressed; with
+no pane the seats are waited on. On a marker, `signal_tree`
+(lib/deadline.sh) ends the seat's whole process tree in one `kill`, parent
+first, so neither a CLI's own retry nor the API-sibling fallback can start;
+the slot becomes an error reading `cancelled from the pane`, the seat's error
+file is removed, a `cancelled` status line is logged, and only then is the
+marker removed, so the pane draws the seat as `cancelling` meanwhile. A seat
+whose answer is already on disk keeps it. Each round removes its seats'
+markers before launching, so a press that landed after the previous round
+collected is spent. A cancelled seat is not offered for retry, sits out round
+2 and gets no rebuttal block from `format-output.sh`. The result JSON and the
+synthesis see it as an error like any other.
 
 ### Retry Logic (`scripts/lib/retry.sh`)
 
@@ -638,7 +649,7 @@ claude-council/
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
 │       ├── cli-stderr.sh        # The error line a CLI provider reports on a timeout or failure (the end of its stderr, colour codes removed)
-│       ├── deadline.sh          # Wall-clock bound for a command (no GNU timeout on macOS or Git Bash)
+│       ├── deadline.sh          # Wall-clock bound for a command (no GNU timeout on macOS or Git Bash) + process-tree signalling
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
 │       ├── hash.sh              # Portable SHA-256 helper (shasum / sha256sum)
