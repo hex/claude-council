@@ -24,8 +24,9 @@ export function unseenRun(entries: readonly DirEntry[], shown: ReadonlySet<strin
 
 export type Section =
   | { kind: 'note'; text: string }
-  // cancel: the digit that cancels the seat, on a querying row while the run is live.
-  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; cancel?: string }
+  // cancellable: a querying row while the run is live, which draws the cancel
+  // button; cancel: its hotkey, a digit for the first nine rows only.
+  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; cancellable: boolean; cancel?: string }
   | { kind: 'summary'; text: string }
   | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string }[] }
   | { kind: 'banner'; key: string; title: string; subtitle: string; background: string }
@@ -70,7 +71,8 @@ function statusRows(
   vendor: (name: string) => string,
   glyph: (state: string) => string,
   elapsed: (name: string) => string,
-  cancelKey: (name: string, state: string, index: number) => string | undefined,
+  cancellable: (state: string) => boolean,
+  cancelKey: (index: number) => string | undefined,
 ): Section[] {
   const shownTime = ({ name, state, ms }: ProviderStatus) => (state === 'querying' ? elapsed(name) : seconds(ms))
   const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
@@ -79,8 +81,9 @@ function statusRows(
   const times = width(providers.map(shownTime))
   let keyed = false
   const rows: Section[] = providers.map((provider, index) => {
-    const cancel = cancelKey(provider.name, provider.state, index)
-    if (cancel) keyed = true
+    const canCancel = cancellable(provider.state)
+    const cancel = canCancel ? cancelKey(index) : undefined
+    if (canCancel) keyed = true
     return {
       kind: 'status',
       glyph: glyph(provider.state),
@@ -90,6 +93,7 @@ function statusRows(
       stateColor: STATE_COLORS[provider.state] ?? COLOR.muted,
       time: shownTime(provider).padStart(times),
       model: provider.model ?? '',
+      cancellable: canCancel,
       ...(cancel ? { cancel } : {}),
     }
   })
@@ -156,7 +160,8 @@ export function paneSections(
     return state === 'querying' ? spinner(frame) : '\u25cf'
   }
   // The digit also jumps to the seat's section once the run is done, so it is only a cancel key while the run is live.
-  const cancelKey = (_name: string, state: string, index: number) => (!isDone && state === 'querying' && index < 9 ? String(index + 1) : undefined)
+  const cancellable = (state: string) => !isDone && state === 'querying'
+  const cancelKey = (index: number) => (index < 9 ? String(index + 1) : undefined)
   // A querying provider's time runs from when the pane first saw it, in whole tenths.
   const elapsed = (name: string) => {
     const since = queryingSinceMs[name]
@@ -165,7 +170,7 @@ export function paneSections(
   const stateOf = new Map(providers.map(provider => [provider.name, provider.state]))
   // A cancelled seat's error file draws nothing (see below), so there is nothing to jump to.
   const hasSection = (name: string) => responses[name] !== undefined || (errors[name] !== undefined && stateOf.get(name) !== 'cancelled')
-  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection) : statusRows(shown, vendor, glyph, elapsed, cancelKey)
+  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection) : statusRows(shown, vendor, glyph, elapsed, cancellable, cancelKey)
   for (const { name, state, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]

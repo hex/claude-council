@@ -810,12 +810,19 @@ seat_cancelled() {
 # children, and the subshell that would otherwise try the API sibling next),
 # then its slot records the cancellation. The slot is written only after the
 # job is reaped, so nothing the seat was mid-way through writing lands on top
-# of it. Args: provider pid output_file
+# of it; and an answer that was already written when the press landed (the
+# job lives on a moment after it, streaming the answer to the pane and the
+# cache) is kept, since the reader cancelled a wait that was already over.
+# Args: provider pid output_file
 cancel_seat() {
     local provider="$1" pid="$2" output_file="$3"
     signal_tree TERM "$pid"
     wait "$pid" 2>/dev/null || true
     rm -f "${COUNCIL_PANE_DIR}/cancel-${provider}"
+    if [[ -f "$output_file" ]] && [[ "$(jq -r '.status' "$output_file" 2>/dev/null)" == "success" ]]; then
+        echo -e "$(provider_color "$provider")${provider}${RESET}: ${DIM}answered before the cancel landed${RESET}" >&2
+        return 0
+    fi
     printf '%s' "$CANCELLED_MSG" | jq -Rs '{status: "error", error: ., cached: false}' > "$output_file"
     pane_error_write "$COUNCIL_PANE_DIR" "$provider" "$CANCELLED_MSG"
     pane_status_event "$COUNCIL_PANE_DIR" "$provider" cancelled "" "$(get_model "$provider")"
@@ -841,6 +848,8 @@ await_seats() {
             pid="${seats[$i]#*=}"
             if ! kill -0 "$pid" 2>/dev/null; then
                 wait "$pid" 2>/dev/null || true
+                # A press that found the seat already gone is spent too.
+                seat_cancelled "$provider" && rm -f "${COUNCIL_PANE_DIR}/cancel-${provider}"
                 seats[i]=""
             elif seat_cancelled "$provider"; then
                 cancel_seat "$provider" "$pid" "${TEMP_DIR}/${provider}${suffix}.json"

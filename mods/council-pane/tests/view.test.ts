@@ -27,9 +27,9 @@ test('paneSections gives a coloured status row per provider, then a banner and b
     isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'success', time: '4.2s', model: 'gemini-3-pro' },
-    { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'warning', time: '    ', model: '', cancel: '2' },
-    { kind: 'status', glyph: '\u2717', glyphColor: 'error', name: 'grok  ', state: 'error   ', stateColor: 'error', time: '0.9s', model: '' },
+    { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'success', time: '4.2s', model: 'gemini-3-pro', cancellable: false },
+    { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'warning', time: '    ', model: '', cancellable: true, cancel: '2' },
+    { kind: 'status', glyph: '\u2717', glyphColor: 'error', name: 'grok  ', state: 'error   ', stateColor: 'error', time: '0.9s', model: '', cancellable: false },
     { kind: 'note', text: 'click \u2717 to cancel a seat, or ctrl+x tab then its digit' },
     { kind: 'banner', key: 'jump:gemini', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)' },
     { kind: 'body', text: 'Use Postgres.' },
@@ -57,7 +57,15 @@ test('a querying row carries its digit as the cancel key while the run is live, 
   expect(pending[1]).not.toHaveProperty('cancel')
   const done = paneSections({ ...view, isDone: true }, { collapsesWhenDone: false })
   expect(done.map(section => section.kind === 'status' ? section.cancel : undefined)).toEqual([undefined, undefined, undefined])
+  expect(done.map(section => section.kind === 'status' && section.cancellable)).toEqual([false, false, false])
   expect(done.at(-1)?.kind).toBe('status')
+})
+
+test('every querying row can be cancelled by click; only the first nine carry a digit', () => {
+  const providers = Array.from({ length: 10 }, (_, index) => ({ name: `seat-${index + 1}`, state: 'querying' }))
+  const rows = paneSections({ providers, responses: {}, errors: {}, colors: {}, isDone: false }).filter(section => section.kind === 'status')
+  expect(rows.map(row => row.kind === 'status' && row.cancellable)).toEqual(Array(10).fill(true))
+  expect(rows.map(row => (row.kind === 'status' ? row.cancel : undefined))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', undefined])
 })
 
 test('a cancelled seat draws in grey and is counted apart in the summary', () => {
@@ -88,7 +96,7 @@ test('a cancelled seat draws in grey and is counted apart in the summary', () =>
     responses: {}, errors: { 'grok-cli': 'cancelled from the pane' }, colors: {}, isDone: false,
   })
   expect(live).toEqual([
-    { kind: 'status', glyph: '○', glyphColor: 'inactive', name: 'grok-cli', state: 'cancelled', stateColor: 'inactive', time: '', model: 'grok-4.7' },
+    { kind: 'status', glyph: '○', glyphColor: 'inactive', name: 'grok-cli', state: 'cancelled', stateColor: 'inactive', time: '', model: 'grok-4.7', cancellable: false },
   ])
 })
 

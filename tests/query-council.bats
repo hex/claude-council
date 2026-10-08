@@ -540,6 +540,25 @@ cancel_from_pane() {
     run ! kill -0 "$(cat "$STUB_DIR/grok.sleeper")"
 }
 
+@test "cancel: a marker that lands after the seat answered keeps the answer" {
+    setup_pane
+    # The stub answers at once; query_provider then streams the answer to the
+    # pane and the cache, a window in which the job is still alive.
+    write_stub grok
+    # Pressed the moment the answer file exists, before the job is reaped.
+    (
+        await_any_file "$PANE/responses/grok.md" "$PANE/run-over"
+        touch "$PANE/cancel-grok"
+    ) &
+    COUNCIL_RETRY_WAIT=0 run_council_with_pane --providers=grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'success'
+    assert_json_eq "$output" '.round1.grok.response' 'ANSWER-FROM-grok'
+    [[ "$(awk -F'\t' '$1 == "grok" { print $2 }' "$PANE/status" | paste -sd, -)" != *cancelled* ]]
+    # The marker is consumed only while the run is still waiting on seats; one
+    # that lands after that stays, and goes with the watch dir.
+}
+
 @test "cancel: a seat cancelled in round 1 sits out the debate round" {
     setup_pane
     write_stub gemini
