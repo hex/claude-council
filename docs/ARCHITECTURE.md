@@ -254,20 +254,24 @@ TTL: $COUNCIL_CACHE_TTL seconds (default 3600)
 
 ### Cancelling a seat (`scripts/query-council.sh`, `mods/council-pane`)
 
-While a round's seats are out, `await_seats` polls them in 0.2 s ticks
-(bash 3.2 has no `wait -n`) and looks for `cancel/<provider>` in the pane's
-watch dir, which the mod pane writes when its cancel button is pressed; with
-no pane the seats are waited on. On a marker, `signal_tree`
-(lib/deadline.sh) ends the seat's whole process tree in one `kill`, parent
-first, so neither a CLI's own retry nor the API-sibling fallback can start;
-the slot becomes an error reading `cancelled from the pane`, the seat's error
-file is removed, a `cancelled` status line is logged, and only then is the
-marker removed, so the pane draws the seat as `cancelling` meanwhile. A seat
-whose answer is already on disk keeps it. Each round removes its seats'
-markers before launching, so a press that landed after the previous round
-collected is spent. A cancelled seat is not offered for retry, sits out round
-2 and gets no rebuttal block from `format-output.sh`. The result JSON and the
-synthesis see it as an error like any other.
+While round 1's seats are out (the first pass and the retry), `await_seats`
+polls them in 0.2 s ticks (bash 3.2 has no `wait -n`) and looks for
+`cancel/<provider>` in the pane's watch dir, which the mod pane writes when
+its cancel button is pressed; with no pane the seats are waited on. On a
+marker, the seat's whole process tree (`process_tree`, lib/deadline.sh) is
+listed once and sent TERM in one `kill`, parent first, so neither a CLI's own
+retry nor the API-sibling fallback can start, and KILL five seconds later for
+whatever trapped or ignored it; the slot becomes an error reading `cancelled
+from the pane` (its role kept), the seat's error file is removed, a
+`cancelled` status line is logged, and only then is the marker removed, so
+the pane draws the seat as `cancelling` meanwhile. A press that finds the
+seat's slot already on disk, whatever it says, is spent: the seat's work is
+done. Round 1 removes its seats' markers before launching, so a press that
+landed after the round collected is spent too. A cancelled seat is not
+offered for retry, sits out round 2 and gets no rebuttal block from
+`format-output.sh`; round 2 logs no pane rows, so it has no cancel and is
+waited on. The result JSON and the synthesis see it as an error like any
+other.
 
 ### Retry Logic (`scripts/lib/retry.sh`)
 

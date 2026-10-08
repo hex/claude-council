@@ -803,40 +803,52 @@ seat_in() {
 
 # The mod pane cancels a seat by dropping its name in the watch dir's
 # cancel/ folder; the marker stays until the seat is logged as cancelled, so
-# the pane can draw the seat as cancelling meanwhile.
-cancel_marker() { printf '%s/cancel/%s' "${COUNCIL_PANE_DIR:-}" "$1"; }
-seat_cancelled() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "$(cancel_marker "$1")" ]]; }
+# the pane can draw the seat as cancelling meanwhile. Without a pane there is
+# no folder and nothing to spend.
+seat_cancelled() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/cancel/$1" ]]; }
+spend_cancel() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/cancel/$1"; }
 
 # End a seat the pane cancelled: its whole process tree goes (the CLI, its
 # children, and the subshell that would otherwise try the API sibling next),
-# then its slot records the cancellation. The slot is written only after the
-# job is reaped, so nothing the seat was mid-way through writing lands on top
-# of it. Any error file is removed rather than written: the status line is
-# the whole story, and a seat that failed on a retry and was then cancelled
-# would otherwise show its old error. Args: provider pid output_file
+# then its slot records the cancellation. The tree is listed once, before
+# the signal: a child left behind is reparented and no longer found under
+# the job. TERM first, then KILL for whatever is still there five seconds
+# on, since a CLI that traps TERM for a graceful exit, or a child that
+# ignores it, would otherwise outlive the job holding its stderr open. The
+# slot is written only after the job is reaped, so nothing the seat was
+# mid-way through writing lands on top of it. Any error file is removed
+# rather than written: the status line is the whole story, and a seat that
+# failed on a retry and was then cancelled would otherwise show its old
+# error. Args: provider pid output_file
 cancel_seat() {
-    local provider="$1" pid="$2" output_file="$3"
-    signal_tree TERM "$pid"
+    local provider="$1" pid="$2" output_file="$3" role="" ticks=50
+    local -a tree
+    # shellcheck disable=SC2207 # pids hold no spaces or globs
+    tree=($(process_tree "$pid"))
+    kill -TERM "${tree[@]}" 2>/dev/null || true
+    while (( ticks-- > 0 )) && any_alive "${tree[@]}"; do sleep 0.1; done
+    kill -KILL "${tree[@]}" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
-    printf '%s' "$CANCELLED_MSG" | jq -Rs '{status: "error", error: ., cached: false}' > "$output_file"
+    [[ -z "$ROLE_ASSIGNMENTS" ]] || role=$(get_provider_role "$provider" "$ROLE_ASSIGNMENTS")
+    printf '%s' "$CANCELLED_MSG" | jq -Rs --arg role "$role" \
+        '{status: "error", error: ., cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
     rm -f "${COUNCIL_PANE_DIR}/errors/${provider}.txt"
     pane_status_event "$COUNCIL_PANE_DIR" "$provider" cancelled "" "$(get_model "$provider")"
-    rm -f "$(cancel_marker "$provider")"
+    spend_cancel "$provider"
     CANCELLED+=("$provider")
     echo -e "$(provider_color "$provider")${provider}${RESET}: ${DIM}${CANCELLED_MSG}${RESET}" >&2
 }
 
-# Wait for the seats launched as background jobs, ending any the pane cancels
-# meanwhile. Polled in 0.2 s ticks rather than waited on: bash 3.2 has no
-# wait -n, and a blocking wait could not notice the marker. Without a pane
-# nothing can cancel, so the seats are simply waited on. A press that finds
-# the seat's answer already written is spent: the job lives on a moment
-# after that write, streaming the answer to the pane and the cache, and the
-# reader cancelled a wait that was already over. Args: output_suffix
-# provider=pid...
+# Wait for the round-1 seats launched as background jobs, ending any the pane
+# cancels meanwhile. Polled in 0.2 s ticks rather than waited on: bash 3.2
+# has no wait -n, and a blocking wait could not notice the marker. Without a
+# pane nothing can cancel, so the seats are simply waited on. A press that
+# finds the seat's slot already on disk is spent, whatever the slot says:
+# the seat has finished its work (the job lives on a moment after that write,
+# streaming the answer to the pane and the cache), and the reader cancelled
+# a wait that was already over; a slot caught mid-write is one such.
+# Args: provider=pid...
 await_seats() {
-    local suffix="$1"
-    shift
     local -a seats=("$@")
     local i provider pid live seat
     if [[ -z "${COUNCIL_PANE_DIR:-}" ]]; then
@@ -851,14 +863,14 @@ await_seats() {
             pid="${seats[$i]#*=}"
             if ! kill -0 "$pid" 2>/dev/null; then
                 wait "$pid" 2>/dev/null || true
-                rm -f "$(cancel_marker "$provider")"
+                spend_cancel "$provider"
                 seats[i]=""
             elif seat_cancelled "$provider"; then
-                if [[ "$(jq -r '.status' "${TEMP_DIR}/${provider}${suffix}.json" 2>/dev/null)" == "success" ]]; then
-                    rm -f "$(cancel_marker "$provider")"
+                if [[ -e "${TEMP_DIR}/${provider}.json" ]]; then
+                    spend_cancel "$provider"
                     live=1
                 else
-                    cancel_seat "$provider" "$pid" "${TEMP_DIR}/${provider}${suffix}.json"
+                    cancel_seat "$provider" "$pid" "${TEMP_DIR}/${provider}.json"
                     seats[i]=""
                 fi
             else
@@ -884,11 +896,12 @@ query_round1() {
         fi
         # A marker from before this round (a press that landed once the last
         # round had collected) is spent: the seat starts this one afresh.
-        rm -f "${TEMP_DIR}/${provider}.json" "$(cancel_marker "$provider")"
+        rm -f "${TEMP_DIR}/${provider}.json"
+        spend_cancel "$provider"
         query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" "$provider_role" &
         seats+=("${provider}=$!")
     done
-    await_seats "" "${seats[@]}"
+    await_seats "${seats[@]}"
 }
 
 # Launch all queries in parallel
@@ -1020,16 +1033,15 @@ if [[ "$DEBATE_MODE" == true ]]; then
     debate_common+="4. What would you change about your original recommendation after seeing these?"
 
     # Query all providers for rebuttals (no roles, no cache). A seat cancelled
-    # in round 1 has no answer to defend, so the roster is fixed here; one
-    # cancelled during this round still has its slot collected below.
+    # in round 1 has no answer to defend. Round 2 logs no pane rows, so there
+    # is nothing to press and the seats are simply waited on.
     ROUND2_PROVIDERS=()
     for provider in "${PROVIDERS[@]}"; do
         seat_in "$provider" ${CANCELLED[@]+"${CANCELLED[@]}"} || ROUND2_PROVIDERS+=("$provider")
     done
-    ROUND2_SEATS=()
+    ROUND2_PIDS=()
     for provider in ${ROUND2_PROVIDERS[@]+"${ROUND2_PROVIDERS[@]}"}; do
         # Round 2: no role, skip cache (rebuttals depend on round 1 content)
-        rm -f "$(cancel_marker "$provider")"
         (
             script="$(provider_script_path "$provider")"
             model=$(get_model "$provider")
@@ -1061,11 +1073,13 @@ if [[ "$DEBATE_MODE" == true ]]; then
                 fi
             fi
         ) &
-        ROUND2_SEATS+=("${provider}=$!")
+        ROUND2_PIDS+=($!)
     done
 
     # Wait for round 2
-    await_seats "_r2" ${ROUND2_SEATS[@]+"${ROUND2_SEATS[@]}"}
+    for pid in ${ROUND2_PIDS[@]+"${ROUND2_PIDS[@]}"}; do
+        wait "$pid" 2>/dev/null || true
+    done
 
     # Collect round 2 results
     for provider in ${ROUND2_PROVIDERS[@]+"${ROUND2_PROVIDERS[@]}"}; do

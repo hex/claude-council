@@ -139,12 +139,6 @@ cmd_identity() {
     printf 'proc:%s\n' "${fields[19]}"
 }
 
-any_alive() {
-    local p
-    for p in "$@"; do if kill -0 "$p" 2>/dev/null; then return 0; fi; done
-    return 1
-}
-
 # Ends a round's Codex and every process under it, and records why: timeout
 # or stopped. The reason is written first, so the round reads it once Codex
 # exits; the round then waits for the ended file, written only once nothing

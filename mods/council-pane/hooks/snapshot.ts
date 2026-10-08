@@ -19,9 +19,15 @@ async function readFolder(fs: Files, dir: string, suffix: string): Promise<Recor
   if (!(await fs.exists(dir))) return texts
   for (const entry of await fs.list(dir)) {
     if (entry.kind !== 'file' || entry.name.startsWith('.') || !entry.name.endsWith(suffix)) continue
-    texts[entry.name.slice(0, entry.name.length - suffix.length)] = await fs.read(`${dir}/${entry.name}`)
+    texts[entry.name.slice(0, -suffix.length)] = await fs.read(`${dir}/${entry.name}`)
   }
   return texts
+}
+
+// The names of a folder's plain files; a marker is its name, with nothing to read.
+async function fileNames(fs: Files, dir: string): Promise<string[]> {
+  if (!(await fs.exists(dir))) return []
+  return (await fs.list(dir)).filter(entry => entry.kind === 'file' && !entry.name.startsWith('.')).map(entry => entry.name)
 }
 
 export async function readView(fs: Files, runDir: string): Promise<RunView> {
@@ -36,7 +42,7 @@ export async function readView(fs: Files, runDir: string): Promise<RunView> {
     responses: await readFolder(fs, `${runDir}/responses`, '.md'),
     errors: await readFolder(fs, `${runDir}/errors`, '.txt'),
     // The seats the pane pressed for cancel; a marker stays until the run logs the seat as cancelled.
-    cancels: Object.keys(await readFolder(fs, `${runDir}/cancel`, '')),
+    cancels: await fileNames(fs, `${runDir}/cancel`),
     colors: parseColors(await readText(fs, `${runDir}/colors`)),
     isDone,
     ...(latest ? { latest } : {}),

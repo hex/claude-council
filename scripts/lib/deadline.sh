@@ -45,6 +45,13 @@ process_tree() {
     for child in $(children_of "$1"); do process_tree "$child"; done
 }
 
+# Whether any of the given processes is still alive.
+any_alive() {
+    local p
+    for p in "$@"; do if kill -0 "$p" 2>/dev/null; then return 0; fi; done
+    return 1
+}
+
 # The direct children of a process. pgrep finds them where it exists; Git
 # Bash ships none, and there the parent is read from each /proc/<pid>/stat,
 # field 4, after a name that may hold spaces.
