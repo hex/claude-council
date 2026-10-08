@@ -32,19 +32,17 @@
 # Usage: signal_tree <SIG> <pid>
 signal_tree() {
     local sig="$1" pid="$2"
-    local -a pids=()
-    tree_of pids "$pid"
+    local -a pids
+    # shellcheck disable=SC2207 # pids hold no spaces or globs
+    pids=($(process_tree "$pid"))
     kill "-$sig" "${pids[@]}" 2>/dev/null || true
 }
 
-# Append a process and all its descendants, parents first, to the array
-# named by $1. Usage: tree_of <array name> <pid>
-tree_of() {
-    local out="$1" pid="$2" child
-    eval "$out+=(\"$pid\")"
-    for child in $(children_of "$pid"); do
-        tree_of "$out" "$child"
-    done
+# A process and everything under it, parents first, one pid per line.
+process_tree() {
+    local child
+    echo "$1"
+    for child in $(children_of "$1"); do process_tree "$child"; done
 }
 
 # The direct children of a process. pgrep finds them where it exists; Git

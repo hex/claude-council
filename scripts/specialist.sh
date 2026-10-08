@@ -139,13 +139,6 @@ cmd_identity() {
     printf 'proc:%s\n' "${fields[19]}"
 }
 
-# A process and everything under it.
-process_tree() {
-    local child
-    echo "$1"
-    for child in $(children_of "$1"); do process_tree "$child"; done
-}
-
 any_alive() {
     local p
     for p in "$@"; do if kill -0 "$p" 2>/dev/null; then return 0; fi; done

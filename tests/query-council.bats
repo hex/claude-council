@@ -440,7 +440,7 @@ setup_pane() {
     [ ! -f "$PANE/retry-offer" ]
     [ ! -f "$PANE/.retry" ]
     # The pane saw grok query, fail, query again and complete.
-    [ "$(awk -F'\t' '$1 == "grok" { print $2 }' "$PANE/status" | paste -sd, -)" = "querying,error,querying,complete" ]
+    [ "$(pane_states grok)" = "querying,error,querying,complete" ]
     # A provider that answered on retry is no longer an error.
     [[ "$stderr" != *"Errors:"* ]]
 }
@@ -488,33 +488,37 @@ setup_pane() {
     [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
 }
 
-# A stub that answers only after <seconds>, through a child sleep whose pid it
-# records, so a test can tell whether a cancel ended the whole tree.
-# Usage: write_slow_stub <name> <seconds>
+# A stub that answers after <seconds>, through a child sleep whose pid it
+# records, so a test can tell whether a cancel ended the whole tree. The
+# first <fast_calls> calls answer at once instead, for a seat whose slow call
+# is its debate one. Usage: write_slow_stub <name> <seconds> [fast_calls]
 write_slow_stub() {
-    local name="$1" seconds="$2"
+    local name="$1" seconds="$2" fast_calls="${3:-0}"
     cat > "$STUB_DIR/${name}.sh" <<EOF
 #!/bin/bash
 echo "${name}" >> "${CALLS_LOG}"
-sleep ${seconds} &
-echo \$! > "${STUB_DIR}/${name}.sleeper"
-wait \$!
-printf 'ANSWER-FROM-%s\n' "${name}"
+if [[ "\$(grep -c '^${name}\$' "${CALLS_LOG}")" -gt ${fast_calls} ]]; then
+    sleep ${seconds} &
+    echo \$! > "${STUB_DIR}/${name}.sleeper"
+    wait \$!
+fi
+printf 'ANSWER-FROM-%s\\n' "${name}"
 EOF
     chmod +x "$STUB_DIR/${name}.sh"
 }
 
-# Stand in for the pane cancelling a seat: once its stub is running (the
-# status log says querying before the script starts), drop the marker the
-# pane writes.
+# Stand in for the mod pane cancelling a seat: once its slow call is running
+# (the stub records its sleeper), drop the marker the pane writes.
 cancel_from_pane() {
-    local name="$1" waited=0
-    until grep -q "^${name}$" "$CALLS_LOG" 2>/dev/null || [[ -f "$PANE/run-over" ]]; do
-        sleep 0.05
-        waited=$((waited + 1))
-        [[ $waited -gt 160 ]] && return 1
-    done
-    touch "$PANE/cancel-${name}"
+    local name="$1"
+    await_any_file "$STUB_DIR/${name}.sleeper" "$PANE/run-over" || return 1
+    mkdir -p "$PANE/cancel"
+    touch "$PANE/cancel/${name}"
+}
+
+# The states the pane saw for one provider, in order, comma-separated.
+pane_states() {
+    awk -F'\t' -v p="$1" '$1 == p { print $2 }' "$PANE/status" | paste -sd, -
 }
 
 @test "cancel: a marker from the pane ends that seat and the run goes on without it" {
@@ -530,12 +534,13 @@ cancel_from_pane() {
     assert_json_eq "$output" '.round1.gemini.status' 'success'
     assert_json_eq "$output" '.round1.grok.status' 'error'
     assert_json_eq "$output" '.round1.grok.error' 'cancelled from the pane'
-    # The pane saw the seat query and then be cancelled, never errored.
-    [ "$(awk -F'\t' '$1 == "grok" { print $2 }' "$PANE/status" | paste -sd, -)" = "querying,cancelled" ]
-    [ "$(cat "$PANE/errors/grok.txt")" = "cancelled from the pane" ]
+    # The pane saw the seat query and then be cancelled, never errored, and
+    # the status line is the whole story: no error file.
+    [ "$(pane_states grok)" = "querying,cancelled" ]
+    [ ! -f "$PANE/errors/grok.txt" ]
     # A cancelled seat is not offered for retry, and the marker is consumed.
     [ ! -f "$PANE/offer-seen" ]
-    [ ! -f "$PANE/cancel-grok" ]
+    [ ! -f "$PANE/cancel/grok" ]
     # The stub's own child went with it.
     run ! kill -0 "$(cat "$STUB_DIR/grok.sleeper")"
 }
@@ -548,13 +553,13 @@ cancel_from_pane() {
     # Pressed the moment the answer file exists, before the job is reaped.
     (
         await_any_file "$PANE/responses/grok.md" "$PANE/run-over"
-        touch "$PANE/cancel-grok"
+        mkdir -p "$PANE/cancel"; touch "$PANE/cancel/grok"
     ) &
     COUNCIL_RETRY_WAIT=0 run_council_with_pane --providers=grok "q"
     [ "$status" -eq 0 ]
     assert_json_eq "$output" '.round1.grok.status' 'success'
     assert_json_eq "$output" '.round1.grok.response' 'ANSWER-FROM-grok'
-    [[ "$(awk -F'\t' '$1 == "grok" { print $2 }' "$PANE/status" | paste -sd, -)" != *cancelled* ]]
+    [[ "$(pane_states grok)" != *cancelled* ]]
     # The marker is consumed only while the run is still waiting on seats; one
     # that lands after that stays, and goes with the watch dir.
 }
@@ -578,23 +583,8 @@ cancel_from_pane() {
     setup_pane
     write_stub gemini
     # grok answers round 1 at once; the debate call is the slow one.
-    cat > "$STUB_DIR/grok.sh" <<EOF
-#!/bin/bash
-echo grok >> "${CALLS_LOG}"
-if [[ -f "${STUB_DIR}/grok.answered" ]]; then
-    sleep 30 &
-    echo \$! > "${STUB_DIR}/grok.sleeper"
-    wait \$!
-fi
-touch "${STUB_DIR}/grok.answered"
-echo ANSWER-FROM-grok
-EOF
-    chmod +x "$STUB_DIR/grok.sh"
-    # Round 2 writes no pane status, so the debate call shows only in the call log.
-    (
-        until [[ "$(grep -c '^grok$' "$CALLS_LOG")" -ge 2 ]] || [[ -f "$PANE/run-over" ]]; do sleep 0.05; done
-        touch "$PANE/cancel-grok"
-    ) &
+    write_slow_stub grok 30 1
+    cancel_from_pane grok &
     local started; started=$SECONDS
     COUNCIL_RETRY_WAIT=0 run_council_with_pane --providers=gemini,grok --debate "q"
     [ "$status" -eq 0 ]

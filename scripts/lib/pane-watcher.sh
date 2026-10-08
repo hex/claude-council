@@ -172,14 +172,16 @@ print_response() {
 # "fallback" (amber, ↪ "fell back") for a seat whose API sibling answered,
 # where the text is the reason the seat itself did not. That reason is not
 # always a failure: a CLI that cannot read an image is routed there by design.
-# "cancelled" (grey, ○) is a seat the reader ended from the pane: the line
-# says so and its text, which says the same, is not repeated.
+# "cancelled" (grey, ○) is a seat the reader ended from the pane; the run
+# removes its error file, so the line is all there is.
 print_error_notice() {
     local name="$1" file="${2:-$WATCH/errors/${1}.txt}" state="${3:-error}" err_line glyph='✗' label='error' rgb='185;28;28'
-    if [[ "$state" == fallback ]]; then glyph='↪'; label='fell back'; rgb='180;83;9'; fi
-    if [[ "$state" == cancelled ]]; then glyph='○'; label='cancelled'; rgb='113;113;122'; file=''; fi
+    case "$state" in
+        fallback)  glyph='↪'; label='fell back'; rgb='180;83;9' ;;
+        cancelled) glyph='○'; label='cancelled'; rgb='113;113;122' ;;
+    esac
     printf '\n\033[1;38;2;%sm%s %s %s\033[0m\n' "$rgb" "$glyph" "$name" "$label"
-    if [[ -n "$file" && -f "$file" ]]; then
+    if [[ -f "$file" ]]; then
         # `|| -n` keeps the last line: the producer stores a command
         # substitution, which has no trailing newline, so a plain read loop
         # would return non-zero on it and show nothing for a one-line error.
@@ -368,7 +370,7 @@ while true; do
             provider_states[idx]="$state"
             [[ -n "$ms" ]] && provider_timings[idx]="$ms"
             [[ -n "$model" ]] && provider_models[idx]="$model"
-            if [[ "$state" == "error" || "$state" == "fallback" || "$state" == "cancelled" ]]; then
+            case "$state" in error|fallback|cancelled)
                 clear_loading
                 # Replay from a snapshot of the text: a provider that fails
                 # again on retry overwrites errors/<name>.txt, and each
@@ -379,7 +381,8 @@ while true; do
                 cp "$WATCH/errors/${provider}.txt" "$snap" 2>/dev/null || true
                 print_error_notice "$provider" "$snap" "$state"
                 display_events+=("${state}:${provider}"$'\t'"$snap")
-            fi
+                ;;
+            esac
         done
     fi
 

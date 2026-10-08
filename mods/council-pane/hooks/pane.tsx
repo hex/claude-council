@@ -754,7 +754,7 @@ function cancelSeat($: EngineInterface, state: PaneState, name: string): void {
   const runDir = state.runDir
   if (!runDir) return
   state.cancelling.add(name)
-  void $.fs.write(`${runDir}/cancel-${name}`, '').catch((err: unknown) => $.ui.log(`cancel ${name}: ${String(err)}`))
+  void $.fs.write(`${runDir}/cancel/${name}`, '').catch((err: unknown) => $.ui.log(`cancel ${name}: ${String(err)}`))
   $.ui.invalidate('ui.render')
 }
 

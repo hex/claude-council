@@ -223,14 +223,12 @@ blank_lines_before() {
 }
 
 @test "watcher: a seat the reader cancelled prints a grey cancelled notice, not an error" {
-    mkdir -p "$W/errors"
-    printf 'cancelled from the pane' > "$W/errors/grok-cli.txt"
+    # The run writes no error file for a cancelled seat; the status line is all.
     printf 'grok-cli\tquerying\t\tgrok-4.7\ngrok-cli\tcancelled\t\tgrok-4.7\n' >> "$W/status"
     run_watcher
     [ "$status" -eq 0 ]
     [[ "$output" == *$'\033[1;38;2;113;113;122m○ grok-cli cancelled\033[0m'* ]]
     [[ "$output" != *"grok-cli error"* ]]
-    [[ "$output" != *"cancelled from the pane"* ]]
 }
 
 @test "watcher: a seat that fell back to its API shows the answer, the API beside the model, and why" {
