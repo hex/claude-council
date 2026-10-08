@@ -22,7 +22,7 @@ When the variable is set, `run-council.sh` writes its watch directory there and 
 
 | File | Written by | Holds |
 |---|---|---|
-| `status` | the run | one line per provider event: name, state (`querying`, `complete`, `cached`, `error`, `fallback`), milliseconds, model. A `fallback` line's model reads `<model> via <sibling> API` |
+| `status` | the run | one line per provider event: name, state (`querying`, `complete`, `cached`, `error`, `fallback`, `cancelled`), milliseconds, model. A `fallback` line's model reads `<model> via <sibling> API` |
 | `responses/<name>.md` | the run | each answer |
 | `errors/<name>.txt` | the run | each error, and for a seat its API sibling answered, why the seat itself did not |
 | `colors` | the run | each provider's banner color as `r;g;b` |
@@ -31,20 +31,21 @@ When the variable is set, `run-council.sh` writes its watch directory there and 
 | `job-file` | an `--async` run | the path of the job's record, which says when the result can be fetched |
 | `retry-offer` | the run | seconds the offer stays open, then the failed providers |
 | `.retry` / `.retry-declined` | the pane | the answer to the offer |
+| `cancel-<name>` | the pane | cancel that seat; the run removes it once the seat is ended, or keeps the answer if one landed first |
 | `.done` | the run | the run has finished |
 
 Without the mod the variable is never set and the scripts behave as before.
 
 ## What you get
 
-- A status list with one row per provider, in the provider's color. A provider still querying shows a spinner and a running time. When the run ends it collapses to one summary line and a row of names. A seat its API sibling answered counts as answered, and the summary says how many fell back.
+- A status list with one row per provider, in the provider's color. A provider still querying shows a spinner, a running time and a `cancel` button: click it, or press ctrl+x tab and then the row's digit (`1` to `9`), to end that seat and go on without it. The row reads `cancelling` until the run confirms, then `cancelled` in grey with a hollow `○`. When the run ends it collapses to one summary line and a row of names. A seat its API sibling answered counts as answered, and the summary says how many fell back and how many were cancelled.
 - A banner per answer with the model and the time it took. Errors show in red. When a CLI seat fails and its API sibling answers, a dim amber `<name> fell back: <reason>` line sits between the banner and the answer.
 - Tables wider than the pane are rewritten as one record per row. Claude Code sizes tables to the terminal, so a wide one wraps into noise otherwise.
 - The pane holds at most 80,000 characters, counted after wide tables are rewritten for its width. Claude Code refuses to draw a pane carrying more than 100,000 and draws its own instead, so over the budget the answers are cut to an even share, each ending with how many characters were left out; the synthesis, banners and errors are never cut, and `/claude-council:result` has every answer whole.
 - The synthesis, below the answers, once Claude has written it. Press `0` to jump to it.
 - While a run is live, a `COUNCIL` band above the prompt reads like the specialist band: how many providers finished (`3 of 6`, an error counting as finished), a thin line that fills with them, an `m:ss` clock since the run started, the latest event (`gemini answered`, `asking kimi`, `grok-cli answered through its API`), and a button to open the pane. On a narrow pane the event gives way first. The pane lists who is still out.
 - `retry` and `skip` buttons with a countdown bar when a provider fails. They sit in the band above the prompt, so they stay in view while the pane scrolls. Click them, or press ctrl+x tab to give the band the keys and then `r` or `s`. Typing goes to the prompt until you do.
-- Press `1` to `9` in the focused pane to jump to that provider's answer.
+- Press `1` to `9` in the focused pane to jump to that provider's answer once the run is done; while it is live the same digits cancel that seat.
 - When a run ends, a `COUNCIL` notice sits above the prompt for 20 seconds with buttons to open the pane or dismiss it. This covers `--async` jobs too, and the notice names the job.
 - `/council-pane` reopens the pane with the last run.
 

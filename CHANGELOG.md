@@ -4,6 +4,14 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Features
+- A seat can be cancelled from the Claude Code pane. Each querying row has a `cancel` button, with the row's digit as its key once ctrl+x tab gives the pane the keys. The run ends that seat's whole process tree (the CLI, its children, and the API fallback that would have followed), the row reads `cancelled` in grey, the summary counts it apart from the errors, the retry offer skips it and a seat cancelled in round 1 sits out the debate round. The result records it as an error reading `cancelled from the pane`. A press that lands after the seat answered keeps the answer. The tmux pane shows a cancelled seat with a grey `○ <seat> cancelled` notice.
+
+### Fixes
+- A deadline or cancel now signals a provider's whole process tree in one call, parent first. Signalled child first, a shell wrapper woke from its `wait` before its own signal arrived and could start the model fallback in the gap.
+
 ## 2026.10.2
 
 ### Features

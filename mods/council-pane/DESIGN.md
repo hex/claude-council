@@ -61,6 +61,7 @@ Each glyph has one meaning.
 | `●` | A specialist that is on, a provider, or live when coloured `warning` |
 | `✓` | Done |
 | `✗` | Failed |
+| `○` | Switched off, or a seat the reader cancelled |
 | `⋯` | Running |
 | `▶` | The row you are editing |
 | `↳` | A continuation of the row above |

@@ -30,7 +30,7 @@ test('paneSections gives a coloured status row per provider, then a banner and b
     { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'success', time: '4.2s', model: 'gemini-3-pro', cancellable: false },
     { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'warning', time: '    ', model: '', cancellable: true, cancel: '2' },
     { kind: 'status', glyph: '\u2717', glyphColor: 'error', name: 'grok  ', state: 'error   ', stateColor: 'error', time: '0.9s', model: '', cancellable: false },
-    { kind: 'note', text: 'click \u2717 to cancel a seat, or ctrl+x tab then its digit' },
+    { kind: 'note', text: 'click cancel on a row, or ctrl+x tab then its digit' },
     { kind: 'banner', key: 'jump:gemini', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)' },
     { kind: 'body', text: 'Use Postgres.' },
     { kind: 'error', key: 'jump:grok', title: 'grok error', text: 'HTTP 429' },
@@ -50,7 +50,7 @@ test('a querying row carries its digit as the cancel key while the run is live, 
   const live = paneSections(view)
   expect(live.map(section => section.kind === 'status' ? section.cancel : undefined)).toEqual([undefined, '2', '3'])
   // The hint names the keys the way the retry row does, once per run.
-  expect(live.at(-1)).toEqual({ kind: 'note', text: 'click ✗ to cancel a seat, or ctrl+x tab then its digit' })
+  expect(live.at(-1)).toEqual({ kind: 'note', text: 'click cancel on a row, or ctrl+x tab then its digit' })
   // A seat whose cancel is on its way draws as cancelling, with no key.
   const pending = paneSections(view, { cancelling: new Set(['grok-cli']) })
   expect(pending[1]).toMatchObject({ kind: 'status', state: 'cancelling', stateColor: 'inactive', glyph: '\u25cb' })

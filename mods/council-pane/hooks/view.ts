@@ -38,7 +38,7 @@ export type Section =
 const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger, fallback: COLOR.warning, cancelled: COLOR.muted, cancelling: COLOR.muted }
 // What the pane writes to a seat's row between the press and the run's answer.
 const CANCELLING = 'cancelling'
-export const CANCEL_HINT = 'click \u2717 to cancel a seat, or ctrl+x tab then its digit'
+export const CANCEL_HINT = 'click cancel on a row, or ctrl+x tab then its digit'
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
 const SPINNER = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f']

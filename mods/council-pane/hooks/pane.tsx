@@ -1485,7 +1485,7 @@ export const register: Register = (on, options) => {
               {section.cancellable && (
                 <Box flexDirection="row" flexShrink={0}>
                   <Text>{'  '}</Text>
-                  <Button key={`cancel:${seat}`} plain label={'\u2717'} {...(section.cancel ? { hotkey: section.cancel } : {})} onPress={() => cancelSeat($, state, seat)} />
+                  <Button key={`cancel:${seat}`} plain label="cancel" {...(section.cancel ? { hotkey: section.cancel } : {})} onPress={() => cancelSeat($, state, seat)} />
                 </Box>
               )}
             </Box>
