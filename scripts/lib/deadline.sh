@@ -22,18 +22,29 @@
 # own report of a signal-ended job ("Terminated: 15 ...", printed by wait in a
 # main shell) is silenced: a caller capturing stderr would store it as the
 # provider's error text.
-# Send a signal to a process and everything under it, children first, so a
-# CLI's own child (the binary a node wrapper spawns, the sleep a shell script
-# is in) cannot outlive it holding the caller's captured stdout open. Never
-# fails: a process that is already gone is the outcome wanted, and callers run
-# under errexit.
+# Send a signal to a process and everything under it, so a CLI's own child
+# (the binary a node wrapper spawns, the sleep a shell script is in) cannot
+# outlive it holding the caller's captured stdout open. The whole tree is
+# listed first and signalled in one call, parent before child: a parent
+# signalled after its child has died wakes from its wait and may start the
+# next attempt (a model fallback) in the gap. Never fails: a process that is
+# already gone is the outcome wanted, and callers run under errexit.
 # Usage: signal_tree <SIG> <pid>
 signal_tree() {
-    local sig="$1" pid="$2" child
+    local sig="$1" pid="$2"
+    local -a tree=()
+    tree_of tree "$pid"
+    kill "-$sig" "${tree[@]}" 2>/dev/null || true
+}
+
+# Append a process and all its descendants, parents first, to the array
+# named by $1. Usage: tree_of <array name> <pid>
+tree_of() {
+    local out="$1" pid="$2" child
+    eval "$out+=(\"$pid\")"
     for child in $(children_of "$pid"); do
-        signal_tree "$sig" "$child"
+        tree_of "$out" "$child"
     done
-    kill "-$sig" "$pid" 2>/dev/null || true
 }
 
 # The direct children of a process. pgrep finds them where it exists; Git

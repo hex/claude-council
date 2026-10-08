@@ -23,6 +23,7 @@ test('the latest event is the log\'s last whole line, in words', () => {
   expect(lastEvent(log('grok\terror\t\t'))).toBe('grok failed')
   expect(lastEvent(log('grok-cli\tfallback\t1200\tgrok-4.6 via grok API'))).toBe('grok-cli answered through its API')
   expect(lastEvent(log('kimi\tquerying\t\t'))).toBe('asking kimi')
+  expect(lastEvent(log('grok-cli\tcancelled\t\tgrok-4.7'))).toBe('grok-cli cancelled')
   expect(lastEvent('gemini\tcomplete\t4210\t\nopenai')).toBe('gemini answered')
   expect(lastEvent('')).toBeUndefined()
 })
