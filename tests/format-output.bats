@@ -127,6 +127,23 @@ envelope_with_entry() {
     [[ "$output" != *"grok-cli: Error"*"first answer"* ]]
 }
 
+@test "format-output: a seat with no round-2 slot gets no rebuttal block" {
+    # A seat cancelled in round 1 sits out the debate: it has no slot, and the
+    # rebuttals section must not invent an error for it.
+    local json
+    json=$(jq -n '{
+        metadata: {quiet_mode: false, debate_mode: true},
+        round1: {gemini: {status: "success", model: "gemini-3-pro", response: "first answer"},
+                 grok: {status: "error", model: "grok-4.7", error: "cancelled from the pane"}},
+        round2: {gemini: {status: "success", model: "gemini-3-pro", response: "the rebuttal"}}
+    }')
+    run bash "$SCRIPT" "$json"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Round 2: Rebuttals"*"Gemini REBUTTAL"*"the rebuttal"* ]]
+    [[ "$output" != *"Grok REBUTTAL"* ]]
+    [[ "$output" != *"Unknown error"* ]]
+}
+
 @test "format-output: fallback note absent when fallback field is not set" {
     local json
     json=$(jq -n '{

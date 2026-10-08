@@ -564,6 +564,23 @@ pane_states() {
     # that lands after that stays, and goes with the watch dir.
 }
 
+@test "cancel: a marker older than the round is spent, not honoured" {
+    # A press that lands after round 1 has collected (the row still read
+    # querying for the pane's last half-second) must not cancel the seat's
+    # rebuttal in round 2 and overwrite its complete row.
+    setup_pane
+    write_stub gemini
+    write_stub grok
+    mkdir -p "$PANE/cancel"; touch "$PANE/cancel/grok"
+    COUNCIL_RETRY_WAIT=0 run_council_with_pane --providers=gemini,grok --debate "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'success'
+    assert_json_eq "$output" '.round2.grok.status' 'success'
+    [[ "$(pane_states grok)" != *cancelled* ]]
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 2 ]
+    [ ! -f "$PANE/cancel/grok" ]
+}
+
 @test "cancel: a seat cancelled in round 1 sits out the debate round" {
     setup_pane
     write_stub gemini

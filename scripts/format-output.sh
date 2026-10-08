@@ -192,6 +192,8 @@ format_output() {
                 echo ""
 
                 for provider in $providers; do
+                    # A seat cancelled in round 1 has no rebuttal slot and no block.
+                    [[ "$(echo "$json" | jq -r ".round2 | has(\"${provider}\")")" == "true" ]] || continue
                     local swatch
                     swatch=$(provider_swatch "$provider")
                     local model
@@ -201,8 +203,7 @@ format_output() {
                     local model_fallback
                     model_fallback=$(echo "$json" | jq -r ".round2[\"${provider}\"].model_fallback // empty")
                     local entry
-                    # A provider absent from round2 renders as an error entry
-                    entry=$(echo "$json" | jq -c ".round2[\"${provider}\"] // {\"status\": \"error\"}")
+                    entry=$(echo "$json" | jq -c ".round2[\"${provider}\"]")
 
                     draw_header "$swatch" "$provider" "$model" "" "rebuttal" "$fallback" "$model_fallback"
                     draw_fallback_reason "$provider" "$fallback" "$entry"

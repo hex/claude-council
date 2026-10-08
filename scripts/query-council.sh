@@ -882,7 +882,9 @@ query_round1() {
         if [[ -n "$ROLE_ASSIGNMENTS" ]]; then
             provider_role=$(get_provider_role "$provider" "$ROLE_ASSIGNMENTS")
         fi
-        rm -f "${TEMP_DIR}/${provider}.json"
+        # A marker from before this round (a press that landed once the last
+        # round had collected) is spent: the seat starts this one afresh.
+        rm -f "${TEMP_DIR}/${provider}.json" "$(cancel_marker "$provider")"
         query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" "$provider_role" &
         seats+=("${provider}=$!")
     done
@@ -1027,6 +1029,7 @@ if [[ "$DEBATE_MODE" == true ]]; then
     ROUND2_SEATS=()
     for provider in ${ROUND2_PROVIDERS[@]+"${ROUND2_PROVIDERS[@]}"}; do
         # Round 2: no role, skip cache (rebuttals depend on round 1 content)
+        rm -f "$(cancel_marker "$provider")"
         (
             script="$(provider_script_path "$provider")"
             model=$(get_model "$provider")
