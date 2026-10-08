@@ -32,9 +32,9 @@
 # Usage: signal_tree <SIG> <pid>
 signal_tree() {
     local sig="$1" pid="$2"
-    local -a tree=()
-    tree_of tree "$pid"
-    kill "-$sig" "${tree[@]}" 2>/dev/null || true
+    local -a pids=()
+    tree_of pids "$pid"
+    kill "-$sig" "${pids[@]}" 2>/dev/null || true
 }
 
 # Append a process and all its descendants, parents first, to the array
