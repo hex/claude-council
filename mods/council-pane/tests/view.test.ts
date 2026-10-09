@@ -1,7 +1,7 @@
 // ABOUTME: Tests for choosing which council run the pane shows and the markdown it draws
 // ABOUTME: Expected strings are written out by hand, never rebuilt from the code under test
 import { test, expect } from 'bun:test'
-import { unseenRun, paneSections, parseColors, markdownBlocks, queryingSince, withinTextBudget } from '../hooks/view'
+import { unseenRun, paneSections, parseColors, markdownBlocks, queryingSince, withinTextBudget, seatsToCancel, seatFolds } from '../hooks/view'
 
 test('unseenRun names the first run dir not shown before, ignoring other entries', () => {
   const entries = [
@@ -31,9 +31,10 @@ test('paneSections gives a coloured status row per provider, then a banner and b
     { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'warning', time: '    ', model: '', cancel: { seat: 'openai', hotkey: '2' } },
     { kind: 'status', glyph: '\u2717', glyphColor: 'error', name: 'grok  ', state: 'error   ', stateColor: 'error', time: '0.9s', model: '' },
     { kind: 'note', text: 'click cancel on a row, or ctrl+x tab then its digit' },
-    { kind: 'banner', key: 'jump:gemini', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)' },
+    { kind: 'toggleAll', closes: true, folds: ['banner:jump:gemini', 'error:jump:grok'] },
+    { kind: 'banner', key: 'jump:gemini', fold: 'banner:jump:gemini', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)', open: true },
     { kind: 'body', text: 'Use Postgres.' },
-    { kind: 'error', key: 'jump:grok', title: 'grok error', text: 'HTTP 429' },
+    { kind: 'error', key: 'jump:grok', fold: 'error:jump:grok', title: 'grok error', open: true, text: 'HTTP 429' },
   ])
 })
 
@@ -63,12 +64,36 @@ test('a querying row carries its digit as the cancel key while the run is live, 
   expect(done.at(-1)?.kind).toBe('status')
 })
 
-test('every querying row can be cancelled by click; only the first nine carry a digit', () => {
+test('every querying row can be cancelled by click; the first ten carry a digit, the tenth 0', () => {
   const providers = Array.from({ length: 10 }, (_, index) => ({ name: `seat-${index + 1}`, state: 'querying' }))
   const rows = paneSections({ providers, responses: {}, errors: {}, colors: {}, isDone: false }).filter(section => section.kind === 'status')
   // The seat's name travels unpadded, since the row's is padded to the column.
   expect(rows.map(row => (row.kind === 'status' ? row.cancel?.seat : undefined))).toEqual(providers.map(provider => provider.name))
-  expect(rows.map(row => (row.kind === 'status' ? row.cancel?.hotkey : undefined))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', undefined])
+  expect(rows.map(row => (row.kind === 'status' ? row.cancel?.hotkey : undefined))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
+  // An eleventh row has a button and no key.
+  const eleven = paneSections({ providers: [...providers, { name: 'seat-11', state: 'querying' }], responses: {}, errors: {}, colors: {}, isDone: false }).filter(section => section.kind === 'status')
+  expect(eleven.at(-1)).toMatchObject({ cancel: { seat: 'seat-11' } })
+  expect(eleven.at(-1)).not.toHaveProperty('cancel.hotkey')
+})
+
+test('cancel all takes every seat still querying, in order, skipping one already pressed', () => {
+  const view = {
+    providers: [
+      { name: 'gemini', state: 'complete', ms: 4210 },
+      { name: 'grok-cli', state: 'querying' },
+      { name: 'kimi', state: 'error', ms: 900 },
+      { name: 'openai', state: 'querying' },
+      { name: 'codex', state: 'querying' },
+    ],
+    isDone: false,
+  }
+  expect(seatsToCancel(view)).toEqual(['grok-cli', 'openai', 'codex'])
+  expect(seatsToCancel({ ...view, cancels: ['openai'] })).toEqual(['grok-cli', 'codex'])
+  // A marker for a seat past querying keeps nothing else out.
+  expect(seatsToCancel({ ...view, cancels: ['gemini'] })).toEqual(['grok-cli', 'openai', 'codex'])
+  expect(seatsToCancel({ ...view, cancels: ['grok-cli', 'openai', 'codex'] })).toEqual([])
+  // A finished run has nothing to cancel, whatever its log last said.
+  expect(seatsToCancel({ ...view, isDone: true })).toEqual([])
 })
 
 test('a cancelled seat draws in grey and is counted apart in the summary', () => {
@@ -88,7 +113,7 @@ test('a cancelled seat draws in grey and is counted apart in the summary', () =>
     {
       kind: 'strip',
       items: [
-        { glyph: '●', color: 'rgb(59,130,246)', name: 'gemini', hotkey: '1', target: 'jump:gemini' },
+        { glyph: '●', color: 'rgb(59,130,246)', name: 'gemini', hotkey: '1', target: 'jump:gemini', fold: 'banner:jump:gemini' },
         { glyph: '○', color: 'inactive', name: 'grok-cli', hotkey: '2' },
       ],
     },
@@ -103,12 +128,68 @@ test('a cancelled seat draws in grey and is counted apart in the summary', () =>
   ])
 })
 
+const answered = {
+  providers: [
+    { name: 'gemini', state: 'complete', ms: 4210 },
+    { name: 'grok-cli', state: 'fallback', ms: 1200 },
+    { name: 'kimi', state: 'error', ms: 900 },
+  ],
+  responses: { gemini: 'Use Postgres.', 'grok-cli': 'Use SQLite.' },
+  errors: { 'grok-cli': 'usage limit', kimi: 'HTTP 429' },
+  colors: {},
+  isDone: true,
+  synthesis: 'Postgres, mostly.',
+}
+
+test('a closed section draws its header alone; an open one keeps its text', () => {
+  const sections = paneSections(answered, { closed: new Set(['banner:jump:grok-cli', 'error:jump:kimi', 'synthesis:jump:synthesis']) }).slice(2)
+  expect(sections).toEqual([
+    { kind: 'toggleAll', closes: true, folds: ['banner:jump:gemini', 'banner:jump:grok-cli', 'error:jump:kimi', 'synthesis:jump:synthesis'] },
+    { kind: 'banner', key: 'jump:gemini', fold: 'banner:jump:gemini', title: 'GEMINI', subtitle: '(4.2s)', background: 'rgb(113,113,122)', open: true },
+    { kind: 'body', text: 'Use Postgres.' },
+    // The fallback reason goes with the answer it explains.
+    { kind: 'banner', key: 'jump:grok-cli', fold: 'banner:jump:grok-cli', title: 'GROK-CLI', subtitle: '(1.2s)', background: 'rgb(113,113,122)', open: false },
+    { kind: 'error', key: 'jump:kimi', fold: 'error:jump:kimi', title: 'kimi error', open: false },
+    { kind: 'synthesis', key: 'jump:synthesis', fold: 'synthesis:jump:synthesis', open: false },
+  ])
+})
+
+test('expand all shows once every section is closed, and no toggle shows for one section', () => {
+  const all = new Set(['banner:jump:gemini', 'banner:jump:grok-cli', 'error:jump:kimi', 'synthesis:jump:synthesis'])
+  expect(paneSections(answered, { closed: all })[2]).toEqual({ kind: 'toggleAll', closes: false, folds: [...all] })
+  const one = paneSections({ ...answered, providers: answered.providers.slice(0, 1), synthesis: undefined })
+  expect(one.map(section => section.kind)).toEqual(['summary', 'strip', 'banner', 'body'])
+})
+
+test('the seat sections are what closes when the synthesis lands, the synthesis itself not', () => {
+  expect(seatFolds(paneSections(answered))).toEqual(['banner:jump:gemini', 'banner:jump:grok-cli', 'error:jump:kimi'])
+})
+
+test('closing a seat\'s error does not close the answer its retry brings', () => {
+  const failed = { ...answered, providers: [{ name: 'kimi', state: 'error', ms: 900 }], responses: {}, errors: { kimi: 'HTTP 429' }, isDone: false, synthesis: undefined }
+  // A live run with one seat: its status row, then its section.
+  const [, error] = paneSections(failed, { closed: new Set(['error:jump:kimi']) })
+  expect(error).toEqual({ kind: 'error', key: 'jump:kimi', fold: 'error:jump:kimi', title: 'kimi error', open: false })
+  const retried = { ...failed, providers: [{ name: 'kimi', state: 'complete', ms: 1500 }], responses: { kimi: 'Use SQLite.' }, errors: {} }
+  expect(paneSections(retried, { closed: new Set(['error:jump:kimi']) }).slice(1)).toEqual([
+    { kind: 'banner', key: 'jump:kimi', fold: 'banner:jump:kimi', title: 'KIMI', subtitle: '(1.5s)', background: 'rgb(113,113,122)', open: true },
+    { kind: 'body', text: 'Use SQLite.' },
+  ])
+})
+
+test('a closed answer leaves its share of the text budget to the open ones', () => {
+  const long = { ...answered, responses: { gemini: 'g'.repeat(60000), 'grok-cli': 'k'.repeat(60000) }, synthesis: undefined }
+  const body = (sections: ReturnType<typeof paneSections>) => sections.find(section => section.kind === 'body') as { kind: 'body'; text: string }
+  expect(body(paneSections(long)).text).toMatch(/^g+\n\n_\u2026 \d+ more characters; the whole answer is in the result/)
+  expect(body(paneSections(long, { closed: new Set(['banner:jump:grok-cli']) })).text).toBe('g'.repeat(60000))
+})
+
 test('paneSections falls back to a neutral banner colour and notes an empty run', () => {
   const base = { responses: {}, errors: {}, colors: {} }
   expect(paneSections({ ...base, providers: [], isDone: false })).toEqual([{ kind: 'note', text: 'Waiting for the council...' }])
   expect(paneSections({ ...base, providers: [], isDone: true })).toEqual([{ kind: 'note', text: 'Council finished with no answers.' }])
   const [, , banner] = paneSections({ ...base, providers: [{ name: 'kimi', state: 'cached' }], responses: { kimi: 'x' }, isDone: true })
-  expect(banner).toEqual({ kind: 'banner', key: 'jump:kimi', title: 'KIMI', subtitle: '', background: 'rgb(113,113,122)' })
+  expect(banner).toEqual({ kind: 'banner', key: 'jump:kimi', fold: 'banner:jump:kimi', title: 'KIMI', subtitle: '', background: 'rgb(113,113,122)', open: true })
 })
 
 test('paneSections collapses the status rows to a summary and a strip once the run is done', () => {
@@ -129,9 +210,9 @@ test('paneSections collapses the status rows to a summary and a strip once the r
     {
       kind: 'strip',
       items: [
-        { glyph: '\u25cf', color: 'rgb(59,130,246)', name: 'gemini', hotkey: '1', target: 'jump:gemini' },
+        { glyph: '\u25cf', color: 'rgb(59,130,246)', name: 'gemini', hotkey: '1', target: 'jump:gemini', fold: 'banner:jump:gemini' },
         { glyph: '\u25cf', color: 'rgb(113,113,122)', name: 'codex', hotkey: '2' },
-        { glyph: '\u2717', color: 'error', name: 'grok', hotkey: '3', target: 'jump:grok' },
+        { glyph: '\u2717', color: 'error', name: 'grok', hotkey: '3', target: 'jump:grok', fold: 'error:jump:grok' },
       ],
     },
   ])
@@ -152,8 +233,8 @@ test('paneSections shows the synthesis after the provider answers, with a jump t
     isDone: true,
     synthesis: '**Consensus.** SQLite.',
   })
-  expect(kinds.map(section => section.kind)).toEqual(['summary', 'strip', 'banner', 'body', 'synthesis'])
-  expect(kinds[4]).toEqual({ kind: 'synthesis', key: 'jump:synthesis', text: '**Consensus.** SQLite.' })
+  expect(kinds.map(section => section.kind)).toEqual(['summary', 'strip', 'toggleAll', 'banner', 'body', 'synthesis'])
+  expect(kinds[5]).toEqual({ kind: 'synthesis', key: 'jump:synthesis', fold: 'synthesis:jump:synthesis', open: true, text: '**Consensus.** SQLite.' })
   const strip = kinds[1]
   expect(strip?.kind === 'strip' ? strip.items.at(-1) : undefined).toEqual({
     glyph: '\u2261',
@@ -161,6 +242,7 @@ test('paneSections shows the synthesis after the provider answers, with a jump t
     name: 'synthesis',
     hotkey: '0',
     target: 'jump:synthesis',
+    fold: 'synthesis:jump:synthesis',
   })
 })
 
@@ -173,7 +255,7 @@ test('paneSections shows why a seat fell back, between its banner and the answer
     isDone: false,
   })
   expect(sections.slice(1)).toEqual([
-    { kind: 'banner', key: 'jump:grok-cli', title: 'GROK-CLI', subtitle: 'grok-4.6 via grok API (1.2s)', background: 'rgb(113,113,122)' },
+    { kind: 'banner', key: 'jump:grok-cli', fold: 'banner:jump:grok-cli', title: 'GROK-CLI', subtitle: 'grok-4.6 via grok API (1.2s)', background: 'rgb(113,113,122)', open: true },
     { kind: 'reason', text: 'grok-cli fell back: Error from grok CLI: sandbox could not be applied' },
     { kind: 'body', text: 'Use Postgres.' },
   ])
@@ -326,7 +408,7 @@ test('paneSections counts the budget on the text as fitted to the pane, which ca
   const bodies = sections.filter(section => section.kind === 'body') as { kind: 'body'; text: string }[]
   expect(bodies.every(body => /more characters; the whole answer is in the result/.test(body.text))).toBe(true)
   // The synthesis is fitted too, and still never cut.
-  expect(sections.find(section => section.kind === 'synthesis')).toEqual({ kind: 'synthesis', key: 'jump:synthesis', text: 'S'.repeat(3000) })
+  expect(sections.find(section => section.kind === 'synthesis')).toEqual({ kind: 'synthesis', key: 'jump:synthesis', fold: 'synthesis:jump:synthesis', open: true, text: 'S'.repeat(3000) })
 })
 
 test('markdownBlocks keeps a short text whole and drops control characters Markdown refuses', () => {

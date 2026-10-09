@@ -257,7 +257,8 @@ TTL: $COUNCIL_CACHE_TTL seconds (default 3600)
 While round 1's seats are out (the first pass and the retry), `await_seats`
 polls them in 0.2 s ticks (bash 3.2 has no `wait -n`) and looks for
 `cancel/<provider>` in the pane's watch dir, which the mod pane writes when
-its cancel button is pressed; with no pane the seats are waited on. On a
+its cancel button is pressed (its band's cancel all writes one per querying
+seat); with no pane the seats are waited on. On a
 marker, the seat's whole process tree (`process_tree`, lib/deadline.sh) is
 listed once and sent TERM in one `kill`, parent first, so neither a CLI's own
 retry nor the API-sibling fallback can start, and KILL five seconds later for

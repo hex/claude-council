@@ -27,15 +27,24 @@ export function unseenRun(entries: readonly DirEntry[], shown: ReadonlySet<strin
 export type Section =
   | { kind: 'note'; text: string }
   // cancel: on a querying row while the run is live, the button's seat (the
-  // name unpadded) and, for the first nine rows, its digit.
+  // name unpadded) and, for the first ten rows, its digit.
   | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; cancel?: { seat: string; hotkey?: string } }
   | { kind: 'summary'; text: string }
-  | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string }[] }
-  | { kind: 'banner'; key: string; title: string; subtitle: string; background: string }
+  // fold: what the jump opens, the fold of the section it lands on.
+  | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string; fold?: string }[] }
+  // A section the person closed is drawn as its header alone: a banner is
+  // followed by no reason or body, and a closed error or synthesis carries no
+  // text. fold names its open or closed state apart from its jump key, so an
+  // error closed by the person does not close the answer a retry brings.
+  | { kind: 'banner'; key: string; fold: string; title: string; subtitle: string; background: string; open: boolean }
   | { kind: 'body'; text: string }
   | { kind: 'reason'; text: string }
-  | { kind: 'synthesis'; key: string; text: string }
-  | { kind: 'error'; key: string; title: string; text: string }
+  | { kind: 'synthesis'; key: string; fold: string; open: true; text: string }
+  | { kind: 'synthesis'; key: string; fold: string; open: false }
+  | { kind: 'error'; key: string; fold: string; title: string; open: true; text: string }
+  | { kind: 'error'; key: string; fold: string; title: string; open: false }
+  // Above the first section, closing every one while any is open, else opening all.
+  | { kind: 'toggleAll'; closes: boolean; folds: string[] }
 
 const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger, fallback: COLOR.warning, cancelled: COLOR.muted, cancelling: COLOR.muted }
 export const CANCEL_HINT = 'click cancel on a row, or ctrl+x tab then its digit'
@@ -64,15 +73,16 @@ export function parseColors(log: string): Record<string, string> {
 const glyphColor = (name: string, state: string, vendor: (name: string) => string) =>
   state === 'error' ? COLOR.danger : state === 'cancelled' ? COLOR.muted : vendor(name)
 
-// While the run is live each querying row carries a cancel button, with the
-// row's digit for the first nine (once the run is done the digits jump to
-// the answers instead), and a hint line follows the rows.
+// Each seat cancel all would take carries its own cancel button, with the
+// row's digit for the first nine and 0 for the tenth, as a keyboard's number
+// row runs (once the run is done the digits jump to the answers instead, and
+// 0 to the synthesis), and a hint line follows the rows.
 function statusRows(
   providers: ProviderStatus[],
   vendor: (name: string) => string,
   glyph: (state: string) => string,
   elapsed: (name: string) => string,
-  live: boolean,
+  cancellable: string[],
 ): Section[] {
   const shownTime = ({ name, state, ms }: ProviderStatus) => (state === 'querying' ? elapsed(name) : seconds(ms))
   const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
@@ -88,10 +98,17 @@ function statusRows(
     stateColor: STATE_COLORS[provider.state] ?? COLOR.muted,
     time: shownTime(provider).padStart(times),
     model: provider.model ?? '',
-    ...(live && provider.state === 'querying' ? { cancel: { seat: provider.name, ...(index < 9 ? { hotkey: String(index + 1) } : {}) } } : {}),
+    ...(cancellable.includes(provider.name) ? { cancel: { seat: provider.name, ...(index < 10 ? { hotkey: String((index + 1) % 10) } : {}) } } : {}),
   }))
   if (rows.some(row => row.kind === 'status' && row.cancel)) rows.push({ kind: 'note', text: CANCEL_HINT })
   return rows
+}
+
+// What the band's cancel all presses: every seat a live run still has
+// querying whose cancel has not been pressed yet, in the log's order.
+export function seatsToCancel({ providers, cancels = [], isDone }: Pick<RunView, 'providers' | 'cancels' | 'isDone'>): string[] {
+  if (isDone) return []
+  return providers.filter(({ name, state }) => state === 'querying' && !cancels.includes(name)).map(({ name }) => name)
 }
 
 function doneSummary(
@@ -99,6 +116,7 @@ function doneSummary(
   vendor: (name: string) => string,
   glyph: (state: string) => string,
   hasSection: (name: string) => boolean,
+  foldOf: (name: string) => string | undefined,
 ): Section[] {
   const tally = (state: string, word: string) => (count(providers, state) > 0 ? `${count(providers, state)} ${word}` : '')
   const slowest = Math.max(0, ...providers.map(provider => provider.ms ?? 0))
@@ -121,6 +139,7 @@ function doneSummary(
         name,
         hotkey: index < 9 ? String(index + 1) : '',
         ...(hasSection(name) ? { target: jumpKey(name) } : {}),
+        ...(foldOf(name) ? { fold: foldOf(name) } : {}),
       })),
     },
   ]
@@ -138,7 +157,7 @@ export function queryingSince(since: Record<string, number>, providers: Provider
 
 export function paneSections(
   { providers, responses, errors, cancels = [], colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
-  { collapsesWhenDone = true, frame = 0, nowMs = 0, fitText = (text: string) => text }: { collapsesWhenDone?: boolean; frame?: number; nowMs?: number; fitText?: (text: string) => string } = {},
+  { collapsesWhenDone = true, frame = 0, nowMs = 0, fitText = (text: string) => text, closed = new Set<string>() }: { collapsesWhenDone?: boolean; frame?: number; nowMs?: number; fitText?: (text: string) => string; closed?: ReadonlySet<string> } = {},
 ): Section[] {
   if (providers.length === 0) {
     return [{ kind: 'note', text: isDone ? 'Council finished with no answers.' : 'Waiting for the council...' }]
@@ -158,19 +177,29 @@ export function paneSections(
     return since === undefined ? '' : `${(Math.floor(Math.max(0, nowMs - since) / 100) / 10).toFixed(1)}s`
   }
   const hasSection = (name: string) => responses[name] !== undefined || errors[name] !== undefined
-  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection) : statusRows(shown, vendor, glyph, elapsed, !isDone)
+  const foldOf = (name: string) => {
+    if (responses[name] !== undefined) return fold('banner', jumpKey(name))
+    return errors[name] !== undefined ? fold('error', jumpKey(name)) : undefined
+  }
+  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection, foldOf) : statusRows(shown, vendor, glyph, elapsed, seatsToCancel({ providers, cancels, isDone }))
   for (const { name, state, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]
+    const key = jumpKey(name)
     if (response !== undefined) {
       const timing = ms === undefined ? '' : `(${seconds(ms)})`
+      const banner = fold('banner', key)
+      const open = !closed.has(banner)
       sections.push({
         kind: 'banner',
-        key: jumpKey(name),
+        key,
+        fold: banner,
         title: name.toUpperCase(),
         subtitle: [model, timing].filter(Boolean).join(' '),
         background: vendor(name),
+        open,
       })
+      if (!open) continue
       // A seat whose API sibling answered has both files: the error is why
       // the seat itself did not, and it belongs above that answer. The state
       // decides, since a seat that failed and then answered on a retry keeps
@@ -183,18 +212,35 @@ export function paneSections(
     } else if (error !== undefined && state !== 'fallback') {
       // A fallback seat's error file is its reason, written just before the
       // answer its API gave: with no answer yet there is nothing to show.
-      sections.push({ kind: 'error', key: jumpKey(name), title: `${name} error`, text: noticeText(error) })
+      const header = { kind: 'error', key, fold: fold('error', key), title: `${name} error` } as const
+      sections.push(closed.has(header.fold) ? { ...header, open: false } : { ...header, open: true, text: noticeText(error) })
     }
   }
   if (synthesis) {
     // It is written last and read last; landing above the answers would push them down mid-read.
-    sections.push({ kind: 'synthesis', key: jumpKey('synthesis'), text: fitText(synthesis) })
+    const key = jumpKey('synthesis')
+    const header = { kind: 'synthesis', key, fold: fold('synthesis', key) } as const
+    sections.push(closed.has(header.fold) ? { ...header, open: false } : { ...header, open: true, text: fitText(synthesis) })
     const strip = sections.find(section => section.kind === 'strip')
     if (strip?.kind === 'strip') {
-      strip.items.push({ glyph: '\u2261', color: `rgb(${NEUTRAL_RGB.replaceAll(';', ',')})`, name: 'synthesis', hotkey: '0', target: jumpKey('synthesis') })
+      strip.items.push({ glyph: '\u2261', color: `rgb(${NEUTRAL_RGB.replaceAll(';', ',')})`, name: 'synthesis', hotkey: '0', target: key, fold: header.fold })
     }
   }
+  const first = sections.findIndex(isClosable)
+  const folds = sections.filter(isClosable).map(section => section.fold)
+  if (folds.length > 1) sections.splice(first, 0, { kind: 'toggleAll', closes: folds.some(each => !closed.has(each)), folds })
   return withinTextBudget(sections)
+}
+
+type ClosableSection = Extract<Section, { open: boolean }>
+const isClosable = (section: Section): section is ClosableSection => section.kind === 'banner' || section.kind === 'error' || section.kind === 'synthesis'
+
+const fold = (kind: ClosableSection['kind'], key: string) => `${kind}:${key}`
+
+// The folds of the seats' answers and errors, which close once the synthesis
+// lands so it reads near the top; the synthesis stays open.
+export function seatFolds(sections: Section[]): string[] {
+  return sections.filter(isClosable).flatMap(section => (section.kind === 'synthesis' ? [] : [section.fold]))
 }
 
 // Claude Code refuses a Pane render carrying more than 100000 characters of

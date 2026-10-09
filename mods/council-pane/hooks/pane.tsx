@@ -16,7 +16,7 @@ import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, T
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
-import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
+import { markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { missingSkills, skillBody, skillIndex, skillsOpening, type Skill } from './skills'
 import { blankDraft, dropEntry, fieldsOf, savedName, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
@@ -47,6 +47,9 @@ const LATEST_KEY = 'specialists-latest'
 const INTRO_KEY = 'specialists-intro-shown'
 const SETUP_COMMAND = 'specialists'
 // Every colour comes from theme.ts; DESIGN.md says which one serves what.
+// A section header's mark: open shows its text, closed only the header.
+const OPEN_MARK = '\u25be'
+const CLOSED_MARK = '\u25b8'
 const STATUS_FILL: Record<Status['kind'], string> = { saved: FILL.saved, error: FILL.error, note: FILL.note }
 const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: ' ERROR ', note: ' NOTE ' }
 // The settings field holding every specialist, as $.config names it; hidden
@@ -74,6 +77,8 @@ type PaneState = {
   frame: number
   nowMs: number
   queryingSinceMs: Record<string, number>
+  // The sections the person closed, by their fold; each run starts with all open.
+  closed: Set<string>
   // When the pane picked the live run up; the progress band's clock.
   runStartedMs?: number
   // Each section's Markdown blocks, for the text they were cut from: a frame
@@ -418,6 +423,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.synthesis = undefined
     state.finished = undefined
     state.queryingSinceMs = {}
+    state.closed = new Set()
     state.runStartedMs = now
     state.fitted.clear()
     await $.ui.open({ id: PANE_ID, title: 'Council' })
@@ -751,6 +757,12 @@ function cancelSeat($: EngineInterface, state: PaneState, name: string): void {
   void $.fs.write(`${runDir}/cancel/${name}`, '').catch((err: unknown) => $.ui.log(`cancel ${name}: ${String(err)}`))
 }
 
+// A section header's press: close it if open, open it if closed.
+function toggleSection($: EngineInterface, state: PaneState, fold: string): void {
+  if (!state.closed.delete(fold)) state.closed.add(fold)
+  $.ui.invalidate('ui.render')
+}
+
 function retryPresses($: EngineInterface, runDir: string) {
   return {
     accept: () => { void $.process.run(['mv', '-f', `${runDir}/retry-offer`, `${runDir}/.retry`]) },
@@ -788,7 +800,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -842,6 +854,8 @@ export const register: Register = (on, options) => {
     if (view && synthesis) {
       state.synthesis = synthesis
       state.view = { ...view, synthesis }
+      // The answers close so the synthesis reads near the top; each opens again on a press.
+      state.closed = new Set(seatFolds(paneSections(state.view)))
       state.drawn = JSON.stringify([state.view, state.retryShown])
       $.ui.invalidate('ui.render')
     }
@@ -1099,9 +1113,14 @@ export const register: Register = (on, options) => {
         </ui.Box>
       )
     }
-    const progress = state.view ? progressBand(state.view, state.runStartedMs, state.nowMs) : undefined
-    if (!progress) return next(e)
+    const view = state.view
+    const progress = view ? progressBand(view, state.runStartedMs, state.nowMs) : undefined
+    if (!view || !progress) return next(e)
     const ui = $.ui.resolve(e)
+    // One marker per seat; the run cancels them one by one, as it would rows
+    // pressed in turn. A press reads the seats again, since one may have
+    // answered since the band was drawn.
+    const cancelAll = () => { if (state.view) for (const name of seatsToCancel(state.view)) cancelSeat($, state, name) }
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
         {/* The specialist band's slots; only the event gives way when narrow. */}
@@ -1116,6 +1135,12 @@ export const register: Register = (on, options) => {
         <ui.Box flexGrow={1} flexShrink={1}>
           <ui.Text dimColor wrap="truncate-end">{`  ${progress.event ?? ''}  `}</ui.Text>
         </ui.Box>
+        {seatsToCancel(view).length > 0 && (
+          <ui.Box flexShrink={0}>
+            <ui.Button key="progress:cancel" hotkey="c" label={'c \u00b7 cancel all'} onPress={cancelAll} />
+            <ui.Text>{'  '}</ui.Text>
+          </ui.Box>
+        )}
         <ui.Box flexShrink={0}>
           <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
         </ui.Box>
@@ -1452,7 +1477,7 @@ export const register: Register = (on, options) => {
       fits.set(text, fitted)
       return fitted
     }
-    const sections = paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs, fitText })
+    const sections = paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs, fitText, closed: state.closed })
     state.tableFit = { columns, byText: fits }
     const fit = (sectionKey: string, text: string) => {
       const kept = state.fitted.get(sectionKey)
@@ -1461,6 +1486,11 @@ export const register: Register = (on, options) => {
       state.fitted.set(sectionKey, { text, blocks })
       return blocks
     }
+    // A closable section's header: a press opens or closes it, and its text leads with the mark.
+    const toggle = (section: { fold: string }, children: RenderChildren) => (
+      <Button key={`toggle:${section.fold}`} plain onPress={() => toggleSection($, state, section.fold)}>{children}</Button>
+    )
+    const mark = (open: boolean) => (open ? OPEN_MARK : CLOSED_MARK)
     const draw = (section: Section, index: number) => {
       const key = `section-${index}`
       switch (section.kind) {
@@ -1468,13 +1498,21 @@ export const register: Register = (on, options) => {
           return <Text key={key} dimColor>{section.text}</Text>
         case 'status': {
           const cancel = section.cancel
+          // The model takes the slack and gives way when narrow, so every
+          // row's cancel sits at the pane's right edge.
           return (
-            <Box key={key} flexDirection="row">
-              <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
-              <Text bold>{`${section.name}  `}</Text>
-              <Text color={section.stateColor}>{`${section.state}  `}</Text>
-              <Text dimColor>{`${section.time}  `}</Text>
-              <Text dimColor>{section.model}</Text>
+            <Box key={key} flexDirection="row" width={columns}>
+              <Box flexShrink={0}>
+                <Text>
+                  <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
+                  <Text bold>{`${section.name}  `}</Text>
+                  <Text color={section.stateColor}>{`${section.state}  `}</Text>
+                  <Text dimColor>{`${section.time}  `}</Text>
+                </Text>
+              </Box>
+              <Box flexGrow={1} flexShrink={1}>
+                <Text dimColor wrap="truncate-end">{section.model}</Text>
+              </Box>
               {cancel && (
                 <Box flexDirection="row" flexShrink={0}>
                   <Text>{'  '}</Text>
@@ -1489,16 +1527,20 @@ export const register: Register = (on, options) => {
         case 'strip':
           return (
             <Box key={key} flexDirection="row" flexWrap="wrap">
-              {section.items.map(item => (
+              {section.items.map(({ target, ...item }) => (
                 <Box key={`${key}-${item.name}`} flexDirection="row">
                   <Text color={item.color}>{`${item.glyph} `}</Text>
-                  {item.target ? (
+                  {target ? (
                     <Button
                       key={`press:${item.name}`}
                       plain
                       label={item.name}
                       {...(item.hotkey ? { hotkey: item.hotkey } : {})}
-                      onPress={() => { void $.ui.scroll({ in: PANE_ID, to: { key: item.target ?? '' }, block: 'start' }) }}
+                      onPress={() => {
+                        // A jump opens the section it lands on.
+                        if (item.fold && state.closed.delete(item.fold)) $.ui.invalidate('ui.render')
+                        void $.ui.scroll({ in: PANE_ID, to: { key: target }, block: 'start' })
+                      }}
                     />
                   ) : (
                     <Text dimColor>{item.name}</Text>
@@ -1508,20 +1550,37 @@ export const register: Register = (on, options) => {
               ))}
             </Box>
           )
+        case 'toggleAll':
+          return (
+            <Box key={key} marginTop={1}>
+              <Button
+                key="toggle:all"
+                plain
+                hotkey="a"
+                label={section.closes ? 'collapse all' : 'expand all'}
+                onPress={() => {
+                  state.closed = section.closes ? new Set(section.folds) : new Set()
+                  $.ui.invalidate('ui.render')
+                }}
+              />
+            </Box>
+          )
         case 'banner':
           return (
             <Box key={section.key} flexDirection="row" marginTop={1} paddingX={1} width={columns} backgroundColor={section.background}>
-              <Text bold color={COLOR.onFill} backgroundColor={section.background}>{section.title}</Text>
-              <Text italic color={COLOR.onFill} backgroundColor={section.background}>{` ${section.subtitle}`}</Text>
+              {toggle(section, [
+                <Text key="title" bold color={COLOR.onFill} backgroundColor={section.background}>{`${mark(section.open)} ${section.title}`}</Text>,
+                <Text key="subtitle" italic color={COLOR.onFill} backgroundColor={section.background}>{` ${section.subtitle}`}</Text>,
+              ])}
             </Box>
           )
         case 'synthesis':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
               <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={FILL.chip}>
-                <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>SYNTHESIS</Text>
+                {toggle(section, <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{`${mark(section.open)} SYNTHESIS`}</Text>)}
               </Box>
-              {fit(key, section.text).map((block, part) => (
+              {section.open && fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
@@ -1540,8 +1599,8 @@ export const register: Register = (on, options) => {
         case 'error':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
-              <Text bold color={COLOR.danger}>{`\u2717 ${section.title}`}</Text>
-              <Text color={COLOR.danger} dimColor>{section.text}</Text>
+              {toggle(section, <Text bold color={COLOR.danger}>{`${mark(section.open)} \u2717 ${section.title}`}</Text>)}
+              {section.open && <Text color={COLOR.danger} dimColor>{section.text}</Text>}
             </Box>
           )
       }
