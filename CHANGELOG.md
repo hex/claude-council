@@ -4,12 +4,12 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.10.4
 
 ### Features
-- The Claude Code pane's `cancel` buttons sit at the right edge of their rows, lined up, and a long model name is cut short first, before the button is pushed off. The `COUNCIL` band above the prompt has a `c · cancel all` button while any seat is querying: it cancels every seat still out, with no confirmation, as pressing each row's cancel would.
-- The tenth seat's row has `0` as its cancel key while it is querying.
-- Answer, error and synthesis sections in the Claude Code pane can be closed to their header line: click the header (`▾`/`▸`), or press ctrl+x tab, tab to it and press Enter, or use `a: collapse all` / `a: expand all` above them. When the synthesis lands the answers and errors close so it reads near the top, a jump from the row of names opens its section, and a closed answer no longer counts toward the pane's text budget, so the open ones are cut less.
+- The `cancel` buttons in the Claude Code pane sit at the right edge of each row, lined up. A long model name gets cut first, before the button does. The `COUNCIL` band above the prompt has a `c · cancel all` button while any seat is querying. It cancels every seat still out, with no confirmation, same as pressing each row's cancel.
+- The tenth seat's row uses `0` as its cancel key while it's querying.
+- Answers, errors and the synthesis in the Claude Code pane fold down to their header line. Click the header (`▾`/`▸`), or press ctrl+x tab, tab to it and press Enter. `a: collapse all` / `a: expand all` above them folds or opens them all. When the synthesis lands, the answers and errors fold so it sits near the top. A jump from the row of names opens that section. A folded answer leaves its share of the pane's text budget to the open ones.
 
 ## 2026.10.3
 
