@@ -70,7 +70,7 @@ export function parseColors(log: string): Record<string, string> {
 const glyphColor = (name: string, state: string, vendor: (name: string) => string) =>
   state === 'error' ? COLOR.danger : state === 'cancelled' ? COLOR.muted : vendor(name)
 
-// While the run is live each querying row carries a cancel button, with the
+// Each seat cancel all would take carries its own cancel button, with the
 // row's digit for the first nine and 0 for the tenth, as a keyboard's number
 // row runs (once the run is done the digits jump to the answers instead, and
 // 0 to the synthesis), and a hint line follows the rows.
@@ -79,7 +79,7 @@ function statusRows(
   vendor: (name: string) => string,
   glyph: (state: string) => string,
   elapsed: (name: string) => string,
-  live: boolean,
+  cancellable: string[],
 ): Section[] {
   const shownTime = ({ name, state, ms }: ProviderStatus) => (state === 'querying' ? elapsed(name) : seconds(ms))
   const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
@@ -95,7 +95,7 @@ function statusRows(
     stateColor: STATE_COLORS[provider.state] ?? COLOR.muted,
     time: shownTime(provider).padStart(times),
     model: provider.model ?? '',
-    ...(live && provider.state === 'querying' ? { cancel: { seat: provider.name, ...(index < 10 ? { hotkey: String((index + 1) % 10) } : {}) } } : {}),
+    ...(cancellable.includes(provider.name) ? { cancel: { seat: provider.name, ...(index < 10 ? { hotkey: String((index + 1) % 10) } : {}) } } : {}),
   }))
   if (rows.some(row => row.kind === 'status' && row.cancel)) rows.push({ kind: 'note', text: CANCEL_HINT })
   return rows
@@ -172,16 +172,17 @@ export function paneSections(
     return since === undefined ? '' : `${(Math.floor(Math.max(0, nowMs - since) / 100) / 10).toFixed(1)}s`
   }
   const hasSection = (name: string) => responses[name] !== undefined || errors[name] !== undefined
-  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection) : statusRows(shown, vendor, glyph, elapsed, !isDone)
+  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection) : statusRows(shown, vendor, glyph, elapsed, seatsToCancel({ providers, cancels, isDone }))
   for (const { name, state, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]
+    const key = jumpKey(name)
+    const open = !closed.has(key)
     if (response !== undefined) {
       const timing = ms === undefined ? '' : `(${seconds(ms)})`
-      const open = !closed.has(jumpKey(name))
       sections.push({
         kind: 'banner',
-        key: jumpKey(name),
+        key,
         title: name.toUpperCase(),
         subtitle: [model, timing].filter(Boolean).join(' '),
         background: vendor(name),
@@ -200,31 +201,33 @@ export function paneSections(
     } else if (error !== undefined && state !== 'fallback') {
       // A fallback seat's error file is its reason, written just before the
       // answer its API gave: with no answer yet there is nothing to show.
-      const header = { kind: 'error', key: jumpKey(name), title: `${name} error` } as const
-      sections.push(closed.has(header.key) ? { ...header, open: false } : { ...header, open: true, text: noticeText(error) })
+      const title = `${name} error`
+      sections.push(open ? { kind: 'error', key, title, open, text: noticeText(error) } : { kind: 'error', key, title, open })
     }
   }
   if (synthesis) {
     // It is written last and read last; landing above the answers would push them down mid-read.
     const key = jumpKey('synthesis')
-    sections.push(closed.has(key) ? { kind: 'synthesis', key, open: false } : { kind: 'synthesis', key, open: true, text: fitText(synthesis) })
+    const open = !closed.has(key)
+    sections.push(open ? { kind: 'synthesis', key, open, text: fitText(synthesis) } : { kind: 'synthesis', key, open })
     const strip = sections.find(section => section.kind === 'strip')
     if (strip?.kind === 'strip') {
-      strip.items.push({ glyph: '\u2261', color: `rgb(${NEUTRAL_RGB.replaceAll(';', ',')})`, name: 'synthesis', hotkey: '0', target: jumpKey('synthesis') })
+      strip.items.push({ glyph: '\u2261', color: `rgb(${NEUTRAL_RGB.replaceAll(';', ',')})`, name: 'synthesis', hotkey: '0', target: key })
     }
   }
-  const keys = sections.flatMap(section => ('open' in section ? [section.key] : []))
-  if (keys.length > 1) {
-    const first = sections.findIndex(section => 'open' in section)
-    sections.splice(first, 0, { kind: 'toggleAll', closes: keys.some(key => !closed.has(key)), keys })
-  }
+  const first = sections.findIndex(isClosable)
+  const keys = sections.filter(isClosable).map(section => section.key)
+  if (keys.length > 1) sections.splice(first, 0, { kind: 'toggleAll', closes: keys.some(key => !closed.has(key)), keys })
   return withinTextBudget(sections)
 }
+
+type ClosableSection = Extract<Section, { open: boolean }>
+const isClosable = (section: Section): section is ClosableSection => section.kind === 'banner' || section.kind === 'error' || section.kind === 'synthesis'
 
 // The answers and errors of the seats, which close once the synthesis lands
 // so it reads near the top; the synthesis stays open.
 export function seatSectionKeys(sections: Section[]): string[] {
-  return sections.flatMap(section => (section.kind === 'banner' || section.kind === 'error' ? [section.key] : []))
+  return sections.filter(isClosable).flatMap(section => (section.kind === 'synthesis' ? [] : [section.key]))
 }
 
 // Claude Code refuses a Pane render carrying more than 100000 characters of

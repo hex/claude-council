@@ -1483,6 +1483,11 @@ export const register: Register = (on, options) => {
       state.fitted.set(sectionKey, { text, blocks })
       return blocks
     }
+    // A closable section's header: a press opens or closes it, and its text leads with the mark.
+    const toggle = (section: { key: string; open: boolean }, children: RenderChildren) => (
+      <Button key={`toggle:${section.key}`} plain onPress={() => toggleSection($, state, section.key)}>{children}</Button>
+    )
+    const mark = (open: boolean) => (open ? OPEN_MARK : CLOSED_MARK)
     const draw = (section: Section, index: number) => {
       const key = `section-${index}`
       switch (section.kind) {
@@ -1519,10 +1524,10 @@ export const register: Register = (on, options) => {
         case 'strip':
           return (
             <Box key={key} flexDirection="row" flexWrap="wrap">
-              {section.items.map(item => (
+              {section.items.map(({ target, ...item }) => (
                 <Box key={`${key}-${item.name}`} flexDirection="row">
                   <Text color={item.color}>{`${item.glyph} `}</Text>
-                  {item.target ? (
+                  {target ? (
                     <Button
                       key={`press:${item.name}`}
                       plain
@@ -1530,8 +1535,8 @@ export const register: Register = (on, options) => {
                       {...(item.hotkey ? { hotkey: item.hotkey } : {})}
                       onPress={() => {
                         // A jump opens the section it lands on.
-                        if (item.target && state.closed.delete(item.target)) $.ui.invalidate('ui.render')
-                        void $.ui.scroll({ in: PANE_ID, to: { key: item.target ?? '' }, block: 'start' })
+                        if (state.closed.delete(target)) $.ui.invalidate('ui.render')
+                        void $.ui.scroll({ in: PANE_ID, to: { key: target }, block: 'start' })
                       }}
                     />
                   ) : (
@@ -1560,19 +1565,17 @@ export const register: Register = (on, options) => {
         case 'banner':
           return (
             <Box key={section.key} flexDirection="row" marginTop={1} paddingX={1} width={columns} backgroundColor={section.background}>
-              <Button key={`toggle:${section.key}`} plain onPress={() => toggleSection($, state, section.key)}>
-                <Text bold color={COLOR.onFill} backgroundColor={section.background}>{`${section.open ? OPEN_MARK : CLOSED_MARK} ${section.title}`}</Text>
-                <Text italic color={COLOR.onFill} backgroundColor={section.background}>{` ${section.subtitle}`}</Text>
-              </Button>
+              {toggle(section, [
+                <Text key="title" bold color={COLOR.onFill} backgroundColor={section.background}>{`${mark(section.open)} ${section.title}`}</Text>,
+                <Text key="subtitle" italic color={COLOR.onFill} backgroundColor={section.background}>{` ${section.subtitle}`}</Text>,
+              ])}
             </Box>
           )
         case 'synthesis':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
               <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={FILL.chip}>
-                <Button key={`toggle:${section.key}`} plain onPress={() => toggleSection($, state, section.key)}>
-                  <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{`${section.open ? OPEN_MARK : CLOSED_MARK} SYNTHESIS`}</Text>
-                </Button>
+                {toggle(section, <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{`${mark(section.open)} SYNTHESIS`}</Text>)}
               </Box>
               {section.open && fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
@@ -1593,9 +1596,7 @@ export const register: Register = (on, options) => {
         case 'error':
           return (
             <Box key={section.key} flexDirection="column" marginTop={1}>
-              <Button key={`toggle:${section.key}`} plain onPress={() => toggleSection($, state, section.key)}>
-                <Text bold color={COLOR.danger}>{`${section.open ? OPEN_MARK : CLOSED_MARK} \u2717 ${section.title}`}</Text>
-              </Button>
+              {toggle(section, <Text bold color={COLOR.danger}>{`${mark(section.open)} \u2717 ${section.title}`}</Text>)}
               {section.open && <Text color={COLOR.danger} dimColor>{section.text}</Text>}
             </Box>
           )
