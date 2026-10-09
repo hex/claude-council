@@ -1548,8 +1548,8 @@ export const register: Register = (on, options) => {
               <Button
                 key="toggle:all"
                 plain
-                dimColor
-                label={section.closes ? `${OPEN_MARK} collapse all` : `${CLOSED_MARK} expand all`}
+                hotkey="a"
+                label={section.closes ? 'collapse all' : 'expand all'}
                 onPress={() => {
                   state.closed = section.closes ? new Set(section.keys) : new Set()
                   $.ui.invalidate('ui.render')
