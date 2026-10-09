@@ -8,8 +8,8 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ### Features
 - The Claude Code pane's `cancel` buttons sit at the right edge of their rows, lined up, and a long model name is cut short rather than pushing the button off. The `COUNCIL` band above the prompt has a `c · cancel all` button while any seat is querying: it cancels every seat still out, with no confirmation, as pressing each row's cancel would.
-- The tenth querying row's cancel has `0` as its key.
-- Answer, error and synthesis sections in the Claude Code pane can be closed to their header line: click the header (`▾`/`▸`) or tab to it and press Enter, or use `a: collapse all` / `a: expand all` above them. When the synthesis lands the answers close so it reads near the top, a jump from the row of names opens its section, and a closed answer no longer counts toward the pane's text budget, so the open ones are cut less.
+- The tenth seat's row has `0` as its cancel key while it is querying.
+- Answer, error and synthesis sections in the Claude Code pane can be closed to their header line: click the header (`▾`/`▸`), or press ctrl+x tab, tab to it and press Enter, or use `a: collapse all` / `a: expand all` above them. When the synthesis lands the answers and errors close so it reads near the top, a jump from the row of names opens its section, and a closed answer no longer counts toward the pane's text budget, so the open ones are cut less.
 
 ## 2026.10.3
 

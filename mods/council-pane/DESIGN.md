@@ -64,6 +64,7 @@ Each glyph has one meaning.
 | `○` | Set aside by the person: a specialist switched off, a seat cancelled |
 | `⋯` | Running |
 | `▶` | The row you are editing |
+| `▾` `▸` | A fold, open and closed: the templates table, a council pane section |
 | `↳` | A continuation of the row above |
 | `✎` | A file edit |
 | `$` | A command |
@@ -81,4 +82,4 @@ Each glyph has one meaning.
 - **Status label**: `SAVED`, `ERROR` or `NOTE` on its fill, then the message in plain text.
 - **Form**: each field under its label, the roster's own column name (`NAME`, `MODEL`, `EFFORT`, `USE WHEN`, then `SKILLS`) in `muted` bold, with anything about it on the right (the use-when counter, `optional`). Each value sits on a `zebra` well, the only sign of where to type; help is `hint` italic under it, wrapped and never cut; a blank line between fields. Buttons: `Save` and the dim `Discard` together, then apart from them the specialist's `Disable`/`Enable`, and the dim `Remove` last, so a Tab too many from Save never lands on it. No frame, and nothing beside a text field: Claude Code sizes a focused field to the whole pane, so anything beside it cuts the text being typed, and given the whole width the field wraps a long value onto the lines below. Accent rules above and below mark the form.
 - **Enter hint**: the bare `⏎` (an empty `submitLabel`), leaving the field more room.
-- **Band**: the one line above the prompt while a council run or a specialist round is live: chip, name, model, time, latest step.
+- **Band**: the one line above the prompt while a council run or a specialist round is live. A specialist round's: chip, name, model, time, latest step, `o · open pane`. A council run's: chip, `N of M` finished, a fill bar, the clock, the latest event, `c · cancel all` while a seat is querying, `o · open pane`. A specialist round's band wins when both are live.
