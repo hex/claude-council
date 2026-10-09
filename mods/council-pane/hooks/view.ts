@@ -94,6 +94,13 @@ function statusRows(
   return rows
 }
 
+// What the band's cancel all presses: every seat a live run still has
+// querying whose cancel has not been pressed yet, in the log's order.
+export function seatsToCancel({ providers, cancels = [], isDone }: Pick<RunView, 'providers' | 'cancels' | 'isDone'>): string[] {
+  if (isDone) return []
+  return providers.filter(({ name, state }) => state === 'querying' && !cancels.includes(name)).map(({ name }) => name)
+}
+
 function doneSummary(
   providers: ProviderStatus[],
   vendor: (name: string) => string,

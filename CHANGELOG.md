@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Features
+- The Claude Code pane's `cancel` buttons sit at the right edge of their rows, lined up, and a long model name is cut short rather than pushing the button off. The `COUNCIL` band above the prompt has a `c · cancel all` button while any seat is querying: it cancels every seat still out, with no confirmation, as pressing each row's cancel would.
+
 ## 2026.10.3
 
 ### Features

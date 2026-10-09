@@ -16,7 +16,7 @@ import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, T
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
-import { markdownBlocks, paneSections, queryingSince, unseenRun, type RunView, type Section } from './view'
+import { markdownBlocks, paneSections, queryingSince, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { missingSkills, skillBody, skillIndex, skillsOpening, type Skill } from './skills'
 import { blankDraft, dropEntry, fieldsOf, savedName, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
@@ -1100,8 +1100,10 @@ export const register: Register = (on, options) => {
       )
     }
     const progress = state.view ? progressBand(state.view, state.runStartedMs, state.nowMs) : undefined
-    if (!progress) return next(e)
+    if (!progress || !state.view) return next(e)
     const ui = $.ui.resolve(e)
+    // One marker per seat; the run cancels them one by one, as it would rows pressed in turn.
+    const toCancel = seatsToCancel(state.view)
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
         {/* The specialist band's slots; only the event gives way when narrow. */}
@@ -1116,6 +1118,12 @@ export const register: Register = (on, options) => {
         <ui.Box flexGrow={1} flexShrink={1}>
           <ui.Text dimColor wrap="truncate-end">{`  ${progress.event ?? ''}  `}</ui.Text>
         </ui.Box>
+        {toCancel.length > 0 && (
+          <ui.Box flexShrink={0}>
+            <ui.Button key="progress:cancel" hotkey="c" label={'c \u00b7 cancel all'} onPress={() => { for (const name of toCancel) cancelSeat($, state, name) }} />
+            <ui.Text>{'  '}</ui.Text>
+          </ui.Box>
+        )}
         <ui.Box flexShrink={0}>
           <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
         </ui.Box>
@@ -1468,13 +1476,21 @@ export const register: Register = (on, options) => {
           return <Text key={key} dimColor>{section.text}</Text>
         case 'status': {
           const cancel = section.cancel
+          // The model takes the slack and gives way when narrow, so every
+          // row's cancel sits at the pane's right edge.
           return (
-            <Box key={key} flexDirection="row">
-              <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
-              <Text bold>{`${section.name}  `}</Text>
-              <Text color={section.stateColor}>{`${section.state}  `}</Text>
-              <Text dimColor>{`${section.time}  `}</Text>
-              <Text dimColor>{section.model}</Text>
+            <Box key={key} flexDirection="row" width={columns}>
+              <Box flexShrink={0}>
+                <Text>
+                  <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
+                  <Text bold>{`${section.name}  `}</Text>
+                  <Text color={section.stateColor}>{`${section.state}  `}</Text>
+                  <Text dimColor>{`${section.time}  `}</Text>
+                </Text>
+              </Box>
+              <Box flexGrow={1} flexShrink={1}>
+                <Text dimColor wrap="truncate-end">{section.model}</Text>
+              </Box>
               {cancel && (
                 <Box flexDirection="row" flexShrink={0}>
                   <Text>{'  '}</Text>

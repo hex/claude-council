@@ -1,7 +1,7 @@
 // ABOUTME: Tests for choosing which council run the pane shows and the markdown it draws
 // ABOUTME: Expected strings are written out by hand, never rebuilt from the code under test
 import { test, expect } from 'bun:test'
-import { unseenRun, paneSections, parseColors, markdownBlocks, queryingSince, withinTextBudget } from '../hooks/view'
+import { unseenRun, paneSections, parseColors, markdownBlocks, queryingSince, withinTextBudget, seatsToCancel } from '../hooks/view'
 
 test('unseenRun names the first run dir not shown before, ignoring other entries', () => {
   const entries = [
@@ -69,6 +69,26 @@ test('every querying row can be cancelled by click; only the first nine carry a 
   // The seat's name travels unpadded, since the row's is padded to the column.
   expect(rows.map(row => (row.kind === 'status' ? row.cancel?.seat : undefined))).toEqual(providers.map(provider => provider.name))
   expect(rows.map(row => (row.kind === 'status' ? row.cancel?.hotkey : undefined))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', undefined])
+})
+
+test('cancel all takes every seat still querying, in order, skipping one already pressed', () => {
+  const view = {
+    providers: [
+      { name: 'gemini', state: 'complete', ms: 4210 },
+      { name: 'grok-cli', state: 'querying' },
+      { name: 'kimi', state: 'error', ms: 900 },
+      { name: 'openai', state: 'querying' },
+      { name: 'codex', state: 'querying' },
+    ],
+    isDone: false,
+  }
+  expect(seatsToCancel(view)).toEqual(['grok-cli', 'openai', 'codex'])
+  expect(seatsToCancel({ ...view, cancels: ['openai'] })).toEqual(['grok-cli', 'codex'])
+  // A marker for a seat past querying keeps nothing else out.
+  expect(seatsToCancel({ ...view, cancels: ['gemini'] })).toEqual(['grok-cli', 'openai', 'codex'])
+  expect(seatsToCancel({ ...view, cancels: ['grok-cli', 'openai', 'codex'] })).toEqual([])
+  // A finished run has nothing to cancel, whatever its log last said.
+  expect(seatsToCancel({ ...view, isDone: true })).toEqual([])
 })
 
 test('a cancelled seat draws in grey and is counted apart in the summary', () => {
