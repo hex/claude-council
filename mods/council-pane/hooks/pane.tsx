@@ -16,7 +16,7 @@ import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, T
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
-import { markdownBlocks, paneSections, queryingSince, seatSectionKeys, seatsToCancel, unseenRun, type RunView, type Section } from './view'
+import { markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { missingSkills, skillBody, skillIndex, skillsOpening, type Skill } from './skills'
 import { blankDraft, dropEntry, fieldsOf, savedName, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
@@ -77,7 +77,7 @@ type PaneState = {
   frame: number
   nowMs: number
   queryingSinceMs: Record<string, number>
-  // The sections the person closed, by their jump key; each run starts with all open.
+  // The sections the person closed, by their fold; each run starts with all open.
   closed: Set<string>
   // When the pane picked the live run up; the progress band's clock.
   runStartedMs?: number
@@ -758,8 +758,8 @@ function cancelSeat($: EngineInterface, state: PaneState, name: string): void {
 }
 
 // A section header's press: close it if open, open it if closed.
-function toggleSection($: EngineInterface, state: PaneState, key: string): void {
-  if (!state.closed.delete(key)) state.closed.add(key)
+function toggleSection($: EngineInterface, state: PaneState, fold: string): void {
+  if (!state.closed.delete(fold)) state.closed.add(fold)
   $.ui.invalidate('ui.render')
 }
 
@@ -855,7 +855,7 @@ export const register: Register = (on, options) => {
       state.synthesis = synthesis
       state.view = { ...view, synthesis }
       // The answers close so the synthesis reads near the top; each opens again on a press.
-      state.closed = new Set(seatSectionKeys(paneSections(state.view)))
+      state.closed = new Set(seatFolds(paneSections(state.view)))
       state.drawn = JSON.stringify([state.view, state.retryShown])
       $.ui.invalidate('ui.render')
     }
@@ -1113,11 +1113,14 @@ export const register: Register = (on, options) => {
         </ui.Box>
       )
     }
-    const progress = state.view ? progressBand(state.view, state.runStartedMs, state.nowMs) : undefined
-    if (!progress || !state.view) return next(e)
+    const view = state.view
+    const progress = view ? progressBand(view, state.runStartedMs, state.nowMs) : undefined
+    if (!view || !progress) return next(e)
     const ui = $.ui.resolve(e)
-    // One marker per seat; the run cancels them one by one, as it would rows pressed in turn.
-    const toCancel = seatsToCancel(state.view)
+    // One marker per seat; the run cancels them one by one, as it would rows
+    // pressed in turn. A press reads the seats again, since one may have
+    // answered since the band was drawn.
+    const cancelAll = () => { if (state.view) for (const name of seatsToCancel(state.view)) cancelSeat($, state, name) }
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
         {/* The specialist band's slots; only the event gives way when narrow. */}
@@ -1132,9 +1135,9 @@ export const register: Register = (on, options) => {
         <ui.Box flexGrow={1} flexShrink={1}>
           <ui.Text dimColor wrap="truncate-end">{`  ${progress.event ?? ''}  `}</ui.Text>
         </ui.Box>
-        {toCancel.length > 0 && (
+        {seatsToCancel(view).length > 0 && (
           <ui.Box flexShrink={0}>
-            <ui.Button key="progress:cancel" hotkey="c" label={'c \u00b7 cancel all'} onPress={() => { for (const name of toCancel) cancelSeat($, state, name) }} />
+            <ui.Button key="progress:cancel" hotkey="c" label={'c \u00b7 cancel all'} onPress={cancelAll} />
             <ui.Text>{'  '}</ui.Text>
           </ui.Box>
         )}
@@ -1484,8 +1487,8 @@ export const register: Register = (on, options) => {
       return blocks
     }
     // A closable section's header: a press opens or closes it, and its text leads with the mark.
-    const toggle = (section: { key: string; open: boolean }, children: RenderChildren) => (
-      <Button key={`toggle:${section.key}`} plain onPress={() => toggleSection($, state, section.key)}>{children}</Button>
+    const toggle = (section: { fold: string }, children: RenderChildren) => (
+      <Button key={`toggle:${section.fold}`} plain onPress={() => toggleSection($, state, section.fold)}>{children}</Button>
     )
     const mark = (open: boolean) => (open ? OPEN_MARK : CLOSED_MARK)
     const draw = (section: Section, index: number) => {
@@ -1535,7 +1538,7 @@ export const register: Register = (on, options) => {
                       {...(item.hotkey ? { hotkey: item.hotkey } : {})}
                       onPress={() => {
                         // A jump opens the section it lands on.
-                        if (state.closed.delete(target)) $.ui.invalidate('ui.render')
+                        if (item.fold && state.closed.delete(item.fold)) $.ui.invalidate('ui.render')
                         void $.ui.scroll({ in: PANE_ID, to: { key: target }, block: 'start' })
                       }}
                     />
@@ -1556,7 +1559,7 @@ export const register: Register = (on, options) => {
                 hotkey="a"
                 label={section.closes ? 'collapse all' : 'expand all'}
                 onPress={() => {
-                  state.closed = section.closes ? new Set(section.keys) : new Set()
+                  state.closed = section.closes ? new Set(section.folds) : new Set()
                   $.ui.invalidate('ui.render')
                 }}
               />
