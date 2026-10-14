@@ -2,14 +2,21 @@
 
 A Claude Code plugin that consults multiple AI coding agents in parallel and shows you their answers side-by-side. Useful when one model's bias could mislead you and the right call depends on cross-checking — architecture decisions, debugging dead ends, security reviews, framework picks.
 
-![Five providers answering in the streaming tmux pane, with the synthesis alongside](docs/images/council-pane.png)
+![Twelve seats answering in the council pane inside Claude Code, the answers folded to their banners and the synthesis open](docs/images/council-pane-claude-code.png)
 
-Five providers answering the same question. Each banner names the provider, the
-model that answered and how long it took. The synthesis separates what they all
-agreed on from where they diverged — here, whether trapping `EXIT INT TERM` on
-one handler is correct, or whether signals should be converted into exits
-first — and when they agree instead, it names the assumption the answer rests
-on.
+Twelve seats answering the same question in the pane inside Claude Code. The top
+line counts who answered and how long the run took, and each number in the row
+below jumps to that seat's answer. Each banner names the seat, the model that
+answered and how long it took. Once the synthesis lands, the answers fold to
+their banners so it sits near the top. It separates what the seats agreed on
+from where they split. Here they split on which `set -e` caveat bites most: the
+script dying on an exit code you expected, or `set -e` going quiet inside an
+`if` or on the left of `&&`. When they agree, it names the assumption the
+answer rests on.
+
+This pane needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` (see
+[Pane inside Claude Code](#pane-inside-claude-code-experimental)). Without it,
+the same answers stream into a tmux side pane.
 
 [Quick start](#quick-start) · [Usage](#usage) · [Configuration](#configuration) · [Reference](#reference) · [Development](#development)
 

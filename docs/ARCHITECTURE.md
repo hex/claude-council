@@ -602,7 +602,7 @@ claude-council/
 ├── docs/
 │   ├── ARCHITECTURE.md          # This file
 │   └── images/
-│       └── council-pane.png   # README screenshot of a five-provider run
+│       └── council-pane-claude-code.png  # README screenshot of a twelve-seat run in the Claude Code pane
 ├── evals/                       # `claude plugin eval` cases: prompt.md + graders/ per case
 │   ├── .gitignore               # Keeps eval run output (results/) out of the repo
 │   └── _shared/                 # Grader text the cases link to, file by file
