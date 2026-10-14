@@ -894,6 +894,12 @@ When a pane (tmux or the one inside Claude Code) streamed the answers, the chat 
 
 `mods/council-pane` is a Claude Code mod that draws the same pane inside Claude Code, without tmux. It ships with the plugin and loads when Claude Code runs with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`; mods are early access, so without that variable nothing changes. Its [README](mods/council-pane/README.md) lists the settings and the limits.
 
+![A council run in progress in the pane inside Claude Code, two seats still querying with cancel buttons and the council band above the prompt](docs/images/council-pane-claude-code-live.png)
+
+A run in progress. Codex and grok-cli are still out, each with a `cancel`
+button on its row, and the band above the prompt counts 10 of 12 with a
+`c · cancel all` button.
+
 The scripts support it through one variable. When `COUNCIL_MOD_PANE_DIR` names an existing directory, a run writes its watch directory there and does not open tmux. `--no-pane` and `COUNCIL_NO_PANE=1` still win. Only the mod sets the variable.
 
 ## Adding New Providers
