@@ -602,6 +602,7 @@ claude-council/
 ├── docs/
 │   ├── ARCHITECTURE.md          # This file
 │   └── images/
+│       ├── council-pane.png                   # README: a five-provider run in the tmux pane
 │       ├── council-pane-claude-code.png       # README hero: a finished twelve-seat run in the Claude Code pane
 │       └── council-pane-claude-code-live.png  # README: the same pane mid-run, with cancel buttons and the band
 ├── evals/                       # `claude plugin eval` cases: prompt.md + graders/ per case
