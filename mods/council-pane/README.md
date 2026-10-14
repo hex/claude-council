@@ -38,6 +38,12 @@ Without the mod the variable is never set and the scripts behave as before.
 
 ## What you get
 
+![A council run in progress in the pane inside Claude Code, two seats still querying with cancel buttons and the council band above the prompt](../../docs/images/council-pane-claude-code-live.png)
+
+A run in progress. Codex and grok-cli are still out, each with a `cancel`
+button on its row, and the band above the prompt counts 10 of 12 with a
+`c · cancel all` button.
+
 - A status list with one row per provider, in the provider's color. A provider still querying shows a spinner, a running time and a `cancel` button at the row's right edge: click it, or press ctrl+x tab and then the row's digit (`1` to `9`, then `0` for the tenth), to end that seat and go on without it. The row reads `cancelling` until the run confirms, then `cancelled` in grey with a hollow `○`. When the run ends it collapses to one summary line and a row of names. A seat its API sibling answered counts as answered, and the summary says how many fell back and how many were cancelled.
 - A banner per answer with the model and the time it took. Errors show in red. Each answer, error and the synthesis can be closed to its header line and opened again: click the header (`▾` open, `▸` closed), or press ctrl+x tab, reach it with Tab or the arrows and press Enter. With two or more of them, an `a: collapse all` / `a: expand all` button above the first does them all at once; click it, or press `a` in the focused pane. When the synthesis lands, the answers and errors close so it reads near the top; a jump from the row of names opens the section it lands on. A new run starts with every section open. When a CLI seat fails and its API sibling answers, a dim amber `<name> fell back: <reason>` line sits between the banner and the answer.
 - Tables wider than the pane are rewritten as one record per row. Claude Code sizes tables to the terminal, so a wide one wraps into noise otherwise.

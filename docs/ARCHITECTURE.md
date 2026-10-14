@@ -601,10 +601,12 @@ claude-council/
 │   └── roles.json               # Role definitions
 ├── docs/
 │   ├── ARCHITECTURE.md          # This file
+│   ├── REFERENCE.md             # Every flag, provider, variable, default and limit
+│   ├── USAGE.md                 # Each workflow, with examples
 │   └── images/
-│       ├── council-pane.png                   # README: a five-provider run in the tmux pane
+│       ├── council-pane.png                   # REFERENCE: a five-provider run in the tmux pane
 │       ├── council-pane-claude-code.png       # README hero: a finished twelve-seat run in the Claude Code pane
-│       └── council-pane-claude-code-live.png  # README: the same pane mid-run, with cancel buttons and the band
+│       └── council-pane-claude-code-live.png  # mod README: the same pane mid-run, with cancel buttons and the band
 ├── evals/                       # `claude plugin eval` cases: prompt.md + graders/ per case
 │   ├── .gitignore               # Keeps eval run output (results/) out of the repo
 │   └── _shared/                 # Grader text the cases link to, file by file

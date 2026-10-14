@@ -750,3 +750,33 @@ export COUNCIL_DEBUG=1
 | Debate | `--debate` | [ ] |
 | Combined flags | Multiple flags | [ ] |
 | Image input | `--image=shot.png` | [ ] |
+
+## Releasing
+
+Bump version in `.claude-plugin/plugin.json` on every release:
+
+```json
+{
+  "version": "YYYY.M.PATCH"
+}
+```
+
+Format: `YYYY.M.PATCH` where PATCH increments with each release. Examples: `2026.1.1`, `2026.1.2`, `2026.2.1`.
+
+**Always bump version when:**
+- Changing command behavior
+- Fixing bugs
+- Updating formatting/output
+- Any change users should pull
+
+Release checklist:
+
+1. Make changes
+2. Test locally
+3. Bump version in `.claude-plugin/plugin.json`
+4. Commit and push
+5. Users update via `/plugin update claude-council`
+
+## Adding New Providers
+
+See the `provider-integration` skill for guidance on adding new AI providers.
