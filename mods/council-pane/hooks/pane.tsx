@@ -85,6 +85,8 @@ type PaneState = {
   headsUpCheckedAtMs: number
   // The last config problem logged, so a broken file is reported once.
   headsUpProblem: string
+  // The last heads-up failure logged (see logFailure).
+  headsUpError: string
   // When the followed specialist round's process was last checked.
   specialistCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
@@ -543,14 +545,16 @@ async function aimRun($: EngineInterface, state: PaneState, settings: PaneOption
 }
 
 // A background failure is logged once per distinct message, never dropped.
-async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>, label = 'specialist'): Promise<void> {
+// Each kind keeps its own last message, so one's success never re-arms the other's.
+async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>, kind: 'specialist' | 'heads-up' = 'specialist'): Promise<void> {
+  const last = kind === 'specialist' ? 'specialistError' : 'headsUpError'
   try {
     await work()
-    state.specialistError = ''
+    state[last] = ''
   } catch (error) {
-    const message = `${label}: ${String(error)}`
-    if (message !== state.specialistError) $.ui.log(message)
-    state.specialistError = message
+    const message = `${kind}: ${String(error)}`
+    if (message !== state[last]) $.ui.log(message)
+    state[last] = message
   }
 }
 
@@ -974,7 +978,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', headsUpError: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
