@@ -139,7 +139,7 @@ ENV:    scrubbed by provider_env_scrub (lib/providers.sh) in the subshell
         that execs the script: base, proxy/CA and Windows variables,
         COUNCIL_*, the provider's vendor prefixes and exact names (claude-cli
         keeps CLAUDE_CODE_OAUTH_TOKEN and CLAUDE_CONFIG_DIR; copilot-cli keeps
-        COPILOT_* but not GH_TOKEN or GITHUB_TOKEN), and COUNCIL_PASS_ENV
+        COPILOT_GITHUB_TOKEN and COPILOT_HOME, not GH_TOKEN or GITHUB_TOKEN), and COUNCIL_PASS_ENV
         names stay; every other exported variable is unset. Nothing goes
         on an env -i argv, where ps would show a key.
 ```
@@ -200,8 +200,9 @@ Two flavors share the interface:
   with none, since an empty one reads as no allowlist. MCP servers in the user's
   `mcp-config.json` still start without reaching the model, and each run lands
   in the CLI's session history; no flag stops either. Its scrubbed environment
-  keeps `COPILOT_*` and drops `GH_TOKEN` and `GITHUB_TOKEN`, and the script
-  clears `COPILOT_ALLOW_ALL`, which would load the working directory's hooks. A
+  keeps `COPILOT_CLI_*`, `COPILOT_GITHUB_TOKEN` and `COPILOT_HOME` by name, so
+  `GH_TOKEN`, `GITHUB_TOKEN` and `COPILOT_ALLOW_ALL` (which would load the
+  working directory's hooks) never reach it. A
   `gh` login still works, since copilot runs `gh` from `PATH`. `check-status.sh`
   checks only that the binary runs: copilot has no auth status command, and a
   prompt would spend a premium request. `get_model` reports `COPILOT_CLI_MODEL`

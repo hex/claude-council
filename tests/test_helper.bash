@@ -99,6 +99,18 @@ assert_not_blank() {
     [[ "$1" =~ [^[:space:]] ]]
 }
 
+# Helper: PATH without the directory one real binary lives in, so jq and bash
+# stay reachable; on a machine without that binary the PATH is left alone.
+path_without_dir_of() {
+    local real_dir
+    real_dir=$(dirname "$(command -v "$1" 2>/dev/null)" 2>/dev/null || true)
+    if [[ -n "$real_dir" ]]; then
+        echo "$PATH" | tr ':' '\n' | grep -vxF -- "$real_dir" | paste -sd: -
+    else
+        echo "$PATH"
+    fi
+}
+
 # Helper: compute a PATH that excludes the directories holding codex and gemini.
 # Use when a test needs to assert "no providers available" on a developer machine
 # that has the CLI agents installed.

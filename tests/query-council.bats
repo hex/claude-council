@@ -756,12 +756,13 @@ env_reporting_provider() {
     done
 }
 
-@test "query-council: copilot-cli keeps its own token and none of the shell's GitHub tokens" {
+@test "query-council: copilot-cli keeps its token and config dir, not the shell's GitHub tokens or COPILOT_ALLOW_ALL" {
     local fakedir="${BATS_TEST_TMPDIR}/env-copilot-cli"
     env_reporting_provider "$fakedir" copilot-cli
     run --separate-stderr env PROVIDERS_DIR="$fakedir" COPILOT_CLI_MODEL=example-model \
         COPILOT_GITHUB_TOKEN=example-token COPILOT_HOME=/tmp/example-home \
         GH_TOKEN=example-gh-token GITHUB_TOKEN=example-github-token \
+        COPILOT_ALLOW_ALL=true COPILOT_MODEL=example-other-model \
         "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=copilot-cli "ping"
     [ "$status" -eq 0 ]
     local seen
@@ -769,7 +770,9 @@ env_reporting_provider() {
     for name in COPILOT_CLI_MODEL COPILOT_GITHUB_TOKEN COPILOT_HOME PATH HOME; do
         [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
     done
-    for name in GH_TOKEN GITHUB_TOKEN; do
+    # COPILOT_ALLOW_ALL=true would trust the working directory and run its
+    # hooks; COPILOT_MODEL would pick a model the header never names.
+    for name in GH_TOKEN GITHUB_TOKEN COPILOT_ALLOW_ALL COPILOT_MODEL; do
         [[ "$seen" != *" $name "* ]] || { echo "leaked $name in:$seen"; return 1; }
     done
 }

@@ -1132,14 +1132,8 @@ $off" ]
 }
 
 @test "copilot-cli.sh: runs a headless session with no tools, instructions, GitHub MCP server or update" {
-    export COUNCIL_FAKE_BEHAVIOR=valid COPILOT_ALLOW_ALL=true
+    export COUNCIL_FAKE_BEHAVIOR=valid
     unset COPILOT_CLI_MODEL
-    # The fake keeps its environment so the test can see what the CLI was handed.
-    printf '#!/bin/bash\nenv > "%s/copilot-env.txt"\nexec "%s/copilot.real" "$@"\n' \
-        "$COUNCIL_FAKE_STATE_DIR" "$FAKE_BIN_DIR" > "$FAKE_BIN_DIR/copilot.wrap"
-    mv "$FAKE_BIN_DIR/copilot" "$FAKE_BIN_DIR/copilot.real"
-    mv "$FAKE_BIN_DIR/copilot.wrap" "$FAKE_BIN_DIR/copilot"
-    chmod +x "$FAKE_BIN_DIR/copilot"
     run "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     # The whole argument list, so a flag lost in quoting fails here instead of
@@ -1147,9 +1141,6 @@ $off" ]
     [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
       '["--output-format","json","--no-auto-update","--no-custom-instructions","--disable-builtin-mcps","--available-tools=none"]' ]
     [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"test prompt"* ]]
-    # COPILOT_ALLOW_ALL=true would trust the working directory and run its hooks.
-    run grep -c '^COPILOT_ALLOW_ALL=' "$COUNCIL_FAKE_STATE_DIR/copilot-env.txt"
-    [ "$output" = "0" ]
 }
 
 @test "copilot-cli.sh: a prompt past the argument limit still reaches the CLI whole" {

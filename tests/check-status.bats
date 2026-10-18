@@ -281,13 +281,7 @@ setup() {
 @test "check-status: a missing claude names Claude Code as what to install" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     rm "$FAKE_BIN_DIR/claude"
-    # Drop only the directory a real claude lives in, so jq and bash stay
-    # reachable; on a machine without one the PATH is left alone.
-    local real_dir clean
-    real_dir=$(dirname "$(command -v claude 2>/dev/null)" 2>/dev/null || true)
-    clean=$PATH
-    [[ -n "$real_dir" ]] && clean=$(echo "$PATH" | tr ':' '\n' | grep -vxF -- "$real_dir" | paste -sd: -)
-    run bash -c "export PATH='$clean'; bash '$SCRIPT'"
+    run bash -c "export PATH='$(path_without_dir_of claude)'; bash '$SCRIPT'"
     [ "$status" -eq 0 ]
     [[ "$output" == *"install Claude Code (claude)"* ]]
 }
@@ -298,13 +292,7 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')" == *"Copilot CLI   ✓  Connected"*"--providers=copilot-cli"* ]]
     rm "$FAKE_BIN_DIR/copilot"
-    # Drop only the directory a real copilot lives in, so jq and bash stay
-    # reachable; on a machine without one the PATH is left alone.
-    local real_dir clean
-    real_dir=$(dirname "$(command -v copilot 2>/dev/null)" 2>/dev/null || true)
-    clean=$PATH
-    [[ -n "$real_dir" ]] && clean=$(echo "$PATH" | tr ':' '\n' | grep -vxF -- "$real_dir" | paste -sd: -)
-    run bash -c "export PATH='$clean'; bash '$SCRIPT'"
+    run bash -c "export PATH='$(path_without_dir_of copilot)'; bash '$SCRIPT'"
     [ "$status" -eq 0 ]
     [[ "$output" == *"install the GitHub Copilot CLI (copilot)"* ]]
 }
@@ -312,13 +300,7 @@ setup() {
 @test "check-status: a missing cursor-agent names the binary to install" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     rm "$FAKE_BIN_DIR/cursor-agent"
-    # Drop only the directory a real cursor-agent lives in, so jq and bash
-    # stay reachable; on a machine without one the PATH is left alone.
-    local real_dir clean
-    real_dir=$(dirname "$(command -v cursor-agent 2>/dev/null)" 2>/dev/null || true)
-    clean=$PATH
-    [[ -n "$real_dir" ]] && clean=$(echo "$PATH" | tr ':' '\n' | grep -vxF -- "$real_dir" | paste -sd: -)
-    run bash -c "export PATH='$clean'; bash '$SCRIPT'"
+    run bash -c "export PATH='$(path_without_dir_of cursor-agent)'; bash '$SCRIPT'"
     [ "$status" -eq 0 ]
     [[ "$output" == *"install the Cursor CLI (cursor-agent)"* ]]
 }

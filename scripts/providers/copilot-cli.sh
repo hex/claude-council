@@ -33,13 +33,6 @@ FULL_PROMPT="${SYSTEM}
 
 ${PROMPT}"
 
-# COPILOT_ALLOW_ALL survives the COPILOT_ family the scrub keeps, and set to
-# exactly "true" it makes the CLI trust the working directory and load that
-# directory's skills, plugins, MCP servers and hooks, hooks that run shell
-# commands included. The council can run in any repository, so the seat never
-# carries it.
-unset COPILOT_ALLOW_ALL
-
 # The seat must answer the prompt every other seat gets and nothing else, and
 # the CLI has no single switch for that, so it is built from flags:
 # --no-custom-instructions: no AGENTS.md or related instruction files, so a
