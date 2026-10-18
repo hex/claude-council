@@ -4,6 +4,16 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Features
+- A heads-up side-check, off by default: with `.claude/council-heads-up.json` in a project, a council seat (codex by default, a panel in order, first answer that is not NONE wins) rereads the last five turns and the last eight tool results mid-turn inside Claude Code and shows one `✦ Heads up` line above the prompt with `learn more`, `knew this` and `dismiss`; only `tell Claude` on the expanded note reaches the main agent, as context on the next prompt. Seen and known topics persist across sessions and feed back so notes do not repeat; typing past a note skips that many later checks. The file is the consent: nothing asks before a send, and each check reports the bytes sent and the seat that answered. Needs the council-pane mod on Claude Code 2.1.302 or later.
+- `transcript-digest.sh --tool-results K --tool-result-chars N` adds the last K tool results inside the window, text only, capped; `/advise` does not use it and its digest is unchanged.
+
+### Changes
+- The stop gate's reviewer allowlist is now derived from the provider scripts on disk (`provider_allowlisted`), so `claude-cli` and `copilot-cli` can review; a `copilot-cli` reviewer spends a premium request per stop.
+- `.claude-plugin/plugin.json` names a `types` contract (`mods/council-pane/types/index.d.ts`) for the mod's `$.state` key.
+
 ## 2026.10.5
 
 ### Features

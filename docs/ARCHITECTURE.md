@@ -426,6 +426,24 @@ schema executably with jq, listing every violation; the bats suite
 keeps the two in sync.
 ```
 
+### Heads-up side-check (`scripts/heads-up.sh`, `mods/council-pane/hooks/heads-up.ts`)
+
+```
+Opt-in via .claude/council-heads-up.json, read by the mod at each
+turn.step of the main loop. heads-up.ts decides (cadence from the
+message count, backoff, one note per turn); pane.tsx forks
+heads-up.sh --run-dir --session --seats --avoid-file, which returns
+its worker's pid at once. The worker: session-transcript.sh ->
+transcript-digest.sh --tool-results -> prompts/heads-up.md ->
+seats in order (codex: codex exec --output-schema, gated on
+turn.completed; others: providers/<seat>.sh, first-line NONE or
+NOTE:/TOPIC:/DETAIL:) -> result.json (temp name, mv) -> .done.
+The pane polls .done, settles $.state (claude-council.headsUp),
+draws the band; seen/known topics live in $.store under heads-up.
+Seat names pass provider_allowlisted (lib/providers.sh), the one
+list, derived from providers/<name>.sh; the stop gate uses it too.
+```
+
 ### Specialists (`scripts/specialist.sh`, `mods/council-pane/hooks/specialist.ts`, `.worktreeinclude`)
 
 ```
@@ -632,8 +650,10 @@ claude-council/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/
 │   └── council-pane/            # Experimental Claude Code mod: the pane drawn inside Claude Code
-│       ├── README.md            # Settings, watch-dir files, limits, the council tool, specialists
+│       ├── README.md            # Settings, watch-dir files, limits, the council tool, specialists, the heads-up
 │       ├── DESIGN.md            # Colour and layout rules; every colour lives in hooks/theme.ts
+│       ├── HEADS-UP.md          # The heads-up side-check's design and its implementation record
+│       ├── types/index.d.ts     # The $.state contract plugin.json names under "types"
 │       ├── tsconfig.json        # Type check against the locally generated plugin types
 │       ├── hooks/               # pane.tsx wires the engine; the other modules are pure
 │       ├── specialists/         # Six template skills, <name>/SKILL.md each, plus LICENSE-openclaw (MIT)
@@ -642,6 +662,7 @@ claude-council/
 │   ├── role-injection.md        # {{VAR}} template for role-wrapped prompts
 │   ├── synthesis.md             # Synthesis structure + calibration rules
 │   ├── stop-review-gate.md      # Stop-gate reviewer contract
+│   ├── heads-up.md              # Side-check prompt: one finding or NONE, {{AVOID}} and {{DIGEST}} slots
 │   └── kimi-cli-agent.md        # No-tools agent definition passed to the kimi CLI
 ├── schemas/
 │   └── agent-analysis.schema.json  # Deep-execution analyst reply contract
@@ -651,8 +672,10 @@ claude-council/
 │   ├── format-output.sh         # Terminal formatter
 │   ├── check-status.sh          # Provider health check
 │   ├── stop-review-gate.sh      # Opt-in Stop hook reviewer
+│   ├── heads-up.sh              # Detached side-check runner: digest, seats in order, result.json
+│   ├── heads-up.schema.json     # Codex answer contract for the side-check, passed as --output-schema
 │   ├── session-transcript.sh    # Conversation id to transcript path, refusing ambiguity
-│   ├── transcript-digest.sh     # Session JSONL to a markdown digest for /advise
+│   ├── transcript-digest.sh     # Session JSONL to a markdown digest for /advise and the side-check
 │   ├── validate-analysis.sh     # Executable mirror of the agent-analysis schema (test suite)
 │   ├── specialist.sh            # Git side of specialists: worktree per run, one commit per round, merge or discard
 │   ├── specialist-report.schema.json  # Round report contract, passed to codex exec as --output-schema

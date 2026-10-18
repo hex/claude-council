@@ -362,6 +362,54 @@ discloses twice: to OpenRouter, and onward to whichever upstream serves the mode
 id you pinned. Keep the reviewer on `ollama` if your working tree may
 contain secrets.
 
+## Heads-up side-check (opt-in, off by default)
+
+While Claude works a long turn inside Claude Code, a council seat can reread
+the conversation and surface one thing you may have missed: a trade-off nobody
+called out, a result that looks off. It needs the council-pane mod (Claude Code
+with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, 2.1.302 or later) and a project
+file:
+
+```bash
+cat > .claude/council-heads-up.json <<'EOF'
+{"enabled": true, "seats": ["codex"], "every": 6}
+EOF
+```
+
+`seats` is the order asked, first answer that is not NONE wins, no synthesis;
+it defaults to `["codex"]`. `every` is messages per check inside a turn,
+default 6. The file is the consent and the only switch: delete it, or set
+`"enabled": false`, and nothing runs.
+
+The note sits above the prompt:
+
+```
+✦ Heads up · The migration test passed against the empty fixture DB, so the backfill path never ran.
+  codex · 12.4 KB · 27 s      1 · learn more   2 · knew this   0 · dismiss
+```
+
+`1` shows the seat's detail and offers `1 · tell Claude` and `0 · close`; only
+tell Claude puts the note in front of Claude, as context on your next prompt.
+`2` and `0` record the topic so no seat raises it again. Typing a prompt while a
+note shows counts as typing past it, and that many later checks are skipped.
+Claude never sees a note you did not tell it about.
+
+Privacy: unlike `/claude-council:advise`, nothing asks before a send. Each
+check digests the last five turns of this session's transcript plus the last
+eight tool results inside them, cut to 2,000 characters each, and sends that
+to the seats in order until one answers. Tool results can carry what a command
+printed, a secret included; messages from other sessions, hook output and
+thinking never go. Each check logs or shows the bytes sent and the seat that
+answered. The seat rules under Stop-gate review above apply: `ollama` keeps it
+on the machine, a CLI seat sends it to that vendor under your subscription,
+`openrouter` discloses twice.
+
+Environment: `COUNCIL_HEADS_UP_SEAT_SECONDS` (per seat, default 60),
+`COUNCIL_HEADS_UP_RUN_SECONDS` (per check, default 180),
+`COUNCIL_HEADS_UP_TURNS` (default 5) and `COUNCIL_HEADS_UP_RESULTS` (default
+8). A seat that times out or errors passes to the next; a check whose seats all
+fail logs one line and shows nothing.
+
 ## Specialists (experimental)
 
 A specialist is a Codex agent that Claude can hand a coding task to. It works in

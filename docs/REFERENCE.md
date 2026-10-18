@@ -376,6 +376,16 @@ it:
 export COUNCIL_PASS_ENV=NODE_OPTIONS,EXAMPLE_VAR   # comma-separated names passed to every provider
 ```
 
+The heads-up side-check ([usage](USAGE.md#heads-up-side-check-opt-in-off-by-default))
+reads four more, all optional:
+
+```bash
+export COUNCIL_HEADS_UP_SEAT_SECONDS=60   # per seat
+export COUNCIL_HEADS_UP_RUN_SECONDS=180   # per check, all seats together
+export COUNCIL_HEADS_UP_TURNS=5           # transcript window, in turns
+export COUNCIL_HEADS_UP_RESULTS=8         # tool results in the digest, 2,000 characters each
+```
+
 ## Display & Terminal Integration
 
 When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `fallback`, `cached`, `error`, `cancelled` with timing) and renders each response as it lands. Rendering prefers [Rich](https://github.com/Textualize/rich) when a Rich-capable Python is available (`python3` with a modern `rich` installed, or [`uv`](https://docs.astral.sh/uv/), which fetches it on demand): word-wrapped prose, tables fitted to the pane width, syntax-highlighted code, clickable links — styled with your terminal's own palette (cyan headings, yellow code, vendor-colored banners). Without one, a built-in dependency-free perl markdown renderer takes over with the same visual language, so nothing needs to be installed. Press **Esc** or **Ctrl-D** to close the pane.

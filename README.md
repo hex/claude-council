@@ -78,6 +78,12 @@ Read this before the first question about your code.
   ([Provider environment](docs/REFERENCE.md#provider-environment)).
 - **`/claude-council:advise` sends part of this conversation.** It shows the
   size, the turn count and the opening lines, and asks before anything leaves.
+- **The heads-up side-check sends it without asking, once a project opts in.**
+  A `.claude/council-heads-up.json` file is the consent: from then on, mid-turn,
+  the last five turns plus the last eight tool results (2,000 characters each;
+  a Bash result can hold a secret) go to the seats it names, codex by default,
+  and the note shows how many bytes went where. Delete the file to stop it
+  ([Heads-up](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default)).
 
 ## Everyday commands
 
@@ -146,6 +152,7 @@ every call asks you first.
 | Roles, debate, agent mode, local council | [Usage guide](docs/USAGE.md) |
 | Background jobs, export, quiet mode | [Usage guide](docs/USAGE.md#background-jobs---async) |
 | A second model reviewing your diff before Claude stops | [Stop-gate review](docs/USAGE.md#stop-gate-review-opt-in-off-by-default) |
+| A one-line "heads up" from codex while Claude works | [Heads-up side-check](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default) |
 | Hand a coding task to a Codex agent on its own branch | [Specialists](docs/USAGE.md#specialists-experimental) |
 | Every flag, variable, default and limit | [Reference](docs/REFERENCE.md) |
 | Running the scripts without Claude Code | [Direct script usage](docs/REFERENCE.md#direct-script-usage) |
