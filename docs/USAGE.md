@@ -385,7 +385,7 @@ The note sits above the prompt:
 
 ```
 ✦ Heads up · The migration test passed against the empty fixture DB, so the backfill path never ran.
-  codex · gpt-6.1-sol · 12.4 KB · 27 s      1 · learn more   2 · knew this   0 · dismiss
+  codex · gpt-6.1-sol · 12.4 KB · 27 s      1: Learn more   2: Knew this already   0: Dismiss
 ```
 
 `1` shows the seat's detail and offers `1 · tell Claude` and `0 · close`; only
