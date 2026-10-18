@@ -1,6 +1,8 @@
 // ABOUTME: Pure policy for the heads-up side-check: cadence, backoff, memory, the runner's result and the band's words
 // ABOUTME: No engine calls, so every rule runs under bun test; pane.tsx is the shell that feeds events in
 
+import type { Note, Phase, Session } from '../types'
+
 /** Fire when the message index within the turn is a positive multiple of this; the builtin's number. */
 export const DEFAULT_EVERY = 6
 /** seen and known each keep this many topics, newest last; the builtin's cap. */
@@ -111,38 +113,7 @@ export function avoidList(m: Memory): string {
   return topics.map(topic => `${topic}\n`).join('')
 }
 
-/** Per-session state in $.state; survives hot reload, never crosses sessions. */
-export type Session = {
-  /** The running turn and the conversation's message count at its first step: the message index within the turn is the difference. */
-  readonly turnBase: { turnId: string; messageCount: number } | null
-  /** The turn a note was offered in; at most one note per turn. */
-  readonly offeredTurn: string | null
-  readonly phase: Phase
-  /** Tell-Claude text armed for the person's next prompt; cleared when it goes. */
-  readonly pendingContext: string | null
-}
 export const FRESH_SESSION: Session = { turnBase: null, offeredTurn: null, phase: { kind: 'idle' }, pendingContext: null }
-
-/** A check in flight and a note on screen cannot both be true: the union says so. */
-export type Phase =
-  | { kind: 'idle' }
-  | { kind: 'checking'; turnId: string; checkId: string; runDir: string; startedMs: number }
-  | { kind: 'showing'; note: Note; expanded: boolean }
-
-/** One check's answer, validated from result.json. */
-export type Note = {
-  /** The check id; dedupes answer application. */
-  readonly id: string
-  /** At most TOPIC_CHARS; what seen and known hold. */
-  readonly topic: string
-  /** The one sentence after "Heads up ·". */
-  readonly headline: string
-  /** Shown on learn more and sent with the next prompt. */
-  readonly detail: string
-  readonly seat: string
-  readonly payloadBytes: number
-  readonly elapsedMs: number
-}
 
 /** What turn.step carries that the rules read: the turn, and the conversation's message count at this step. */
 export type StepFacts = { turnId: string; index: number; messageCount: number }

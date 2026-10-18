@@ -1,7 +1,8 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, learnMoreContext, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, type Note, type Session, mergeMemory, parseConfig, parseMemory, type Memory } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, checkLine, kilobytes, learnMoreContext, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory } from '../hooks/heads-up'
+import type { Note, Session } from '../types'
 
 test('a missing file is off with nothing to report', () => {
   expect(parseConfig(undefined)).toEqual({ enabled: false })

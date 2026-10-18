@@ -1,6 +1,12 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
+import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren } from 'claude-code'
+import {
+  applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, typedPast,
+  type Answer, type BandView, type Memory, type RunResult,
+} from './heads-up'
+import type { Session } from '../types'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
 import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice, progressBand } from './notices'
 import { paneOptions, type PaneOptions } from './options'
@@ -55,6 +61,14 @@ const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: 
 // The settings field holding every specialist, as $.config names it; hidden
 // from the /config menu, since /specialists edits it.
 const LIST_KEY = `claude-council.${LIST_FIELD}`
+// The heads-up runner forks and returns its pid; anything slower is a fault.
+const HEADS_UP_LAUNCH_MS = 10_000
+
+// The heads-up side-check's session state is the host's (its contract is
+// types/index.d.ts), so a hot reload keeps a check in flight and a note on
+// screen; the band reads it while drawing.
+const HEADS_UP = { plugin: 'claude-council', key: 'headsUp' } as const
+const headsUp = atom(HEADS_UP, FRESH_SESSION)
 
 type PaneState = {
   root: string
@@ -67,6 +81,10 @@ type PaneState = {
   shown: Set<string>
   lastError: string
   pidCheckedAtMs: number
+  // When the heads-up check's worker was last asked whether it is alive.
+  headsUpCheckedAtMs: number
+  // The last config problem logged, so a broken file is reported once.
+  headsUpProblem: string
   // When the followed specialist round's process was last checked.
   specialistCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
@@ -388,9 +406,11 @@ async function wakeWhenFetchable($: EngineInterface, state: PaneState): Promise<
 // .done comes from the run's EXIT trap, which a SIGKILL skips. A run whose
 // process is gone and that left no .done will never write one; without this
 // the pane would follow it for the rest of the session and see no later run.
-async function runHasDied($: EngineInterface, state: PaneState, runDir: string, now: number): Promise<boolean> {
-  if (now - state.pidCheckedAtMs < PID_CHECK_MS) return false
-  state.pidCheckedAtMs = now
+// lastCheck: which clock throttles the check, so the council run and the
+// heads-up worker are each asked at the pid cadence.
+async function runHasDied($: EngineInterface, state: PaneState, runDir: string, now: number, lastCheck: 'pidCheckedAtMs' | 'headsUpCheckedAtMs' = 'pidCheckedAtMs'): Promise<boolean> {
+  if (now - state[lastCheck] < PID_CHECK_MS) return false
+  state[lastCheck] = now
   const pid = runPid(await readText(files($), `${runDir}/pid`))
   if (!pid) return false
   const alive = await $.process.run(['kill', '-0', pid])
@@ -415,6 +435,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     $.ui.invalidate('ui.render')
   }
   if (state.pendingWake) await wakeWhenFetchable($, state)
+  if ((await read($, headsUp)).phase.kind === 'checking') await pollHeadsUp($, state, now)
   if (!state.runDir) {
     const name = unseenRun(await $.fs.list(state.root), state.shown)
     if (!name) return
@@ -502,10 +523,14 @@ async function paneHost($: EngineInterface, setting: HostSetting): Promise<PaneH
 // The watch root and the two timers start with the first council run, not the
 // session: a session that never convenes the council pays no polling and
 // leaves no directory behind.
+async function watchRoot($: EngineInterface): Promise<string> {
+  const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
+  return `${tmp}/council-mod.${await $.session.id()}`
+}
+
 async function startWatching($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
   if (state.root) return
-  const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
-  state.root = `${tmp}/council-mod.${await $.session.id()}`
+  state.root = await watchRoot($)
   await $.fs.write(`${state.root}/.keep`, '')
   $.clock.every(FRAME_MS, () => { void animate($, state) })
   $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
@@ -518,12 +543,12 @@ async function aimRun($: EngineInterface, state: PaneState, settings: PaneOption
 }
 
 // A background failure is logged once per distinct message, never dropped.
-async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>): Promise<void> {
+async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>, label = 'specialist'): Promise<void> {
   try {
     await work()
     state.specialistError = ''
   } catch (error) {
-    const message = `specialist: ${String(error)}`
+    const message = `${label}: ${String(error)}`
     if (message !== state.specialistError) $.ui.log(message)
     state.specialistError = message
   }
@@ -543,6 +568,155 @@ async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOpti
   } finally {
     state.isPolling = false
   }
+}
+
+// Every session shares the heads-up memory: a write merges the lists with
+// what another session wrote meanwhile and keeps this session's counters.
+async function loadMemory($: EngineInterface): Promise<Memory> {
+  return parseMemory(await $.store.get(STORE_KEY))
+}
+
+async function saveMemory($: EngineInterface, ours: Memory): Promise<void> {
+  await $.store.set(STORE_KEY, mergeMemory(await loadMemory($), ours))
+}
+
+async function recordAnswer($: EngineInterface, topic: string, answer: Answer): Promise<void> {
+  await saveMemory($, applyAnswer(await loadMemory($), topic, answer))
+}
+
+// The project file is the consent and the only switch; it is read at each
+// step, so turning it on or off needs no reload. A broken file is logged once.
+async function readHeadsUpConfig($: EngineInterface, state: PaneState) {
+  const path = `${await $.session.cwd()}/${CONFIG_FILE}`
+  const config = parseConfig((await $.fs.exists(path)) ? await $.fs.read(path) : undefined)
+  const problem = config.enabled ? '' : config.problem ?? ''
+  if (problem && problem !== state.headsUpProblem) $.ui.log(problem)
+  state.headsUpProblem = problem
+  return config
+}
+
+// Writes the avoid list and forks the runner, which returns once its worker
+// is detached; an exit that is not 0 leaves nothing behind and is reported.
+async function launchHeadsUp($: EngineInterface, seats: readonly string[], memory: Memory, runDir: string): Promise<void> {
+  const avoidFile = `${runDir}/avoid.txt`
+  await $.fs.write(avoidFile, avoidList(memory))
+  const args = ['--run-dir', runDir, '--session', await $.session.id(), '--seats', seats.join(','), '--avoid-file', avoidFile]
+  const run = await $.process.run(['bash', `${$.plugin.root}/scripts/heads-up.sh`, ...args], { timeoutMs: HEADS_UP_LAUNCH_MS })
+  if (run.exitCode === 0) return
+  await $.process.run(['rm', '-rf', runDir])
+  throw new Error(`heads-up.sh exited ${run.exitCode}: ${run.stderr.trim()}`)
+}
+
+// One main-loop step: decide, write the session when it changed, and launch
+// on a cadence point. The session says checking before the fork, so a step
+// that lands while the runner starts cannot launch a second check.
+async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions, step: { turnId: string; index: number; messageCount: number }): Promise<void> {
+  const config = await readHeadsUpConfig($, state)
+  const memory = await loadMemory($)
+  const now = await $.clock.now()
+  const held = await $.state.get(HEADS_UP)
+  const before = held.value ?? FRESH_SESSION
+  const decision = decide(config, before, memory, step, now)
+  const runDir = decision.kind === 'launch' ? `${await watchRoot($)}/heads-up/${decision.checkId}` : ''
+  const session: Session = decision.kind === 'launch'
+    ? { ...decision.session, phase: { kind: 'checking', turnId: step.turnId, checkId: decision.checkId, runDir, startedMs: now } }
+    : decision.session
+  if (session !== before) {
+    // A press or a poll wrote in between: this step's reading is stale, and
+    // the next step decides again on the new session.
+    const written = await $.state.set(HEADS_UP, session, { ifVersion: held.version })
+    if (!written.isSet) return
+  }
+  if (decision.kind === 'skip' && decision.why === 'backoff') await saveMemory($, decision.memory)
+  if (decision.kind !== 'launch' || !config.enabled) return
+  await startWatching($, state, settings)
+  try {
+    await launchHeadsUp($, config.seats, memory, runDir)
+  } catch (error) {
+    await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))
+    throw error
+  }
+}
+
+// The poll's heads-up branch: a result once .done lands, or a failure when
+// the worker or its dir is gone without one. Every check's dir is removed.
+async function pollHeadsUp($: EngineInterface, state: PaneState, now: number): Promise<void> {
+  const phase = (await read($, headsUp)).phase
+  if (phase.kind !== 'checking') return
+  const { runDir, checkId } = phase
+  const lost = (detail: string): RunResult => ({ kind: 'failed', payloadBytes: 0, seats: [{ seat: 'runner', outcome: 'error', elapsedMs: now - phase.startedMs, detail }] })
+  let result: RunResult
+  if (await $.fs.exists(`${runDir}/.done`)) result = parseRunResult(checkId, await readText(files($), `${runDir}/result.json`))
+  else if (!(await $.fs.exists(runDir))) result = lost(`its run dir ${runDir} is gone`)
+  else if (await runHasDied($, state, runDir, now, 'headsUpCheckedAtMs')) result = lost('heads-up.sh stopped without writing a result')
+  else return
+  const memory = await loadMemory($)
+  await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(s, memory, result) : s))
+  if (result.kind !== 'note') $.ui.log(checkLine(result))
+  await $.process.run(['rm', '-rf', runDir])
+}
+
+// A press on the band: the session moves, and the shown topic is recorded.
+async function pressHeadsUp($: EngineInterface, answer: Exclude<Answer, 'typed-past'>): Promise<void> {
+  const shown: { topic?: string } = {}
+  await update($, headsUp, s => {
+    shown.topic = s.phase.kind === 'showing' ? s.phase.note.topic : undefined
+    return pressed(s, answer)
+  })
+  if (shown.topic !== undefined) await recordAnswer($, shown.topic, answer)
+}
+
+// The person's own prompt: a shown note is typed past, and an armed
+// tell-Claude text goes with this prompt and no other.
+async function personSubmitted($: EngineInterface): Promise<string | null> {
+  const seen: { topic?: string; context: string | null } = { context: null }
+  await update($, headsUp, s => {
+    seen.topic = s.phase.kind === 'showing' ? s.phase.note.topic : undefined
+    seen.context = s.pendingContext
+    return { ...typedPast(s), pendingContext: null }
+  })
+  if (seen.topic !== undefined) await recordAnswer($, seen.topic, 'typed-past')
+  return seen.context
+}
+
+function headsUpPresses($: EngineInterface, state: PaneState): Record<Exclude<Answer, 'typed-past'>, () => void> {
+  const press = (answer: Exclude<Answer, 'typed-past'>) => () => { void logFailure($, state, () => pressHeadsUp($, answer), 'heads-up') }
+  return { learn: press('learn'), tell: press('tell'), knew: press('knew'), dismiss: press('dismiss') }
+}
+
+// The note: its headline, then the seat, payload and time beside the choices;
+// once expanded, the detail and the choice to tell Claude.
+function headsUpRow(
+  ui: Pick<Elements['terminal'], 'Box' | 'Button' | 'Text'>,
+  band: BandView,
+  press: Record<Exclude<Answer, 'typed-past'>, () => void>,
+) {
+  return (
+    <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
+      <ui.Text bold wrap="truncate-end">{band.headline}</ui.Text>
+      {band.detail !== null && <ui.Text wrap="wrap">{`  ${band.detail}`}</ui.Text>}
+      <ui.Box flexDirection="row">
+        <ui.Box flexShrink={1}>
+          <ui.Text color={COLOR.hint} wrap="truncate-end">{`  ${band.meta}    `}</ui.Text>
+        </ui.Box>
+        <ui.Box flexShrink={0} flexDirection="row">
+          {band.detail === null
+            ? [
+                <ui.Button key="heads-up:learn" hotkey="1" label={'1 · learn more'} onPress={press.learn} />,
+                <ui.Text key="gap-1">{'  '}</ui.Text>,
+                <ui.Button key="heads-up:knew" hotkey="2" label={'2 · knew this'} onPress={press.knew} />,
+                <ui.Text key="gap-2">{'  '}</ui.Text>,
+                <ui.Button key="heads-up:dismiss" hotkey="0" label={'0 · dismiss'} onPress={press.dismiss} />,
+              ]
+            : [
+                <ui.Button key="heads-up:tell" hotkey="1" label={'1 · tell Claude'} onPress={press.tell} />,
+                <ui.Text key="gap-1">{'  '}</ui.Text>,
+                <ui.Button key="heads-up:close" hotkey="0" label={'0 · close'} onPress={press.dismiss} />,
+              ]}
+        </ui.Box>
+      </ui.Box>
+    </ui.Box>
+  )
 }
 
 function specialistRun($: EngineInterface, args: string[], init?: { stdin?: string }) {
@@ -800,7 +974,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -830,6 +1004,8 @@ export const register: Register = (on, options) => {
     const hasRuns = Object.values(await loadRuns($)).some(record => record.state !== 'finished')
     await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists, hasRuns), inputSchema: specialistSchema(roster.specialists, hasRuns) })
     void logFailure($, state, () => introduceSpecialists($, roster.specialists.length))
+    // A reload drops the poll timer; a check still in flight needs it back.
+    if ((await read($, headsUp)).phase.kind === 'checking') await startWatching($, state, settings)
     if (roster.specialists.length > 0 || hasRuns) {
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })
@@ -860,6 +1036,26 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
     }
     return result
+  })
+
+  // The heads-up check rides the main loop's steps. The request goes first and
+  // is never held up: the check's own work runs beside it.
+  on('turn.step', async function* ($, e, next) {
+    const response = next(e)
+    if (e.agentId === undefined) {
+      const step = { turnId: e.turnId, index: e.index, messageCount: e.messageCount }
+      void logFailure($, state, () => stepHeadsUp($, state, settings, step), 'heads-up')
+    }
+    return yield* response
+  })
+
+  // Only the person's own prompt types past a note or carries the
+  // tell-Claude text; a plugin's submit or a notification does neither.
+  on('prompt.submit', async ($, e, next) => {
+    if (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') return next(e)
+    const armed: { context: string | null } = { context: null }
+    await logFailure($, state, async () => { armed.context = await personSubmitted($) }, 'heads-up')
+    return next(armed.context === null ? e : { ...e, context: [...(e.context ?? []), armed.context] })
   })
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
@@ -1059,7 +1255,7 @@ export const register: Register = (on, options) => {
     return { text: reopenReply(state.view !== undefined) }
   })
 
-  on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     // The band sits on the prompt, so the offer stays in view however far the
     // pane has scrolled; a survey owns the band while it runs.
     const retry = state.retryShown
@@ -1087,6 +1283,10 @@ export const register: Register = (on, options) => {
       )
     }
     if (retry && runDir) return retryRow($.ui.resolve(e), retry, retryPresses($, runDir))
+    // A note is one row and time-sensitive: the progress bands wait for its
+    // answer. Reading the session here subscribes the band to its changes.
+    const band = bandView((await read($, headsUp)).phase)
+    if (band) return headsUpRow($.ui.resolve(e), band, headsUpPresses($, state))
     const working = state.specialist
     if (working) {
       const ui = $.ui.resolve(e)
