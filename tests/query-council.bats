@@ -756,6 +756,24 @@ env_reporting_provider() {
     done
 }
 
+@test "query-council: copilot-cli keeps its own token and none of the shell's GitHub tokens" {
+    local fakedir="${BATS_TEST_TMPDIR}/env-copilot-cli"
+    env_reporting_provider "$fakedir" copilot-cli
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" COPILOT_CLI_MODEL=example-model \
+        COPILOT_GITHUB_TOKEN=example-token COPILOT_HOME=/tmp/example-home \
+        GH_TOKEN=example-gh-token GITHUB_TOKEN=example-github-token \
+        "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=copilot-cli "ping"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=" $(echo "$output" | jq -r '.round1["copilot-cli"].response') "
+    for name in COPILOT_CLI_MODEL COPILOT_GITHUB_TOKEN COPILOT_HOME PATH HOME; do
+        [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
+    done
+    for name in GH_TOKEN GITHUB_TOKEN; do
+        [[ "$seen" != *" $name "* ]] || { echo "leaked $name in:$seen"; return 1; }
+    done
+}
+
 @test "query-council: grok gets the xAI key it is issued under" {
     local fakedir="${BATS_TEST_TMPDIR}/env-grok"
     env_reporting_provider "$fakedir" grok

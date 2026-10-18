@@ -108,7 +108,15 @@ If the `codex`, `agy`, `grok`, `kimi`, or `cursor-agent` CLIs are installed and 
 - On a Team or Enterprise account it is not fully blind: your organisation's server-side instructions and managed policy settings still reach it, the same ones the driving session gets. No CLI flag removes them.
 - Claude writes the synthesis too, so it counts this seat's agreement as one voice, not independent support.
 
-CLI providers use your existing CLI subscription: no API key, no per-call cost. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai`, `--providers=gemini`, `--providers=grok`, or `--providers=kimi`. Listing both API and CLI together (e.g., `--providers=grok,grok-cli`) runs them side-by-side for comparison.
+**Copilot CLI seat (`copilot-cli`), opt-in.** The GitHub Copilot CLI can sit on the council, on your Copilot plan, through the login the CLI already has. Discovery never seats it, because each question spends one of the plan's premium requests; name it with `--providers=...,copilot-cli` or in `COUNCIL_PROVIDERS`. It runs `copilot --output-format json --no-auto-update --no-custom-instructions --disable-builtin-mcps --available-tools=none` with the prompt on stdin. The model gets no tools, built-in or MCP, and no `AGENTS.md` or other instruction files. The GitHub MCP server never connects, and the CLI never downloads an update during a seat run. It has no API sibling to fall back to. Things to know before seating it:
+
+- Two things reach it that no flag removes. MCP servers in your `~/.copilot/mcp-config.json` still start, though the model gets none of their tools. The CLI also saves each run in your Copilot session history.
+- It authenticates with `COPILOT_GITHUB_TOKEN` when set, else your stored login from `copilot login` or the GitHub CLI's `gh auth login`. Copilot reads the second by running `gh`, so `gh` must stay on `PATH`. The council never passes `GH_TOKEN` or `GITHUB_TOKEN`, so a token your shell exports for `gh` or `git` does not choose the account. It drops `COPILOT_ALLOW_ALL` too, because that variable makes the CLI load the working directory's hooks.
+- With `COPILOT_CLI_MODEL` unset, the CLI picks the model per question, and two questions can get different models. The header shows `default`, not the model that answered. A named model can fail. On one plan, `--model` rejected every name tried, including a model the automatic pick had just used, and the seat reports the CLI's `is not available` error. A model saved with `copilot config model` did not change the pick in a seat run, so the council does not read it.
+- `/claude-council:status` shows whether `copilot` is on `PATH`, not whether it has a login. The CLI has no status command, and a test prompt would spend a premium request. A seat without a login fails with the CLI's `No authentication information found` and the ways to log in.
+- The automatic pick can be a Claude model, so the synthesis counts this seat's agreement the way it counts a router seat's.
+
+CLI providers use your existing CLI subscription and need no API key. None of them meters a call except `copilot-cli`, where each question spends one of the plan's premium requests. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai`, `--providers=gemini`, `--providers=grok`, or `--providers=kimi`. Listing both API and CLI together (e.g., `--providers=grok,grok-cli`) runs them side-by-side for comparison.
 
 If a CLI provider fails at query time and its API sibling's key is set, the council automatically retries through that API sibling and marks the slot as a fallback: the answer is shown under the CLI slot with the API model's name, a "fell back to … API" note, and the CLI's own error as the reason; the pane row reads `fallback` with `<model> via <sibling> API`. The fallback is skipped when the sibling is already in your selected providers, so you never get the same vendor's answer twice.
 
@@ -126,6 +134,7 @@ export GROK_CLI_MODEL="grok-4.3"                # default: the grok CLI's own de
 export KIMI_CLI_MODEL="kimi-k3"                 # default: the kimi CLI's own configured model
 export CURSOR_CLI_MODEL="composer-2.5"          # default: the model picked in the Cursor CLI (paid plans only)
 export CLAUDE_CLI_MODEL="fable"                 # default: the account's default model (settings.json is not read)
+export COPILOT_CLI_MODEL="claude-sonnet-5.5"    # default: the CLI's automatic pick per question (settings.json is not read)
 ```
 
 The Antigravity CLI cannot take its prompt on stdin — `--print` with no value

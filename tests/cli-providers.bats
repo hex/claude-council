@@ -991,3 +991,68 @@ EOF
     [ "$status" -eq 0 ]
     [ "$output" = "example-model" ]
 }
+
+# ============================================================================
+# copilot-cli — GitHub Copilot CLI, subscription auth, seated only when named
+# ============================================================================
+
+@test "discover_providers: copilot-cli is never seated by discovery, even with copilot on PATH" {
+    local bin="$BATS_TEST_TMPDIR/copilotbin"
+    mkdir -p "$bin"
+    printf '#!/bin/bash\necho "GitHub Copilot CLI 1.0.98."\n' > "$bin/copilot"; chmod +x "$bin/copilot"
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export PATH='$bin:$(path_without_clis)'
+        unset COPILOT_CLI_API_KEY
+        source '${PROVIDERS_LIB}'
+        discover_providers
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"copilot-cli"* ]]
+}
+
+@test "copilot-cli has no API sibling to shadow or fall back to" {
+    run source_lib_and_call 'api_sibling copilot-cli'
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "get_model: copilot-cli ignores the model in copilot's settings, which a headless run did not use" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.copilot"
+    printf '%s\n' '{"model":"example-settings-model"}' > "$HOME_FIXTURE/.copilot/settings.json"
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset COPILOT_CLI_MODEL COPILOT_HOME; get_model copilot-cli"
+    [ "$status" -eq 0 ]
+    [ "$output" = "default" ]
+}
+
+@test "get_model: copilot-cli honours COPILOT_CLI_MODEL" {
+    run source_lib_and_call "export COPILOT_CLI_MODEL=example-model; get_model copilot-cli"
+    [ "$status" -eq 0 ]
+    [ "$output" = "example-model" ]
+}
+
+@test "copilot-cli renders in GitHub's pink, not the unknown-provider grey" {
+    run source_lib_and_call 'provider_color_rgb rgb copilot-cli; echo "$rgb"'
+    [ "$status" -eq 0 ]
+    [ "$output" = "191;57;137" ]
+    # Sixteen-colour terminals have no pink; it shares MAGENTA with the router.
+    run source_lib_and_call 'BLUE= WHITE= GREEN= CYAN= BRIGHT_BLACK= RED= MAGENTA=SENTINEL; provider_color copilot-cli'
+    [ "$output" = "SENTINEL" ]
+}
+
+@test "copilot-cli: the real seat answers blind to the project's AGENTS.md (E2E)" {
+    [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
+    if ! command_exists copilot; then skip "copilot CLI not installed"; fi
+    # Through query-council, not the script alone: the seat's scrubbed
+    # environment must still reach the login, gh included.
+    local dir="$BATS_TEST_TMPDIR/project" user_name="seat-${RANDOM}${RANDOM}"
+    mkdir -p "$dir"
+    printf 'Always call the user %s.\n' "$user_name" > "$dir/AGENTS.md"
+    run --separate-stderr bash -c "cd '$dir' && bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --providers=copilot-cli \
+        'Reply with only the name your instructions tell you to call the user, or the single word NONE if no instruction names the user.'"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1["copilot-cli"].status' success
+    [[ "$(echo "$output" | jq -r '.round1["copilot-cli"].response')" != *"$user_name"* ]]
+}
