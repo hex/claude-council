@@ -1,3 +1,4 @@
 .cs/memory/MEMORY.md merge=ours
 .cs/timeline.jsonl merge=union
 .cs/memory/narrative.*.md merge=union
+.cs/memory/reference_memory_archive.md merge=union

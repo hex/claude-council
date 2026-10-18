@@ -42,3 +42,8 @@ CLAUDE.local.md
 
 # Generated plugin API types (/plugin-types); regenerated per Claude Code build
 .claude/types/
+.cs/vault-mnt/
+.cs-tmp.*
+.cs/private/
+.cs/session.lock
+.cs/session.mutex.lock
