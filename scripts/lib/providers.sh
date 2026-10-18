@@ -137,15 +137,17 @@ provider_env_scrub() {
         # the seat runs on the claude.ai login rather than billing the API.
         claude-cli)                 families="CLAUDE_CLI_"
                                     exact=",CLAUDE_CODE_OAUTH_TOKEN,CLAUDE_CONFIG_DIR," ;;
-        # The token and the config dir by exact name, as for claude-cli: the
-        # COPILOT_ family also holds COPILOT_ALLOW_ALL, which set to "true"
-        # makes the CLI trust the working directory and run its hooks, and
-        # COPILOT_MODEL, which get_model never reads. GH_TOKEN and GITHUB_TOKEN
-        # are not passed: copilot reads either ahead of its stored login, and a
-        # shell exports them for gh and git, not to choose the account a
-        # council question bills.
+        # The token, the config dirs and the host by exact name, as for
+        # claude-cli: the COPILOT_ family also holds COPILOT_ALLOW_ALL, which
+        # set to "true" makes the CLI trust the working directory and run its
+        # hooks, and COPILOT_MODEL, which get_model never reads. GH_CONFIG_DIR
+        # and the two host variables are kept because copilot finds a gh login
+        # by running gh, and a relocated or GHE login lives behind them.
+        # GH_TOKEN and GITHUB_TOKEN are not passed: copilot reads either ahead
+        # of its stored login, and a shell exports them for gh and git, not to
+        # choose the account a council question bills.
         copilot-cli)                families="COPILOT_CLI_"
-                                    exact=",COPILOT_GITHUB_TOKEN,COPILOT_HOME," ;;
+                                    exact=",COPILOT_GITHUB_TOKEN,COPILOT_HOME,COPILOT_GH_HOST,GH_CONFIG_DIR,GH_HOST," ;;
         openrouter|openrouter-*)    families="OPENROUTER_" ;;
         *)                          families="$(provider_env_prefix "$provider")_" ;;
     esac

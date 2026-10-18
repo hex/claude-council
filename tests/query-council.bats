@@ -761,13 +761,14 @@ env_reporting_provider() {
     env_reporting_provider "$fakedir" copilot-cli
     run --separate-stderr env PROVIDERS_DIR="$fakedir" COPILOT_CLI_MODEL=example-model \
         COPILOT_GITHUB_TOKEN=example-token COPILOT_HOME=/tmp/example-home \
+        GH_CONFIG_DIR=/tmp/example-gh-config GH_HOST=example.ghe.com \
         GH_TOKEN=example-gh-token GITHUB_TOKEN=example-github-token \
         COPILOT_ALLOW_ALL=true COPILOT_MODEL=example-other-model \
         "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=copilot-cli "ping"
     [ "$status" -eq 0 ]
     local seen
     seen=" $(echo "$output" | jq -r '.round1["copilot-cli"].response') "
-    for name in COPILOT_CLI_MODEL COPILOT_GITHUB_TOKEN COPILOT_HOME PATH HOME; do
+    for name in COPILOT_CLI_MODEL COPILOT_GITHUB_TOKEN COPILOT_HOME GH_CONFIG_DIR GH_HOST PATH HOME; do
         [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
     done
     # COPILOT_ALLOW_ALL=true would trust the working directory and run its

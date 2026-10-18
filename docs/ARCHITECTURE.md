@@ -200,7 +200,8 @@ Two flavors share the interface:
   with none, since an empty one reads as no allowlist. MCP servers in the user's
   `mcp-config.json` still start without reaching the model, and each run lands
   in the CLI's session history; no flag stops either. Its scrubbed environment
-  keeps `COPILOT_CLI_*`, `COPILOT_GITHUB_TOKEN` and `COPILOT_HOME` by name, so
+  keeps `COPILOT_CLI_*`, `COPILOT_GITHUB_TOKEN`, `COPILOT_HOME`, `GH_CONFIG_DIR`
+  and the `GH_HOST`/`COPILOT_GH_HOST` pair by name, so
   `GH_TOKEN`, `GITHUB_TOKEN` and `COPILOT_ALLOW_ALL` (which would load the
   working directory's hooks) never reach it. A
   `gh` login still works, since copilot runs `gh` from `PATH`. `check-status.sh`
