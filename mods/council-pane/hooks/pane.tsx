@@ -689,8 +689,8 @@ function headsUpPresses($: EngineInterface, state: PaneState): Record<Exclude<An
 }
 
 // The note, in the shape of Claude Code's own heads-up: the mark in the
-// engine's suggestion colour, the sentence plain and wrapped under its first
-// word, then the choices drawn plain (`1: Learn more`, as a survey's row) with
+// council colour, "Heads up" bold, the sentence plain and wrapped under its
+// first word, then the choices drawn plain (`1: Learn more`, as a survey's row) with
 // the seat line dimmed after them. A narrow pane cuts the seat line, never a choice.
 function headsUpRow(
   ui: Pick<Elements['terminal'], 'Box' | 'Button' | 'Text'>,
@@ -700,9 +700,9 @@ function headsUpRow(
   return (
     <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
       <ui.Box flexDirection="row">
-        <ui.Box flexShrink={0}><ui.Text color={COLOR.info}>{'\u2726 '}</ui.Text></ui.Box>
+        <ui.Box flexShrink={0}><ui.Text color={COLOR.accent}>{'\u2726 '}</ui.Text></ui.Box>
         <ui.Box flexGrow={1} flexShrink={1} flexDirection="column">
-          <ui.Text wrap="wrap">{`Heads up \u00b7 ${band.headline}`}</ui.Text>
+          <ui.Text wrap="wrap"><ui.Text bold>{'Heads up'}</ui.Text>{` \u00b7 ${band.headline}`}</ui.Text>
           {band.detail !== null && <ui.Text wrap="wrap">{band.detail}</ui.Text>}
           <ui.Box flexDirection="row">
             <ui.Box flexShrink={0} flexDirection="row">
