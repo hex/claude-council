@@ -4,5 +4,6 @@ fake-clis.bats
 image.bats
 keys.bats
 release.bats
+stop-gate.bats
 theme.bats
 transcript-digest.bats
