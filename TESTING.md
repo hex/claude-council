@@ -144,7 +144,7 @@ they stay out of the default suite and out of CI.
 ### Windows
 
 CI runs the suite on `windows-latest` under Git Bash, alongside Ubuntu and
-macOS, split across four shards of about 8 minutes each (`tests/shards/`).
+macOS, split across four shards of about 9 minutes each (`tests/shards/`).
 Every test pays about a second in process creation there, so a test that runs
 `query-council.sh` end to end costs 3–4 s against 0.1–0.3 s on Linux.
 What Windows does that the others do not, and how to test for it without a
