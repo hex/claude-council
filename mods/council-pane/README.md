@@ -138,6 +138,16 @@ Network access is on inside the Codex sandbox. The worktree limits where a speci
 
 The mod records the detached round subshell's pid and process start time before Codex begins; launch fails if it cannot record a start time. A different live start time or a vanished pid marks a round without an exit file as lost. If the process check fails, the round stays running and the pane logs the failure once. Rounds started before start times were recorded use the pid existence check. Codex's pid is kept separately for stopping Codex; its exit does not mean the round subshell has finished writing the result.
 
+## Heads-up side-check
+
+Off until a project opts in with `.claude/council-heads-up.json`: `{"enabled": true, "seats": ["codex"], "every": 6}` (`seats` defaults to `["codex"]`, `every` to 6, at least 2). A file that does not parse, or a seat name that is not a plain lowercase word, keeps it off and logs the reason once. The file is the consent and the only switch; [HEADS-UP.md](HEADS-UP.md) is the design.
+
+On the main loop's `turn.step`, every `every` messages into a turn, the mod forks `scripts/heads-up.sh` with the session id, the seats and an avoid list of topics already shown. The request is never held up. While a check runs no other starts; a turn gets at most one note. The poll reads `result.json` once `.done` lands, or reports the check failed once the worker or its dir has vanished, and removes the dir. A check that found nothing, or whose seats all failed, logs one `heads-up:` line with its seats, payload and time.
+
+A note sits above the prompt, after the finished and retry rows and before the specialist and progress bands: `✦ Heads up · <headline>`, then the seat, payload and time with `1 · learn more`, `2 · knew this` and `0 · dismiss`. Learn more shows the detail with `1 · tell Claude` and `0 · close`; only tell Claude puts the note in front of the main agent, as hidden context on your next prompt. A prompt you type while a note shows is typing past it, and the mod skips that many later checks. The plugin store keeps seen and known topics across sessions, 50 each; the session's own state is in `$.state` under `claude-council.headsUp`, declared in `types/index.d.ts`.
+
+The rules live in `hooks/heads-up.ts`, with their tests in `tests/heads-up.test.ts`; `pane.tsx` only feeds them events.
+
 ## Limits
 
 - A run that is killed outright writes no `.done`. The mod checks the run's pid every five seconds and, once the process is gone, shows `stopped before it finished` and moves on.
@@ -160,7 +170,7 @@ The mod records the detached round subshell's pid and process start time before 
 claude plugin validate .
 ```
 
-The types come from `/plugin-types`, which writes `.claude/types/` at the repo root. Regenerate them after a Claude Code update. Run with `--debug` and look for `claude-council` in the log when something does not draw.
+The types come from `/plugin-types`, which writes `.claude/types/` at the repo root. Regenerate them after a Claude Code update. The heads-up state needs types from 2.1.302 or later, which declare `$.state`, `atom`, `read` and `update`. `claude plugin validate` checks the `$.state` key against `types/index.d.ts`, which `.claude-plugin/plugin.json` names under `"types"`. Run with `--debug` and look for `claude-council` in the log when something does not draw.
 
 Colours, type, glyphs and components follow [DESIGN.md](DESIGN.md), and every colour lives in `hooks/theme.ts`. Most are the engine's own theme keys, so the mod follows a light, dark or colour-blind theme and keeps its contrast on each.
 
