@@ -113,7 +113,7 @@ if [[ " $* " == *" --output-schema "* ]]; then
     OUT=""; PREV=""
     for a in "$@"; do [[ "$PREV" == "-o" ]] && OUT="$a"; PREV="$a"; done
     cat > "${COUNCIL_FAKE_STATE_DIR:?}/codex-stdin.txt"
-    note='{"none":false,"topic":"backfill never ran","headline":"The migration test used an empty fixture, so the backfill path never ran.","detail":"Seed one row in the fixture and rerun the migration test."}'
+    note='{"none":false,"topic":"backfill never ran","headline":"The migration test used an empty fixture, so the backfill path never ran.","detail":"Seed one row in C:\\fixtures\\empty.db and rerun the migration test."}'
     case "${COUNCIL_FAKE_BEHAVIOR:-valid}" in
         heads-up-note|heads-up-slow-note)
             [[ "$COUNCIL_FAKE_BEHAVIOR" == heads-up-slow-note ]] && sleep "${COUNCIL_FAKE_SLEEP:-5}"

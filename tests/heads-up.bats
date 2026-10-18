@@ -97,7 +97,8 @@ result() {
     [ "$(result .seat)" = "codex" ]
     [ "$(result .topic)" = "backfill never ran" ]
     [ "$(result .headline)" = "The migration test used an empty fixture, so the backfill path never ran." ]
-    [ "$(result .detail)" = "Seed one row in the fixture and rerun the migration test." ]
+    # A backslash in the seat's text arrives single, as the seat wrote it.
+    [ "$(result .detail)" = 'Seed one row in C:\fixtures\empty.db and rerun the migration test.' ]
     [ "$(result '.ms | type')" = "number" ]
     [ "$(result '.seats | length')" = "1" ]
     [ "$(result '.seats[0].seat + " " + .seats[0].outcome')" = "codex note" ]
@@ -158,7 +159,8 @@ result() {
 }
 
 @test "heads-up: codex hangs past the seat deadline, the timeout is recorded, the next seat's note wins" {
-    export COUNCIL_HEADS_UP_SEAT_SECONDS=2 COUNCIL_FAKE_SLEEP=300
+    # An odd sleep length, so the check below cannot match another test's fake.
+    export COUNCIL_HEADS_UP_SEAT_SECONDS=2 COUNCIL_FAKE_SLEEP=297
     export COUNCIL_FAKE_BEHAVIOR_CODEX=hang COUNCIL_FAKE_BEHAVIOR_AGY=heads-up-note
     start_runner codex,antigravity
     wait_done 20
@@ -170,7 +172,7 @@ result() {
     [ "$(result '.seats[0] | .seat + " " + .outcome + " " + .detail')" = "codex timeout no answer in 2s" ]
     [ "$(result '.seats[1].outcome')" = "note" ]
     # The hung codex was ended, not left running.
-    run ! pgrep -f "sleep 300"
+    run ! pgrep -f "sleep 297"
 }
 
 @test "heads-up: codex exiting 0 without turn.completed is an error, never a note" {
@@ -187,7 +189,7 @@ result() {
     start_runner codex
     wait_done
     [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0] | .outcome + " " + .detail')" = "error answer outside the schema" ]
+    [ "$(result '.seats[0] | .outcome + " " + .detail')" = "error none false with an empty topic or headline" ]
 }
 
 @test "heads-up: every seat erroring is kind failed, with each seat's reason" {

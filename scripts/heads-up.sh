@@ -24,7 +24,7 @@ source "${SCRIPT_DIR}/lib/prompts.sh"
 source "${SCRIPT_DIR}/lib/providers.sh"
 
 usage() {
-    sed -n '5p' "${BASH_SOURCE[0]}" | sed 's/^# //' >&2
+    echo "Usage: heads-up.sh --run-dir DIR --session ID --seats codex[,gemini,...] --avoid-file FILE" >&2
     exit 1
 }
 
@@ -164,6 +164,12 @@ run_with_ticks() {
     rm -f "$ticks_file" "$fired"
 }
 
+# One string field of codex's answer file, on one line, without its trailing
+# newline or a Windows jq's \r.
+answer_field() {
+    jq -r "$2 | tostring | gsub(\"[\\r\\n\\t]+\"; \" \")" "$1" | tr -d '\r'
+}
+
 codex_call() {
     local n="$1"
     local args=(exec --json --skip-git-repo-check -s read-only)
@@ -192,22 +198,29 @@ ask_codex() {
         OUTCOME=none DETAIL=""
         return 0
     fi
-    local fields
-    if fields=$(jq -r 'select((.topic | type) == "string" and (.topic | length) > 0
-                              and (.headline | type) == "string" and (.headline | length) > 0)
-                       | [.topic, .headline, (.detail // "" | tostring)] | map(gsub("[\r\n\t]+"; " ")) | @tsv' \
-                    "$answer" 2>/dev/null | tr -d '\r') && [[ -n "$fields" ]]; then
-        IFS=$'\t' read -r TOPIC HEADLINE NOTE_DETAIL <<< "$fields"
-        OUTCOME=note DETAIL=""
+    if ! jq -e '(.topic | type) == "string" and (.headline | type) == "string"' "$answer" > /dev/null 2>&1; then
+        OUTCOME=error DETAIL="answer outside the schema"
         return 0
     fi
-    OUTCOME=error DETAIL="answer outside the schema"
+    # One field per read, each flattened to one line: @tsv would double any
+    # backslash in the seat's text on its way into result.json.
+    TOPIC=$(answer_field "$answer" .topic)
+    HEADLINE=$(answer_field "$answer" .headline)
+    NOTE_DETAIL=$(answer_field "$answer" '.detail // ""')
+    if [[ -z "$TOPIC" || -z "$HEADLINE" ]]; then
+        OUTCOME=error DETAIL="none false with an empty topic or headline"
+        return 0
+    fi
+    OUTCOME=note DETAIL=""
 }
 
+# The provider's own deadline is a backstop five seconds past ours: a provider
+# script reports its deadline as exit 1, so were the two equal, whichever fired
+# first would decide whether the seat logs a timeout or an error.
 text_call() {
     local n="$1" seat="$2" limit="$3"
     ( provider_env_scrub "$seat"
-      COUNCIL_TIMEOUT="$limit" exec bash "${SCRIPT_DIR}/providers/${seat}.sh" --prompt-file "${RUN_DIR}/prompt.md" ) \
+      COUNCIL_TIMEOUT="$(( limit + 5 ))" exec bash "${SCRIPT_DIR}/providers/${seat}.sh" --prompt-file "${RUN_DIR}/prompt.md" ) \
         > "${RUN_DIR}/seat-${n}.out" 2> "${RUN_DIR}/seat-${n}.err"
 }
 
