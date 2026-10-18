@@ -73,7 +73,7 @@ bats --verbose-run tests/cache.bats
 | `shards.bats` | 1 test | every bats file is named in the shard lists the Windows CI job runs from |
 | `tmpdir.bats` | 1 test | every temp file the scripts create honours `TMPDIR` |
 
-**Total: 823 tests** across 32 `.bats` files.
+**Total: 841 tests** across 32 `.bats` files.
 
 The bats suite does not cover `mods/`. The council-pane mod has its own checks:
 

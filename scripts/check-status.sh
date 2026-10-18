@@ -350,7 +350,6 @@ remediation_for() {
         claude-cli:no_binary) echo "install Claude Code (claude)" ;;
         claude-cli:unauthed)  echo "claude auth login" ;;
         copilot-cli:no_binary) echo "install the GitHub Copilot CLI (copilot)" ;;
-        copilot-cli:unauthed) echo "copilot login" ;;
         ollama:no_binary)     echo "install Ollama (ollama.com)" ;;
         ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;

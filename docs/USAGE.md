@@ -244,7 +244,7 @@ Attach one image (e.g. a UI screenshot) so vision-capable providers can critique
 
 - Single image per query, raw size up to 10 MB, extensions: png / jpg / jpeg / webp / gif.
 - `gemini`, `openai`, `grok`, `perplexity`, `kimi` and `openrouter` (on its default model) receive the image alongside the prompt.
-- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok`, `kimi-cli` via `kimi` (the slot is marked as a fallback, with the reason `<cli> cannot read images; the <sibling> API answered with the image`). If the sibling is unusable (no API key), not vision-capable, or already answering in its own slot, the CLI provider answers text-only instead and its answer is prefixed with `(answered without the image)`. Selecting `ollama` or `cursor-cli` directly is text-only.
+- CLI providers answer through their vision sibling: `codex` via `openai`, `antigravity` via `gemini`, `grok-cli` via `grok`, `kimi-cli` via `kimi` (the slot is marked as a fallback, with the reason `<cli> cannot read images; the <sibling> API answered with the image`). If the sibling is unusable (no API key), not vision-capable, or already answering in its own slot, the CLI provider answers text-only instead and its answer is prefixed with `(answered without the image)`. Selecting `ollama`, `cursor-cli`, `claude-cli` or `copilot-cli` directly is text-only.
 
 Privacy: the image is sent to the providers that can see it, but its bytes are **not** written to cache entries or the saved `council-*.md` transcripts — only a hash of the image keys the cache.
 
@@ -347,7 +347,10 @@ EOF
 Safety properties: it never blocks on a clean tree, never re-gates a
 continuation already triggered by a stop hook, caps blocks per session at
 `max_iterations`, and any reviewer failure allows the stop. Delete the file
-(or set `"enabled": false`) to turn it off.
+(or set `"enabled": false`) to turn it off. The reviewer must be one of the
+providers named under Privacy below; `claude-cli` and `copilot-cli` are not
+on that list, and with either as `provider` the gate allows every stop
+without a review or a message.
 
 Privacy: the review sends your full uncommitted `git diff` to the configured
 provider, named by its provider id. With `ollama` it never leaves the machine.

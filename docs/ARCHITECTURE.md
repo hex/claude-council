@@ -714,7 +714,7 @@ claude-council/
 │   │   ├── specialist-setup-e2e.sh  # The /specialists screen in a real Claude Code, driven through tmux
 │   │   └── specialist-setup-e2e.expected.txt
 │   ├── fixtures/
-│   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/cursor-agent/ollama binaries on PATH
+│   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/cursor-agent/claude/copilot/ollama binaries on PATH
 │   │   └── status-fakes.bash    # Recording curl + jq for the check-status tests
 │   ├── agent-analysis.bats
 │   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
