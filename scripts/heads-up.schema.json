@@ -9,6 +9,6 @@
     "none": { "type": "boolean", "description": "True when nothing meets the bar: not specific, already raised, already known, or not worth an interruption." },
     "topic": { "type": "string", "description": "Empty when none is true. Otherwise a stable label under 140 characters, for de-duplication." },
     "headline": { "type": "string", "description": "Empty when none is true. Otherwise one sentence under 200 characters naming the thing; no greeting, no name, no markdown." },
-    "detail": { "type": "string", "description": "Empty when none is true. Otherwise under 600 characters: why it matters and what to check." }
+    "detail": { "type": "string", "description": "Empty when none is true. Otherwise under 600 characters, two or three plain sentences for someone who remembers nothing of the session: the line that shows it, why it matters, and what to check or do." }
   }
 }

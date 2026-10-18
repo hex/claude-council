@@ -19,10 +19,10 @@ Otherwise your ENTIRE answer is exactly three lines and nothing else:
 
 NOTE: <one sentence under 200 characters naming the thing itself>
 TOPIC: <a short stable label for it, under 140 characters>
-DETAIL: <under 600 characters, one line: why it matters and what to check>
+DETAIL: <under 600 characters, one line, two or three plain sentences for someone who remembers nothing of this session: the line in the material that shows it, why it matters, and what to check or do>
 
 No preamble, no markdown, no code blocks.
 
-When you were given an output schema, answer through it instead: nothing to raise is `{"none": true, "topic": "", "headline": "", "detail": ""}`, and a finding is `{"none": false, "topic": "<label>", "headline": "<the sentence>", "detail": "<why and what to check>"}`.
+When you were given an output schema, answer through it instead: nothing to raise is `{"none": true, "topic": "", "headline": "", "detail": ""}`, and a finding is `{"none": false, "topic": "<label>", "headline": "<the sentence>", "detail": "<two or three plain sentences: the line that shows it, why it matters, what to check>"}`.
 
 {{DIGEST}}
