@@ -22,6 +22,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/prompts.sh"
 source "${SCRIPT_DIR}/lib/providers.sh"
+source "${SCRIPT_DIR}/lib/clock.sh"
 
 usage() {
     echo "Usage: heads-up.sh --run-dir DIR --session ID --seats codex[,gemini,...] --avoid-file FILE" >&2
@@ -89,12 +90,6 @@ parse_args() {
     require_count COUNCIL_HEADS_UP_RESULTS "$RESULTS"
     SEAT_SECONDS=$((10#$SEAT_SECONDS))
     RUN_SECONDS=$((10#$RUN_SECONDS))
-}
-
-# Current time in milliseconds; whole seconds scaled to ms without python3, so
-# the unit stays right (as query-council.sh and check-status.sh do).
-now_ms() {
-    python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo $(( $(date +%s) * 1000 ))
 }
 
 # The last line of a seat's stderr, one line and at most 300 characters, for a

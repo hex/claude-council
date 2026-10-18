@@ -347,10 +347,10 @@ EOF
 Safety properties: it never blocks on a clean tree, never re-gates a
 continuation already triggered by a stop hook, caps blocks per session at
 `max_iterations`, and any reviewer failure allows the stop. Delete the file
-(or set `"enabled": false`) to turn it off. The reviewer must be one of the
-providers named under Privacy below; `claude-cli` and `copilot-cli` are not
-on that list, and with either as `provider` the gate allows every stop
-without a review or a message.
+(or set `"enabled": false`) to turn it off. The reviewer is any provider
+script under `scripts/providers/`, `claude-cli` and `copilot-cli` included; a
+name that is not one allows every stop without a review or a message. A
+`copilot-cli` reviewer spends a premium request per stop.
 
 Privacy: the review sends your full uncommitted `git diff` to the configured
 provider, named by its provider id. With `ollama` it never leaves the machine.

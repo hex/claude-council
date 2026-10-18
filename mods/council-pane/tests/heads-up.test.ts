@@ -114,6 +114,11 @@ test('none and failed results keep the payload size and each seat with its reaso
   expect(parseRunResult('c1', JSON.stringify(failed))).toEqual({ kind: 'failed', payloadBytes: 900, seats: [{ seat: 'codex', outcome: 'timeout', elapsedMs: 60000 }, { seat: 'gemini', outcome: 'error', elapsedMs: 1200, detail: 'exit 1: quota' }] })
 })
 
+test('a failure before any seat ran keeps the runner reason', () => {
+  const text = JSON.stringify({ kind: 'failed', bytes: 0, detail: 'session-transcript.sh: no transcript for abc', seats: [] })
+  expect(parseRunResult('c1', text)).toEqual({ kind: 'failed', payloadBytes: 0, seats: [{ seat: 'runner', outcome: 'error', elapsedMs: 0, detail: 'session-transcript.sh: no transcript for abc' }] })
+})
+
 test('a result that does not read is a failure naming the text, never a quiet none', () => {
   const runner = (detail: string) => ({ kind: 'failed', payloadBytes: 0, seats: [{ seat: 'runner', outcome: 'error', elapsedMs: 0, detail }] })
   expect(parseRunResult('c1', '')).toEqual(runner('result.json does not read as a run result: ""'))

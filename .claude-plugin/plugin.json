@@ -10,6 +10,7 @@
   "homepage": "https://github.com/hex/claude-council",
   "repository": "https://github.com/hex/claude-council",
   "icon": "./assets/icon.png",
+  "types": "./mods/council-pane/types/index.d.ts",
   "keywords": [
     "multi-agent",
     "council",

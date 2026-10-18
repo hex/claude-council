@@ -177,7 +177,13 @@ export function parseRunResult(checkId: string, text: string): RunResult {
   if (!isRecord(raw) || !isCount(raw.bytes) || !Array.isArray(raw.seats)) return unread
   const seats = raw.seats.map(seatOutcome)
   if (!seats.every((seat): seat is SeatOutcome => seat !== undefined)) return unread
-  if (raw.kind === 'none' || raw.kind === 'failed') return { kind: raw.kind, payloadBytes: raw.bytes, seats }
+  if (raw.kind === 'none') return { kind: 'none', payloadBytes: raw.bytes, seats }
+  if (raw.kind === 'failed') {
+    // A failure before any seat ran (no transcript, an empty digest) names its
+    // reason at the top level; it is read as the runner's own outcome.
+    const runner: SeatOutcome[] = typeof raw.detail === 'string' && raw.detail !== '' ? [{ seat: 'runner', outcome: 'error', elapsedMs: 0, detail: raw.detail }] : []
+    return { kind: 'failed', payloadBytes: raw.bytes, seats: [...runner, ...seats] }
+  }
   if (raw.kind !== 'note') return unread
   const { seat, ms, topic, headline, detail } = raw
   if (typeof seat !== 'string' || !isCount(ms) || typeof topic !== 'string' || typeof headline !== 'string' || typeof detail !== 'string') return unread
