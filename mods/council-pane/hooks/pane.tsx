@@ -688,8 +688,9 @@ function headsUpPresses($: EngineInterface, state: PaneState): Record<Exclude<An
   return { learn: press('learn'), tell: press('tell'), knew: press('knew'), dismiss: press('dismiss') }
 }
 
-// The note: its headline, then the seat, payload and time beside the choices;
-// once expanded, the detail and the choice to tell Claude.
+// The note, in the finished notice's style: the chip, the sentence wrapped
+// beside it, then the seat line and the choices on rows of their own, so a
+// narrow pane cuts nothing. Once expanded, the detail and the choice to tell Claude.
 function headsUpRow(
   ui: Pick<Elements['terminal'], 'Box' | 'Button' | 'Text'>,
   band: BandView,
@@ -697,27 +698,29 @@ function headsUpRow(
 ) {
   return (
     <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
-      <ui.Text wrap="wrap"><ui.Text bold color={COLOR.accent}>{'✦ Heads up'}</ui.Text><ui.Text bold>{` · ${band.headline}`}</ui.Text></ui.Text>
-      {band.detail !== null && <ui.Text wrap="wrap">{`  ${band.detail}`}</ui.Text>}
       <ui.Box flexDirection="row">
-        <ui.Box flexShrink={1}>
-          <ui.Text color={COLOR.hint} wrap="truncate-end">{`  ${band.meta}    `}</ui.Text>
+        {chip(ui, 'heads-up-chip', 'HEADS UP')}
+        <ui.Box flexGrow={1} flexShrink={1}>
+          <ui.Text bold wrap="wrap">{` ${band.headline}`}</ui.Text>
         </ui.Box>
-        <ui.Box flexShrink={0} flexDirection="row">
-          {band.detail === null
-            ? [
-                <ui.Button key="heads-up:learn" hotkey="1" label={'1 · learn more'} onPress={press.learn} />,
-                <ui.Text key="gap-1">{'  '}</ui.Text>,
-                <ui.Button key="heads-up:knew" hotkey="2" label={'2 · knew this'} onPress={press.knew} />,
-                <ui.Text key="gap-2">{'  '}</ui.Text>,
-                <ui.Button key="heads-up:dismiss" hotkey="0" label={'0 · dismiss'} onPress={press.dismiss} />,
-              ]
-            : [
-                <ui.Button key="heads-up:tell" hotkey="1" label={'1 · tell Claude'} onPress={press.tell} />,
-                <ui.Text key="gap-1">{'  '}</ui.Text>,
-                <ui.Button key="heads-up:close" hotkey="0" label={'0 · close'} onPress={press.dismiss} />,
-              ]}
-        </ui.Box>
+      </ui.Box>
+      {band.detail !== null && <ui.Text wrap="wrap">{`  ${band.detail}`}</ui.Text>}
+      <ui.Text color={COLOR.hint} wrap="wrap">{`  ${band.meta}`}</ui.Text>
+      <ui.Box flexDirection="row" flexShrink={0}>
+        <ui.Text>{'  '}</ui.Text>
+        {band.detail === null
+          ? [
+              <ui.Button key="heads-up:learn" hotkey="1" label={'1 · learn more'} onPress={press.learn} />,
+              <ui.Text key="gap-1">{'  '}</ui.Text>,
+              <ui.Button key="heads-up:knew" hotkey="2" label={'2 · knew this'} onPress={press.knew} />,
+              <ui.Text key="gap-2">{'  '}</ui.Text>,
+              <ui.Button key="heads-up:dismiss" hotkey="0" label={'0 · dismiss'} onPress={press.dismiss} />,
+            ]
+          : [
+              <ui.Button key="heads-up:tell" hotkey="1" label={'1 · tell Claude'} onPress={press.tell} />,
+              <ui.Text key="gap-1">{'  '}</ui.Text>,
+              <ui.Button key="heads-up:close" hotkey="0" label={'0 · close'} onPress={press.dismiss} />,
+            ]}
       </ui.Box>
     </ui.Box>
   )
