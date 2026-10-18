@@ -4,10 +4,18 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.10.5
 
 ### Features
-- A `copilot-cli` seat puts the GitHub Copilot CLI on the council, on your Copilot plan. Discovery never seats it, because each question spends a premium request, so name it in `--providers` or `COUNCIL_PROVIDERS`. It runs `copilot --output-format json --no-auto-update --no-custom-instructions --disable-builtin-mcps --available-tools=none` with the prompt on stdin, so it gets no tools and no `AGENTS.md`. MCP servers in your `mcp-config.json` still start without reaching the model, and each run lands in your Copilot session history; no flag stops either. Through the env scrub it gets `COPILOT_GITHUB_TOKEN`, `COPILOT_HOME`, `COPILOT_CLI_*` and the `gh` config and host variables only, never `GH_TOKEN`, `GITHUB_TOKEN` or `COPILOT_ALLOW_ALL`, and a `gh` login works. The CLI picks the model per question, so the header reads `default`, and a plan can reject every name passed in `COPILOT_CLI_MODEL`. `/claude-council:status` shows whether `copilot` is on `PATH`, not whether it has a login. Proposed by @CHENGHAO-WANG. (#58)
+- A `copilot-cli` seat puts the GitHub Copilot CLI on the council, on your Copilot plan. Discovery never seats it, because each question spends a premium request, so name it in `--providers` or `COUNCIL_PROVIDERS`. It runs `copilot --output-format json --no-auto-update --no-custom-instructions --disable-builtin-mcps --available-tools=none` with the prompt on stdin, so it gets no tools and no `AGENTS.md`. MCP servers in your `mcp-config.json` still start without reaching the model, and each run lands in your Copilot session history; no flag stops either. Through the env scrub it gets `COPILOT_GITHUB_TOKEN`, `COPILOT_HOME`, `COPILOT_CLI_*` and the `gh` config and host variables only, never `GH_TOKEN`, `GITHUB_TOKEN` or `COPILOT_ALLOW_ALL`, and a `gh` login works. The CLI picks the model per question, so the header reads `default`, and a plan can reject every name passed in `COPILOT_CLI_MODEL`. `/claude-council:status` shows whether `copilot` is on `PATH`, not whether it has a login. Proposed by @CHENGHAO-WANG. (#58, #59)
+
+### Docs
+- The README now covers only the first run: install, one provider, one question, what gets sent and saved. The detail moved to `docs/USAGE.md` (every workflow) and `docs/REFERENCE.md` (every flag, variable, default and limit); releasing and adding a provider moved to `TESTING.md`. The hero image is the pane inside Claude Code, the tmux pane keeps its own screenshot in the reference.
+- `docs/USAGE.md` names `claude-cli` and `copilot-cli` as text-only image seats and says the stop-gate allows every stop when either is the configured reviewer.
+
+### Other
+- The Windows CI shard lists now balance by runtime instead of file count; the slowest shard went from 12m46s to 10m02s. (#60)
+- Dependabot bumped the HOL plugin scanner action to v1.2.777. (#54)
 
 ## 2026.10.4
 
