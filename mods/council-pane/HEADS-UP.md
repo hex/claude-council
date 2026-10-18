@@ -26,7 +26,7 @@ During a long turn, above the prompt:
   codex · 12.4 KB · 27 s      1 · learn more   2 · knew this   0 · dismiss
 ```
 
-- `1` expands the band to the seat's detail (up to 600 characters) and arms a one-shot context: the person's next prompt carries "The user opened a side-check note (from codex, not from you): <headline and detail>" so the main agent learns of it exactly when the person next speaks. Nothing is submitted on their behalf.
+- `1` expands the band to the seat's detail (up to 600 characters). The expanded band offers `1 · tell Claude` and `0 · close`; only `tell Claude` arms a one-shot context, so the person's next prompt carries "The user opened a side-check note (from codex, not from you): <headline and detail>" and the main agent learns of it exactly when the person next speaks. Reading the detail alone tells Claude nothing, and nothing is submitted on the person's behalf.
 - `2` records the topic as known; `0` as seen. Both are fed back so no seat raises it again.
 - Typing a prompt while a note is up is typing past it: the next `typedPastInARow` checks are skipped. Any press resets the counter.
 
@@ -37,14 +37,18 @@ Call sites in `pane.tsx`, the whole shell:
 ```ts
 on('turn.step', async ($, e, next) => {
   const result = next(e)                                     // the request is never delayed
-  if (e.agentId === undefined) void logFailure($, state, () => stepHeadsUp($, state, e))
+  if (e.agentId === undefined) void logFailure($, state, () => stepHeadsUp($, e))
   return result
 })
-// poll(): if (state.headsUp.phase.kind === 'checking') await pollHeadsUp($, state)
+// stepHeadsUp: session = (await $.state.get(HEADS_UP)).value ?? FRESH_SESSION; decide; write back on a change
+// poll(): if (session.phase.kind === 'checking') await pollHeadsUp($)
 // AbovePrompt, after finished and retry, before the specialist and progress bands:
-//   const band = bandView(state.headsUp.phase); if (band) return headsUpRow(ui, band, presses)
-// prompt.submit (composer | bridge): typed past while showing; one-shot learn-more context
+//   const band = bandView((await $.state.get(HEADS_UP)).value?.phase)   // a render read subscribes the band
+//   if (band) return headsUpRow(ui, band, presses)
+// prompt.submit (composer | bridge): typed past while showing; the one-shot tell-Claude context
 ```
+
+`$.state` owns `Session`; nothing in the closure mirrors it. Events and presses write it, the render reads it, and a read during a render subscribes that render, so no `$.ui.invalidate` call is needed for the band.
 
 ## Shape
 
@@ -53,21 +57,21 @@ Data first. Three owners and nothing else:
 | State | Owner | Where | Why |
 |---|---|---|---|
 | `Memory` {seen, known, typedPastInARow, looksToSkip} | `applyAnswer` | `$.store['heads-up']` | crosses sessions like the builtin; lists capped at 50, counters global like the builtin |
-| `Session` {offeredTurn, phase, pendingContext} | pane shell via `decide` and `settle` | `$.state` (`PluginState['claude-council']['headsUp']`) | per session, survives hot reload; `phase` is a tagged union so "checking and showing at once" cannot be represented |
+| `Session` {turnBase, offeredTurn, phase, pendingContext} | pane shell via `decide` and `settle` | `$.state` (`PluginState['claude-council']['headsUp']`) | per session, survives hot reload; `phase` is a tagged union so "checking and showing at once" cannot be represented |
 | run files | `scripts/heads-up.sh` | `council-mod.<sid>/heads-up/<checkId>/` | detached worker output; `result.json` written to a temp name and moved, `.done` last |
 
-Flow: `turn.step` on main → `decide` (pure) → `launch` writes `avoid.txt`, forks `heads-up.sh` → the worker builds the digest with `transcript-digest.sh --tool-results`, asks seats in order → `result.json` + `.done` → the pane's poll timer (started lazily) → `parseRunResult` (the only place the wire shape is read) → `settle` → `bandView` → row.
+Flow: `turn.step` on main → `decide` (pure) → `launch` writes `avoid.txt`, forks `heads-up.sh --session <id>` → the worker resolves the transcript with `session-transcript.sh`, builds the digest with `transcript-digest.sh --tool-results`, asks seats in order → `result.json` + `.done` → the pane's poll timer (started lazily) → `parseRunResult` (the only place the wire shape is read) → `settle` → `bandView` → row.
 
 Load-bearing decisions:
 
-- **Digest = Path A, `transcript-digest.sh` extended with `--tool-results K --tool-result-chars N`, off by default.** One privacy filter, already under 37 tests, stays the single source of truth (per boundary-discipline). A TS filter over `$.session.messages()` would be a second copy of the same policy with no origin field to build it on. The mod resolves the transcript path once per session from `$.session.id()` (the main session's id, so the subagent trap `/advise` documents does not apply) and passes it explicitly. `turn.step` fires after the previous records were appended, so the lag is one unanswered `tool_use` at most. Tool results: the last K=8 whose `tool_use` sits inside the `last:5` window, text only, 2000 characters each (jq slices codepoints), tool name kept and inputs left out, `is_error` shown as `[error]`, AskUserQuestion results skipped because `ANSWER_FILTER` already covers them. Measured on the largest transcript: about 7.3 KB of turns plus about 5 KB of results, 12.7 KB in all, 27 KB worst case; both under the 32K argv ceiling, and the codex path uses stdin anyway. `/advise` and its tests keep their meaning; new tests pin the opposite rule under the flag, and that peer and notification rows stay out.
-- **Cadence = `index > 0 && (2 * index) % every === 0`.** `turn.step.index` counts model requests; a step past the first carries two messages (the assistant's tool call and its result), so the builtin's "message index is a positive multiple of `every`" is every third step at `every: 6`. The mapping is stated in code, not assumed.
+- **Digest = Path A, `transcript-digest.sh` extended with `--tool-results K --tool-result-chars N`, off by default.** One privacy filter, already under 37 tests, stays the single source of truth (per boundary-discipline). A TS filter over `$.session.messages()` would be a second copy of the same policy with no origin field to build it on. The mod passes `$.session.id()` (the main session's id, so the subagent trap `/advise` documents does not apply) and the runner resolves it through `session-transcript.sh`, the one resolver. `turn.step` fires after the previous records were appended, so the lag is one unanswered `tool_use` at most. Tool results: the last K=8 whose `tool_use` sits inside the `last:5` window, text only, 2000 characters each (jq slices codepoints), tool name kept and inputs left out, `is_error` shown as `[error]`, AskUserQuestion results skipped because `ANSWER_FILTER` already covers them. Measured on the largest transcript: about 7.3 KB of turns plus about 5 KB of results, 12.7 KB in all, 27 KB worst case; both under the 32K argv ceiling, and the codex path uses stdin anyway. `/advise` and its tests keep their meaning; new tests pin the opposite rule under the flag, and that peer and notification rows stay out.
+- **Cadence reads the message count, not a guess at it.** `turn.step` carries `messageCount`, the whole conversation's; `Session.turnBase` records it at the turn's first step, and the message index within the turn is the difference. The check fires when that index is a positive multiple of `every`, the builtin's rule read off a direct fact. (A tool step carries two messages, so this is every third step at `every: 6`, but the code never assumes it.)
 - **Offered-this-turn is stamped when a note lands, not when a check launches.** A NONE result leaves later cadence points of the same turn free to check again; several seat calls per long turn are accepted by ruling. `phase: checking` alone keeps checks from overlapping. A note that lands after its turn ended stamps the turn it was launched in.
 - **Runner = `scripts/heads-up.sh`, the stop gate's direct-exec pattern, sequential seats.** `query-council.sh` joins every seat, caches, falls back to sibling models and merges stderr into answers; each of those contradicts "first non-NONE in seat order, the named seat answered".
 - **Codex NONE is structural: a direct `codex exec --json --output-schema` inside the runner, prompt on stdin, success gated on a `turn.completed` event** (codex exits 0 on SIGTERM). The schema `{none, topic, headline, detail}` is strict-required. Other seats get a first-line `NONE` / `NOTE:` + `TOPIC:` + `DETAIL:` contract and the builtin's NONE regex; an off-contract reply is an error, never shown. The shared `providers/codex.sh` is untouched: a schema mode there would be a second way to call codex for one caller.
-- **The seat list has one owner: `provider_allowlisted` in `lib/providers.sh`.** `stop-review-gate.sh` moves onto it in this change. TypeScript checks only the name's shape (`^[a-z][a-z0-9-]+$`, so a name cannot carry a path) and never holds the list.
+- **The seat list has one owner: `provider_allowlisted` in `lib/providers.sh`, derived from the registry the library already holds (a plain-word name whose `providers/<name>.sh` exists), not a third hand-written list.** `stop-review-gate.sh` moves onto it in this change. TypeScript checks only the name's shape (`^[a-z][a-z0-9-]+$`, so a name cannot carry a path) and never holds the list.
 - **Errors fail open, reported once.** A seat timeout or error moves to the next seat; all seats failing writes `kind: failed` with each reason, which the pane logs through `logFailure`. The band never nags about infrastructure. Deadlines: 60 s per seat, 180 s per run, counted in ticks of `sleep 1`, never `$((SECONDS+N))`.
-- **Learn more = expand in place + one-shot `prompt.submit` context.** `$.prompt.submit` would start a turn the person did not ask for; `prompt.fill` would overwrite their draft. A `prompt.submit` hook adding `context` (index.d.ts:2967) hands the model text with the person's next prompt, which is the promise: the main agent learns of a note only through the person.
+- **Learn more expands in place; tell Claude arms a one-shot `prompt.submit` context.** Two presses, because reading more and telling Claude are different decisions. `$.prompt.submit` would start a turn the person did not ask for; `prompt.fill` would overwrite their draft. A `prompt.submit` hook adding `context` (index.d.ts:2967) hands the model text with the person's next prompt, which is the promise: the main agent learns of a note only through the person.
 - **Typed past = a `prompt.submit` whose `origin.kind` is `composer` or `bridge` while a note shows.** This plugin's own submits and continuation turns do not count. Turn end alone does not either: the person may not have looked yet.
 - **Band priority: after finished and retry, before the specialist and progress bands.** A note is one row and time-sensitive; the progress bands return when it is answered. Controls carry full-strength hotkey labels, no `dimColor`.
 - **Settings: the file only.** A userConfig row would be a second switch, and `$.config.set` reloads the module.
