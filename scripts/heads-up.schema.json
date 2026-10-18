@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heads-up side-check answer",
+  "description": "Strict: codex --output-schema requires every property. none=true with empty strings means nothing worth raising.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["none", "topic", "headline", "detail"],
+  "properties": {
+    "none": { "type": "boolean", "description": "True when nothing meets the bar: not specific, already raised, already known, or not worth an interruption." },
+    "topic": { "type": "string", "description": "Empty when none is true. Otherwise a stable label under 140 characters, for de-duplication." },
+    "headline": { "type": "string", "description": "Empty when none is true. Otherwise one sentence under 200 characters naming the thing; no greeting, no name, no markdown." },
+    "detail": { "type": "string", "description": "Empty when none is true. Otherwise under 600 characters: why it matters and what to check." }
+  }
+}

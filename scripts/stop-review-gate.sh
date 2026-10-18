@@ -27,10 +27,8 @@ IFS=$'\t' read -r ENABLED PROVIDER MAX_ITER < <(
 # The provider name is interpolated into a script path and then executed, so
 # constrain it to the known set — a config value like "../../evil" must never
 # select an arbitrary script. Unknown provider -> fail open.
-case "$PROVIDER" in
-    gemini|openai|grok|grok-cli|perplexity|kimi|kimi-cli|cursor-cli|ollama|openrouter|codex|antigravity) ;;
-    *) exit 0 ;;
-esac
+source "${SCRIPT_DIR}/lib/providers.sh"
+provider_allowlisted "$PROVIDER" || exit 0
 
 # Guard 1: never re-gate a continuation already triggered by a stop hook
 SESSION_ID=""
@@ -57,7 +55,6 @@ PROVIDER_SCRIPT="${SCRIPT_DIR}/providers/${PROVIDER}.sh"
 [[ -f "$PROVIDER_SCRIPT" ]] || exit 0
 
 source "${SCRIPT_DIR}/lib/prompts.sh"
-source "${SCRIPT_DIR}/lib/providers.sh"
 TEMPLATE=$(load_prompt_template stop-review-gate)
 PROMPT=$(interpolate_template "$TEMPLATE" "DIFF=$DIFF")
 

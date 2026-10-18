@@ -138,6 +138,22 @@ dirty_diff() {
     [[ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]]
 }
 
+# "../providers/codex" names a script that exists, so only the name's shape
+# can refuse it; "codex/x" carries a slash with no traversal at all.
+@test "stop-gate: a provider name with a path in it is refused, even one that resolves" {
+    dirty_diff
+    export COUNCIL_FAKE_BEHAVIOR=block-verdict
+    local name
+    for name in "../../evil" "../providers/codex" "codex/x"; do
+        jq -n --arg p "$name" '{enabled: true, provider: $p, max_iterations: 1}' \
+            > "$REPO/.claude/council-stop-gate.json"
+        run bash "$GATE" <<< "$(stop_event)"
+        [ "$status" -eq 0 ] || return 1
+        [ -z "$output" ] || return 1
+        [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ] || return 1
+    done
+}
+
 # The allowlist fails open on an unknown name, so a seat omitted from it makes
 # the gate exit 0 silently. Only an acceptance case can tell "provider declined
 # to block" from "provider was never allowed to run".

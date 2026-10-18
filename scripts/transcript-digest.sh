@@ -14,8 +14,12 @@ usage() {
 Usage: transcript-digest.sh [OPTIONS] [--] <transcript.jsonl>
 
 Options:
-  --turns SPEC   Window over human turns: last:N or all (default: last:25)
-  --help, -h     This message
+  --turns SPEC              Window over human turns: last:N or all (default: last:25)
+  --tool-results K          Also emit the last K tool results whose tool_use sits
+                            inside the window, text only (off unless given)
+  --tool-result-chars N     Cut each emitted tool result to N characters
+                            (default: 2000; needs --tool-results)
+  --help, -h                This message
 
 Takes a path to a session JSONL. It does not resolve a session id and does not
 discover "the current session": inside a subagent the ambient session id names
@@ -29,6 +33,8 @@ EOF
 
 TRANSCRIPT=""
 TURNS="last:25"
+TOOL_RESULTS=""
+TOOL_RESULT_CHARS=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -42,6 +48,30 @@ while [[ $# -gt 0 ]]; do
                 usage
             fi
             TURNS="$2"
+            shift 2
+            ;;
+        --tool-results=*)
+            TOOL_RESULTS="${1#*=}"
+            shift
+            ;;
+        --tool-results)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --tool-results needs a count." >&2
+                usage
+            fi
+            TOOL_RESULTS="$2"
+            shift 2
+            ;;
+        --tool-result-chars=*)
+            TOOL_RESULT_CHARS="${1#*=}"
+            shift
+            ;;
+        --tool-result-chars)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --tool-result-chars needs a count." >&2
+                usage
+            fi
+            TOOL_RESULT_CHARS="$2"
             shift 2
             ;;
         --help|-h)
@@ -74,6 +104,33 @@ done
 if [[ -z "$TRANSCRIPT" ]]; then
     echo "Error: no transcript given." >&2
     usage
+fi
+
+# Base-10 and at least 1, for the same reasons --turns refuses 00 and 0.
+require_count() {
+    case "$2" in
+        ''|*[!0-9]*)
+            echo "Error: $1 needs a number, got: $2" >&2
+            exit 1
+            ;;
+    esac
+    if [ "$((10#$2))" -eq 0 ]; then
+        echo "Error: $1 needs 1 or more." >&2
+        exit 1
+    fi
+}
+
+# Tool results stay out unless asked for: each one is output the person never
+# typed and may never have read, so the mode is a deliberate choice per caller.
+# A cap given without the mode would be silently ignored, so it is refused.
+if [[ -n "$TOOL_RESULTS" ]]; then
+    require_count --tool-results "$TOOL_RESULTS"
+    TOOL_RESULTS=$((10#$TOOL_RESULTS))
+    require_count --tool-result-chars "${TOOL_RESULT_CHARS:-2000}"
+    TOOL_RESULT_CHARS=$((10#${TOOL_RESULT_CHARS:-2000}))
+elif [[ -n "$TOOL_RESULT_CHARS" ]]; then
+    echo "Error: --tool-result-chars needs --tool-results." >&2
+    exit 1
 fi
 
 # A bare uuid is the natural thing to reach for, and resolving one here is the
@@ -164,6 +221,34 @@ ANSWER_FILTER='.type == "user"
     and (.toolUseResult | type == "object")
     and (.toolUseResult.answers | type == "object")'
 
+# Under --tool-results only. $keep maps each tool_use_id chosen for emission
+# (see choose_tool_results) to its tool name, and is {} when the mode is off,
+# so this branch emits nothing by default. A result is read from its
+# tool_result block, never from toolUseResult, which duplicates it with extras
+# (an Edit carries the whole original file). The heading names the tool and
+# never its input.
+# A real tool result carries no origin and no isMeta. A row that does is a
+# peer message, a task notification or a plugin's injection, and stays out even
+# when it holds a tool_result block for a tool_use in the window: the filter
+# admits only the shape it knows rather than refusing the shapes it has seen.
+TOOL_RESULT_ROW='.type == "user" and (.isMeta != true) and (.origin.kind == null)'
+# The $keep, $cap and $failed below are jq's, so they stay single-quoted.
+# shellcheck disable=SC2016
+TOOL_RESULT_EXTRACT='
+    select('"$TOOL_RESULT_ROW"')
+    | .message.content | arrays | .[]
+    | select(.type == "tool_result" and (.tool_use_id | type) == "string"
+             and ($keep[.tool_use_id] != null))
+    | (has("is_error") and .is_error) as $failed
+    | { role: ("Tool result · " + $keep[.tool_use_id]), id: .tool_use_id,
+        body: (if (.content | type) == "string" then .content
+               else [.content[]? | select(.type == "text") | .text] | join("\n")
+               end) }
+    | .body |= (if length > $cap
+                then .[0:$cap] + "… [+\(length - $cap) chars]"
+                else . end)
+    | .body |= (if $failed then "[error] " + . else . end)'
+
 EXTRACT="
     select(.type == \"user\" or .type == \"assistant\")
     | if .type == \"user\" then
@@ -171,9 +256,10 @@ EXTRACT="
               { role: \"Human\", id: (.uuid // \"-\"),
                 body: ([.toolUseResult.answers | to_entries[]
                         | \"Answered \\\"\\(.key)\\\": \\(.value)\"] | join(\"\n\")) }
+          elif ($HUMAN_FILTER) then
+              { role: \"Human\", id: (.uuid // \"-\"), body: .message.content }
           else
-              select($HUMAN_FILTER)
-            | { role: \"Human\", id: (.uuid // \"-\"), body: .message.content }
+              $TOOL_RESULT_EXTRACT
           end
       else
           { role: \"Assistant\", id: (.message.id // .uuid // \"-\"), body: .message.content }
@@ -285,10 +371,43 @@ emit_malformed_note() {
     printf '> %s malformed record%s skipped: this digest is incomplete.\n\n' "$MALFORMED" "$plural"
 }
 
+# Prints the {tool_use_id: name} map of the results to emit: the last
+# $TOOL_RESULTS whose tool_use sits inside the window (from line $1), in file
+# order. Joining on a tool_use seen in the window is what keeps a result of
+# earlier work out, and what gives the heading its tool name. AskUserQuestion is
+# left out of the join: ANSWER_FILTER already renders the pick, and its
+# envelope would otherwise take a slot from a real result. The name becomes a
+# heading, so a line break or the block sentinel inside it is flattened.
+choose_tool_results() {
+    head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | tail -n "+${1:-1}" \
+        | jq -R -n -c --argjson k "$TOOL_RESULTS" "
+            [inputs | $RECORDS] as \$records
+            | ([\$records[] | select(.type == \"assistant\")
+                | .message.content | arrays | .[]
+                | select(.type == \"tool_use\" and .name != \"AskUserQuestion\")
+                | {key: .id, value: (.name | gsub(\"[\\u0001\\r\\n]\"; \" \"))}]
+               | from_entries) as \$names
+            | [\$records[] | select($TOOL_RESULT_ROW)
+                | .message.content | arrays | .[]
+                | select(.type == \"tool_result\" and (.tool_use_id | type) == \"string\"
+                         and (\$names[.tool_use_id] != null))
+                | {key: .tool_use_id, value: \$names[.tool_use_id]}]
+            | .[-\$k:] | from_entries" 2>"$JQ_ERR" | tr -d '\r'
+}
+
+KEEP='{}'
+
 extract_body() {
     head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | tail -n "+${1:-1}" \
-        | jq -R -r "$RECORDS | $EXTRACT" 2>"$JQ_ERR" | sed 's/\r$//' | awk "$FORMAT_AWK"
+        | jq -R -r --argjson keep "$KEEP" --argjson cap "${TOOL_RESULT_CHARS:-0}" \
+            "$RECORDS | $EXTRACT" 2>"$JQ_ERR" \
+        | sed 's/\r$//' | awk "$FORMAT_AWK"
 }
+
+if [[ -n "$TOOL_RESULTS" && ( -n "$START_LINE" || "$WINDOWED" -eq 0 ) ]]; then
+    KEEP=$(choose_tool_results "$START_LINE") || true
+    refuse_on_jq_error
+fi
 
 if [[ -n "$START_LINE" ]]; then
     _body=$(extract_body "$START_LINE") || true

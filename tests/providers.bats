@@ -563,6 +563,43 @@ run_provider_with_image() {
     KIMI_MODEL=kimi-k2 KIMI_VISION=1 provider_vision_capable kimi
 }
 
+# The seat allowlist is the providers/ directory itself: a name is allowed when
+# it is a plain word and a script answers for it, so adding a provider script
+# allows its seat and no second list can drift from the registry.
+@test "provider_allowlisted: every script in providers/ is allowed by its name" {
+    source "${LIB_DIR}/providers.sh"
+    local script name
+    for script in "${PROVIDERS}"/*.sh; do
+        name=$(basename "$script" .sh)
+        provider_allowlisted "$name" || { echo "refused: $name"; return 1; }
+    done
+    provider_allowlisted codex
+    provider_allowlisted grok-cli
+}
+
+@test "provider_allowlisted: a name with no script is refused" {
+    source "${LIB_DIR}/providers.sh"
+    run ! provider_allowlisted nosuchseat
+    run ! provider_allowlisted openrouter-1
+    run ! provider_allowlisted ""
+}
+
+# The name is spliced into a script path, so anything that is not a plain word
+# is refused before the filesystem is asked, even when a file would match.
+@test "provider_allowlisted: a path, a dot name or an odd spelling is refused" {
+    source "${LIB_DIR}/providers.sh"
+    run ! provider_allowlisted ../../evil
+    run ! provider_allowlisted ../providers/codex
+    run ! provider_allowlisted providers/codex
+    run ! provider_allowlisted ./codex
+    run ! provider_allowlisted Codex
+    run ! provider_allowlisted codex.sh
+    run ! provider_allowlisted -codex
+    run ! provider_allowlisted c
+    run ! provider_allowlisted $'codex\n'
+    run ! provider_allowlisted 'codex '
+}
+
 @test "provider_vision_capable: true for gemini/openai/grok/perplexity, false for the rest" {
     source "${LIB_DIR}/providers.sh"
     provider_vision_capable gemini

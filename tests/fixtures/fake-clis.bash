@@ -37,6 +37,23 @@
 #                    string, the other shape the message format allows
 #   tool-narration - kimi only: an assistant message carrying tool_calls, whose
 #                    content narrates the call rather than answering
+#   heads-up-note  - a heads-up side-check finding: codex under --output-schema
+#                    writes it to the -o file and emits turn.completed; the
+#                    others print the NOTE:/TOPIC:/DETAIL: lines
+#   heads-up-slow-note - codex only: the note after sleeping COUNCIL_FAKE_SLEEP
+#                    (default 5s)
+#   heads-up-none  - nothing to raise: codex writes {"none": true, ...}, the
+#                    others print "NONE."
+#   heads-up-blank - codex only: none false with an empty topic and headline,
+#                    an answer that fits the schema and says nothing
+#   heads-up-no-turn - codex only: writes a note, exits 0, but its events hold
+#                    no turn.completed, as codex looks after a SIGTERM
+#   off-contract   - a reply that neither starts NONE nor NOTE:, though it
+#                    carries a NOTE: further along
+#
+# COUNCIL_FAKE_BEHAVIOR_<BIN> (CODEX, AGY, CURSOR_AGENT, ...) overrides
+# COUNCIL_FAKE_BEHAVIOR for that one binary, so one test can give two seats
+# different behaviours.
 #
 # Every invocation appends {bin, args} to $COUNCIL_FAKE_STATE_DIR/calls.jsonl
 # so tests can assert exactly what the plugin sent to the CLI.
@@ -57,12 +74,14 @@ install_fake_clis() {
 
 write_fake_cli() {
     local bin="$1"
-    local marker
+    local marker override
     marker="FAKE-$(echo "$bin" | tr '[:lower:]' '[:upper:]')-RESPONSE"
+    override="COUNCIL_FAKE_BEHAVIOR_$(echo "$bin" | tr '[:lower:]-' '[:upper:]_')"
     cat > "$FAKE_BIN_DIR/$bin" <<EOF
 #!/bin/bash
 # Fake $bin CLI: records its invocation, then acts per COUNCIL_FAKE_BEHAVIOR
 set -euo pipefail
+COUNCIL_FAKE_BEHAVIOR="\${$override:-\${COUNCIL_FAKE_BEHAVIOR:-valid}}"
 jq -cn --arg bin "$bin" '{bin: \$bin, args: \$ARGS.positional}' --args -- "\$@" \\
     >> "\${COUNCIL_FAKE_STATE_DIR:?}/calls.jsonl"
 # Version probes succeed regardless of behavior, mirroring real CLIs where
@@ -81,6 +100,42 @@ EOF
 SPILLED=\$(printf '%s\\n' "\$@" | grep -o '[^[:space:]]*council-agy-prompt[^[:space:]]*' | head -1 || true)
 if [[ -n "\${SPILLED:-}" && -f "\$SPILLED" ]]; then
     cp "\$SPILLED" "\${COUNCIL_FAKE_STATE_DIR:?}/spill.txt"
+fi
+EOF
+    fi
+    if [[ "$bin" == "codex" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<'EOF'
+# The heads-up runner's structured call: codex exec --json ... --output-schema
+# SCHEMA -o FILE -. The prompt arrives on stdin (kept for inspection), the
+# answer goes to the -o file and the JSONL events to stdout. The real CLI exits
+# 0 on SIGTERM, so only a turn.completed event says the turn finished.
+if [[ " $* " == *" --output-schema "* ]]; then
+    OUT=""; PREV=""
+    for a in "$@"; do [[ "$PREV" == "-o" ]] && OUT="$a"; PREV="$a"; done
+    cat > "${COUNCIL_FAKE_STATE_DIR:?}/codex-stdin.txt"
+    note='{"none":false,"topic":"backfill never ran","headline":"The migration test used an empty fixture, so the backfill path never ran.","detail":"Seed one row in C:\\fixtures\\empty.db and rerun the migration test."}'
+    case "${COUNCIL_FAKE_BEHAVIOR:-valid}" in
+        heads-up-note|heads-up-slow-note)
+            [[ "$COUNCIL_FAKE_BEHAVIOR" == heads-up-slow-note ]] && sleep "${COUNCIL_FAKE_SLEEP:-5}"
+            echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
+            printf '%s\n' "$note" > "$OUT"
+            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            exit 0 ;;
+        heads-up-none)
+            echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
+            echo '{"none":true,"topic":"","headline":"","detail":""}' > "$OUT"
+            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            exit 0 ;;
+        heads-up-blank)
+            echo '{"none":false,"topic":"","headline":"","detail":""}' > "$OUT"
+            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            exit 0 ;;
+        heads-up-no-turn)
+            echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
+            printf '%s\n' "$note" > "$OUT"
+            echo "codex: interrupted" >&2
+            exit 0 ;;
+    esac
 fi
 EOF
     fi
@@ -267,6 +322,10 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     binary-error)   printf 'Error: caf\\351 broke\\n' >&2; exit 1 ;;
     sandbox-warning) echo "$marker: deterministic answer" ;;
     stdin-echo)     echo "$marker: stdin=[\$(cat)]" ;;
+    heads-up-note)  printf '%s\\n' "NOTE: The retry loop never backs off, so a 429 storm hammers the API." \\
+                        "TOPIC: retry without backoff" "DETAIL: Each retry fires at once; add a growing delay." ;;
+    heads-up-none)  echo "NONE." ;;
+    off-contract)   printf '%s\\n' "Here is a thought worth raising." "NOTE: the retries look off" "TOPIC: retries" ;;
     *)              echo "Unknown COUNCIL_FAKE_BEHAVIOR: \${COUNCIL_FAKE_BEHAVIOR}" >&2; exit 64 ;;
 esac
 EOF
