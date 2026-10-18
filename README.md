@@ -119,6 +119,8 @@ and the [usage guide](docs/USAGE.md) explains each workflow.
   `openrouter-2`).
 - **`claude-cli`** seats Claude Code itself on your subscription, without your
   `CLAUDE.md`, settings or plugins. It joins only when you name it.
+- **`copilot-cli`** seats the GitHub Copilot CLI on your Copilot plan, without
+  your `AGENTS.md` or any tools. It joins only when you name it.
 
 Keys, CLI details, default models and their fallbacks are in the
 [reference](docs/REFERENCE.md#api-keys).
