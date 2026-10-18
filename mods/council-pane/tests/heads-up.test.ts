@@ -70,7 +70,7 @@ test('the avoid list is every seen and known topic once, one per line', () => {
 
 const on: HeadsUpConfig = { enabled: true, seats: ['codex'], every: 6 }
 const inTurn = (messageCount: number): Session => ({ ...FRESH_SESSION, turnBase: { turnId: 't1', messageCount } })
-const note: Note = { id: 'c1', topic: 'Backfill never ran', headline: 'The test ran on an empty DB.', detail: 'So the backfill path was skipped.', seat: 'codex', payloadBytes: 12698, elapsedMs: 27400 }
+const note: Note = { id: 'c1', topic: 'Backfill never ran', headline: 'The test ran on an empty DB.', detail: 'So the backfill path was skipped.', seat: 'codex', model: 'gpt-6.1-sol', payloadBytes: 12698, elapsedMs: 27400 }
 
 test('a step of a new turn records where the turn starts and does not fire there', () => {
   expect(decide(on, FRESH_SESSION, EMPTY_MEMORY, { turnId: 't1', index: 0, messageCount: 10 }, 1000)).toEqual({ kind: 'skip', why: 'off-cadence', session: inTurn(10) })
@@ -104,8 +104,10 @@ test('backoff spends one skipped check per cadence point and hands back the memo
 const codexNone = { seat: 'codex', outcome: 'none', ms: 27400 }
 
 test('a note result reads into the note the band draws, its seat outcomes kept', () => {
-  const text = JSON.stringify({ kind: 'note', bytes: 12698, seat: 'codex', ms: 27400, topic: 'Backfill never ran', headline: 'The test ran on an empty DB.', detail: 'So the backfill path was skipped.', seats: [{ seat: 'codex', outcome: 'note', ms: 27400 }] })
+  const text = JSON.stringify({ kind: 'note', bytes: 12698, seat: 'codex', model: 'gpt-6.1-sol', ms: 27400, topic: 'Backfill never ran', headline: 'The test ran on an empty DB.', detail: 'So the backfill path was skipped.', seats: [{ seat: 'codex', outcome: 'note', ms: 27400 }] })
   expect(parseRunResult('c1', text)).toEqual({ kind: 'note', note, seats: [{ seat: 'codex', outcome: 'note', elapsedMs: 27400 }] })
+  // A runner that names no model leaves it empty; the band then shows the seat alone.
+  expect(parseRunResult('c1', text.replace('"model":"gpt-6.1-sol",', '')).kind).toBe('note')
 })
 
 test('none and failed results keep the payload size and each seat with its reason', () => {
@@ -183,8 +185,9 @@ test('learn expands the note; tell arms the context and closes; knew and dismiss
 test('the band draws the headline, the seat, payload and time, and the detail once expanded', () => {
   expect(bandView({ kind: 'idle' })).toBeNull()
   expect(bandView({ kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1 })).toBeNull()
-  expect(bandView({ kind: 'showing', note, expanded: false })).toEqual({ headline: '✦ Heads up · The test ran on an empty DB.', meta: 'codex · 12.4 KB · 27 s', detail: null })
-  expect(bandView({ kind: 'showing', note, expanded: true })).toEqual({ headline: '✦ Heads up · The test ran on an empty DB.', meta: 'codex · 12.4 KB · 27 s', detail: 'So the backfill path was skipped.' })
+  expect(bandView({ kind: 'showing', note, expanded: false })).toEqual({ headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', detail: null })
+  expect(bandView({ kind: 'showing', note, expanded: true })).toEqual({ headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', detail: 'So the backfill path was skipped.' })
+  expect(bandView({ kind: 'showing', note: { ...note, model: '' }, expanded: false })?.meta).toBe('codex · 12.4 KB · 27 s')
 })
 
 test('every finished check logs one line with its seats, payload and time', () => {

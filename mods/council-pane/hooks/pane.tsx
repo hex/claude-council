@@ -697,7 +697,7 @@ function headsUpRow(
 ) {
   return (
     <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
-      <ui.Text bold wrap="truncate-end">{band.headline}</ui.Text>
+      <ui.Text wrap="wrap"><ui.Text bold color={COLOR.accent}>{'✦ Heads up'}</ui.Text><ui.Text bold>{` · ${band.headline}`}</ui.Text></ui.Text>
       {band.detail !== null && <ui.Text wrap="wrap">{`  ${band.detail}`}</ui.Text>}
       <ui.Box flexDirection="row">
         <ui.Box flexShrink={1}>

@@ -275,10 +275,10 @@ record_seat() {
 write_result() {
     local kind="$1"
     jq -n --arg kind "$kind" --argjson bytes "${BYTES:-0}" --argjson seats "$SEATS_JSON" \
-        --arg seat "${WIN_SEAT:-}" --argjson ms "${WIN_MS:-0}" --arg topic "${TOPIC:-}" \
+        --arg seat "${WIN_SEAT:-}" --arg model "${WIN_MODEL:-}" --argjson ms "${WIN_MS:-0}" --arg topic "${TOPIC:-}" \
         --arg headline "${HEADLINE:-}" --arg detail "${NOTE_DETAIL:-}" --arg failure "${FAILURE:-}" \
         '{kind: $kind, bytes: $bytes}
-         + (if $kind == "note" then {seat: $seat, ms: $ms, topic: $topic, headline: $headline, detail: $detail}
+         + (if $kind == "note" then {seat: $seat, model: $model, ms: $ms, topic: $topic, headline: $headline, detail: $detail}
             elif $failure != "" then {detail: $failure}
             else {} end)
          + {seats: $seats}' > "${RUN_DIR}/result.json.tmp"
@@ -322,7 +322,7 @@ worker() {
         record_seat "$seat" "$OUTCOME" "$ms" "$DETAIL"
         case "$OUTCOME" in
             note)
-                WIN_SEAT="$seat" WIN_MS="$ms"
+                WIN_SEAT="$seat" WIN_MS="$ms" WIN_MODEL="$(get_model "$seat")"
                 write_result note
                 return 0
                 ;;

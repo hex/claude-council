@@ -90,6 +90,7 @@ result() {
 
 @test "heads-up: a codex note wins and result.json carries it" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    export CODEX_MODEL=gpt-test
     start_runner codex,antigravity
     [ "$status" -eq 0 ]
     wait_done
@@ -100,6 +101,8 @@ result() {
     # A backslash in the seat's text arrives single, as the seat wrote it.
     [ "$(result .detail)" = 'Seed one row in C:\fixtures\empty.db and rerun the migration test.' ]
     [ "$(result '.ms | type')" = "number" ]
+    # The model the seat ran, as get_model resolves it, so the band can name it.
+    [ "$(result .model)" = "gpt-test" ]
     [ "$(result '.seats | length')" = "1" ]
     [ "$(result '.seats[0].seat + " " + .seats[0].outcome')" = "codex note" ]
     # First note wins: the second seat is never asked.

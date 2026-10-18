@@ -29,6 +29,8 @@ export type Note = {
   /** Shown on learn more and sent with the next prompt. */
   readonly detail: string
   readonly seat: string
+  /** The model the seat ran, as the runner resolved it; '' when it named none. */
+  readonly model: string
   readonly payloadBytes: number
   readonly elapsedMs: number
 }

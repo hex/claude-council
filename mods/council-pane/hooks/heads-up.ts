@@ -188,7 +188,7 @@ export function parseRunResult(checkId: string, text: string): RunResult {
   const { seat, ms, topic, headline, detail } = raw
   if (typeof seat !== 'string' || !isCount(ms) || typeof topic !== 'string' || typeof headline !== 'string' || typeof detail !== 'string') return unread
   const note: Note = {
-    id: checkId, seat, payloadBytes: raw.bytes, elapsedMs: ms,
+    id: checkId, seat, model: typeof raw.model === 'string' ? raw.model.trim() : '', payloadBytes: raw.bytes, elapsedMs: ms,
     topic: topic.trim().slice(0, TOPIC_CHARS),
     headline: cut(headline.replace(/\s+/g, ' ').trim(), HEADLINE_CHARS),
     detail: detail.trim().slice(0, DETAIL_CHARS),
@@ -253,9 +253,9 @@ export function pressed(s: Session, a: Exclude<Answer, 'typed-past'>): Session {
 
 /** What the band draws; null yields to the next hook. */
 export type BandView = {
-  /** "✦ Heads up · <headline>" */
+  /** The seat's sentence; the row draws the "✦ Heads up" mark ahead of it. */
   readonly headline: string
-  /** "codex · 12.4 KB · 27 s" */
+  /** "codex · gpt-6.1-sol · 12.4 KB · 27 s"; the model is left out when the runner named none. */
   readonly meta: string
   /** Non-null once expanded; the band then offers tell Claude and close instead of the three choices. */
   readonly detail: string | null
@@ -264,8 +264,8 @@ export function bandView(p: Phase): BandView | null {
   if (p.kind !== 'showing') return null
   const { note } = p
   return {
-    headline: `✦ Heads up · ${note.headline}`,
-    meta: `${note.seat} · ${kilobytes(note.payloadBytes)} · ${seconds(note.elapsedMs)}`,
+    headline: note.headline,
+    meta: [note.seat, note.model, kilobytes(note.payloadBytes), seconds(note.elapsedMs)].filter(part => part !== '').join(' · '),
     detail: p.expanded ? note.detail : null,
   }
 }
