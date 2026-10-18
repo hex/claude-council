@@ -37,6 +37,11 @@ discover_providers() {
                 # plugin, so it is seated only when named in --providers or
                 # COUNCIL_PROVIDERS.
                 ;;
+            copilot-cli)
+                # Never discovered: each question bills the Copilot plan, and a
+                # copilot on PATH says nothing about wanting that, so it is
+                # seated only when named in --providers or COUNCIL_PROVIDERS.
+                ;;
             ollama)
                 command -v ollama >/dev/null 2>&1 && is_available=true
                 ;;
@@ -132,6 +137,11 @@ provider_env_scrub() {
         # the seat runs on the claude.ai login rather than billing the API.
         claude-cli)                 families="CLAUDE_CLI_"
                                     exact=",CLAUDE_CODE_OAUTH_TOKEN,CLAUDE_CONFIG_DIR," ;;
+        # COPILOT_GITHUB_TOKEN, COPILOT_HOME and COPILOT_MODEL are the CLI's
+        # own. GH_TOKEN and GITHUB_TOKEN are not passed: copilot reads either
+        # ahead of its stored login, and a shell exports them for gh and git,
+        # not to choose the account a council question bills.
+        copilot-cli)                families="COPILOT_" ;;
         openrouter|openrouter-*)    families="OPENROUTER_" ;;
         *)                          families="$(provider_env_prefix "$provider")_" ;;
     esac
@@ -375,6 +385,9 @@ get_model() {
         # No cli_config_model arm: the seat runs with --setting-sources "", so
         # the model in Claude's settings.json is never what it uses.
         claude-cli) cli_model claude-cli "${CLAUDE_CLI_MODEL:-}" ;;
+        # No cli_config_model arm: a model saved in copilot's settings.json
+        # left a headless run on the CLI's automatic pick.
+        copilot-cli) cli_model copilot-cli "${COPILOT_CLI_MODEL:-}" ;;
         ollama)     echo "${OLLAMA_MODEL:-local}" ;;
         # Pinned rather than an alias for the reason stated above, and pinned to
         # an Anthropic id because that is the one vendor the council otherwise
@@ -475,7 +488,8 @@ provider_color() {
         perplexity)        echo -e "${GREEN:-}" ;;
         kimi|kimi-cli)     echo -e "${BRIGHT_BLACK:-}" ;;
         ollama)            echo -e "${CYAN:-}" ;;
-        openrouter|openrouter-[0-9]*) echo -e "${MAGENTA:-}" ;;
+        # copilot-cli has no sixteen-colour pink, so it shares the router's magenta.
+        openrouter|openrouter-[0-9]*|copilot-cli) echo -e "${MAGENTA:-}" ;;
         *)                 echo -e "${CYAN:-}" ;;
     esac
 }
@@ -495,6 +509,7 @@ provider_color_rgb() {
         kimi|kimi-cli)     printf -v "$__out" '63;63;70'     ;;  # zinc-700
         ollama)            printf -v "$__out" '8;145;178'    ;;  # cyan-600
         claude-cli)        printf -v "$__out" '217;119;87'   ;;  # Claude coral
+        copilot-cli)       printf -v "$__out" '191;57;137'   ;;  # GitHub Primer pink-5
         openrouter|openrouter-[0-9]*) printf -v "$__out" '124;58;237' ;;  # violet-600
         *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
     esac

@@ -35,9 +35,9 @@ setup() {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    # antigravity and kimi-cli have no offline auth probe, so both still count;
+    # antigravity, kimi-cli and copilot-cli have no offline auth probe, so all three still count;
     # codex, grok-cli, cursor-cli and claude-cli probe auth and report unauthed under auth-failure
-    [[ "$output" == *"2/13 providers available"* ]]
+    [[ "$output" == *"3/14 providers available"* ]]
 }
 
 @test "check-status: missing API key shows exact export remediation" {
@@ -98,8 +98,8 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connected"* ]]
-    # 6 API providers + codex + antigravity + grok-cli + kimi-cli + cursor-cli + claude-cli + ollama, all healthy
-    [[ "$output" == *"13/13 providers available"* ]]
+    # 6 API providers + codex + antigravity + grok-cli + kimi-cli + cursor-cli + claude-cli + copilot-cli + ollama, all healthy
+    [[ "$output" == *"14/14 providers available"* ]]
 }
 
 @test "check-status: the footer total equals the number of provider rows printed" {
@@ -130,8 +130,8 @@ setup() {
     # Every API provider must classify 401, not just whichever one happens to be
     # first: a substring match alone cannot tell six rows from one.
     [ "$(auth_failures "$output")" -eq 6 ]
-    # Only the seven local providers remain (codex, antigravity, grok-cli, kimi-cli, cursor-cli, claude-cli, ollama)
-    [[ "$output" == *"7/13 providers available"* ]]
+    # Only the eight local providers remain (codex, antigravity, grok-cli, kimi-cli, cursor-cli, claude-cli, copilot-cli, ollama)
+    [[ "$output" == *"8/14 providers available"* ]]
 }
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
@@ -154,7 +154,7 @@ setup() {
     [[ "$output" == *"Error (HTTP 500)"* ]]
     # A server-side fault is not a credentials problem
     [ "$(auth_failures "$output")" -eq 0 ]
-    [[ "$output" == *"7/13 providers available"* ]]
+    [[ "$output" == *"8/14 providers available"* ]]
 }
 
 @test "check-status: curl failure (000) reports a connection timeout" {
@@ -163,7 +163,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]
-    [[ "$output" == *"7/13 providers available"* ]]
+    [[ "$output" == *"8/14 providers available"* ]]
 }
 
 # Gemini and xAI answer a rejected key with 400 rather than a 401, so the status
@@ -292,6 +292,23 @@ setup() {
     [[ "$output" == *"install Claude Code (claude)"* ]]
 }
 
+@test "check-status: copilot-cli row says how to seat it, and a missing copilot names what to install" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')" == *"Copilot CLI   ✓  Connected"*"--providers=copilot-cli"* ]]
+    rm "$FAKE_BIN_DIR/copilot"
+    # Drop only the directory a real copilot lives in, so jq and bash stay
+    # reachable; on a machine without one the PATH is left alone.
+    local real_dir clean
+    real_dir=$(dirname "$(command -v copilot 2>/dev/null)" 2>/dev/null || true)
+    clean=$PATH
+    [[ -n "$real_dir" ]] && clean=$(echo "$PATH" | tr ':' '\n' | grep -vxF -- "$real_dir" | paste -sd: -)
+    run bash -c "export PATH='$clean'; bash '$SCRIPT'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"install the GitHub Copilot CLI (copilot)"* ]]
+}
+
 @test "check-status: a missing cursor-agent names the binary to install" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     rm "$FAKE_BIN_DIR/cursor-agent"
@@ -331,10 +348,10 @@ setup() {
     plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
     [[ "$plain" == *"OpenAI        ✗  Inference blocked (HTTP 429)"*"fix: check the account's billing or credits"* ]]
     # Only OpenAI's body carries OpenAI's marker; the other three read it as a
-    # plain 429. Perplexity, OpenRouter and the seven CLIs stay available.
+    # plain 429. Perplexity, OpenRouter and the eight CLIs stay available.
     [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked' || true)" -eq 1 ]
     [ "$(printf '%s\n' "$plain" | grep -c 'Rate limited (HTTP 429)' || true)" -eq 3 ]
-    [[ "$plain" == *"9/13 providers available"* ]]
+    [[ "$plain" == *"10/14 providers available"* ]]
 }
 
 @test "check-status: OpenAI credit_balance_exhausted reports inference blocked" {
@@ -382,7 +399,7 @@ setup() {
     plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
     [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked (HTTP 402)' || true)" -eq 4 ]
     [[ "$plain" == *"Perplexity    ✓  Connected"* ]]
-    [[ "$plain" == *"9/13 providers available"* ]]
+    [[ "$plain" == *"10/14 providers available"* ]]
 }
 
 @test "check-status: an inference answer the probe does not recognise reads Connected, inference unverified" {
@@ -396,7 +413,7 @@ setup() {
     # The key works, so the provider still counts; the row says what is unproven.
     [ "$(printf '%s\n' "$plain" | grep -c 'Connected .*inference unverified (HTTP 400)' || true)" -eq 4 ]
     [[ "$plain" == *"OpenAI        ✓  Connected ("*"ms)"*"· inference unverified (HTTP 400)"* ]]
-    [[ "$plain" == *"13/13 providers available"* ]]
+    [[ "$plain" == *"14/14 providers available"* ]]
     [[ "$plain" != *"Inference blocked"* ]]
 }
 

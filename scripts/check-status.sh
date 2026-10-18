@@ -349,6 +349,8 @@ remediation_for() {
         cursor-cli:unauthed)  echo "cursor-agent login" ;;
         claude-cli:no_binary) echo "install Claude Code (claude)" ;;
         claude-cli:unauthed)  echo "claude auth login" ;;
+        copilot-cli:no_binary) echo "install the GitHub Copilot CLI (copilot)" ;;
+        copilot-cli:unauthed) echo "copilot login" ;;
         ollama:no_binary)     echo "install Ollama (ollama.com)" ;;
         ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;
@@ -395,6 +397,10 @@ cursorcli_status=$(check_cli_provider "cursor-cli" "cursor-agent" status)
 # so a healthy row says how to.
 claudecli_status=$(provider_env_scrub claude-cli; check_cli_provider "claude-cli" "claude" auth status)
 [[ "$claudecli_status" == ok:* ]] && claudecli_status="${claudecli_status} · seat with --providers=claude-cli"
+# copilot has no auth status command, and a logged-in prompt run bills the
+# plan, so like agy it stays a single-tier check. Discovery never seats it.
+copilotcli_status=$(check_cli_provider "copilot-cli" "copilot")
+[[ "$copilotcli_status" == ok:* ]] && copilotcli_status="${copilotcli_status} · seat with --providers=copilot-cli"
 ollama_status=$(check_cli_provider "ollama" "ollama" list)
 
 # Format output
@@ -534,6 +540,7 @@ fi
 format_status "Kimi CLI" "kimi-cli" "$kimicli_status"
 format_status "Cursor CLI" "cursor-cli" "$cursorcli_status"
 format_status "Claude CLI" "claude-cli" "$claudecli_status"
+format_status "Copilot CLI" "copilot-cli" "$copilotcli_status"
 format_status "Ollama" "ollama" "$ollama_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
 format_status "Antigravity" "antigravity" "$antigravity_status"
@@ -552,6 +559,7 @@ echo ""
 [[ "$kimicli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$cursorcli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$claudecli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$copilotcli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$ollama_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))
