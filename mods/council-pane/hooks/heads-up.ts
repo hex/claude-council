@@ -113,7 +113,7 @@ export function avoidList(m: Memory): string {
   return topics.map(topic => `${topic}\n`).join('')
 }
 
-export const FRESH_SESSION: Session = { turnBase: null, offeredTurn: null, phase: { kind: 'idle' }, pendingContext: null }
+export const FRESH_SESSION: Session = { turnBase: null, offeredTurn: null, phase: { kind: 'idle' } }
 
 /** What turn.step carries that the rules read: the turn, and the conversation's message count at this step. */
 export type StepFacts = { turnId: string; index: number; messageCount: number }
@@ -247,13 +247,12 @@ export function typedPast(s: Session): Session {
 }
 
 /**
- * A press. learn: the band expands and stays; tell: the context is armed and
- * the band closes; knew, dismiss and a close from the expanded band: idle.
+ * A press. learn: the band expands and stays; tell, knew, dismiss and a close
+ * from the expanded band: idle. The shell puts tell's draft in the prompt box.
  */
 export function pressed(s: Session, a: Exclude<Answer, 'typed-past'>): Session {
   if (s.phase.kind !== 'showing') return s
   if (a === 'learn') return { ...s, phase: { ...s.phase, expanded: true } }
-  if (a === 'tell') return { ...s, phase: { kind: 'idle' }, pendingContext: learnMoreContext(s.phase.note) }
   return { ...s, phase: { kind: 'idle' } }
 }
 
@@ -292,10 +291,13 @@ export function checkLine(r: RunResult): string {
   return `heads-up: failed · ${kilobytes(r.payloadBytes)} · ${reasons.join('; ')}`
 }
 
-/** "The user opened a side-check note (from codex, not from you): <headline>\n<detail>" */
-export function learnMoreContext(n: Note): string {
-  const opened = `The user opened a side-check note (from ${n.seat}, not from you): ${n.headline}`
-  return n.detail === '' ? opened : `${opened}\n${n.detail}`
+/**
+ * The draft tell Claude puts in the prompt box, for the person to send or
+ * edit: the main agent learns of a note only through the person's own prompt.
+ */
+export function tellClaudeDraft(n: Note): string {
+  const raised = `A side check by ${n.seat} (not you) raised this: ${n.headline}`
+  return `${n.detail === '' ? raised : `${raised} ${n.detail}`} What do you make of it?`
 }
 
 /** "12.4 KB" style, one decimal. */

@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, learnMoreContext, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('a missing file is off with nothing to report', () => {
@@ -179,10 +179,10 @@ test('typing past a shown note takes it down; with none shown nothing changes', 
   expect(typedPast(checking)).toBe(checking)
 })
 
-test('learn expands the note; tell arms the context and closes; knew and dismiss close', () => {
+test('learn expands the note; tell, knew and dismiss close it', () => {
   const showing: Session = { ...inTurn(10), phase: { kind: 'showing', note, expanded: false } }
   expect(pressed(showing, 'learn')).toEqual({ ...showing, phase: { kind: 'showing', note, expanded: true } })
-  expect(pressed({ ...showing, phase: { kind: 'showing', note, expanded: true } }, 'tell')).toEqual({ ...showing, phase: { kind: 'idle' }, pendingContext: 'The user opened a side-check note (from codex, not from you): The test ran on an empty DB.\nSo the backfill path was skipped.' })
+  expect(pressed({ ...showing, phase: { kind: 'showing', note, expanded: true } }, 'tell')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(showing, 'knew')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(showing, 'dismiss')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(checking, 'dismiss')).toBe(checking)
@@ -205,9 +205,9 @@ test('every finished check logs one line with its seats, payload and time', () =
     .toBe('heads-up: failed · 0.9 KB · codex timeout after 60 s; gemini error after 1 s: exit 1: quota')
 })
 
-test('the tell-Claude context names the seat and leaves out an empty detail', () => {
-  expect(learnMoreContext(note)).toBe('The user opened a side-check note (from codex, not from you): The test ran on an empty DB.\nSo the backfill path was skipped.')
-  expect(learnMoreContext({ ...note, detail: '' })).toBe('The user opened a side-check note (from codex, not from you): The test ran on an empty DB.')
+test('the tell-Claude draft quotes the note for the person to send, naming the seat', () => {
+  expect(tellClaudeDraft(note)).toBe('A side check by codex (not you) raised this: The test ran on an empty DB. So the backfill path was skipped. What do you make of it?')
+  expect(tellClaudeDraft({ ...note, detail: '' })).toBe('A side check by codex (not you) raised this: The test ran on an empty DB. What do you make of it?')
 })
 
 test('kilobytes reads to one decimal', () => {

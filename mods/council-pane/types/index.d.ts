@@ -8,8 +8,6 @@ export type Session = {
   /** The turn a note was offered in; at most one note per turn. */
   readonly offeredTurn: string | null
   readonly phase: Phase
-  /** Tell-Claude text armed for the person's next prompt; cleared when it goes. */
-  readonly pendingContext: string | null
 }
 
 /** A check in flight and a note on screen cannot both be true: the union says so. */

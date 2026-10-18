@@ -3,10 +3,10 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren } from 'claude-code'
 import {
-  applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, typedPast,
+  applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
   type Answer, type BandView, type Memory, type RunResult,
 } from './heads-up'
-import type { Session } from '../types'
+import type { Note, Session } from '../types'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
 import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice, progressBand } from './notices'
 import { paneOptions, type PaneOptions } from './options'
@@ -661,26 +661,31 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, now: number): P
 }
 
 // A press on the band: the session moves, and the shown topic is recorded.
+// Tell Claude puts a draft in the prompt box, as the builtin does, so the
+// person sees what Claude will get and sends it themselves; nothing is hidden
+// and nothing is sent. A box that cannot take it (a dialog up, headless) is
+// reported once, since the note is gone by then.
 async function pressHeadsUp($: EngineInterface, answer: Exclude<Answer, 'typed-past'>): Promise<void> {
-  const shown: { topic?: string } = {}
+  const shown: { note?: Note } = {}
   await update($, headsUp, s => {
-    shown.topic = s.phase.kind === 'showing' ? s.phase.note.topic : undefined
+    shown.note = s.phase.kind === 'showing' ? s.phase.note : undefined
     return pressed(s, answer)
   })
-  if (shown.topic !== undefined) await recordAnswer($, shown.topic, answer)
+  if (shown.note === undefined) return
+  await recordAnswer($, shown.note.topic, answer)
+  if (answer !== 'tell') return
+  const filled = await $.prompt.fill({ text: tellClaudeDraft(shown.note), mode: 'replace' })
+  if (!filled.isFilled) throw new Error(`the prompt box did not take the note: ${tellClaudeDraft(shown.note)}`)
 }
 
-// The person's own prompt: a shown note is typed past, and an armed
-// tell-Claude text goes with this prompt and no other.
-async function personSubmitted($: EngineInterface): Promise<string | null> {
-  const seen: { topic?: string; context: string | null } = { context: null }
+// The person's own prompt while a note shows: it is typed past.
+async function personSubmitted($: EngineInterface): Promise<void> {
+  const seen: { topic?: string } = {}
   await update($, headsUp, s => {
     seen.topic = s.phase.kind === 'showing' ? s.phase.note.topic : undefined
-    seen.context = s.pendingContext
-    return { ...typedPast(s), pendingContext: null }
+    return typedPast(s)
   })
   if (seen.topic !== undefined) await recordAnswer($, seen.topic, 'typed-past')
-  return seen.context
 }
 
 function headsUpPresses($: EngineInterface, state: PaneState): Record<Exclude<Answer, 'typed-past'>, () => void> {
@@ -1060,13 +1065,11 @@ export const register: Register = (on, options) => {
     return yield* response
   })
 
-  // Only the person's own prompt types past a note or carries the
-  // tell-Claude text; a plugin's submit or a notification does neither.
+  // Only the person's own prompt types past a note; a plugin's submit or a
+  // notification does not.
   on('prompt.submit', async ($, e, next) => {
-    if (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') return next(e)
-    const armed: { context: string | null } = { context: null }
-    await logFailure($, state, async () => { armed.context = await personSubmitted($) }, 'heads-up')
-    return next(armed.context === null ? e : { ...e, context: [...(e.context ?? []), armed.context] })
+    if (e.origin.kind === 'composer' || e.origin.kind === 'bridge') await logFailure($, state, () => personSubmitted($), 'heads-up')
+    return next(e)
   })
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {

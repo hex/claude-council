@@ -26,7 +26,7 @@ During a long turn, above the prompt:
   codex · gpt-6.1-sol · 12.4 KB · 27 s      1: Learn more   2: Knew this already   0: Dismiss
 ```
 
-- `1` expands the band to the seat's detail (up to 600 characters). The expanded band offers `1 · tell Claude` and `0 · close`; only `tell Claude` arms a one-shot context, so the person's next prompt carries "The user opened a side-check note (from codex, not from you): <headline and detail>" and the main agent learns of it exactly when the person next speaks. Reading the detail alone tells Claude nothing, and nothing is submitted on the person's behalf.
+- `1` expands the band to the seat's detail (up to 600 characters). The expanded band offers `1 · tell Claude` and `0 · close`; `tell Claude` puts a draft quoting the note in the prompt box ("A side check by codex (not you) raised this: <headline> <detail> What do you make of it?"), as the builtin does, and the person sends or edits it. Reading the detail alone tells Claude nothing, and nothing is submitted on the person's behalf.
 - `2` records the topic as known; `0` as seen. Both are fed back so no seat raises it again.
 - Typing a prompt while a note is up is typing past it: the next `typedPastInARow` checks are skipped. Any press resets the counter.
 
@@ -45,7 +45,7 @@ on('turn.step', async ($, e, next) => {
 // AbovePrompt, after finished and retry, before the specialist and progress bands:
 //   const band = bandView((await $.state.get(HEADS_UP)).value?.phase)   // a render read subscribes the band
 //   if (band) return headsUpRow(ui, band, presses)
-// prompt.submit (composer | bridge): typed past while showing; the one-shot tell-Claude context
+// prompt.submit (composer | bridge): typed past while showing| bridge): typed past while showing; the one-shot tell-Claude context
 ```
 
 `$.state` owns `Session`; nothing in the closure mirrors it. Events and presses write it, the render reads it, and a read during a render subscribes that render, so no `$.ui.invalidate` call is needed for the band.
@@ -57,7 +57,7 @@ Data first. Three owners and nothing else:
 | State | Owner | Where | Why |
 |---|---|---|---|
 | `Memory` {seen, known, typedPastInARow, looksToSkip} | `applyAnswer` | `$.store['heads-up']` | crosses sessions like the builtin; lists capped at 50, counters global like the builtin |
-| `Session` {turnBase, offeredTurn, phase, pendingContext} | pane shell via `decide` and `settle` | `$.state` (`PluginState['claude-council']['headsUp']`) | per session, survives hot reload; `phase` is a tagged union so "checking and showing at once" cannot be represented |
+| `Session` {turnBase, offeredTurn, phase} | pane shell via `decide` and `settle` | `$.state` (`PluginState['claude-council']['headsUp']`) | per session, survives hot reload; `phase` is a tagged union so "checking and showing at once" cannot be represented |
 | run files | `scripts/heads-up.sh` | `council-mod.<sid>/heads-up/<checkId>/` | detached worker output; `result.json` written to a temp name and moved, `.done` last |
 
 Flow: `turn.step` on main → `decide` (pure) → `launch` writes `avoid.txt`, forks `heads-up.sh --session <id>` → the worker resolves the transcript with `session-transcript.sh`, builds the digest with `transcript-digest.sh --tool-results`, asks seats in order → `result.json` + `.done` → the pane's poll timer (started lazily) → `parseRunResult` (the only place the wire shape is read) → `settle` → `bandView` → row.
@@ -71,7 +71,7 @@ Load-bearing decisions:
 - **Codex NONE is structural: a direct `codex exec --json --output-schema` inside the runner, prompt on stdin, success gated on a `turn.completed` event** (codex exits 0 on SIGTERM). The schema `{none, topic, headline, detail}` is strict-required. Other seats get a first-line `NONE` / `NOTE:` + `TOPIC:` + `DETAIL:` contract and the builtin's NONE regex; an off-contract reply is an error, never shown. The shared `providers/codex.sh` is untouched: a schema mode there would be a second way to call codex for one caller.
 - **The seat list has one owner: `provider_allowlisted` in `lib/providers.sh`, derived from the registry the library already holds (a plain-word name whose `providers/<name>.sh` exists), not a third hand-written list.** `stop-review-gate.sh` moves onto it in this change. TypeScript checks only the name's shape (`^[a-z][a-z0-9-]+$`, so a name cannot carry a path) and never holds the list.
 - **Errors fail open, reported once.** A seat timeout or error moves to the next seat; all seats failing writes `kind: failed` with each reason, which the pane logs through `logFailure`. The band never nags about infrastructure. Deadlines: 60 s per seat, 180 s per run, counted in ticks of `sleep 1`, never `$((SECONDS+N))`.
-- **Learn more expands in place; tell Claude arms a one-shot `prompt.submit` context.** Two presses, because reading more and telling Claude are different decisions. `$.prompt.submit` would start a turn the person did not ask for; `prompt.fill` would overwrite their draft. A `prompt.submit` hook adding `context` (index.d.ts:2967) hands the model text with the person's next prompt, which is the promise: the main agent learns of a note only through the person.
+- **Learn more expands in place; tell Claude fills the prompt box.** Two presses, because reading more and telling Claude are different decisions. `$.prompt.submit` would start a turn the person did not ask for, and a hidden `prompt.submit` context vanished without a trace when pressed (seen live). `$.prompt.fill` puts a draft the person can read, edit and send, which is the builtin's behaviour and the promise: the main agent learns of a note only through the person.
 - **Typed past = a `prompt.submit` whose `origin.kind` is `composer` or `bridge` while a note shows.** This plugin's own submits and continuation turns do not count. Turn end alone does not either: the person may not have looked yet.
 - **Band priority: after finished and retry, before the specialist and progress bands.** A note is one row and time-sensitive; the progress bands return when it is answered. Controls carry full-strength hotkey labels, no `dimColor`.
 - **Settings: the file only.** A userConfig row would be a second switch, and `$.config.set` reloads the module.
