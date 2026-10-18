@@ -231,15 +231,17 @@ check_provider() {
             ;;
         perplexity)
             # Perplexity has no /models endpoint, so auth can only be probed with
-            # a (billable) chat request. The API rejects anything under 16 output
-            # tokens, so 16 is as close to free as the status check can get.
+            # a (billable) Agent API request. A bare perplexity/sonar with no
+            # tools runs no web search (~$0.00004 against ~$0.0012 for a preset,
+            # measured 2026-10-19), and 16 output tokens was the old API's floor.
+            # The body is kept: a 403 can name a cause other than the key.
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
                 -X POST \
                 --config "$cfg" \
                 -H "Content-Type: application/json" \
-                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":16}' \
-                "https://api.perplexity.ai/chat/completions" 2>/dev/null || true)
+                -d '{"model":"perplexity/sonar","input":"hi","max_output_tokens":16}' \
+                "https://api.perplexity.ai/v1/agent" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
     esac
@@ -254,7 +256,19 @@ check_provider() {
     if [[ "$http_code" == "400" ]] && rejected_key "$name" "$body_file"; then
         rejected=1
     fi
+    # Perplexity marks a bad key invalid_api_key; a 403 with any other error type
+    # (chat_completions_not_available for a retired endpoint) is not the key's fault.
+    local other_403=0
+    if [[ "$name" == perplexity && "$http_code" == "403" ]] \
+        && jq -e 'try ((.error.type | type) == "string" and .error.type != "invalid_api_key") catch false' \
+            "$body_file" >/dev/null 2>&1; then
+        other_403=1
+    fi
     rm -f "$body_file"
+    if (( other_403 )); then
+        echo "error:403"
+        return
+    fi
     if (( rejected )); then
         # This branch only runs on 400, so report it under the code the vendor sent
         echo "auth_error:400"

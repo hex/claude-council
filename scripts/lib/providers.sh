@@ -382,7 +382,7 @@ get_model() {
         openai)     echo "${OPENAI_MODEL:-gpt-6-astra}" ;;
         grok)       echo "${GROK_MODEL:-grok-latest}" ;;
         grok-cli)   cli_model grok-cli "${GROK_CLI_MODEL:-}" ;;
-        perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
+        perplexity) echo "${PERPLEXITY_MODEL:-low}" ;;
         codex)      cli_model codex "${CODEX_MODEL:-}" ;;
         antigravity) cli_model antigravity "${ANTIGRAVITY_MODEL:-}" ;;
         kimi)       echo "${KIMI_MODEL:-kimi-k3}" ;;

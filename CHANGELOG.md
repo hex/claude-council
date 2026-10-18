@@ -4,6 +4,12 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixes
+- The Perplexity seat works again. Sonar Chat Completions ended on 2026-09-27, so `/chat/completions` answered every request with 403 `chat_completions_not_available`. The seat now posts to the Agent API (`/v1/agent`) with the `web_search` tool, and `PERPLEXITY_MODEL` takes a preset (`fast`, `low`, `medium`, `high`, `xhigh`) or a `provider/model` id. The default is `low` and the fallback `fast`, Perplexity's own mapping for `sonar-reasoning-pro` and `sonar-pro`; an old `sonar-*` value is refused by the API with its own error. `temperature` is no longer sent.
+- `/claude-council:status` probes Perplexity on the Agent API with `perplexity/sonar` and no tools (about $0.00004 a check), and a Perplexity 403 whose body names a cause other than `invalid_api_key` reads `Error (HTTP 403)` instead of telling you to regenerate a working key.
+
 ## 2026.10.5
 
 ### Features

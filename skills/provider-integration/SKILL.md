@@ -26,7 +26,7 @@ Each provider is a shell script in `scripts/providers/` that:
 | Gemini | `GEMINI_API_KEY` | gemini-flash-latest |
 | OpenAI | `OPENAI_API_KEY` | gpt-6-astra |
 | Grok | `XAI_API_KEY` (or `GROK_API_KEY`) | grok-latest |
-| Perplexity | `PERPLEXITY_API_KEY` | sonar-reasoning-pro |
+| Perplexity | `PERPLEXITY_API_KEY` | low (Agent API preset) |
 | Kimi | `KIMI_API_KEY` | kimi-k3 |
 | Ollama | none (local) | first model `ollama list` shows |
 | OpenRouter | `OPENROUTER_API_KEY` | anthropic/claude-fable-5.1 (or one seat per `OPENROUTER_MODELS` entry) |

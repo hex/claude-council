@@ -130,7 +130,7 @@ run_provider_with_prompt_file() {
 }
 
 @test "perplexity: a large prompt never reaches jq's argv" {
-    FAKE_BODY='{"choices":[{"message":{"content":"PPLX_OK"}}]}'
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPLX_OK"}]}]}'
     run_provider_with_prompt_file perplexity.sh PERPLEXITY_API_KEY=k
     [ "$status" -eq 0 ]
     [ "$output" = "PPLX_OK" ]
@@ -176,7 +176,7 @@ run_provider_with_prompt_file() {
     for spec in "gemini.sh:GEMINI_API_KEY:{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"   \"}]}}]}" \
                 "openai.sh:OPENAI_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}" \
                 "grok.sh:GROK_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}" \
-                "perplexity.sh:PERPLEXITY_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}" \
+                "perplexity.sh:PERPLEXITY_API_KEY:{\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"   \"}]}]}" \
                 "kimi.sh:KIMI_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}" \
                 "openrouter.sh:OPENROUTER_API_KEY:{\"choices\":[{\"message\":{\"content\":\"   \"}}]}"; do
         local script="${spec%%:*}" rest="${spec#*:}"
@@ -251,7 +251,7 @@ run_provider_with_image() {
 }
 
 @test "perplexity: the image base64 never reaches jq's argv" {
-    FAKE_BODY='{"choices":[{"message":{"content":"PPX_OK"}}]}'
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}]}'
     run_provider_with_image perplexity.sh PERPLEXITY_API_KEY=k
     [ "$status" -eq 0 ]
     grep -qF "$IMAGE_LEAK_MARK" "$DATA_FILE"
@@ -261,7 +261,7 @@ run_provider_with_image() {
 @test "perplexity: the image base64 stays off argv with a recency filter set" {
     # The recency branch builds a second, separate payload; the two-hop leak was
     # in the shared content build, but only one branch was ever exercised.
-    FAKE_BODY='{"choices":[{"message":{"content":"PPX_OK"}}]}'
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}]}'
     run_provider_with_image perplexity.sh PERPLEXITY_API_KEY=k PERPLEXITY_RECENCY=week
     [ "$status" -eq 0 ]
     grep -qF "$IMAGE_LEAK_MARK" "$DATA_FILE"
@@ -418,10 +418,51 @@ run_provider_with_image() {
 }
 
 @test "perplexity: extracts content and surfaces errors" {
-    FAKE_BODY='{"choices":[{"message":{"content":"PPX_OK"}}]}'
+    FAKE_BODY='{"output":[{"type":"search_results","results":[]},{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}]}'
     run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k
     [ "$status" -eq 0 ]
     [ "$output" = "PPX_OK" ]
+}
+
+# Sonar Chat Completions ended 2026-09-27: /chat/completions now answers 403
+# chat_completions_not_available, and the Agent API rejects the old sonar-* model
+# ids. The seat posts to /v1/agent and names a preset (or a provider/model id).
+@test "perplexity: posts a preset to the Agent API with web search on" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k
+    [ "$status" -eq 0 ]
+    grep -qxF 'https://api.perplexity.ai/v1/agent' "$ARGV_FILE"
+    [ "$(jq -r '.preset' "$DATA_FILE")" = "low" ]
+    [ "$(jq -r 'has("model")' "$DATA_FILE")" = "false" ]
+    [ "$(jq -r '.input' "$DATA_FILE")" = "hi" ]
+    [ -n "$(jq -r '.instructions // empty' "$DATA_FILE")" ]
+    [ "$(jq -r '.tools[0].type' "$DATA_FILE")" = "web_search" ]
+    # Reasoning presets share the output budget with their thinking, as sonar-reasoning-pro did
+    [ "$(jq -r '.max_output_tokens' "$DATA_FILE")" -ge 32768 ]
+}
+
+@test "perplexity: a provider/model id is sent as model, not preset" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k PERPLEXITY_MODEL=perplexity/sonar COUNCIL_MAX_TOKENS=2048
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.model' "$DATA_FILE")" = "perplexity/sonar" ]
+    [ "$(jq -r 'has("preset")' "$DATA_FILE")" = "false" ]
+    [ "$(jq -r '.max_output_tokens' "$DATA_FILE")" = "2048" ]
+}
+
+@test "perplexity: the recency filter rides on the web_search tool" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k PERPLEXITY_RECENCY=week
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.tools[0].filters.search_recency_filter' "$DATA_FILE")" = "week" ]
+    [ "$(jq -r 'has("search_recency_filter")' "$DATA_FILE")" = "false" ]
+}
+
+@test "perplexity: joins every output_text part of the message item" {
+    FAKE_BODY='{"output":[{"type":"search_results","results":[]},{"type":"message","content":[{"type":"output_text","text":"PART1 "},{"type":"output_text","text":"PART2"}]}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "PART1 PART2" ]
 }
 
 # ---- secret + payload hygiene (findings #14, #6, #4 provider hop) ----
@@ -451,7 +492,7 @@ run_provider_with_image() {
 }
 
 @test "perplexity: bearer key never appears in the process argv" {
-    FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"x"}]}]}'
     run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=SEKRET_PPX
     [ "$status" -eq 0 ]
     run ! grep -qF "SEKRET_PPX" "$ARGV_FILE"
@@ -519,8 +560,8 @@ run_provider_with_image() {
     grep -qF 'data:image/png;base64,QUJD' "$DATA_FILE"
 }
 
-@test "perplexity: injects image_url object when given an image" {
-    FAKE_BODY='{"choices":[{"message":{"content":"ok"}}]}'
+@test "perplexity: injects an input_image part when given an image" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}'
     local bf="${BATS_TEST_TMPDIR}/b64"; printf 'QUJD' > "$bf"
     run --separate-stderr env PATH="${FAKE_DIR}:$PATH" \
         FAKE_ARGV_FILE="$ARGV_FILE" FAKE_CONFIG_FILE="$CONFIG_FILE" \
@@ -528,12 +569,13 @@ run_provider_with_image() {
         COUNCIL_RETRY_DELAY=0 PERPLEXITY_API_KEY=k \
         bash "$PROVIDERS/perplexity.sh" "hi" --image-file "$bf" --image-mime image/png
     [ "$status" -eq 0 ]
-    grep -qF 'image_url' "$DATA_FILE"
-    grep -qF 'data:image/png;base64,QUJD' "$DATA_FILE"
+    [ "$(jq -r '.input[0].content[0].text' "$DATA_FILE")" = "hi" ]
+    [ "$(jq -r '.input[0].content[1].type' "$DATA_FILE")" = "input_image" ]
+    [ "$(jq -r '.input[0].content[1].image_url' "$DATA_FILE")" = "data:image/png;base64,QUJD" ]
 }
 
-@test "perplexity: injects image_url object with a recency filter set" {
-    FAKE_BODY='{"choices":[{"message":{"content":"ok"}}]}'
+@test "perplexity: injects an input_image part with a recency filter set" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}'
     local bf="${BATS_TEST_TMPDIR}/b64"; printf 'QUJD' > "$bf"
     run --separate-stderr env PATH="${FAKE_DIR}:$PATH" \
         FAKE_ARGV_FILE="$ARGV_FILE" FAKE_CONFIG_FILE="$CONFIG_FILE" \
@@ -541,9 +583,8 @@ run_provider_with_image() {
         COUNCIL_RETRY_DELAY=0 PERPLEXITY_API_KEY=k PERPLEXITY_RECENCY=week \
         bash "$PROVIDERS/perplexity.sh" "hi" --image-file "$bf" --image-mime image/png
     [ "$status" -eq 0 ]
-    grep -qF 'image_url' "$DATA_FILE"
-    grep -qF 'data:image/png;base64,QUJD' "$DATA_FILE"
-    grep -qF 'search_recency_filter' "$DATA_FILE"
+    [ "$(jq -r '.input[0].content[1].image_url' "$DATA_FILE")" = "data:image/png;base64,QUJD" ]
+    [ "$(jq -r '.tools[0].filters.search_recency_filter' "$DATA_FILE")" = "week" ]
 }
 
 @test "provider_vision_capable: kimi reads images on its default model" {

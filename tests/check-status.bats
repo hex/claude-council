@@ -146,6 +146,31 @@ setup() {
     [ "$(auth_failures "$output")" -eq 6 ]
 }
 
+# Perplexity answers a bad key with 401 invalid_api_key. Its 403 for a retired
+# endpoint names the cause in the body, and "regenerate it" would send the user
+# after a key that works (seen 2026-10-19 on /chat/completions).
+@test "check-status: a Perplexity 403 that is not about the key is a plain error" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=403
+    export COUNCIL_FAKE_HTTP_BODY='{"error":{"message":"Sonar is now the Agent API.","type":"chat_completions_not_available","code":403}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
+    # The other five API rows keep their auth reading of a bare 403
+    [ "$(auth_failures "$output")" -eq 5 ]
+}
+
+@test "check-status: a Perplexity 403 that names the key stays an auth failure" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=403
+    export COUNCIL_FAKE_HTTP_BODY='{"error":{"message":"Invalid API key provided.","type":"invalid_api_key","code":403}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ "$(auth_failures "$output")" -eq 6 ]
+}
+
 @test "check-status: HTTP 500 reports a generic error with the code" {
     shadow_curl
     export COUNCIL_FAKE_HTTP_CODE=500
