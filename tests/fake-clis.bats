@@ -1115,6 +1115,93 @@ $off" ]
 }
 
 # ============================================================================
+# copilot-cli.sh against the fake binary
+# ============================================================================
+
+@test "fixture: fake copilot shadows any real copilot on PATH" {
+    run command -v copilot
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$FAKE_BIN_DIR/copilot" ]]
+}
+
+@test "copilot-cli.sh: returns the answer from the assistant message event" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-COPILOT-RESPONSE: deterministic answer" ]
+}
+
+@test "copilot-cli.sh: runs a headless session with no tools, instructions, GitHub MCP server or update" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COPILOT_ALLOW_ALL=true
+    unset COPILOT_CLI_MODEL
+    # The fake keeps its environment so the test can see what the CLI was handed.
+    printf '#!/bin/bash\nenv > "%s/copilot-env.txt"\nexec "%s/copilot.real" "$@"\n' \
+        "$COUNCIL_FAKE_STATE_DIR" "$FAKE_BIN_DIR" > "$FAKE_BIN_DIR/copilot.wrap"
+    mv "$FAKE_BIN_DIR/copilot" "$FAKE_BIN_DIR/copilot.real"
+    mv "$FAKE_BIN_DIR/copilot.wrap" "$FAKE_BIN_DIR/copilot"
+    chmod +x "$FAKE_BIN_DIR/copilot"
+    run "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    # The whole argument list, so a flag lost in quoting fails here instead of
+    # shifting every other one.
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
+      '["--output-format","json","--no-auto-update","--no-custom-instructions","--disable-builtin-mcps","--available-tools=none"]' ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"test prompt"* ]]
+    # COPILOT_ALLOW_ALL=true would trust the working directory and run its hooks.
+    run grep -c '^COPILOT_ALLOW_ALL=' "$COUNCIL_FAKE_STATE_DIR/copilot-env.txt"
+    [ "$output" = "0" ]
+}
+
+@test "copilot-cli.sh: a prompt past the argument limit still reaches the CLI whole" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    big_prompt 300000 > "$pf"
+    run "${PROVIDERS_DIR_REAL}/copilot-cli.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [ "$(wc -c < "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" -gt 300000 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -c)" -lt 1000 ]
+}
+
+@test "copilot-cli.sh: passes --model only when COPILOT_CLI_MODEL is set" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    export COPILOT_CLI_MODEL=example-model
+    run "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("--model") as $i | .[$i+1]')" = "example-model" ]
+}
+
+@test "copilot-cli.sh: an empty answer is an error, not a blank answer" {
+    export COUNCIL_FAKE_BEHAVIOR=empty
+    run "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error from copilot CLI: no answer in response" ]
+}
+
+@test "copilot-cli.sh: a logged-out CLI reports the CLI's own way to log in" {
+    export COUNCIL_FAKE_BEHAVIOR=auth-failure
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+    [ "$stderr" = "Error from copilot CLI: Error: No authentication information found.  Copilot can be authenticated with GitHub using an OAuth Token or a Fine-Grained Personal Access Token.  To authenticate, you can use any of the following methods:   • Start 'copilot' and run the '/login' command   • Set the COPILOT_GITHUB_TOKEN, GH_TOKEN, or GITHUB_TOKEN environment variable   • Run 'gh auth login' to authenticate with the GitHub CLI" ]
+}
+
+@test "copilot-cli.sh: a hung CLI is ended at COUNCIL_TIMEOUT" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_TIMEOUT=1
+    run "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"timed out after 1s"* ]]
+}
+
+@test "copilot-cli.sh: reads the prompt from --prompt-file" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    printf 'prompt from file' > "$pf"
+    run "${PROVIDERS_DIR_REAL}/copilot-cli.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"prompt from file"* ]]
+}
+
+# ============================================================================
 # A long stderr ahead of the cause, for the CLIs beside codex
 # ============================================================================
 
@@ -1136,4 +1223,8 @@ $off" ]
 
 @test "claude-cli.sh: a failure buried under a long stderr still reports its cause" {
     assert_cause_after_noise claude-cli.sh claude
+}
+
+@test "copilot-cli.sh: a failure buried under a long stderr still reports its cause" {
+    assert_cause_after_noise copilot-cli.sh copilot
 }

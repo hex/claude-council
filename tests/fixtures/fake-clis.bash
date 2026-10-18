@@ -1,4 +1,4 @@
-# ABOUTME: Installs fake codex/agy/grok/kimi/cursor-agent/claude/ollama CLI executables onto PATH for hermetic tests
+# ABOUTME: Installs fake codex/agy/grok/kimi/cursor-agent/claude/copilot/ollama CLI executables onto PATH for hermetic tests
 # ABOUTME: Behavior switches via COUNCIL_FAKE_BEHAVIOR; calls recorded as JSONL in COUNCIL_FAKE_STATE_DIR
 
 # Behaviors (COUNCIL_FAKE_BEHAVIOR):
@@ -13,7 +13,7 @@
 #   auth-failure   - login-required message on stderr, exit 1; claude answers
 #                    `auth status` with loggedIn:false and exit 1, unless an
 #                    ANTHROPIC_API_KEY is set, which the real CLI counts as
-#                    logged in
+#                    logged in; copilot prints the real CLI's logged-out text
 #   slow           - sleep COUNCIL_FAKE_SLEEP (default 5s) then respond
 #   hang           - exec sleep COUNCIL_FAKE_SLEEP (default 300s); replaces the
 #                    process so the deadline watchdog's SIGTERM kills it cleanly
@@ -48,7 +48,7 @@ install_fake_clis() {
     export FAKE_BIN_DIR COUNCIL_FAKE_STATE_DIR
 
     local bin
-    for bin in codex agy grok kimi cursor-agent claude ollama; do
+    for bin in codex agy grok kimi cursor-agent claude copilot ollama; do
         write_fake_cli "$bin"
     done
     PATH="$FAKE_BIN_DIR:$PATH"
@@ -184,6 +184,42 @@ if [[ "\${1:-} \${2:-}" == "auth status" ]]; then
     fi
     echo '{"loggedIn": true, "authMethod": "claude.ai"}'
     exit 0
+fi
+EOF
+    fi
+    if [[ "$bin" == "copilot" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<EOF
+# The real CLI answers --output-format json with JSONL, one event per line,
+# the answer in an assistant.message event's .data.content. These are the
+# events copilot 1.0.98 printed for a one-word prompt with every tool off,
+# its session.info notice included; deltas and usage events are left out.
+# With no -p it reads the prompt from stdin; keep a copy so a test can assert
+# what reached the CLI and that it never rode argv.
+if [[ " \$* " == *" --output-format json "* ]]; then
+    cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
+    case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
+        valid|empty)
+            ANSWER="$marker: deterministic answer"
+            [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "empty" ]] && ANSWER=""
+            echo '{"type":"session.info","data":{"infoType":"configuration","message":"Unknown tool name in the tool allowlist: \"none\""}}'
+            echo '{"type":"session.mcp_servers_loaded","data":{"servers":[{"name":"github-mcp-server","status":"disabled","source":"builtin"}]}}'
+            echo '{"type":"session.auto_mode_resolved","data":{"chosenModel":"example-model","availableModels":["example-model"]}}'
+            echo '{"type":"session.tools_updated","data":{"model":"example-model"}}'
+            echo '{"type":"user.message","data":{"content":"prompt"}}'
+            jq -cn --arg a "\$ANSWER" '{type: "assistant.message", data: {model: "example-model", content: \$a, toolRequests: [], phase: "final_answer"}}'
+            echo '{"type":"assistant.turn_end","data":{"turnId":"0"}}'
+            echo '{"type":"result","sessionId":"fake","exitCode":0}'
+            exit 0 ;;
+        auth-failure)
+            # The real CLI's logged-out stderr, word for word, exit 1.
+            printf '%s\n' "Error: No authentication information found." "" \\
+                "Copilot can be authenticated with GitHub using an OAuth Token or a Fine-Grained Personal Access Token." "" \\
+                "To authenticate, you can use any of the following methods:" \\
+                "  • Start 'copilot' and run the '/login' command" \\
+                "  • Set the COPILOT_GITHUB_TOKEN, GH_TOKEN, or GITHUB_TOKEN environment variable" \\
+                "  • Run 'gh auth login' to authenticate with the GitHub CLI" >&2
+            exit 1 ;;
+    esac
 fi
 EOF
     fi
