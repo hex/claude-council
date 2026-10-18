@@ -4,11 +4,12 @@
   "description": "Strict: codex --output-schema requires every property. none=true with empty strings means nothing worth raising.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["none", "topic", "headline", "detail"],
+  "required": ["none", "tag", "topic", "headline", "detail"],
   "properties": {
     "none": { "type": "boolean", "description": "True when nothing meets the bar: not specific, already raised, already known, or not worth an interruption." },
+    "tag": { "type": "string", "enum": ["", "You should know", "Heads up"], "description": "Empty when none is true. 'You should know' for a system, concept or design that matters for the person's work; 'Heads up' for this session's work: a decision the assistant made, something it did not highlight, a result that may be off." },
     "topic": { "type": "string", "description": "Empty when none is true. Otherwise a stable label under 140 characters, for de-duplication." },
-    "headline": { "type": "string", "description": "Empty when none is true. Otherwise one sentence under 200 characters naming the thing; no greeting, no name, no markdown." },
-    "detail": { "type": "string", "description": "Empty when none is true. Otherwise under 600 characters, two or three plain sentences for someone who remembers nothing of the session: the line that shows it, why it matters, and what to check or do." }
+    "headline": { "type": "string", "description": "Empty when none is true. Otherwise one sentence, about 20 words and under 200 characters, naming the actual thing and its consequence; no greeting, no name, no markdown." },
+    "detail": { "type": "string", "description": "Empty when none is true. Otherwise under 600 characters, two or three plain sentences for someone who remembers nothing of the session: what the material shows, why it matters, and what to check or do next." }
   }
 }

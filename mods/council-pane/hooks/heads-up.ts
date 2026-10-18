@@ -1,7 +1,7 @@
 // ABOUTME: Pure policy for the heads-up side-check: cadence, backoff, memory, the runner's result and the band's words
 // ABOUTME: No engine calls, so every rule runs under bun test; pane.tsx is the shell that feeds events in
 
-import type { Note, Phase, Session } from '../types'
+import type { Note, Phase, Session, Tag } from '../types'
 
 /** Fire when the message index within the turn is a positive multiple of this; the builtin's number. */
 export const DEFAULT_EVERY = 6
@@ -159,7 +159,7 @@ export type RunResult =
   | { kind: 'failed'; payloadBytes: number; seats: readonly SeatOutcome[] }
 
 /**
- * Wire shape: {kind, bytes, seat?, ms?, topic?, headline?, detail?, seats:[{seat,outcome,ms,detail?}]}.
+ * Wire shape: {kind, bytes, seat?, model?, ms?, tag?, topic?, headline?, detail?, seats:[{seat,outcome,ms,detail?}]}.
  * A text that does not parse to it is `failed` naming the text, so a runner
  * change can never read as "no note". A headline is cut to HEADLINE_CHARS, one line.
  */
@@ -188,13 +188,19 @@ export function parseRunResult(checkId: string, text: string): RunResult {
   const { seat, ms, topic, headline, detail } = raw
   if (typeof seat !== 'string' || !isCount(ms) || typeof topic !== 'string' || typeof headline !== 'string' || typeof detail !== 'string') return unread
   const note: Note = {
-    id: checkId, seat, model: typeof raw.model === 'string' ? raw.model.trim() : '', payloadBytes: raw.bytes, elapsedMs: ms,
+    id: checkId, tag: tagOf(raw.tag), seat, model: typeof raw.model === 'string' ? raw.model.trim() : '', payloadBytes: raw.bytes, elapsedMs: ms,
     topic: topic.trim().slice(0, TOPIC_CHARS),
     headline: cut(headline.replace(/\s+/g, ' ').trim(), HEADLINE_CHARS),
     detail: detail.trim().slice(0, DETAIL_CHARS),
   }
   if (note.topic === '' || note.headline === '') return unread
   return { kind: 'note', note, seats }
+}
+
+// A seat's tag, case-folded; anything but the builtin's two reads as Heads up,
+// the tag for this session's own work, which is what the check is asked for.
+function tagOf(raw: unknown): Tag {
+  return typeof raw === 'string' && raw.trim().toLowerCase() === 'you should know' ? 'You should know' : 'Heads up'
 }
 
 // How much of an unreadable result.json its failure quotes.
@@ -253,7 +259,9 @@ export function pressed(s: Session, a: Exclude<Answer, 'typed-past'>): Session {
 
 /** What the band draws; null yields to the next hook. */
 export type BandView = {
-  /** The seat's sentence; the row draws the "✦ Heads up" mark ahead of it. */
+  /** Drawn bold after the mark: "Heads up" or "You should know". */
+  readonly tag: Tag
+  /** The seat's sentence, after the tag and a dot. */
   readonly headline: string
   /** "codex · gpt-6.1-sol · 12.4 KB · 27 s"; the model is left out when the runner named none. */
   readonly meta: string
@@ -264,6 +272,7 @@ export function bandView(p: Phase): BandView | null {
   if (p.kind !== 'showing') return null
   const { note } = p
   return {
+    tag: note.tag,
     headline: note.headline,
     meta: [note.seat, note.model, kilobytes(note.payloadBytes), seconds(note.elapsedMs)].filter(part => part !== '').join(' · '),
     detail: p.expanded ? note.detail : null,

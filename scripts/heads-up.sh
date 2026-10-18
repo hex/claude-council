@@ -9,7 +9,7 @@
 #   DIR/pid, DIR/start                before the fork returns
 #   DIR/digest.md, DIR/prompt.md      what left the machine; kept until the mod removes the dir
 #   DIR/seat-<n>.{out,err,events}     each seat's raw output
-#   DIR/result.json                   {kind:note|none|failed, bytes, seat?, ms?, topic?, headline?, detail?,
+#   DIR/result.json                   {kind:note|none|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, detail?,
 #                                      seats:[{seat,outcome,ms,detail?}]}; written to a temp name and moved
 #   DIR/.done                         last; the mod trusts result.json only after it
 # Env (COUNCIL_* so provider_env_scrub keeps them):
@@ -202,6 +202,7 @@ ask_codex() {
     TOPIC=$(answer_field "$answer" .topic)
     HEADLINE=$(answer_field "$answer" .headline)
     NOTE_DETAIL=$(answer_field "$answer" '.detail // ""')
+    TAG=$(answer_field "$answer" '.tag // ""')
     if [[ -z "$TOPIC" || -z "$HEADLINE" ]]; then
         OUTCOME=error DETAIL="none false with an empty topic or headline"
         return 0
@@ -221,7 +222,7 @@ text_call() {
 
 # Any other seat: its provider script under the scrubbed env; the first line
 # decides. NONE by the builtin's regex; "NOTE: <headline>" then "TOPIC: ..."
-# and "DETAIL: ..." lines; anything else is an error, never a note.
+# "TAG: ..." and "DETAIL: ..." lines; anything else is an error, never a note.
 ask_text_seat() {
     local n="$1" seat="$2" limit="$3" first line
     run_with_ticks "$limit" text_call "$n" "$seat" "$limit"
@@ -243,10 +244,12 @@ ask_text_seat() {
         return 0
     fi
     if [[ "$first" =~ ^NOTE:[[:space:]]*(.+)$ ]]; then
-        HEADLINE="${BASH_REMATCH[1]}" TOPIC="" NOTE_DETAIL=""
+        HEADLINE="${BASH_REMATCH[1]}" TOPIC="" NOTE_DETAIL="" TAG=""
         while IFS= read -r line; do
             line="${line%$'\r'}"
-            if [[ -z "$TOPIC" && "$line" =~ ^TOPIC:[[:space:]]*(.+)$ ]]; then
+            if [[ -z "$TAG" && "$line" =~ ^TAG:[[:space:]]*(.+)$ ]]; then
+                TAG="${BASH_REMATCH[1]}"
+            elif [[ -z "$TOPIC" && "$line" =~ ^TOPIC:[[:space:]]*(.+)$ ]]; then
                 TOPIC="${BASH_REMATCH[1]}"
             elif [[ -z "$NOTE_DETAIL" && "$line" =~ ^DETAIL:[[:space:]]*(.+)$ ]]; then
                 NOTE_DETAIL="${BASH_REMATCH[1]}"
@@ -276,9 +279,9 @@ write_result() {
     local kind="$1"
     jq -n --arg kind "$kind" --argjson bytes "${BYTES:-0}" --argjson seats "$SEATS_JSON" \
         --arg seat "${WIN_SEAT:-}" --arg model "${WIN_MODEL:-}" --argjson ms "${WIN_MS:-0}" --arg topic "${TOPIC:-}" \
-        --arg headline "${HEADLINE:-}" --arg detail "${NOTE_DETAIL:-}" --arg failure "${FAILURE:-}" \
+        --arg headline "${HEADLINE:-}" --arg detail "${NOTE_DETAIL:-}" --arg tag "${TAG:-}" --arg failure "${FAILURE:-}" \
         '{kind: $kind, bytes: $bytes}
-         + (if $kind == "note" then {seat: $seat, model: $model, ms: $ms, topic: $topic, headline: $headline, detail: $detail}
+         + (if $kind == "note" then {seat: $seat, model: $model, ms: $ms, tag: $tag, topic: $topic, headline: $headline, detail: $detail}
             elif $failure != "" then {detail: $failure}
             else {} end)
          + {seats: $seats}' > "${RUN_DIR}/result.json.tmp"

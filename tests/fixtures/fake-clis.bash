@@ -113,7 +113,7 @@ if [[ " $* " == *" --output-schema "* ]]; then
     OUT=""; PREV=""
     for a in "$@"; do [[ "$PREV" == "-o" ]] && OUT="$a"; PREV="$a"; done
     cat > "${COUNCIL_FAKE_STATE_DIR:?}/codex-stdin.txt"
-    note='{"none":false,"topic":"backfill never ran","headline":"The migration test used an empty fixture, so the backfill path never ran.","detail":"Seed one row in C:\\fixtures\\empty.db and rerun the migration test."}'
+    note='{"none":false,"tag":"Heads up","topic":"backfill never ran","headline":"The migration test used an empty fixture, so the backfill path never ran.","detail":"Seed one row in C:\\fixtures\\empty.db and rerun the migration test."}'
     case "${COUNCIL_FAKE_BEHAVIOR:-valid}" in
         heads-up-note|heads-up-slow-note)
             [[ "$COUNCIL_FAKE_BEHAVIOR" == heads-up-slow-note ]] && sleep "${COUNCIL_FAKE_SLEEP:-5}"
@@ -123,11 +123,11 @@ if [[ " $* " == *" --output-schema "* ]]; then
             exit 0 ;;
         heads-up-none)
             echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
-            echo '{"none":true,"topic":"","headline":"","detail":""}' > "$OUT"
+            echo '{"none":true,"tag":"","topic":"","headline":"","detail":""}' > "$OUT"
             echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
             exit 0 ;;
         heads-up-blank)
-            echo '{"none":false,"topic":"","headline":"","detail":""}' > "$OUT"
+            echo '{"none":false,"tag":"Heads up","topic":"","headline":"","detail":""}' > "$OUT"
             echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
             exit 0 ;;
         heads-up-no-turn)
@@ -323,7 +323,7 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     sandbox-warning) echo "$marker: deterministic answer" ;;
     stdin-echo)     echo "$marker: stdin=[\$(cat)]" ;;
     heads-up-note)  printf '%s\\n' "NOTE: The retry loop never backs off, so a 429 storm hammers the API." \\
-                        "TOPIC: retry without backoff" "DETAIL: Each retry fires at once; add a growing delay." ;;
+                        "TAG: You should know" "TOPIC: retry without backoff" "DETAIL: Each retry fires at once; add a growing delay." ;;
     heads-up-none)  echo "NONE." ;;
     off-contract)   printf '%s\\n' "Here is a thought worth raising." "NOTE: the retries look off" "TOPIC: retries" ;;
     *)              echo "Unknown COUNCIL_FAKE_BEHAVIOR: \${COUNCIL_FAKE_BEHAVIOR}" >&2; exit 64 ;;

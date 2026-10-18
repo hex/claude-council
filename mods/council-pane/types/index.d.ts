@@ -18,13 +18,17 @@ export type Phase =
   | { kind: 'checking'; turnId: string; checkId: string; runDir: string; startedMs: number }
   | { kind: 'showing'; note: Note; expanded: boolean }
 
+/** The builtin's two tags: a concept that matters, or this session's own work. */
+export type Tag = 'You should know' | 'Heads up'
+
 /** One check's answer, validated from result.json. */
 export type Note = {
   /** The check id; dedupes answer application. */
   readonly id: string
+  readonly tag: Tag
   /** At most TOPIC_CHARS (heads-up.ts); what seen and known hold. */
   readonly topic: string
-  /** The one sentence after "Heads up ·". */
+  /** The one sentence after the tag and a dot. */
   readonly headline: string
   /** Shown on learn more and sent with the next prompt. */
   readonly detail: string

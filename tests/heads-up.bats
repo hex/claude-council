@@ -103,6 +103,7 @@ result() {
     [ "$(result '.ms | type')" = "number" ]
     # The model the seat ran, as get_model resolves it, so the band can name it.
     [ "$(result .model)" = "gpt-test" ]
+    [ "$(result .tag)" = "Heads up" ]
     [ "$(result '.seats | length')" = "1" ]
     [ "$(result '.seats[0].seat + " " + .seats[0].outcome')" = "codex note" ]
     # First note wins: the second seat is never asked.
@@ -170,6 +171,7 @@ result() {
     [ "$(result .kind)" = "note" ]
     [ "$(result .seat)" = "antigravity" ]
     [ "$(result .headline)" = "The retry loop never backs off, so a 429 storm hammers the API." ]
+    [ "$(result .tag)" = "You should know" ]
     [ "$(result .topic)" = "retry without backoff" ]
     [ "$(result .detail)" = "Each retry fires at once; add a growing delay." ]
     [ "$(result '.seats[0] | .seat + " " + .outcome + " " + .detail')" = "codex timeout no answer in 2s" ]
