@@ -8,7 +8,7 @@
 #
 # Prints the detached worker's pid and exits 0 at once. Exit 1 before the fork
 # when the arguments are unusable (the mod logs stderr once). The worker writes:
-#   DIR/pid, DIR/start                before the fork returns
+#   DIR/pid                           before the fork returns
 #   DIR/digest.md, DIR/prompt.md      what left the machine; kept until the mod removes the dir
 #   DIR/seat.{out,err,events}         the seat's raw output
 #   DIR/result.json                   {kind:note|none|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
@@ -314,7 +314,6 @@ main() {
     ( worker ) </dev/null >/dev/null 2>&1 &
     local pid="$!"
     echo "$pid" > "${RUN_DIR}/pid"
-    date +%s > "${RUN_DIR}/start"
     echo "$pid"
 }
 

@@ -104,7 +104,6 @@ result() {
     after=$(date +%s)
     [ "$status" -eq 0 ]
     [ "$output" = "$(cat "$RUN_DIR/pid")" ]
-    [ -s "$RUN_DIR/start" ]
     [ $(( after - before )) -lt 3 ]
     [ ! -f "$RUN_DIR/.done" ]
     wait_done
