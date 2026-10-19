@@ -95,6 +95,8 @@ type PaneState = {
   headsUpReceipt: string
   // The last check that failed, drawn in red above the prompt for a while; the transcript keeps the reason.
   headsUpFailure?: FinishNotice
+  // The note whose Turn off was pressed once; the second press turns the check off for this project.
+  headsUpTurnOffArmed: string
   // When the followed specialist round's process was last checked.
   specialistCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
@@ -685,7 +687,7 @@ async function saveMemory($: EngineInterface, ours: Memory): Promise<void> {
 
 async function recordAnswer($: EngineInterface, topic: string, answer: Answer): Promise<void> {
   await saveMemory($, applyAnswer(await loadMemory($), topic, answer))
-  await count($, answer === 'typed-past' ? 'typedPast' : answer)
+  await count($, answer === 'typed-past' ? 'typedPast' : answer === 'turn-off' ? 'turnOff' : answer)
 }
 
 // Read, add one, write: a count, never a lock (see Counts).
@@ -793,6 +795,12 @@ async function pressHeadsUp($: EngineInterface, answer: Exclude<Answer, 'typed-p
   })
   if (shown.note === undefined) return
   await recordAnswer($, shown.note.topic, answer)
+  if (answer === 'turn-off') {
+    const file = await headsUpFile($)
+    await $.fs.write(file.path, withEnabled(file.text, false))
+    $.ui.log(`heads-up: off for this project (${CONFIG_FILE}); /${HEADS_UP_COMMAND} on turns it back on`)
+    return
+  }
   if (answer !== 'tell') return
   const filled = await $.prompt.fill({ text: tellClaudeDraft(shown.note), mode: 'replace' })
   if (!filled.isFilled) throw new Error(`the prompt box did not take the note: ${tellClaudeDraft(shown.note)}`)
@@ -808,9 +816,19 @@ async function personSubmitted($: EngineInterface): Promise<void> {
   if (seen.topic !== undefined) await recordAnswer($, seen.topic, 'typed-past')
 }
 
-function headsUpPresses($: EngineInterface, state: PaneState): Record<Exclude<Answer, 'typed-past'>, () => void> {
-  const press = (answer: Exclude<Answer, 'typed-past'>) => () => { void logFailure($, state, () => pressHeadsUp($, answer), 'heads-up') }
-  return { learn: press('learn'), tell: press('tell'), knew: press('knew'), dismiss: press('dismiss') }
+// Turn off takes two presses, as the builtin's Disable does: the first arms it
+// for this note, any other press disarms it.
+function headsUpPresses($: EngineInterface, state: PaneState, noteId: string): Record<Exclude<Answer, 'typed-past'>, () => void> {
+  const press = (answer: Exclude<Answer, 'typed-past'>) => () => {
+    state.headsUpTurnOffArmed = ''
+    void logFailure($, state, () => pressHeadsUp($, answer), 'heads-up')
+  }
+  const turnOff = () => {
+    if (state.headsUpTurnOffArmed === noteId) return press('turn-off')()
+    state.headsUpTurnOffArmed = noteId
+    $.ui.invalidate('ui.render')
+  }
+  return { learn: press('learn'), tell: press('tell'), knew: press('knew'), dismiss: press('dismiss'), 'turn-off': turnOff }
 }
 
 // The note, in the shape of Claude Code's own heads-up: the mark in the
@@ -821,8 +839,10 @@ function headsUpRow(
   ui: Pick<Elements['terminal'], 'Box' | 'Button' | 'Text'>,
   band: BandView,
   press: Record<Exclude<Answer, 'typed-past'>, () => void>,
+  turnOffArmed: boolean,
 ) {
   const { more } = band
+  const turnOff = <ui.Button key="heads-up:turn-off" hotkey="4" label={turnOffArmed ? 'Press again to turn off' : 'Turn off'} plain dimColor onPress={press['turn-off']} />
   return (
     <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
       <ui.Box flexDirection="row">
@@ -845,11 +865,15 @@ function headsUpRow(
                     <ui.Text key="gap-1">{'   '}</ui.Text>,
                     <ui.Button key="heads-up:knew" hotkey="2" label="Knew this already" plain onPress={press.knew} />,
                     <ui.Text key="gap-2">{'   '}</ui.Text>,
+                    turnOff,
+                    <ui.Text key="gap-3">{'   '}</ui.Text>,
                     <ui.Button key="heads-up:dismiss" hotkey="0" label="Dismiss" plain role="dismiss" onPress={press.dismiss} />,
                   ]
                 : [
                     <ui.Button key="heads-up:tell" hotkey="1" label="Tell Claude" plain onPress={press.tell} />,
                     <ui.Text key="gap-1">{'   '}</ui.Text>,
+                    turnOff,
+                    <ui.Text key="gap-2">{'   '}</ui.Text>,
                     <ui.Button key="heads-up:close" hotkey="0" label="Close" plain role="dismiss" onPress={press.dismiss} />,
                   ]}
             </ui.Box>
@@ -1118,7 +1142,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', headsUpError: '', headsUpTip: '', headsUpReceipt: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', headsUpError: '', headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -1476,7 +1500,7 @@ export const register: Register = (on, options) => {
     // A note is one row and time-sensitive: the progress bands wait for its
     // answer. Reading the session here subscribes the band to its changes.
     const band = bandView((await read($, headsUp)).phase)
-    if (band) return headsUpRow($.ui.resolve(e), band, headsUpPresses($, state))
+    if (band) return headsUpRow($.ui.resolve(e), band, headsUpPresses($, state, band.id), state.headsUpTurnOffArmed === band.id)
     const working = state.specialist
     if (working) {
       const ui = $.ui.resolve(e)

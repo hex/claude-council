@@ -116,6 +116,7 @@ tmux send-keys -t "$SESSION" -l 'Run date, then ls, then pwd, as three separate 
 wait_for 'Heads up · The migration test used an empty fixture, so the backfill path never ran.'
 wait_for '1: Learn more'
 screen | grep -qF '2: Knew this already' || fail "the band lacks 2: Knew this already"
+screen | grep -qF '4: Turn off' || fail "the band lacks 4: Turn off"
 screen | grep -qF '0: Dismiss' || fail "the band lacks 0: Dismiss"
 # The model is read from your own codex config, not from the fake.
 screen | grep -qE 'codex · [^·]+ · [0-9.]+ KB · [0-9]+ s' || fail "the band lacks the seat line"
@@ -170,7 +171,7 @@ C="$(counts)"
 # The engine may leave a suggested prompt in the box; clear it first.
 key C-u
 tmux send-keys -t "$SESSION" -l '/heads-up status'; key Enter
-wait_for "On this machine: $(printf '%s' "$C" | jq -r '"checks \(.checks) (none \(.none), notes \(.notes), repeats \(.repeats), failed \(.failed)) · learn \(.learn), tell \(.tell), knew \(.knew), dismiss \(.dismiss), typed past \(.typedPast)"')"
+wait_for "On this machine: $(printf '%s' "$C" | jq -r '"checks \(.checks) (none \(.none), notes \(.notes), repeats \(.repeats), failed \(.failed)) · learn \(.learn), tell \(.tell), knew \(.knew), dismiss \(.dismiss), turned off \(.turnOff), typed past \(.typedPast)"')"
 echo "   counts: $(printf '%s' "$C" | jq -c 'del(.repeats, .checks)') and every check settled"
 
 echo "6. /exit leaves no claude behind"

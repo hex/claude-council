@@ -88,10 +88,11 @@ export type Counts = {
   readonly tell: number
   readonly knew: number
   readonly dismiss: number
+  readonly turnOff: number
   readonly typedPast: number
 }
-export const COUNT_KEYS = ['checks', 'none', 'notes', 'repeats', 'failed', 'learn', 'tell', 'knew', 'dismiss', 'typedPast'] as const
-export const EMPTY_COUNTS: Counts = { checks: 0, none: 0, notes: 0, repeats: 0, failed: 0, learn: 0, tell: 0, knew: 0, dismiss: 0, typedPast: 0 }
+export const COUNT_KEYS = ['checks', 'none', 'notes', 'repeats', 'failed', 'learn', 'tell', 'knew', 'dismiss', 'turnOff', 'typedPast'] as const
+export const EMPTY_COUNTS: Counts = { checks: 0, none: 0, notes: 0, repeats: 0, failed: 0, learn: 0, tell: 0, knew: 0, dismiss: 0, turnOff: 0, typedPast: 0 }
 
 export function parseCounts(raw: unknown): Counts {
   if (!isRecord(raw)) return EMPTY_COUNTS
@@ -103,9 +104,9 @@ export function bumped(c: Counts, key: keyof Counts): Counts {
   return { ...c, [key]: c[key] + 1 }
 }
 
-/** "checks 12 (none 8, notes 2, repeats 1, failed 1) · learn 2, tell 1, knew 0, dismiss 1, typed past 3" */
+/** "checks 12 (none 8, notes 2, repeats 1, failed 1) · learn 2, tell 1, knew 0, dismiss 1, turned off 0, typed past 3" */
 export function countsLine(c: Counts): string {
-  return `checks ${c.checks} (none ${c.none}, notes ${c.notes}, repeats ${c.repeats}, failed ${c.failed}) · learn ${c.learn}, tell ${c.tell}, knew ${c.knew}, dismiss ${c.dismiss}, typed past ${c.typedPast}`
+  return `checks ${c.checks} (none ${c.none}, notes ${c.notes}, repeats ${c.repeats}, failed ${c.failed}) · learn ${c.learn}, tell ${c.tell}, knew ${c.knew}, dismiss ${c.dismiss}, turned off ${c.turnOff}, typed past ${c.typedPast}`
 }
 
 export type HeadsUpCommand =
@@ -344,13 +345,14 @@ export function mergeMemory(stored: Memory, ours: Memory): Memory {
   return { ...ours, seen: newestUnique([...stored.seen, ...ours.seen]), known: newestUnique([...stored.known, ...ours.known]) }
 }
 
-export type Answer = 'learn' | 'tell' | 'knew' | 'dismiss' | 'typed-past'
+export type Answer = 'learn' | 'tell' | 'knew' | 'dismiss' | 'turn-off' | 'typed-past'
 
 /**
  * The builtin's transitions:
  * - any press: typedPastInARow = 0, looksToSkip = 0; the topic joins seen (and known on 'knew')
  * - typed-past: typedPastInARow += 1, looksToSkip = typedPastInARow; the topic joins seen
  * 'learn' and 'tell' are one note's two presses; the lists take the topic once.
+ * 'turn-off' (the second press of the band's Turn off) is a dismiss here; the shell writes the file off.
  * Idempotent on the lists (dedupe by case-folded topic); the shell applies it once per note id.
  */
 export function applyAnswer(m: Memory, topic: string, a: Answer): Memory {
@@ -519,6 +521,8 @@ export type BandView = {
   readonly meta: string
   /** Non-null once expanded: the bold title and the bullets, the last one the action; the band then offers tell Claude and close instead of the three choices. */
   readonly more: { readonly title: string; readonly points: readonly string[] } | null
+  /** The note's id, so the shell knows whether its armed Turn off belongs to this note. */
+  readonly id: string
 }
 export function bandView(p: Phase): BandView | null {
   if (p.kind !== 'showing') return null
@@ -528,6 +532,7 @@ export function bandView(p: Phase): BandView | null {
     headline: note.headline,
     meta: [note.seat, note.model, kilobytes(note.payloadBytes), seconds(note.elapsedMs)].filter(part => part !== '').join(' · '),
     more: p.expanded ? { title: note.title, points: note.points } : null,
+    id: note.id,
   }
 }
 

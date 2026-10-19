@@ -63,6 +63,7 @@ test('a press resets the backoff and records the topic; knew also marks it known
   expect(applyAnswer(backedOff, 'Fixture DB empty', 'dismiss')).toEqual({ seen: ['Fixture DB empty'], known: [], typedPastInARow: 0, looksToSkip: 0 })
   expect(applyAnswer(backedOff, 'Fixture DB empty', 'learn')).toEqual({ seen: ['Fixture DB empty'], known: [], typedPastInARow: 0, looksToSkip: 0 })
   expect(applyAnswer(backedOff, 'Fixture DB empty', 'knew')).toEqual({ seen: ['Fixture DB empty'], known: ['Fixture DB empty'], typedPastInARow: 0, looksToSkip: 0 })
+  expect(applyAnswer(backedOff, 'Fixture DB empty', 'turn-off')).toEqual({ seen: ['Fixture DB empty'], known: [], typedPastInARow: 0, looksToSkip: 0 })
 })
 
 test('typing past a note counts up and skips that many checks', () => {
@@ -201,6 +202,7 @@ test('learn expands the note; tell, knew and dismiss close it', () => {
   expect(pressed(showing, 'learn')).toEqual({ ...showing, phase: { kind: 'showing', note, expanded: true } })
   expect(pressed({ ...showing, phase: { kind: 'showing', note, expanded: true } }, 'tell')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(showing, 'knew')).toEqual({ ...showing, phase: { kind: 'idle' } })
+  expect(pressed(showing, 'turn-off')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(showing, 'dismiss')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(checking, 'dismiss')).toBe(checking)
 })
@@ -209,8 +211,8 @@ test('the band draws the headline, the seat, payload and time, and the title and
   expect(bandView({ kind: 'idle' })).toBeNull()
   expect(bandView({ kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1 })).toBeNull()
   expect(bandView({ kind: 'showing', note: { ...note, tag: 'You should know' }, expanded: false })?.tag).toBe('You should know')
-  expect(bandView({ kind: 'showing', note, expanded: false })).toEqual({ tag: 'Heads up', headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', more: null })
-  expect(bandView({ kind: 'showing', note, expanded: true })).toEqual({ tag: 'Heads up', headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', more: { title: 'The backfill path was skipped', points: ['The fixture had no rows, so the backfill loop never ran.', 'Seed one row and rerun the migration test.'] } })
+  expect(bandView({ kind: 'showing', note, expanded: false })).toEqual({ tag: 'Heads up', headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', more: null, id: note.id })
+  expect(bandView({ kind: 'showing', note, expanded: true })).toEqual({ tag: 'Heads up', headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', more: { title: 'The backfill path was skipped', points: ['The fixture had no rows, so the backfill loop never ran.', 'Seed one row and rerun the migration test.'] }, id: note.id })
   expect(bandView({ kind: 'showing', note: { ...note, model: '' }, expanded: false })?.meta).toBe('codex · 12.4 KB · 27 s')
 })
 
@@ -244,8 +246,8 @@ test('a bump adds one to its count and leaves the rest', () => {
 })
 
 test('the counts line names every count in a fixed order', () => {
-  expect(countsLine(EMPTY_COUNTS)).toBe('checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
-  expect(countsLine({ checks: 12, none: 8, notes: 2, repeats: 1, failed: 1, learn: 2, tell: 1, knew: 0, dismiss: 1, typedPast: 3 })).toBe('checks 12 (none 8, notes 2, repeats 1, failed 1) · learn 2, tell 1, knew 0, dismiss 1, typed past 3')
+  expect(countsLine(EMPTY_COUNTS)).toBe('checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, turned off 0, typed past 0')
+  expect(countsLine({ checks: 12, none: 8, notes: 2, repeats: 1, failed: 1, learn: 2, tell: 1, knew: 0, dismiss: 1, turnOff: 1, typedPast: 3 })).toBe('checks 12 (none 8, notes 2, repeats 1, failed 1) · learn 2, tell 1, knew 0, dismiss 1, turned off 1, typed past 3')
 })
 
 test('the heads-up command reads on with an optional seat, off and status, and refuses anything else', () => {
@@ -291,19 +293,19 @@ test('status names the effective state and which switch set it, then the counts'
   const counts = { ...EMPTY_COUNTS, checks: 4, none: 3, notes: 1, learn: 1 }
   expect(statusText({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts)).toBe(
     'Heads-up side-check: on for this project, by .claude/council-heads-up.json (the /config row is off) · seat codex · every 3 requests\n'
-    + 'On this machine: checks 4 (none 3, notes 1, repeats 0, failed 0) · learn 1, tell 0, knew 0, dismiss 0, typed past 0')
+    + 'On this machine: checks 4 (none 3, notes 1, repeats 0, failed 0) · learn 1, tell 0, knew 0, dismiss 0, turned off 0, typed past 0')
   expect(statusText({ enabled: true, seat: 'codex', every: 3, model: { model: 'gpt-6.1-sol', effort: 'high' } }, true, undefined, EMPTY_COUNTS)).toBe(
     'Heads-up side-check: on for every project, by the /config row (no .claude/council-heads-up.json here) · seat codex (gpt-6.1-sol, high) · every 3 requests\n'
-    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
+    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, turned off 0, typed past 0')
   expect(statusText({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS)).toBe(
     'Heads-up side-check: off for this project, by .claude/council-heads-up.json (the /config row is on) · /heads-up on [seat] turns it on here\n'
-    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
+    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, turned off 0, typed past 0')
   expect(statusText({ enabled: false }, false, undefined, EMPTY_COUNTS)).toBe(
     'Heads-up side-check: off (the /config row is off, no .claude/council-heads-up.json here) · /heads-up on [seat] turns it on for this project, /config row "Heads-up side-check" for every project\n'
-    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
+    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, turned off 0, typed past 0')
   expect(statusText({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' }, true, '{', EMPTY_COUNTS)).toBe(
     'Heads-up side-check: off: .claude/council-heads-up.json is not valid JSON; heads-up is off\n'
-    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
+    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, turned off 0, typed past 0')
 })
 
 test('the one-time intro is a tail on the prompt hint, once per install, only while the check is off', () => {
