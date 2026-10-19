@@ -54,10 +54,12 @@ start_runner() {
 
 # Polls for the worker's .done, up to $1 seconds (default 30).
 # Git Bash hands a path to a program as C:/... while the shell's own paths look
-# POSIX; one spelling for both sides of an argv comparison, elsewhere a no-op.
+# POSIX, and jq ends every line there with CRLF; one spelling for both sides of
+# an argv comparison, elsewhere a no-op.
 same_paths() {
     local word out=()
     for word in "$@"; do
+        word=${word%$'\r'}
         if command -v cygpath >/dev/null 2>&1 && [[ "$word" == /* || "$word" =~ ^[A-Za-z]:/ ]]; then word=$(cygpath -m "$word"); fi
         out+=("$word")
     done
