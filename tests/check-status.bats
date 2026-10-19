@@ -171,6 +171,22 @@ setup() {
     [ "$(auth_failures "$output")" -eq 6 ]
 }
 
+# A retired sonar-* id passes the key probe, which always sends perplexity/sonar,
+# while every query with it fails, so the row must name the id instead of
+# reading Connected. The refusal costs no request.
+@test "check-status: a retired Perplexity model id is an error row and sends no probe" {
+    record_curl
+    export PERPLEXITY_MODEL=sonar-pro
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Unsupported model           PERPLEXITY_MODEL=sonar-pro is a retired Sonar id; use fast, another Agent API preset or a provider/model id"* ]]
+    [[ "$plain" == *"13/14 providers available"* ]]
+    grep -qF 'https://api.openai.com/v1/models' "$CS_ARGV_FILE"
+    run ! grep -qF 'api.perplexity.ai' "$CS_ARGV_FILE"
+}
+
 @test "check-status: HTTP 500 reports a generic error with the code" {
     shadow_curl
     export COUNCIL_FAKE_HTTP_CODE=500

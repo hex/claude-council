@@ -172,6 +172,14 @@ check_provider() {
         return
     fi
 
+    # The Perplexity probe always sends perplexity/sonar, so it would read
+    # Connected for a model value every query fails on.
+    local refusal
+    if [[ "$name" == perplexity ]] && ! refusal=$(perplexity_model_field "$model"); then
+        echo "bad_model:${refusal}"
+        return
+    fi
+
     # Measure response time with a minimal request
     local start_time end_time duration
     start_time=$(now_ms)
@@ -485,6 +493,11 @@ format_status() {
             icon="${RED}✗ ${RESET}"
             plain_state="Rate limited (HTTP ${status#rate_limited:})"
             painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        bad_model:*)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Unsupported model";   painted_state="${RED}${plain_state}${RESET}"
+            plain_detail="${status#bad_model:}"; painted_detail="${DIM}${plain_detail}${RESET}"
             ;;
         error:*)
             icon="${RED}✗ ${RESET}"
