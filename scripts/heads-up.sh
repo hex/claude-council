@@ -151,7 +151,11 @@ run_with_ticks() {
         # shellcheck disable=SC2207 # pids hold no spaces or globs
         tree=($(process_tree "$pid"))
         kill -TERM "${tree[@]}" 2>/dev/null || true
-        sleep 5
+        # Up to five seconds of grace, cut short once every pid is gone.
+        for _ in 1 2 3 4 5; do
+            sleep 1
+            any_alive "${tree[@]}" || exit 0
+        done
         kill -KILL "${tree[@]}" 2>/dev/null || true
     ) &
     watchdog="$!"
