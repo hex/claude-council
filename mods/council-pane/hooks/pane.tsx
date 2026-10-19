@@ -1024,7 +1024,7 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     await $.command.register({ name: SETUP_COMMAND, description: 'Add, edit or remove specialists', immediate: true })
-    await $.command.register({ name: HEADS_UP_COMMAND, description: 'Heads-up side-check: switch it on or off for this project, or show its state and counts', argumentHint: '[on|off|status]', immediate: true })
+    await $.command.register({ name: HEADS_UP_COMMAND, description: 'Heads-up side-check: switch it on for this project, naming the seats to ask, or off, or show its state and counts', argumentHint: '[on [seat,...] | off | status]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     // An entry that does not parse is reported, never dropped quietly.
     const roster = specialistRoster(options)
@@ -1290,11 +1290,11 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: HEADS_UP_COMMAND }, async ($, e) => {
-    const action = headsUpCommand(e.args)
-    if (action === 'unknown') return { text: `Usage: /${HEADS_UP_COMMAND} [on|off|status]` }
-    if (action !== 'status') {
+    const command = headsUpCommand(e.args)
+    if (command.action === 'unknown') return { text: `${command.why}. Usage: /${HEADS_UP_COMMAND} [on [seat,...] | off | status]; a seat is a provider name such as codex, gemini or grok-cli.` }
+    if (command.action !== 'status') {
       const file = await headsUpFile($)
-      await $.fs.write(file.path, withEnabled(file.text, action === 'on'))
+      await $.fs.write(file.path, withEnabled(file.text, command.action === 'on', command.action === 'on' ? command.seats : []))
       state.headsUpTip = ''
     }
     const file = await headsUpFile($)

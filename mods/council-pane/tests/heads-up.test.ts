@@ -242,21 +242,28 @@ test('the counts line names every count in a fixed order', () => {
   expect(countsLine({ checks: 12, none: 8, notes: 2, repeats: 1, failed: 1, learn: 2, tell: 1, knew: 0, dismiss: 1, typedPast: 3 })).toBe('checks 12 (none 8, notes 2, repeats 1, failed 1) · learn 2, tell 1, knew 0, dismiss 1, typed past 3')
 })
 
-test('the heads-up command reads on, off and status, and nothing else', () => {
-  expect(headsUpCommand('')).toBe('status')
-  expect(headsUpCommand(' Status ')).toBe('status')
-  expect(headsUpCommand('on')).toBe('on')
-  expect(headsUpCommand('OFF')).toBe('off')
-  expect(headsUpCommand('maybe')).toBe('unknown')
+test('the heads-up command reads on with optional seats, off and status, and refuses anything else', () => {
+  expect(headsUpCommand('')).toEqual({ action: 'status' })
+  expect(headsUpCommand(' Status ')).toEqual({ action: 'status' })
+  expect(headsUpCommand('on')).toEqual({ action: 'on', seats: [] })
+  expect(headsUpCommand('ON gemini,grok-cli')).toEqual({ action: 'on', seats: ['gemini', 'grok-cli'] })
+  expect(headsUpCommand('on gemini grok-cli')).toEqual({ action: 'on', seats: ['gemini', 'grok-cli'] })
+  expect(headsUpCommand('on Gemini')).toEqual({ action: 'on', seats: ['gemini'] })
+  expect(headsUpCommand('on ../x')).toEqual({ action: 'unknown', why: 'seat "../x" is not a plain lowercase word' })
+  expect(headsUpCommand('OFF')).toEqual({ action: 'off' })
+  expect(headsUpCommand('off gemini')).toEqual({ action: 'unknown', why: 'off takes no seats' })
+  expect(headsUpCommand('maybe')).toEqual({ action: 'unknown', why: 'unknown word "maybe"' })
 })
 
-test('switching the project file keeps its seats and every, and starts a fresh file when there is none or it is broken', () => {
-  expect(withEnabled(undefined, true)).toBe('{"enabled": true}\n')
-  expect(withEnabled(undefined, false)).toBe('{"enabled": false}\n')
-  expect(withEnabled('{"enabled": true, "seats": ["gemini"], "every": 5}', false)).toBe('{"enabled": false, "seats": ["gemini"], "every": 5}\n')
-  expect(withEnabled('{"seats": ["gemini"]}', true)).toBe('{"enabled": true, "seats": ["gemini"]}\n')
-  expect(withEnabled('{"enabled": tru', true)).toBe('{"enabled": true}\n')
-  expect(withEnabled('[1]', true)).toBe('{"enabled": true}\n')
+test('switching the project file keeps its seats and every, takes new seats when given, and starts a fresh file when there is none or it is broken', () => {
+  expect(withEnabled(undefined, true, [])).toBe('{"enabled": true}\n')
+  expect(withEnabled(undefined, false, [])).toBe('{"enabled": false}\n')
+  expect(withEnabled('{"enabled": true, "seats": ["gemini"], "every": 5}', false, [])).toBe('{"enabled": false, "seats": ["gemini"], "every": 5}\n')
+  expect(withEnabled('{"seats": ["gemini"]}', true, [])).toBe('{"enabled": true, "seats": ["gemini"]}\n')
+  expect(withEnabled('{"seats": ["gemini"], "every": 5}', true, ['codex', 'grok-cli'])).toBe('{"enabled": true, "seats": ["codex", "grok-cli"], "every": 5}\n')
+  expect(withEnabled(undefined, true, ['gemini'])).toBe('{"enabled": true, "seats": ["gemini"]}\n')
+  expect(withEnabled('{"enabled": tru', true, [])).toBe('{"enabled": true}\n')
+  expect(withEnabled('[1]', true, [])).toBe('{"enabled": true}\n')
 })
 
 test('status names the effective state and which switch set it, then the counts', () => {
@@ -268,10 +275,10 @@ test('status names the effective state and which switch set it, then the counts'
     'Heads-up side-check: on for every project, by the /config row (no .claude/council-heads-up.json here) · seats codex, gemini · every 3 requests\n'
     + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
   expect(statusText({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS)).toBe(
-    'Heads-up side-check: off for this project, by .claude/council-heads-up.json (the /config row is on) · /heads-up on turns it on here\n'
+    'Heads-up side-check: off for this project, by .claude/council-heads-up.json (the /config row is on) · /heads-up on [seats] turns it on here\n'
     + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
   expect(statusText({ enabled: false }, false, undefined, EMPTY_COUNTS)).toBe(
-    'Heads-up side-check: off (the /config row is off, no .claude/council-heads-up.json here) · /heads-up on turns it on for this project, /config row "Heads-up side-check" for every project\n'
+    'Heads-up side-check: off (the /config row is off, no .claude/council-heads-up.json here) · /heads-up on [seats] turns it on for this project, /config row "Heads-up side-check" for every project\n'
     + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
   expect(statusText({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' }, true, '{', EMPTY_COUNTS)).toBe(
     'Heads-up side-check: off: .claude/council-heads-up.json is not valid JSON; heads-up is off\n'
@@ -279,7 +286,7 @@ test('status names the effective state and which switch set it, then the counts'
 })
 
 test('the one-time intro is a tail on the prompt hint, once per install, only while the check is off', () => {
-  expect(introTail({ shown: false, enabled: false })).toEqual({ tail: 'heads-up side-check is off: /heads-up on, or /config', markShown: true })
+  expect(introTail({ shown: false, enabled: false })).toEqual({ tail: 'Tip: /heads-up on lets another model watch long turns and flag what Claude missed', markShown: true })
   expect(introTail({ shown: false, enabled: true })).toEqual({ markShown: true })
   expect(introTail({ shown: true, enabled: false })).toEqual({ markShown: false })
 })

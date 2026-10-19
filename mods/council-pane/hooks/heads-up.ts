@@ -94,20 +94,33 @@ export function countsLine(c: Counts): string {
   return `checks ${c.checks} (none ${c.none}, notes ${c.notes}, repeats ${c.repeats}, failed ${c.failed}) · learn ${c.learn}, tell ${c.tell}, knew ${c.knew}, dismiss ${c.dismiss}, typed past ${c.typedPast}`
 }
 
-/** The /heads-up argument: nothing or status shows the state; on and off write the project file. */
-export function headsUpCommand(args: string): 'status' | 'on' | 'off' | 'unknown' {
-  const word = args.trim().toLowerCase()
-  if (word === '' || word === 'status') return 'status'
-  if (word === 'on' || word === 'off') return word
-  return 'unknown'
+export type HeadsUpCommand =
+  | { action: 'status' }
+  | { action: 'on'; seats: readonly string[] }
+  | { action: 'off' }
+  | { action: 'unknown'; why: string }
+
+/**
+ * The /heads-up argument: nothing or status shows the state; on, with the
+ * seats to ask (commas or spaces) or none to keep the file's, and off write
+ * the project file. A seat is checked here as the file's are.
+ */
+export function headsUpCommand(args: string): HeadsUpCommand {
+  const [word = '', ...rest] = args.trim().toLowerCase().split(/[\s,]+/).filter(part => part !== '')
+  if (word === '' || word === 'status') return { action: 'status' }
+  if (word === 'off') return rest.length === 0 ? { action: 'off' } : { action: 'unknown', why: 'off takes no seats' }
+  if (word !== 'on') return { action: 'unknown', why: `unknown word ${JSON.stringify(word)}` }
+  const bad = rest.find(seat => !SEAT_SHAPE.test(seat))
+  if (bad !== undefined) return { action: 'unknown', why: `seat ${JSON.stringify(bad)} is not a plain lowercase word` }
+  return { action: 'on', seats: rest }
 }
 
 /**
- * The project file with `enabled` set, its other fields kept; a missing or
- * unreadable file starts over with `enabled` alone. One line, two-space-free
- * JSON, as the docs show it.
+ * The project file with `enabled` set and, when given, the seats; its other
+ * fields kept. A missing or unreadable file starts over. One line of JSON, as
+ * the docs show it.
  */
-export function withEnabled(text: string | undefined, on: boolean): string {
+export function withEnabled(text: string | undefined, on: boolean, seats: readonly string[]): string {
   let kept: Record<string, unknown> = {}
   if (text !== undefined) {
     try {
@@ -118,6 +131,7 @@ export function withEnabled(text: string | undefined, on: boolean): string {
     }
   }
   const { enabled: _dropped, ...rest } = kept
+  if (seats.length > 0) rest.seats = [...seats]
   const entries = Object.entries({ enabled: on, ...rest }).map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`)
   return `{${entries.join(', ')}}\n`
 }
@@ -131,8 +145,8 @@ export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: stri
   else if (config.enabled) {
     const by = file === true ? `on for this project, by ${CONFIG_FILE} (the /config row is ${row})` : `on for every project, by the /config row (${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`})`
     line = `Heads-up side-check: ${by} · seats ${config.seats.join(', ')} · every ${config.every} requests`
-  } else if (file === false) line = `Heads-up side-check: off for this project, by ${CONFIG_FILE} (the /config row is ${row}) · /${COMMAND} on turns it on here`
-  else line = `Heads-up side-check: off (the /config row is off, ${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`}) · /${COMMAND} on turns it on for this project, /config row "Heads-up side-check" for every project`
+  } else if (file === false) line = `Heads-up side-check: off for this project, by ${CONFIG_FILE} (the /config row is ${row}) · /${COMMAND} on [seats] turns it on here`
+  else line = `Heads-up side-check: off (the /config row is off, ${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`}) · /${COMMAND} on [seats] turns it on for this project, /config row "Heads-up side-check" for every project`
   return `${line}\nOn this machine: ${countsLine(counts)}`
 }
 
@@ -154,7 +168,7 @@ function fileEnabled(text: string): boolean | undefined {
 export function introTail(p: { shown: boolean; enabled: boolean }): { tail?: string; markShown: boolean } {
   if (p.shown) return { markShown: false }
   if (p.enabled) return { markShown: true }
-  return { tail: `heads-up side-check is off: /${COMMAND} on, or /config`, markShown: true }
+  return { tail: `Tip: /${COMMAND} on lets another model watch long turns and flag what Claude missed`, markShown: true }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

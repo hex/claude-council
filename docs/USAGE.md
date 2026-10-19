@@ -400,14 +400,16 @@ note shows counts as typing past it, and that many later checks are skipped.
 Claude never sees a note you did not tell it about.
 
 `/heads-up on` and `/heads-up off` write the project file for you, keeping its
-seats and cadence; `/heads-up` alone (or `/heads-up status`) says whether the
+seats and cadence; `/heads-up on gemini,grok-cli` names the seats to ask, any
+provider the council runs, in the order asked. `/heads-up` alone (or
+`/heads-up status`) says whether the
 check is on here and which switch set it, then the counts kept on this machine
 and never sent anywhere: checks run, with how many found nothing, drew a note,
 repeated a topic already seen, or failed; and the presses, learn, tell, knew,
 dismiss and typed past. The first session on a machine where the check is off
-adds a dim note to the hint under the empty prompt, `heads-up side-check is
-off: /heads-up on, or /config`, until you type; a flag in the plugin store
-keeps it from coming back.
+adds a dim tip to the hint under the empty prompt, `Tip: /heads-up on lets
+another model watch long turns and flag what Claude missed`, until you type; a
+flag in the plugin store keeps it from coming back.
 
 Privacy: unlike `/claude-council:advise`, nothing asks before a send. Each
 check digests the last five turns of this session's transcript plus the last
