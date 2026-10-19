@@ -297,7 +297,7 @@ Grok's token accounting depends on the model: `grok-build` counts thinking token
 
 ## Perplexity Search Features
 
-The Perplexity seat uses the Agent API (`/v1/agent`) with its `web_search` tool, so answers are web-grounded with inline citations. Sonar Chat Completions ended on 2026-09-27, and the old `sonar-*` model ids are refused there.
+The Perplexity seat uses the Agent API (`/v1/agent`) with its `web_search` tool, so answers are web-grounded with inline citations. Sonar Chat Completions ended on 2026-09-27. The seat refuses an old `sonar-*` model id before any request and names the preset to use instead.
 
 ```bash
 # Filter search results by recency: day, week, month, year
