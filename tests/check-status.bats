@@ -136,6 +136,7 @@ setup() {
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
 # region block. Without the 403 arm these lose their remediation line entirely.
+# Perplexity's bare 403 carries no invalid_api_key marker, so it is the one plain error.
 @test "check-status: HTTP 403 reports auth failure with regenerate remediation" {
     shadow_curl
     export COUNCIL_FAKE_HTTP_CODE=403
@@ -143,7 +144,10 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Auth failed (HTTP 403)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
-    [ "$(auth_failures "$output")" -eq 6 ]
+    [ "$(auth_failures "$output")" -eq 5 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
 }
 
 # Perplexity answers a bad key with 401 invalid_api_key. Its 403 for a retired
@@ -157,8 +161,34 @@ setup() {
     [ "$status" -eq 0 ]
     local plain
     plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
-    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
+    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)            Sonar is now the Agent API."* ]]
     # The other five API rows keep their auth reading of a bare 403
+    [ "$(auth_failures "$output")" -eq 5 ]
+}
+
+# Only invalid_api_key is evidence of a bad key. A 403 page from a proxy or WAF,
+# or JSON with no error type, says nothing about the key either way.
+@test "check-status: a Perplexity 403 with an HTML body is a plain error" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=403
+    export COUNCIL_FAKE_HTTP_BODY='<html><body>403 Forbidden</body></html>'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
+    [ "$(auth_failures "$output")" -eq 5 ]
+}
+
+@test "check-status: a Perplexity 403 with no error type is a plain error" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=403
+    export COUNCIL_FAKE_HTTP_BODY='{"detail":"Forbidden"}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
     [ "$(auth_failures "$output")" -eq 5 ]
 }
 

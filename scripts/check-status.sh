@@ -264,17 +264,21 @@ check_provider() {
     if [[ "$http_code" == "400" ]] && rejected_key "$name" "$body_file"; then
         rejected=1
     fi
-    # Perplexity marks a bad key invalid_api_key; a 403 with any other error type
-    # (chat_completions_not_available for a retired endpoint) is not the key's fault.
-    local other_403=0
+    # Perplexity marks a bad key invalid_api_key, and only that marker reads as
+    # a rejected key. Any other 403 (chat_completions_not_available for a
+    # retired endpoint, a proxy's HTML page) is a plain error carrying the
+    # vendor's message, flattened to one line, with its backslashes doubled for
+    # the echo -e that prints the row.
+    local other_403=""
     if [[ "$name" == perplexity && "$http_code" == "403" ]] \
-        && jq -e 'try ((.error.type | type) == "string" and .error.type != "invalid_api_key") catch false' \
-            "$body_file" >/dev/null 2>&1; then
-        other_403=1
+        && ! jq -e 'try (.error.type == "invalid_api_key") catch false' "$body_file" >/dev/null 2>&1; then
+        other_403=$(jq -r 'try (.error.message | strings | gsub("[[:cntrl:]]+"; " ") | gsub("\\\\"; "\\\\")) catch empty' \
+            "$body_file" 2>/dev/null || true)
+        other_403="error:403${other_403:+:${other_403}}"
     fi
     rm -f "$body_file"
-    if (( other_403 )); then
-        echo "error:403"
+    if [[ -n "$other_403" ]]; then
+        echo "$other_403"
         return
     fi
     if (( rejected )); then
@@ -500,9 +504,14 @@ format_status() {
             plain_detail="${status#bad_model:}"; painted_detail="${DIM}${plain_detail}${RESET}"
             ;;
         error:*)
+            # error:<code>, or error:<code>:<vendor message> for the detail column
+            local rest="${status#error:}"
             icon="${RED}✗ ${RESET}"
-            plain_state="Error (HTTP ${status#error:})"
+            plain_state="Error (HTTP ${rest%%:*})"
             painted_state="${RED}${plain_state}${RESET}"
+            if [[ "$rest" == *:* ]]; then
+                plain_detail="${rest#*:}"; painted_detail="${DIM}${plain_detail}${RESET}"
+            fi
             ;;
         ok:*)
             local rest="${status#ok:}"
