@@ -149,17 +149,31 @@ if [[ -n "$DEBUG" ]]; then
     }' >&2 2>/dev/null || true
 fi
 
-# Extract text: the message item's output_text parts. The raw JSON carries no
-# top-level output_text (only the SDKs add it), and .output[]? tolerates an
-# error body, which has no .output.
-TEXT=$(echo "$RESPONSE" | jq -r '[.output[]? | select(.type == "message") | .content[]? | select(.type == "output_text") | .text] | join("")')
+# Only a JSON object is read: a proxy's HTML page on a 200 would otherwise end
+# the script on jq's parse error, and it falls to the raw-body report below.
+TEXT="" ERROR=""
+if jq -e 'type == "object"' >/dev/null 2>&1 <<<"$RESPONSE"; then
+    # A reasoning preset that spends max_output_tokens stops early with status
+    # incomplete. Its partial answer still prints, under this warning.
+    if [[ "$(jq -r '.status' <<<"$RESPONSE")" == incomplete ]]; then
+        echo "Warning from Perplexity: response incomplete ($(jq -r '(.incomplete_details | objects | .reason | strings) // "no reason given"' <<<"$RESPONSE")), the answer may be cut off" >&2
+    fi
+    # The message item's output_text parts. The raw JSON carries no top-level
+    # output_text (only the SDKs add it), and an error body has no .output.
+    TEXT=$(jq -r '[.output[]? | objects | select(.type == "message") | .content | arrays | .[] | objects | select(.type == "output_text") | .text | strings] | join("")' <<<"$RESPONSE")
+    ERROR=$(jq -r '(if (.error | type) == "object" then (.error.message // "") elif (.error | type) == "string" then .error else "" end)' <<<"$RESPONSE")
+fi
 
     # Whitespace-stripped, not just empty: a model that answers with a single
     # space passes a bare -z test, and the council would store that as a
     # successful answer and weigh it in the synthesis like any other.
 if [[ ! "$TEXT" =~ [^[:space:]] ]]; then
-    ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // "") elif (.error | type) == "string" then .error else "" end) | select(. != "") // "Unknown error"')
-    echo "Error from Perplexity: $ERROR" >&2
+    if [[ -n "$ERROR" ]]; then
+        echo "Error from Perplexity: $ERROR" >&2
+    else
+        echo "Error from Perplexity: Unable to parse response" >&2
+        echo "Raw response: $RESPONSE" >&2
+    fi
     is_model_unavailable_error "$RESPONSE" && exit 3
     exit 1
 fi

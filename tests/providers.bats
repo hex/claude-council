@@ -496,6 +496,52 @@ run_provider_with_image() {
     [ "$output" = "PART1 PART2" ]
 }
 
+@test "perplexity: surfaces .error.message on a failure body" {
+    FAKE_BODY='{"error":{"message":"bad key","type":"invalid_api_key"}}' FAKE_HTTP=401
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error from Perplexity: bad key" ]
+}
+
+# A reasoning preset can spend the whole max_output_tokens on thinking and stop
+# before writing a message item. The body is the only record of why.
+@test "perplexity: a 200 with no message item prints the raw body after the incomplete warning" {
+    FAKE_BODY='{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"search_results","results":[]},{"type":"reasoning"}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k
+    [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+    [ "$stderr" = "Warning from Perplexity: response incomplete (max_output_tokens), the answer may be cut off
+Error from Perplexity: Unable to parse response
+Raw response: $FAKE_BODY" ]
+}
+
+@test "perplexity: a message item whose content is not an array prints the raw body" {
+    FAKE_BODY='{"status":"completed","output":[{"type":"message","content":"flat text"}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error from Perplexity: Unable to parse response
+Raw response: $FAKE_BODY" ]
+}
+
+# A proxy or captive portal can answer 200 with a page of its own.
+@test "perplexity: a non-JSON 200 prints the raw body instead of dying in jq" {
+    FAKE_BODY='<html>gateway</html>'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error from Perplexity: Unable to parse response
+Raw response: <html>gateway</html>" ]
+}
+
+# The orchestrator merges stderr into the answer, so the warning travels with
+# the cut-off text into the council's output.
+@test "perplexity: an incomplete answer is printed with a warning naming the reason" {
+    FAKE_BODY='{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","content":[{"type":"output_text","text":"Half an ans"}]}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "Half an ans" ]
+    [ "$stderr" = "Warning from Perplexity: response incomplete (max_output_tokens), the answer may be cut off" ]
+}
+
 # ---- secret + payload hygiene (findings #14, #6, #4 provider hop) ----
 
 @test "gemini: API key never appears in the process argv" {
