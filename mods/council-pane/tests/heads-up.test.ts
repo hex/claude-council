@@ -278,6 +278,7 @@ test('switching the project file keeps its seat and every, takes a new seat when
   expect(withEnabled('{"every": 5}', true, 'gemini', 9)).toBe('{"enabled": true, "every": 9, "seat": "gemini"}\n')
   expect(withEnabled(undefined, undefined, 'gemini', 3)).toBe('{"seat": "gemini", "every": 3}\n')
   expect(withEnabled('{"model": {}}', false)).toBe('{"enabled": false}\n')
+  expect(withEnabled('{"enabled": true, "seats": ["codex", "gemini"], "models": {"codex": {"model": "x"}}, "every": 3}', true, 'codex')).toBe('{"enabled": true, "every": 3, "seat": "codex"}\n')
   expect(withEnabled('{"seat": "gemini", "model": {"model": "old"}}', true, 'codex', 3, {})).toBe('{"enabled": true, "seat": "codex", "every": 3}\n')
   expect(withEnabled('{"model": {"model": "old"}}', true, 'codex', 3, { model: 'gpt-6.1-sol', effort: 'high' })).toBe('{"enabled": true, "model": {"model": "gpt-6.1-sol", "effort": "high"}, "seat": "codex", "every": 3}\n')
 })

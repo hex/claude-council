@@ -151,7 +151,8 @@ export function withEnabled(text: string | undefined, on: boolean | undefined, s
       kept = {}
     }
   }
-  const { enabled: _dropped, ...rest } = kept
+  // The keys parseConfig refuses go too, so a write always leaves a file that reads.
+  const { enabled: _dropped, seats: _seats, models: _models, ...rest } = kept
   if (seat !== undefined) {
     if (seat !== (rest.seat ?? DEFAULT_SEAT)) delete rest.model
     rest.seat = seat

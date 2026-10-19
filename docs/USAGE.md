@@ -410,7 +410,7 @@ think; then it writes the project file, and sets the `/config` row for "every
 project". By hand, the pick lives under `model`: `"model": {"model":
 "gpt-6.1-sol", "effort": "high"}`; the model goes to the seat's own `*_MODEL`
 variable for the check, an effort only to codex. A file with a `seats` list or
-a `models` map keeps the check off, and the reason names the key. The seat gets 60 seconds per check (`COUNCIL_HEADS_UP_SEAT_SECONDS`), so a slow CLI such as antigravity, which the council itself allows twenty minutes, times out here; pick codex, gemini or another fast seat. `/heads-up on`
+a `models` map keeps the check off, and the reason names the key. `/heads-up on`, `/heads-up off` and setup drop both keys when they write, so the file reads again. The seat gets 60 seconds per check (`COUNCIL_HEADS_UP_SEAT_SECONDS`), so a slow CLI such as antigravity, which the council itself allows twenty minutes, times out here; pick codex, gemini or another fast seat. `/heads-up on`
 and `/heads-up off` write the project file for you, keeping its seat and
 cadence; `/heads-up on gemini` names the seat to ask, any one provider the
 council runs, and drops a `model` picked for a different seat. `/heads-up` alone (or `/heads-up
