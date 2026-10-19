@@ -204,7 +204,7 @@ text_call() {
 # decides. NONE by the builtin's regex; "NOTE: <headline>" then "TAG: ...",
 # "TOPIC: ...", "TITLE: ..." and "POINT: ..." lines; anything else is an error, never a note.
 ask_text_seat() {
-    local limit="$1" first line rc=0
+    local limit="$1" first line rc=0 points=()
     run_with_deadline "$limit" text_call "$limit" || rc=$?
     if (( rc == 143 )); then
         OUTCOME=timeout DETAIL="no answer in ${limit}s"
@@ -224,7 +224,7 @@ ask_text_seat() {
         return 0
     fi
     if [[ "$first" =~ ^NOTE:[[:space:]]*(.+)$ ]]; then
-        HEADLINE="${BASH_REMATCH[1]}" TOPIC="" TITLE="" TAG="" POINTS_JSON='[]'
+        HEADLINE="${BASH_REMATCH[1]}" TOPIC="" TITLE="" TAG=""
         while IFS= read -r line; do
             line="${line%$'\r'}"
             if [[ -z "$TAG" && "$line" =~ ^TAG:[[:space:]]*(.+)$ ]]; then
@@ -234,9 +234,10 @@ ask_text_seat() {
             elif [[ -z "$TITLE" && "$line" =~ ^TITLE:[[:space:]]*(.+)$ ]]; then
                 TITLE="${BASH_REMATCH[1]}"
             elif [[ "$line" =~ ^POINT:[[:space:]]*(.+)$ ]]; then
-                POINTS_JSON=$(jq -c --arg point "${BASH_REMATCH[1]}" '. + [$point]' <<< "$POINTS_JSON")
+                points+=("${BASH_REMATCH[1]}")
             fi
         done < <(tail -n +2 "${RUN_DIR}/seat.out")
+        POINTS_JSON=$(jq -nc '$ARGS.positional' --args -- ${points[@]+"${points[@]}"})
         if [[ -n "$TOPIC" ]]; then
             OUTCOME=note DETAIL=""
             return 0
