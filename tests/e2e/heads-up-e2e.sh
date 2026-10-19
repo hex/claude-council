@@ -104,10 +104,11 @@ echo "0. the once-per-install tail sits on the prompt hint while the check is of
 wait_for 'Tip: /heads-up on lets another model watch long turns and flag what Claude missed'
 screen > "$OUT/0-intro.txt"
 tmux send-keys -t "$SESSION" -l '/heads-up'; key Enter
-wait_for 'Heads-up side-check: off for this project, by .claude/council-heads-up.json (the /config row is off)'
+wait_for 'Heads-up side-check: off for this project'
 screen | grep -qF 'Tip: /heads-up on lets another model watch long turns and flag what Claude missed' && fail "the intro tail is still drawn after typing"
 tmux send-keys -t "$SESSION" -l '/heads-up on'; key Enter
-wait_for 'Heads-up side-check: on for this project, by .claude/council-heads-up.json (the /config row is off) · seat codex · every 2 requests'
+wait_for 'Heads-up side-check: on for this project'
+wait_for 'every    2 requests'
 [ "$(cat "$PROJECT/.claude/council-heads-up.json")" = '{"enabled": true, "seat": "codex", "every": 2}' ] || fail "the file after /heads-up on is $(cat "$PROJECT/.claude/council-heads-up.json")"
 screen > "$OUT/0-switch.txt"
 
@@ -171,7 +172,8 @@ C="$(counts)"
 # The engine may leave a suggested prompt in the box; clear it first.
 key C-u
 tmux send-keys -t "$SESSION" -l '/heads-up status'; key Enter
-wait_for "On this machine: $(printf '%s' "$C" | jq -r '"checks \(.checks) (none \(.none), notes \(.notes), repeats \(.repeats), failed \(.failed)) · learn \(.learn), tell \(.tell), knew \(.knew), dismiss \(.dismiss), turned off \(.turnOff), typed past \(.typedPast)"')"
+wait_for "checks   $(printf '%s' "$C" | jq -r '"checks \(.checks) · none \(.none) · notes \(.notes) · repeats \(.repeats) · failed \(.failed)"')"
+wait_for "presses  $(printf '%s' "$C" | jq -r '"learn \(.learn) · tell \(.tell) · knew \(.knew) · dismiss \(.dismiss) · turned off \(.turnOff) · typed past \(.typedPast)"')"
 echo "   counts: $(printf '%s' "$C" | jq -c 'del(.repeats, .checks)') and every check settled"
 
 echo "6. /exit leaves no claude behind"

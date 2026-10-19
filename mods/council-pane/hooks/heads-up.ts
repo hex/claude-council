@@ -104,9 +104,14 @@ export function bumped(c: Counts, key: keyof Counts): Counts {
   return { ...c, [key]: c[key] + 1 }
 }
 
-/** "checks 12 (none 8, notes 2, repeats 1, failed 1) · learn 2, tell 1, knew 0, dismiss 1, turned off 0, typed past 3" */
+/** "checks 12 · none 8 · notes 2 · repeats 1 · failed 1" */
 export function countsLine(c: Counts): string {
-  return `checks ${c.checks} (none ${c.none}, notes ${c.notes}, repeats ${c.repeats}, failed ${c.failed}) · learn ${c.learn}, tell ${c.tell}, knew ${c.knew}, dismiss ${c.dismiss}, turned off ${c.turnOff}, typed past ${c.typedPast}`
+  return `checks ${c.checks} · none ${c.none} · notes ${c.notes} · repeats ${c.repeats} · failed ${c.failed}`
+}
+
+/** "learn 2 · tell 1 · knew 0 · dismiss 1 · turned off 0 · typed past 3" */
+export function pressesLine(c: Counts): string {
+  return `learn ${c.learn} · tell ${c.tell} · knew ${c.knew} · dismiss ${c.dismiss} · turned off ${c.turnOff} · typed past ${c.typedPast}`
 }
 
 export type HeadsUpCommand =
@@ -169,18 +174,34 @@ export function withEnabled(text: string | undefined, on: boolean | undefined, s
   return `{${entries.join(', ')}}\n`
 }
 
-/** What /heads-up status prints: the effective state, which switch set it, the seat and cadence, then the counts. */
+/**
+ * What /heads-up status prints: a headline with the effective state, then one
+ * aligned row per fact: which switch set it, the seat and cadence, the counts
+ * kept on this machine.
+ */
 export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: string | undefined, counts: Counts): string {
   const row = rowOn ? 'on' : 'off'
   const file = fileText === undefined ? undefined : fileEnabled(fileText)
-  let line: string
-  if (!config.enabled && config.problem !== undefined) line = `Heads-up side-check: off: ${config.problem}`
-  else if (config.enabled) {
-    const by = file === true ? `on for this project, by ${CONFIG_FILE} (the /config row is ${row})` : `on for every project, by the /config row (${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`})`
-    line = `Heads-up side-check: ${by} · seat ${seatLabel(config.seat, config.model)} · every ${config.every} requests`
-  } else if (file === false) line = `Heads-up side-check: off for this project, by ${CONFIG_FILE} (the /config row is ${row}) · /${COMMAND} on [seat] turns it on here`
-  else line = `Heads-up side-check: off (the /config row is off, ${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`}) · /${COMMAND} on [seat] turns it on for this project, /config row "Heads-up side-check" for every project`
-  return `${line}\nOn this machine: ${countsLine(counts)}`
+  const fileNote = fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`
+  const rows: [string, string][] = []
+  let state: string
+  if (!config.enabled && config.problem !== undefined) {
+    state = 'off'
+    rows.push(['problem', config.problem])
+  } else if (config.enabled) {
+    state = file === true ? 'on for this project' : 'on for every project'
+    rows.push(['by', file === true ? `${CONFIG_FILE} (the /config row is ${row})` : `the /config row (${fileNote})`])
+    rows.push(['seat', seatLabel(config.seat, config.model)], ['every', `${config.every} requests`])
+  } else if (file === false) {
+    state = 'off for this project'
+    rows.push(['by', `${CONFIG_FILE} (the /config row is ${row})`], ['turn on', `/${COMMAND} on [seat] turns it on here`])
+  } else {
+    state = 'off'
+    rows.push(['by', `the /config row is off, ${fileNote}`], ['turn on', `/${COMMAND} on [seat] for this project, the /config row "Heads-up side-check" for every project`])
+  }
+  rows.push(['checks', countsLine(counts)], ['presses', pressesLine(counts)])
+  const width = Math.max(...rows.map(([label]) => label.length))
+  return [`Heads-up side-check: ${state}`, ...rows.map(([label, value]) => `  ${label.padEnd(width)}  ${value}`)].join('\n')
 }
 
 /** The /heads-up setup dialogs: scope, seat, cadence. */

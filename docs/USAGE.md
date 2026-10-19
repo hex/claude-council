@@ -415,7 +415,7 @@ and `/heads-up off` write the project file for you, keeping its seat and
 cadence; `/heads-up on gemini` names the seat to ask, any one provider the
 council runs, and drops a `model` picked for a different seat. `/heads-up` alone (or `/heads-up
 status`) says whether the
-check is on here and which switch set it, then the counts kept on this machine
+check is on here and which switch set it, one aligned row per fact, then the counts kept on this machine
 and never sent anywhere: checks run, with how many found nothing, drew a note,
 repeated a topic already seen, or failed; and the presses, learn, tell, knew,
 dismiss, turned off and typed past. A check that found nothing leaves a dim receipt on the
