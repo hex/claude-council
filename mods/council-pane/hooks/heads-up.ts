@@ -209,27 +209,14 @@ export const SEAT_QUESTION = 'Which seat should reread the turn?'
 export const EVERY_QUESTION = 'How often should a long turn be checked?'
 export const EVERY_LABELS = ['Every 3 requests', 'Every 6 requests', 'Every 9 requests'] as const
 
-// How a seat shows it is set up: its CLI on PATH, or a key in the environment.
-const SEAT_SIGNS: ReadonlyArray<{ seat: string; bin?: string; keys?: readonly string[] }> = [
-  { seat: 'codex', bin: 'codex' },
-  { seat: 'antigravity', bin: 'agy' },
-  { seat: 'claude-cli', bin: 'claude' },
-  { seat: 'copilot-cli', bin: 'copilot' },
-  { seat: 'cursor-cli', bin: 'cursor-agent' },
-  { seat: 'grok-cli', bin: 'grok' },
-  { seat: 'kimi-cli', bin: 'kimi' },
-  { seat: 'ollama', bin: 'ollama' },
-  { seat: 'gemini', keys: ['GEMINI_API_KEY'] },
-  { seat: 'grok', keys: ['GROK_API_KEY', 'XAI_API_KEY'] },
-  { seat: 'kimi', keys: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'] },
-  { seat: 'openai', keys: ['OPENAI_API_KEY'] },
-  { seat: 'openrouter', keys: ['OPENROUTER_API_KEY'] },
-  { seat: 'perplexity', keys: ['PERPLEXITY_API_KEY'] },
-]
-
-/** The seats that look set up on this machine, CLIs before API seats, codex first. */
-export function availableSeats(onPath: (bin: string) => boolean, hasKey: (name: string) => boolean): string[] {
-  return SEAT_SIGNS.filter(sign => (sign.bin !== undefined && onPath(sign.bin)) || (sign.keys ?? []).some(hasKey)).map(sign => sign.seat)
+/**
+ * The seats discover_providers printed, the council's own test for what is set
+ * up here: codex first, and the router's numbered seats as the one seat they
+ * share a script with.
+ */
+export function seatsFromDiscovery(stdout: string): string[] {
+  const seats = [...new Set(stdout.split(/\s+/).filter(name => name !== '').map(name => (/^openrouter-\d+$/.test(name) ? 'openrouter' : name)))]
+  return seats.includes(DEFAULT_SEAT) ? [DEFAULT_SEAT, ...seats.filter(seat => seat !== DEFAULT_SEAT)] : seats
 }
 
 /** The dialog takes two to four options; the person types any other seat under Other. */

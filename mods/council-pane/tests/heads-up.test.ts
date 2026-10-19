@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, statusText, introTail, availableSeats, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, statusText, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -333,11 +333,10 @@ test('the one-time intro is a tail on the prompt hint, once per install, only wh
   expect(introTail({ shown: true, enabled: false })).toEqual({ markShown: false })
 })
 
-test('the seats on offer are the providers with a CLI on PATH or a key in the environment, codex first', () => {
-  const onPath = (bin: string) => ['codex', 'grok', 'ollama'].includes(bin)
-  const hasKey = (name: string) => ['GEMINI_API_KEY', 'XAI_API_KEY'].includes(name)
-  expect(availableSeats(onPath, hasKey)).toEqual(['codex', 'grok-cli', 'ollama', 'gemini', 'grok'])
-  expect(availableSeats(() => false, () => false)).toEqual([])
+test('the seats on offer are what the council discovers, codex first and the router as one seat', () => {
+  expect(seatsFromDiscovery('antigravity codex gemini openrouter-1 openrouter-2 perplexity\n')).toEqual(['codex', 'antigravity', 'gemini', 'openrouter', 'perplexity'])
+  expect(seatsFromDiscovery('antigravity grok-cli\n')).toEqual(['antigravity', 'grok-cli'])
+  expect(seatsFromDiscovery('\n')).toEqual([])
 })
 
 test('the dialog asks for one seat of at most four, and the answer reads back as one checked seat', () => {
