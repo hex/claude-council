@@ -14,6 +14,12 @@ setup() {
     install_fake_clis
     unset_provider_keys
 }
+
+# The last run's output without its colour codes.
+plain_output() {
+    printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g'
+}
+
 @test "check-status: codex installed but unauthenticated is its own state" {
     export COUNCIL_FAKE_BEHAVIOR=auth-failure
     run bash "$SCRIPT"
@@ -114,7 +120,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local rows total
-    rows=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g' | grep -c '^  [^ ]')
+    rows=$(plain_output | grep -c '^  [^ ]')
     total=$(printf '%s\n' "$output" | sed -n 's|.*[0-9][0-9]*/\([0-9][0-9]*\) providers available.*|\1|p')
     [ "$rows" -gt 0 ]
     [ "$total" = "$rows" ]
@@ -146,7 +152,7 @@ setup() {
     [[ "$output" == *"key rejected - regenerate it"* ]]
     [ "$(auth_failures "$output")" -eq 5 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    plain=$(plain_output)
     [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
 }
 
@@ -160,7 +166,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    plain=$(plain_output)
     [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)            Sonar is now the Agent API."* ]]
     # The other five API rows keep their auth reading of a bare 403
     [ "$(auth_failures "$output")" -eq 5 ]
@@ -175,7 +181,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    plain=$(plain_output)
     [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
     [ "$(auth_failures "$output")" -eq 5 ]
 }
@@ -187,7 +193,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    plain=$(plain_output)
     [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
     [ "$(auth_failures "$output")" -eq 5 ]
 }
@@ -210,7 +216,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    plain=$(plain_output)
     [[ "$plain" == *"Perplexity    ✗  Unsupported model           PERPLEXITY_MODEL=sonar-pro is a retired Sonar id; use fast, another Agent API preset or a provider/model id"* ]]
     [[ "$plain" == *"13/14 providers available"* ]]
     grep -qF 'https://api.openai.com/v1/models' "$CS_ARGV_FILE"
@@ -361,7 +367,7 @@ setup() {
     export COUNCIL_FAKE_BEHAVIOR=valid
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    [[ "$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')" == *"Copilot CLI   ✓  Connected"*"--providers=copilot-cli"* ]]
+    [[ "$(plain_output)" == *"Copilot CLI   ✓  Connected"*"--providers=copilot-cli"* ]]
     rm "$FAKE_BIN_DIR/copilot"
     run bash -c "export PATH='$(path_without_dir_of copilot)'; bash '$SCRIPT'"
     [ "$status" -eq 0 ]
@@ -398,7 +404,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    plain=$(plain_output)
     [[ "$plain" == *"OpenAI        ✗  Inference blocked (HTTP 429)"*"fix: check the account's billing or credits"* ]]
     # Only OpenAI's body carries OpenAI's marker; the other three read it as a
     # plain 429. Perplexity, OpenRouter and the eight CLIs stay available.
@@ -413,7 +419,7 @@ setup() {
     export COUNCIL_FAKE_CHAT_BODY='{"error":{"message":"Your organization has no prepaid credits remaining.","type":"insufficient_quota","code":"credit_balance_exhausted"}}'
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    [[ "$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')" == *"OpenAI        ✗  Inference blocked (HTTP 429)"* ]]
+    [[ "$(plain_output)" == *"OpenAI        ✗  Inference blocked (HTTP 429)"* ]]
 }
 
 # The one xAI shape seen in the wild (xAI documents none): a 403, which without
@@ -425,7 +431,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    plain=$(plain_output)
     [[ "$plain" == *"Grok          ✗  Inference blocked (HTTP 403)"* ]]
     [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked' || true)" -eq 1 ]
 }
@@ -437,7 +443,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    plain=$(plain_output)
     [[ "$plain" == *"Kimi          ✗  Inference blocked (HTTP 429)"* ]]
     [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked' || true)" -eq 1 ]
 }
@@ -449,7 +455,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    plain=$(plain_output)
     [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked (HTTP 402)' || true)" -eq 4 ]
     [[ "$plain" == *"Perplexity    ✓  Connected"* ]]
     [[ "$plain" == *"10/14 providers available"* ]]
@@ -462,7 +468,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     local plain
-    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g')
+    plain=$(plain_output)
     # The key works, so the provider still counts; the row says what is unproven.
     [ "$(printf '%s\n' "$plain" | grep -c 'Connected .*inference unverified (HTTP 400)' || true)" -eq 4 ]
     [[ "$plain" == *"OpenAI        ✓  Connected ("*"ms)"*"· inference unverified (HTTP 400)"* ]]
