@@ -20,14 +20,8 @@ source "${SCRIPT_DIR}/lib/display.sh"
 source "${SCRIPT_DIR}/lib/verbosity.sh"
 resolve_grok_key
 
-# Helper: current time in milliseconds. Falls back to whole-second precision
-# (still in milliseconds — *1000 — so elapsed-time math stays unit-correct) when
-# python3 is unavailable.
-now_ms() {
-    python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo $(( $(date +%s) * 1000 ))
-}
-
 source "${SCRIPT_DIR}/lib/providers.sh"
+source "${SCRIPT_DIR}/lib/clock.sh"
 source "${SCRIPT_DIR}/lib/model_fallback.sh"
 source "${SCRIPT_DIR}/lib/deadline.sh"
 

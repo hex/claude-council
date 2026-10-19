@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/keys.sh"
 source "$SCRIPT_DIR/lib/providers.sh"
+source "$SCRIPT_DIR/lib/clock.sh"
 source "$SCRIPT_DIR/lib/retry.sh"
 resolve_grok_key
 
@@ -27,12 +28,6 @@ BRIGHT_BLACK='\033[90m'
 CYAN='\033[36m'
 DIM='\033[2m'
 RESET='\033[0m'
-
-# Millisecond timestamp. Without python3, scale whole seconds to ms so callers
-# that render "(${duration}ms)" don't show durations ~1000x too small.
-now_ms() {
-    python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || echo $(( $(date +%s) * 1000 ))
-}
 
 # Does a 400 from this provider mean the key was rejected?
 # Usage: rejected_key <provider> <body_file>

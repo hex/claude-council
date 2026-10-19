@@ -347,20 +347,100 @@ EOF
 Safety properties: it never blocks on a clean tree, never re-gates a
 continuation already triggered by a stop hook, caps blocks per session at
 `max_iterations`, and any reviewer failure allows the stop. Delete the file
-(or set `"enabled": false`) to turn it off. The reviewer must be one of the
-providers named under Privacy below; `claude-cli` and `copilot-cli` are not
-on that list, and with either as `provider` the gate allows every stop
-without a review or a message.
+(or set `"enabled": false`) to turn it off. The reviewer is any provider
+script under `scripts/providers/`, `claude-cli` and `copilot-cli` included; a
+name that is not one allows every stop without a review or a message. A
+`copilot-cli` reviewer spends a premium request per stop.
 
 Privacy: the review sends your full uncommitted `git diff` to the configured
 provider, named by its provider id. With `ollama` it never leaves the machine.
-A CLI provider (`codex`, `antigravity`, `grok-cli`, `kimi-cli`, `cursor-cli`) sends
+A CLI provider (`codex`, `antigravity`, `grok-cli`, `kimi-cli`, `cursor-cli`,
+`claude-cli`, `copilot-cli`) sends
 it to that CLI's vendor under your subscription rather than an API key, and an
 API provider (`gemini`, `openai`, `grok`, `perplexity`, `kimi`) sends it to that
 third-party API — `kimi` sends it to Moonshot. `openrouter` is the one seat that
 discloses twice: to OpenRouter, and onward to whichever upstream serves the model
 id you pinned. Keep the reviewer on `ollama` if your working tree may
 contain secrets.
+
+## Heads-up side-check (opt-in, off by default)
+
+While Claude works a long turn inside Claude Code, a council seat can reread
+the conversation and surface one thing you may have missed: a trade-off nobody
+called out, a result that looks off. It needs the council-pane mod (Claude Code
+with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, 2.1.302 or later) and one of two
+switches. The `/config` row "Heads-up side-check" turns it on in every project.
+A project file turns it on, or off, for that project alone and picks the seat
+and cadence:
+
+```bash
+cat > .claude/council-heads-up.json <<'EOF'
+{"enabled": true, "seat": "codex", "every": 3}
+EOF
+```
+
+`enabled` is optional: `true` turns the check on here, `false` turns it off
+here whatever the row says, and without it the row decides. `seat` is the one
+provider asked, no panel and no synthesis; it defaults to `codex`. `every` is
+model requests per check inside a turn, default 3, so
+a check runs at the third, sixth, ninth request. `every` must be a whole number
+of at least 2; any other value keeps the check off and logs the reason once. Either switch is the consent:
+nothing asks before a check sends.
+
+The note sits above the prompt:
+
+```
+✦ Heads up · The migration test passed against the empty fixture DB, so the backfill path never ran.
+  1: Learn more   2: Knew this already   4: Turn off   0: Dismiss      codex · gpt-6.1-sol · 12.4 KB · 27 s
+```
+
+`4` is dim and takes two presses, as the builtin's Disable does: the first
+reads `Press again to turn off`, the second writes `"enabled": false` to the
+project file, what `/heads-up off` does. `1` opens the note as the builtin draws it, a bold title and three to six
+bullets with the action last, and offers `1: Tell Claude` and `0: Close`; tell
+Claude puts a draft quoting the note in your prompt box, and you send or edit it.
+`2` and `0` record the topic so no seat raises it again. Typing a prompt while a
+note shows counts as typing past it, and that many later checks are skipped.
+Claude never sees a note you did not tell it about.
+
+`/heads-up setup` asks in Claude Code's own dialog: where the check runs
+(this project, every project, or off here), which one seat rereads the turn
+(the providers with a CLI on PATH or a key in your environment, up to four;
+type any other seat under Other), how often, then which model that seat uses
+(its current one, codex's catalog, or one you type) and for codex how hard to
+think; then it writes the project file, and sets the `/config` row for "every
+project". By hand, the pick lives under `model`: `"model": {"model":
+"gpt-6.1-sol", "effort": "high"}`; the model goes to the seat's own `*_MODEL`
+variable for the check, an effort only to codex. A file with a `seats` list or
+a `models` map keeps the check off, and the reason names the key. `/heads-up on`, `/heads-up off` and setup drop both keys when they write, so the file reads again. A seat name that is not a council provider (no `scripts/providers/<seat>.sh`) is refused by `/heads-up on` and by setup before anything is written, with the real names listed; a check that fails to start, for instance on a seat typed by hand into the file, shows the red failure row and counts as failed. The seat gets 60 seconds per check (`COUNCIL_HEADS_UP_SEAT_SECONDS`), so a slow CLI such as antigravity, which the council itself allows twenty minutes, times out here; pick codex, gemini or another fast seat. `/heads-up on`
+and `/heads-up off` write the project file for you, keeping its seat and
+cadence; `/heads-up on gemini` names the seat to ask, any one provider the
+council runs, and drops a `model` picked for a different seat. `/heads-up` alone (or `/heads-up
+status`) says whether the
+check is on here and which switch set it, one aligned row per fact, then the counts kept on this machine
+and never sent anywhere: checks run, with how many found nothing, drew a note,
+repeated a topic already seen, or failed; and the presses, learn, tell, knew,
+dismiss, turned off and typed past. A check that found nothing leaves a dim receipt on the
+hint under the prompt, `heads-up: gemini read 8.3 KB in 11 s, nothing to flag`,
+until you type or the next check; only a failed check writes a transcript row. The first session on a machine where the check is off
+adds a dim tip to the hint under the empty prompt, `Tip: /heads-up on lets
+another model watch long turns and flag what Claude missed`, until you type; a
+flag in the plugin store keeps it from coming back.
+
+Privacy: unlike `/claude-council:advise`, nothing asks before a send. Each
+check digests the last five turns of this session's transcript plus the last
+eight tool results inside them, cut to 2,000 characters each, and sends that
+to the one seat. Tool results can carry what a command
+printed, a secret included; messages from other sessions, hook output and
+thinking never go. Each check logs or shows the bytes sent and the seat that
+answered. The seat rules under Stop-gate review above apply: `ollama` keeps it
+on the machine, a CLI seat sends it to that vendor under your subscription,
+`openrouter` discloses twice.
+
+Environment: `COUNCIL_HEADS_UP_SEAT_SECONDS` (the seat's deadline, default
+60), `COUNCIL_HEADS_UP_TURNS` (default 5) and `COUNCIL_HEADS_UP_RESULTS`
+(default 8). A check whose seat times out or errors logs one line and shows
+the red failure row above the prompt.
 
 ## Specialists (experimental)
 

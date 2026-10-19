@@ -78,6 +78,14 @@ Read this before the first question about your code.
   ([Provider environment](docs/REFERENCE.md#provider-environment)).
 - **`/claude-council:advise` sends part of this conversation.** It shows the
   size, the turn count and the opening lines, and asks before anything leaves.
+- **The heads-up side-check sends it without asking, once you switch it on.**
+  The `/config` row "Heads-up side-check" or a project's
+  `.claude/council-heads-up.json` is the consent: from then on, mid-turn, the
+  last five turns plus the last eight tool results (2,000 characters each; a
+  Bash result can hold a secret) go to the one seat it names, codex by default,
+  and the note shows how many bytes went where. Switch the row off, or give
+  the project a file saying `"enabled": false`, to stop it
+  ([Heads-up](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default)).
 
 ## Everyday commands
 
@@ -146,6 +154,7 @@ every call asks you first.
 | Roles, debate, agent mode, local council | [Usage guide](docs/USAGE.md) |
 | Background jobs, export, quiet mode | [Usage guide](docs/USAGE.md#background-jobs---async) |
 | A second model reviewing your diff before Claude stops | [Stop-gate review](docs/USAGE.md#stop-gate-review-opt-in-off-by-default) |
+| A one-line "heads up" from a council seat, codex by default, while Claude works | [Heads-up side-check](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default) |
 | Hand a coding task to a Codex agent on its own branch | [Specialists](docs/USAGE.md#specialists-experimental) |
 | Every flag, variable, default and limit | [Reference](docs/REFERENCE.md) |
 | Running the scripts without Claude Code | [Direct script usage](docs/REFERENCE.md#direct-script-usage) |
@@ -159,7 +168,7 @@ every call asks you first.
   [Running from a local clone](docs/REFERENCE.md#running-from-a-local-clone).
 - **No providers found.** Run `/claude-council:status`. Export keys in the
   shell you start Claude Code from. Or use `--local`.
-- **A different model answered.** A header like `grok-4.6 (grok-latest
+- **A different model answered.** A header like `grok-4.7 (grok-latest
   unavailable)` is a [model fallback](docs/REFERENCE.md#model-fallback).
   Setting the provider's `_MODEL` variable turns it off.
 - **No pane.** It needs tmux, or the variable above for the pane inside Claude

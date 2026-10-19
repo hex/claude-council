@@ -1,0 +1,12 @@
+project: <tmp>
+0. the once-per-install tail sits on the prompt hint while the check is off; /heads-up reads the state and switches the project on
+1. a turn of three shell commands reaches the cadence (every 2) and the fake seat's note is drawn
+   band drawn; seat line: codex · gpt-6.1-sol · N KB · N s
+2. Learn more opens the title and bullets, the action bold last
+3. Tell Claude closes the band and puts the draft in the prompt box, unsent
+   memory: {"seen":["backfill never ran"],"known":[],"typedPastInARow":0,"looksToSkip":0}
+4. the person sends the draft; Claude answers a note it only learned from them
+5. /heads-up status counts the checks, the one drawn note and the two presses
+   counts: {"none":0,"notes":1,"failed":0,"learn":1,"tell":1,"knew":0,"dismiss":0,"typedPast":0} and every check settled
+6. /exit leaves no claude behind
+PASS (<tmp>)

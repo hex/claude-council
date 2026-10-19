@@ -231,8 +231,9 @@ the bytes never enter the prompt string.
 Per-provider disposition when an image is attached:
 - **gemini, openai, grok, perplexity, kimi** (vision-capable) receive the image —
   gemini as an `inlineData` part, openai as `input_image` (Responses API) or
-  `image_url` (Chat Completions), grok and perplexity as an OpenAI-compatible
-  `image_url` data-URI on their `/chat/completions` endpoint.
+  `image_url` (Chat Completions), grok as an OpenAI-compatible `image_url`
+  data-URI on its `/chat/completions` endpoint, perplexity as an `input_image`
+  part on the Agent API's `/v1/agent`.
 - **codex, antigravity, grok-cli, kimi-cli** (CLI, cannot accept an image) route
   to their vision API sibling — codex→openai, antigravity→gemini, grok-cli→grok,
   kimi-cli→kimi — with the image. The route is taken only when the sibling is
@@ -424,6 +425,25 @@ to the analyst, and one that never arrives is absent from the
 result, never silently dropped. validate-analysis.sh mirrors the
 schema executably with jq, listing every violation; the bats suite
 keeps the two in sync.
+```
+
+### Heads-up side-check (`scripts/heads-up.sh`, `mods/council-pane/hooks/heads-up.ts`)
+
+```
+Opt-in via .claude/council-heads-up.json, read by the mod at each
+turn.step of the main loop. heads-up.ts decides (cadence from the
+step's index in its turn, backoff, one note per turn); pane.tsx forks
+heads-up.sh --run-dir --session --seat --avoid-file [--model], which
+returns its worker's pid at once. The worker: session-transcript.sh ->
+transcript-digest.sh --tool-results -> prompts/heads-up.md ->
+the one seat (codex: codex exec --output-schema, gated on
+turn.completed; others: providers/<seat>.sh, first-line NONE or
+NOTE:, TAG:, TOPIC:, TITLE: and POINT: lines) -> result.json
+(temp name, mv) -> .done.
+The pane polls .done, settles $.state (claude-council.headsUp),
+draws the band; seen/known topics live in $.store under heads-up.
+Seat names pass provider_allowlisted (lib/providers.sh), the one
+list, derived from providers/<name>.sh; the stop gate uses it too.
 ```
 
 ### Specialists (`scripts/specialist.sh`, `mods/council-pane/hooks/specialist.ts`, `.worktreeinclude`)
@@ -632,8 +652,10 @@ claude-council/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/
 │   └── council-pane/            # Experimental Claude Code mod: the pane drawn inside Claude Code
-│       ├── README.md            # Settings, watch-dir files, limits, the council tool, specialists
+│       ├── README.md            # Settings, watch-dir files, limits, the council tool, specialists, the heads-up
 │       ├── DESIGN.md            # Colour and layout rules; every colour lives in hooks/theme.ts
+│       ├── HEADS-UP.md          # The heads-up side-check's design and its implementation record
+│       ├── types/index.d.ts     # The $.state contract plugin.json names under "types"
 │       ├── tsconfig.json        # Type check against the locally generated plugin types
 │       ├── hooks/               # pane.tsx wires the engine; the other modules are pure
 │       ├── specialists/         # Six template skills, <name>/SKILL.md each, plus LICENSE-openclaw (MIT)
@@ -642,6 +664,7 @@ claude-council/
 │   ├── role-injection.md        # {{VAR}} template for role-wrapped prompts
 │   ├── synthesis.md             # Synthesis structure + calibration rules
 │   ├── stop-review-gate.md      # Stop-gate reviewer contract
+│   ├── heads-up.md              # Side-check prompt: one finding or NONE, {{AVOID}} and {{DIGEST}} slots
 │   └── kimi-cli-agent.md        # No-tools agent definition passed to the kimi CLI
 ├── schemas/
 │   └── agent-analysis.schema.json  # Deep-execution analyst reply contract
@@ -651,8 +674,10 @@ claude-council/
 │   ├── format-output.sh         # Terminal formatter
 │   ├── check-status.sh          # Provider health check
 │   ├── stop-review-gate.sh      # Opt-in Stop hook reviewer
+│   ├── heads-up.sh              # Detached side-check runner: digest, one seat, result.json
+│   ├── heads-up.schema.json     # Codex answer contract for the side-check, passed as --output-schema
 │   ├── session-transcript.sh    # Conversation id to transcript path, refusing ambiguity
-│   ├── transcript-digest.sh     # Session JSONL to a markdown digest for /advise
+│   ├── transcript-digest.sh     # Session JSONL to a markdown digest for /advise and the side-check
 │   ├── validate-analysis.sh     # Executable mirror of the agent-analysis schema (test suite)
 │   ├── specialist.sh            # Git side of specialists: worktree per run, one commit per round, merge or discard
 │   ├── specialist-report.schema.json  # Round report contract, passed to codex exec as --output-schema
@@ -677,6 +702,7 @@ claude-council/
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
 │       ├── cli-stderr.sh        # The error line a CLI provider reports on a timeout or failure (the end of its stderr, colour codes removed)
+│       ├── clock.sh             # Millisecond clock shared by the scripts that time a seat or a run
 │       ├── deadline.sh          # Wall-clock bound for a command (no GNU timeout on macOS or Git Bash) + process-tree signalling
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
@@ -710,6 +736,9 @@ claude-council/
 │   ├── shards/                  # Which bats files each Windows CI shard runs
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── e2e/                     # Run by hand, not by run_tests.sh; each script has a recorded passing run
+│   │   ├── heads-up-e2e.sh      # The heads-up side-check in a real Claude Code, driven through tmux, with the fake codex as the seat
+│   │   ├── heads-up-e2e.expected.txt
+│   │   ├── heads-up-codex-e2e.sh  # One real check against the logged-in codex on a session you name; sends that session off the machine
 │   │   ├── specialist-e2e.sh    # specialist.sh against the real codex: start, round, network follow-up, merge
 │   │   ├── specialist-e2e.expected.txt
 │   │   ├── specialist-setup-e2e.sh  # The /specialists screen in a real Claude Code, driven through tmux
@@ -728,6 +757,7 @@ claude-council/
 │   ├── export.bats
 │   ├── fake-clis.bats
 │   ├── format-output.bats
+│   ├── heads-up.bats            # heads-up.sh with the fake CLIs: one seat, result.json, deadlines, refusals before the fork
 │   ├── image.bats               # Vision / --image routing + privacy guards
 │   ├── jobs.bats
 │   ├── keys.bats
@@ -757,7 +787,8 @@ claude-council/
 ├── LICENSE
 ├── README.md
 ├── SECURITY.md
-└── TESTING.md
+├── TESTING.md
+└── tsconfig.json               # Extends the generated plugin types' tsconfig under .claude-plugin/types
 ```
 
 ## Configuration Reference
@@ -808,7 +839,10 @@ claude-council/
 | `COUNCIL_DEBUG` | - | Enable debug output |
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
 | `COUNCIL_MOD_PANE_DIR` | - | An existing directory a run writes its watch dir into, opening no tmux pane. Only the council-pane mod sets it; `COUNCIL_NO_PANE` still wins |
-| `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `specialist_round_limit`, `specialists` | ask, on, off, on, 60, `[]` | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each |
+| `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `specialist_round_limit`, `heads_up`, `specialists` | ask, on, off, on, 60, off, `[]` | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each |
+| `COUNCIL_HEADS_UP_SEAT_SECONDS` | 60 | The heads-up seat's deadline per check (s) |
+| `COUNCIL_HEADS_UP_TURNS` | 5 | Turns of the session transcript the heads-up digest covers |
+| `COUNCIL_HEADS_UP_RESULTS` | 8 | Tool results inside those turns the heads-up digest carries, 2000 characters each |
 | `COUNCIL_RENDERER` | auto | `perl` forces the built-in perl renderer; otherwise the pane prefers Rich when a Rich-capable Python exists (python3 with a modern rich, else `uv run --no-project --with rich`), with perl as the fallback |
 | `COUNCIL_RICH_PROBE_TIMEOUT` | 10 | Seconds before the pane-open uv probe for Rich is abandoned (guards against a cold uv cache on a dead network stalling pane opening) |
 | `COUNCIL_THEME` | auto-detected | Force pane render palette (emphasis + muted text): `light` / `dark` (else OSC 11 query; `COLORFGBG` only asserts `light`, never `dark` since it goes stale; otherwise attribute-only emphasis that inherits the foreground, and muted text keeps faint/bright-black) |

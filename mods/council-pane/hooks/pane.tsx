@@ -1,6 +1,14 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
+import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren } from 'claude-code'
+import {
+  applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
+  bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
+  availableSeats, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEAT_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
+  type Answer, type BandView, type Memory, type RunResult,
+} from './heads-up'
+import type { Note, Session } from '../types'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
 import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice, progressBand } from './notices'
 import { paneOptions, type PaneOptions } from './options'
@@ -55,6 +63,16 @@ const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: 
 // The settings field holding every specialist, as $.config names it; hidden
 // from the /config menu, since /specialists edits it.
 const LIST_KEY = `claude-council.${LIST_FIELD}`
+// The /config row that turns the heads-up on for every project, as $.config names it.
+const HEADS_UP_ROW_KEY = 'claude-council.heads_up'
+// The heads-up runner forks and returns its pid; anything slower is a fault.
+const HEADS_UP_LAUNCH_MS = 10_000
+
+// The heads-up side-check's session state is the host's (its contract is
+// types/index.d.ts), so a hot reload keeps a check in flight and a note on
+// screen; the band reads it while drawing.
+const HEADS_UP = { plugin: 'claude-council', key: 'headsUp' } as const
+const headsUp = atom(HEADS_UP, FRESH_SESSION)
 
 type PaneState = {
   root: string
@@ -67,6 +85,20 @@ type PaneState = {
   shown: Set<string>
   lastError: string
   pidCheckedAtMs: number
+  // When the heads-up check's worker was last asked whether it is alive.
+  headsUpCheckedAtMs: number
+  // The last config problem logged, so a broken file is reported once.
+  headsUpProblem: string
+  // The last heads-up failure logged (see logFailure).
+  headsUpError: string
+  // The intro tail on the prompt hint; '' once typed past, turned on, or never due.
+  headsUpTip: string
+  // The last check that found nothing, on the prompt hint until a keystroke or the next check.
+  headsUpReceipt: string
+  // The last check that failed, drawn in red above the prompt for a while; the transcript keeps the reason.
+  headsUpFailure?: FinishNotice
+  // The note whose Turn off was pressed once; the second press turns the check off for this project.
+  headsUpTurnOffArmed: string
   // When the followed specialist round's process was last checked.
   specialistCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
@@ -340,6 +372,95 @@ async function introduceSpecialists($: EngineInterface, specialists: number): Pr
   if (notice.markShown) await $.store.set(INTRO_KEY, true)
 }
 
+// The engine's own dialogs: scope, seat, cadence, then the seat's model and,
+// for codex, its effort. The file is
+// written first; "every project" then sets the /config row, which reloads
+// this module, so the status that follows may not print.
+async function setupHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<string | undefined> {
+  let scope: string
+  try {
+    scope = await $.ui.ask(SCOPE_QUESTION, { header: 'Heads-up', options: [SCOPE.project, SCOPE.all, SCOPE.off] })
+  } catch {
+    return 'Setup closed; nothing changed.'
+  }
+  const file = await headsUpFile($)
+  if (scope === SCOPE.off) {
+    await $.fs.write(file.path, withEnabled(file.text, false))
+    return statusText(parseConfig((await headsUpFile($)).text, settings.headsUp), settings.headsUp, (await headsUpFile($)).text, parseCounts(await $.store.get(COUNTS_KEY)))
+  }
+  if (scope !== SCOPE.project && scope !== SCOPE.all) return `Setup closed: ${JSON.stringify(scope)} is not one of the choices; nothing changed.`
+  const bins = (await $.process.run(['bash', '-c', 'for b in codex agy claude copilot cursor-agent grok kimi ollama; do command -v "$b" > /dev/null 2>&1 && echo "$b"; done'])).stdout.split('\n').filter(line => line !== '')
+  // $.env.get takes a literal name, checked when the module loads.
+  const keyValues: Record<string, string | undefined> = {
+    GEMINI_API_KEY: await $.env.get('GEMINI_API_KEY'),
+    GROK_API_KEY: await $.env.get('GROK_API_KEY'),
+    XAI_API_KEY: await $.env.get('XAI_API_KEY'),
+    KIMI_API_KEY: await $.env.get('KIMI_API_KEY'),
+    MOONSHOT_API_KEY: await $.env.get('MOONSHOT_API_KEY'),
+    OPENAI_API_KEY: await $.env.get('OPENAI_API_KEY'),
+    OPENROUTER_API_KEY: await $.env.get('OPENROUTER_API_KEY'),
+    PERPLEXITY_API_KEY: await $.env.get('PERPLEXITY_API_KEY'),
+  }
+  const keys = new Set(Object.entries(keyValues).filter(([, value]) => (value ?? '') !== '').map(([name]) => name))
+  let seatAnswer: string
+  let everyAnswer: string
+  try {
+    seatAnswer = await $.ui.ask(SEAT_QUESTION, { header: 'Heads-up', options: seatOptions(availableSeats(bin => bins.includes(bin), name => keys.has(name))) })
+    everyAnswer = await $.ui.ask(EVERY_QUESTION, { header: 'Heads-up', options: [...EVERY_LABELS] })
+  } catch {
+    return 'Setup closed; nothing changed.'
+  }
+  const chosen = seatFromAnswer(seatAnswer)
+  if ('why' in chosen) return `Setup closed: ${chosen.why}; nothing changed.`
+  const { seat } = chosen
+  const unknown = await notASeat($, seat)
+  if (unknown !== undefined) return `Setup closed: ${unknown}; nothing changed.`
+  const every = everyFromAnswer(everyAnswer)
+  if ('why' in every) return `Setup closed: ${every.why}; nothing changed.`
+  // The seat's model; codex also takes an effort, from its own catalog.
+  const current = (await $.process.run(['bash', '-c', 'source "$1/scripts/lib/providers.sh" && get_model "$2"', '_', $.plugin.root, seat]).catch(() => ({ stdout: '' }))).stdout.trim()
+  const catalog = seat === 'codex' ? await readCatalog($) : undefined
+  const slugs = catalog !== undefined && 'models' in catalog ? catalog.models.filter(m => m.listed).map(m => m.slug) : undefined
+  let modelAnswer: string
+  try {
+    modelAnswer = await $.ui.ask(MODEL_QUESTION(seat), { header: 'Heads-up', options: modelOptions(current, slugs) })
+  } catch {
+    return 'Setup closed; nothing changed.'
+  }
+  const model = modelFromAnswer(modelAnswer)
+  let pick: SeatPick = model === undefined ? {} : { model }
+  if (seat === 'codex' && catalog !== undefined && 'models' in catalog) {
+    const entry = catalog.models.find(m => m.slug === (model ?? current))
+    let effortAnswer: string
+    try {
+      effortAnswer = await $.ui.ask(EFFORT_QUESTION, { header: 'Heads-up', options: effortOptions(entry?.efforts ?? [], entry?.defaultEffort ?? '') })
+    } catch {
+      return 'Setup closed; nothing changed.'
+    }
+    const effort = effortFromAnswer(effortAnswer)
+    if ('why' in effort) return `Setup closed: ${effort.why}; nothing changed.`
+    if (effort.effort !== undefined) pick = { ...pick, effort: effort.effort }
+  }
+  await $.fs.write(file.path, withEnabled(file.text, scope === SCOPE.project ? true : undefined, seat, every.every, pick))
+  state.headsUpTip = ''
+  if (scope === SCOPE.all && !settings.headsUp) {
+    const written = await $.config.set({ key: HEADS_UP_ROW_KEY, value: true })
+    if (written.deny) return `The file is written, but the /config row was refused: ${written.deny}`
+  }
+  const after = await headsUpFile($)
+  return statusText(parseConfig(after.text, scope === SCOPE.all || settings.headsUp), scope === SCOPE.all || settings.headsUp, after.text, parseCounts(await $.store.get(COUNTS_KEY)))
+}
+
+// Once per install, while the check is off: the store flag is shared by every session.
+async function introduceHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
+  const intro = introTail({ shown: (await $.store.get(HEADS_UP_INTRO_KEY)) === true, enabled: (await readHeadsUpConfig($, state, settings)).enabled })
+  if (intro.tail !== undefined) {
+    state.headsUpTip = intro.tail
+    $.ui.invalidate('ui.render')
+  }
+  if (intro.markShown) await $.store.set(HEADS_UP_INTRO_KEY, true)
+}
+
 async function foldTemplates($: EngineInterface, state: PaneState): Promise<void> {
   const { templatesOpen, ...setup } = currentSetup(state)
   await keepSetup($, state, templatesOpen ? setup : { ...setup, templatesOpen: true })
@@ -388,9 +509,11 @@ async function wakeWhenFetchable($: EngineInterface, state: PaneState): Promise<
 // .done comes from the run's EXIT trap, which a SIGKILL skips. A run whose
 // process is gone and that left no .done will never write one; without this
 // the pane would follow it for the rest of the session and see no later run.
-async function runHasDied($: EngineInterface, state: PaneState, runDir: string, now: number): Promise<boolean> {
-  if (now - state.pidCheckedAtMs < PID_CHECK_MS) return false
-  state.pidCheckedAtMs = now
+// lastCheck: which clock throttles the check, so the council run and the
+// heads-up worker are each asked at the pid cadence.
+async function runHasDied($: EngineInterface, state: PaneState, runDir: string, now: number, lastCheck: 'pidCheckedAtMs' | 'headsUpCheckedAtMs' = 'pidCheckedAtMs'): Promise<boolean> {
+  if (now - state[lastCheck] < PID_CHECK_MS) return false
+  state[lastCheck] = now
   const pid = runPid(await readText(files($), `${runDir}/pid`))
   if (!pid) return false
   const alive = await $.process.run(['kill', '-0', pid])
@@ -414,7 +537,12 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.finished = undefined
     $.ui.invalidate('ui.render')
   }
+  if (state.headsUpFailure && !noticeIsLive(state.headsUpFailure, now)) {
+    state.headsUpFailure = undefined
+    $.ui.invalidate('ui.render')
+  }
   if (state.pendingWake) await wakeWhenFetchable($, state)
+  if ((await read($, headsUp)).phase.kind === 'checking') await pollHeadsUp($, state, now)
   if (!state.runDir) {
     const name = unseenRun(await $.fs.list(state.root), state.shown)
     if (!name) return
@@ -502,10 +630,14 @@ async function paneHost($: EngineInterface, setting: HostSetting): Promise<PaneH
 // The watch root and the two timers start with the first council run, not the
 // session: a session that never convenes the council pays no polling and
 // leaves no directory behind.
+async function watchRoot($: EngineInterface): Promise<string> {
+  const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
+  return `${tmp}/council-mod.${await $.session.id()}`
+}
+
 async function startWatching($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
   if (state.root) return
-  const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
-  state.root = `${tmp}/council-mod.${await $.session.id()}`
+  state.root = await watchRoot($)
   await $.fs.write(`${state.root}/.keep`, '')
   $.clock.every(FRAME_MS, () => { void animate($, state) })
   $.clock.every(POLL_MS, () => { void pollOnce($, state, settings) })
@@ -518,14 +650,16 @@ async function aimRun($: EngineInterface, state: PaneState, settings: PaneOption
 }
 
 // A background failure is logged once per distinct message, never dropped.
-async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>): Promise<void> {
+// Each kind keeps its own last message, so one's success never re-arms the other's.
+async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>, kind: 'specialist' | 'heads-up' = 'specialist'): Promise<void> {
+  const last = kind === 'specialist' ? 'specialistError' : 'headsUpError'
   try {
     await work()
-    state.specialistError = ''
+    state[last] = ''
   } catch (error) {
-    const message = `specialist: ${String(error)}`
-    if (message !== state.specialistError) $.ui.log(message)
-    state.specialistError = message
+    const message = `${kind}: ${String(error)}`
+    if (message !== state[last]) $.ui.log(message)
+    state[last] = message
   }
 }
 
@@ -543,6 +677,237 @@ async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOpti
   } finally {
     state.isPolling = false
   }
+}
+
+// Every session shares the heads-up memory: a write merges the lists with
+// what another session wrote meanwhile and keeps this session's counters.
+async function loadMemory($: EngineInterface): Promise<Memory> {
+  return parseMemory(await $.store.get(STORE_KEY))
+}
+
+async function saveMemory($: EngineInterface, ours: Memory): Promise<void> {
+  await $.store.set(STORE_KEY, mergeMemory(await loadMemory($), ours))
+}
+
+async function recordAnswer($: EngineInterface, topic: string, answer: Answer): Promise<void> {
+  await saveMemory($, applyAnswer(await loadMemory($), topic, answer))
+  await count($, answer === 'typed-past' ? 'typedPast' : answer === 'turn-off' ? 'turnOff' : answer)
+}
+
+// Read, add one, write: a count, never a lock (see Counts).
+async function count($: EngineInterface, key: keyof Counts): Promise<void> {
+  await $.store.set(COUNTS_KEY, bumped(parseCounts(await $.store.get(COUNTS_KEY)), key))
+}
+
+// The runner's own allowlist (a providers/<seat>.sh exists) decides what a
+// seat is, so no second list lives here; the refusal names the real ones.
+async function notASeat($: EngineInterface, seat: string): Promise<string | undefined> {
+  const ok = await $.process.run(['bash', '-c', 'source "$1/scripts/lib/providers.sh" && provider_allowlisted "$2"', '_', $.plugin.root, seat])
+  if (ok.exitCode === 0) return undefined
+  const names = (await $.fs.list(`${$.plugin.root}/scripts/providers`)).map(entry => entry.name).filter(name => name.endsWith('.sh')).map(name => name.slice(0, -3)).sort()
+  return `${JSON.stringify(seat)} is not a council seat; one of ${names.join(', ')}`
+}
+
+// The project file is the consent and the only switch; it is read at each
+// step, so turning it on or off needs no reload. A broken file is logged once.
+async function headsUpFile($: EngineInterface): Promise<{ path: string; text: string | undefined }> {
+  const path = `${await $.session.cwd()}/${CONFIG_FILE}`
+  return { path, text: (await $.fs.exists(path)) ? await $.fs.read(path) : undefined }
+}
+
+async function readHeadsUpConfig($: EngineInterface, state: PaneState, settings: PaneOptions) {
+  const config = parseConfig((await headsUpFile($)).text, settings.headsUp)
+  const problem = config.enabled ? '' : config.problem ?? ''
+  if (problem && problem !== state.headsUpProblem) $.ui.log(problem)
+  state.headsUpProblem = problem
+  return config
+}
+
+// Writes the avoid list and forks the runner, which returns once its worker
+// is detached; an exit that is not 0 leaves nothing behind and is reported.
+async function launchHeadsUp($: EngineInterface, config: Extract<HeadsUpConfig, { enabled: true }>, runDir: string, avoidFile: string): Promise<void> {
+  const args = ['--run-dir', runDir, '--session', await $.session.id(), '--seat', config.seat, '--avoid-file', avoidFile]
+  const pick = modelFile(config)
+  if (pick !== '') {
+    await $.fs.write(`${runDir}/model.json`, pick)
+    args.push('--model', `${runDir}/model.json`)
+  }
+  const run = await $.process.run(['bash', `${$.plugin.root}/scripts/heads-up.sh`, ...args], { timeoutMs: HEADS_UP_LAUNCH_MS })
+  if (run.exitCode === 0) return
+  await $.process.run(['rm', '-rf', runDir])
+  throw new Error(`heads-up.sh exited ${run.exitCode}: ${run.stderr.trim()}`)
+}
+
+// One main-loop step: decide, write the session when it changed, and launch
+// on a cadence point. The session says checking before the fork, so a step
+// that lands while the runner starts cannot launch a second check.
+async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions, step: { turnId: string; index: number }): Promise<void> {
+  const config = await readHeadsUpConfig($, state, settings)
+  const memory = await loadMemory($)
+  const now = await $.clock.now()
+  const held = await $.state.get(HEADS_UP)
+  const decision = decide(config, held.value ?? FRESH_SESSION, memory, step, now)
+  if (decision.kind === 'skip' && decision.why === 'backoff') await saveMemory($, decision.memory)
+  if (decision.kind !== 'launch' || !config.enabled) return
+  const runDir = `${await watchRoot($)}/heads-up/${decision.checkId}`
+  // The run dir exists before the session says `checking`: a poll that lands
+  // in between would otherwise read a dir that is not there yet as a run
+  // that vanished, and idle the session under the launch.
+  const avoidFile = `${runDir}/avoid.txt`
+  await $.fs.write(avoidFile, avoidList(memory))
+  const session: Session = { ...(held.value ?? FRESH_SESSION), phase: { kind: 'checking', turnId: step.turnId, checkId: decision.checkId, runDir, startedMs: now } }
+  // A press or a poll wrote in between: this step's reading is stale, and
+  // the next step decides again on the new session.
+  const written = await $.state.set(HEADS_UP, session, { ifVersion: held.version })
+  if (!written.isSet) {
+    await $.process.run(['rm', '-rf', runDir])
+    return
+  }
+  await startWatching($, state, settings)
+  try {
+    await launchHeadsUp($, config, runDir, avoidFile)
+    await count($, 'checks')
+  } catch (error) {
+    await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))
+    // A check that never started is a failed check to the person: red above the prompt, counted, and logged by the caller.
+    state.headsUpFailure = { text: `heads-up: failed · ${String(error)}`, untilMs: now + FINISH_NOTICE_MS, isFailure: true }
+    $.ui.invalidate('ui.render')
+    await count($, 'failed')
+    throw error
+  }
+}
+
+// The poll's heads-up branch: a result once .done lands, or a failure when
+// the worker or its dir is gone without one. Every check's dir is removed.
+async function pollHeadsUp($: EngineInterface, state: PaneState, now: number): Promise<void> {
+  const phase = (await read($, headsUp)).phase
+  if (phase.kind !== 'checking') return
+  const { runDir, checkId } = phase
+  const lost = (detail: string): RunResult => ({ kind: 'failed', payloadBytes: 0, seats: [{ seat: 'runner', outcome: 'error', elapsedMs: now - phase.startedMs, detail }] })
+  let result: RunResult
+  if (await $.fs.exists(`${runDir}/.done`)) result = parseRunResult(checkId, await readText(files($), `${runDir}/result.json`))
+  else if (!(await $.fs.exists(runDir))) result = lost(`its run dir ${runDir} is gone`)
+  else if (await runHasDied($, state, runDir, now, 'headsUpCheckedAtMs')) result = lost('heads-up.sh stopped without writing a result')
+  else return
+  const memory = await loadMemory($)
+  const settled = await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(s, memory, result) : s))
+  if (result.kind === 'failed') {
+    $.ui.log(checkLine(result))
+    state.headsUpFailure = { text: checkLine(result), untilMs: now + FINISH_NOTICE_MS, isFailure: true }
+    $.ui.invalidate('ui.render')
+  }
+  if (result.kind === 'none') {
+    state.headsUpReceipt = receiptLine(result)
+    $.ui.invalidate('ui.render')
+  }
+  const drawn = settled.phase.kind === 'showing' && settled.phase.note.id === checkId
+  await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
+  await $.process.run(['rm', '-rf', runDir])
+}
+
+// A press on the band: the session moves, and the shown topic is recorded.
+// Tell Claude puts a draft in the prompt box, as the builtin does, so the
+// person sees what Claude will get and sends it themselves; nothing is hidden
+// and nothing is sent. A box that cannot take it (a dialog up, headless) is
+// reported once, since the note is gone by then.
+async function pressHeadsUp($: EngineInterface, answer: Exclude<Answer, 'typed-past'>): Promise<void> {
+  const shown: { note?: Note } = {}
+  await update($, headsUp, s => {
+    shown.note = s.phase.kind === 'showing' ? s.phase.note : undefined
+    return pressed(s, answer)
+  })
+  if (shown.note === undefined) return
+  await recordAnswer($, shown.note.topic, answer)
+  if (answer === 'turn-off') {
+    const file = await headsUpFile($)
+    await $.fs.write(file.path, withEnabled(file.text, false))
+    $.ui.log(`heads-up: off for this project (${CONFIG_FILE}); /${HEADS_UP_COMMAND} on turns it back on`)
+    return
+  }
+  if (answer !== 'tell') return
+  const filled = await $.prompt.fill({ text: tellClaudeDraft(shown.note), mode: 'replace' })
+  if (!filled.isFilled) throw new Error(`the prompt box did not take the note: ${tellClaudeDraft(shown.note)}`)
+}
+
+// The person's own prompt while a note shows: it is typed past.
+async function personSubmitted($: EngineInterface): Promise<void> {
+  const seen: { topic?: string } = {}
+  await update($, headsUp, s => {
+    seen.topic = s.phase.kind === 'showing' ? s.phase.note.topic : undefined
+    return typedPast(s)
+  })
+  if (seen.topic !== undefined) await recordAnswer($, seen.topic, 'typed-past')
+}
+
+// Turn off takes two presses, as the builtin's Disable does: the first arms it
+// for this note, any other press disarms it.
+function headsUpPresses($: EngineInterface, state: PaneState, noteId: string): Record<Exclude<Answer, 'typed-past'>, () => void> {
+  const press = (answer: Exclude<Answer, 'typed-past'>) => () => {
+    state.headsUpTurnOffArmed = ''
+    void logFailure($, state, () => pressHeadsUp($, answer), 'heads-up')
+  }
+  const turnOff = () => {
+    if (state.headsUpTurnOffArmed === noteId) return press('turn-off')()
+    state.headsUpTurnOffArmed = noteId
+    $.ui.invalidate('ui.render')
+  }
+  return { learn: press('learn'), tell: press('tell'), knew: press('knew'), dismiss: press('dismiss'), 'turn-off': turnOff }
+}
+
+// The note, in the shape of Claude Code's own heads-up: the mark in the
+// council colour, the tag bold, the sentence plain and wrapped under its
+// first word, then the choices drawn plain (`1: Learn more`, as a survey's row) with
+// the seat line dimmed after them. A narrow pane cuts the seat line, never a choice.
+function headsUpRow(
+  ui: Pick<Elements['terminal'], 'Box' | 'Button' | 'Text'>,
+  band: BandView,
+  press: Record<Exclude<Answer, 'typed-past'>, () => void>,
+  turnOffArmed: boolean,
+) {
+  const { more } = band
+  const turnOff = <ui.Button key="heads-up:turn-off" hotkey="4" label={turnOffArmed ? 'Press again to turn off' : 'Turn off'} plain dimColor onPress={press['turn-off']} />
+  return (
+    <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
+      <ui.Box flexDirection="row">
+        <ui.Box flexShrink={0}><ui.Text color={COLOR.accent}>{'\u2726 '}</ui.Text></ui.Box>
+        <ui.Box flexGrow={1} flexShrink={1} flexDirection="column">
+          <ui.Text wrap="wrap"><ui.Text bold>{band.tag}</ui.Text>{` \u00b7 ${band.headline}`}</ui.Text>
+          {more !== null && (
+            <ui.Box flexDirection="column" marginTop={1} marginBottom={1}>
+              {more.title !== '' && <ui.Text bold wrap="wrap">{more.title}</ui.Text>}
+              {more.points.map((point, at) => (
+                <ui.Text key={`heads-up:point:${at}`} wrap="wrap" bold={at === more.points.length - 1}>{`- ${point}`}</ui.Text>
+              ))}
+            </ui.Box>
+          )}
+          <ui.Box flexDirection="row">
+            <ui.Box flexShrink={0} flexDirection="row">
+              {more === null
+                ? [
+                    <ui.Button key="heads-up:learn" hotkey="1" label="Learn more" plain onPress={press.learn} />,
+                    <ui.Text key="gap-1">{'   '}</ui.Text>,
+                    <ui.Button key="heads-up:knew" hotkey="2" label="Knew this already" plain onPress={press.knew} />,
+                    <ui.Text key="gap-2">{'   '}</ui.Text>,
+                    turnOff,
+                    <ui.Text key="gap-3">{'   '}</ui.Text>,
+                    <ui.Button key="heads-up:dismiss" hotkey="0" label="Dismiss" plain role="dismiss" onPress={press.dismiss} />,
+                  ]
+                : [
+                    <ui.Button key="heads-up:tell" hotkey="1" label="Tell Claude" plain onPress={press.tell} />,
+                    <ui.Text key="gap-1">{'   '}</ui.Text>,
+                    turnOff,
+                    <ui.Text key="gap-2">{'   '}</ui.Text>,
+                    <ui.Button key="heads-up:close" hotkey="0" label="Close" plain role="dismiss" onPress={press.dismiss} />,
+                  ]}
+            </ui.Box>
+            <ui.Box flexShrink={1}>
+              <ui.Text color={COLOR.hint} wrap="truncate-end">{`      ${band.meta}`}</ui.Text>
+            </ui.Box>
+          </ui.Box>
+        </ui.Box>
+      </ui.Box>
+    </ui.Box>
+  )
 }
 
 function specialistRun($: EngineInterface, args: string[], init?: { stdin?: string }) {
@@ -800,11 +1165,12 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', headsUpError: '', headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     await $.command.register({ name: SETUP_COMMAND, description: 'Add, edit or remove specialists', immediate: true })
+    await $.command.register({ name: HEADS_UP_COMMAND, description: 'Heads-up side-check: set it up in a few questions, switch it on for this project naming the seat, or off, or show its state and counts', argumentHint: '[setup | on [seat] | off | status]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     // An entry that does not parse is reported, never dropped quietly.
     const roster = specialistRoster(options)
@@ -830,6 +1196,9 @@ export const register: Register = (on, options) => {
     const hasRuns = Object.values(await loadRuns($)).some(record => record.state !== 'finished')
     await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists, hasRuns), inputSchema: specialistSchema(roster.specialists, hasRuns) })
     void logFailure($, state, () => introduceSpecialists($, roster.specialists.length))
+    void logFailure($, state, () => introduceHeadsUp($, state, settings), 'heads-up')
+    // A reload drops the poll timer; a check still in flight needs it back.
+    if ((await read($, headsUp)).phase.kind === 'checking') await startWatching($, state, settings)
     if (roster.specialists.length > 0 || hasRuns) {
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })
@@ -860,6 +1229,24 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
     }
     return result
+  })
+
+  // The heads-up check rides the main loop's steps. The request goes first and
+  // is never held up: the check's own work runs beside it.
+  on('turn.step', async function* ($, e, next) {
+    const response = next(e)
+    if (e.agentId === undefined) {
+      const step = { turnId: e.turnId, index: e.index }
+      void logFailure($, state, () => stepHeadsUp($, state, settings, step), 'heads-up')
+    }
+    return yield* response
+  })
+
+  // Only the person's own prompt types past a note; a plugin's submit or a
+  // notification does not.
+  on('prompt.submit', async ($, e, next) => {
+    if (e.origin.kind === 'composer' || e.origin.kind === 'bridge') await logFailure($, state, () => personSubmitted($), 'heads-up')
+    return next(e)
   })
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
@@ -1048,6 +1435,23 @@ export const register: Register = (on, options) => {
     return { result: `Run ${current.id} not finished: ${why}`, isError: true }
   })
 
+  on('command.run', { command: HEADS_UP_COMMAND }, async ($, e) => {
+    const command = headsUpCommand(e.args)
+    if (command.action === 'unknown') return { text: `${command.why}. Usage: /${HEADS_UP_COMMAND} [on [seat] | off | setup | status]; one seat, a provider name such as codex, gemini or grok-cli.` }
+    if (command.action === 'setup') {
+      const outcome = await setupHeadsUp($, state, settings)
+      if (outcome !== undefined) return { text: outcome }
+    } else if (command.action !== 'status') {
+      const unknown = command.action === 'on' && command.seat !== undefined ? await notASeat($, command.seat) : undefined
+      if (unknown !== undefined) return { text: `${unknown}; nothing changed.` }
+      const file = await headsUpFile($)
+      await $.fs.write(file.path, withEnabled(file.text, command.action === 'on', command.action === 'on' ? command.seat : undefined))
+      state.headsUpTip = ''
+    }
+    const file = await headsUpFile($)
+    return { text: statusText(parseConfig(file.text, settings.headsUp), settings.headsUp, file.text, parseCounts(await $.store.get(COUNTS_KEY))) }
+  })
+
   on('command.run', { command: REOPEN_COMMAND }, async ($, e) => {
     const command = paneCommand(e.args)
     if (command.action === 'forget') {
@@ -1059,7 +1463,20 @@ export const register: Register = (on, options) => {
     return { text: reopenReply(state.view !== undefined) }
   })
 
-  on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
+  // The intro rides the dim hint under the prompt while it is empty; the
+  // first typed character retires it for good.
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    const tail = state.headsUpTip !== '' ? state.headsUpTip : state.headsUpReceipt
+    if (tail === '') return next(e)
+    if (e.props.isDraft) {
+      state.headsUpTip = ''
+      state.headsUpReceipt = ''
+      return next(e)
+    }
+    return next({ ...e, props: { ...e.props, tail } })
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     // The band sits on the prompt, so the offer stays in view however far the
     // pane has scrolled; a survey owns the band while it runs.
     const retry = state.retryShown
@@ -1087,6 +1504,28 @@ export const register: Register = (on, options) => {
       )
     }
     if (retry && runDir) return retryRow($.ui.resolve(e), retry, retryPresses($, runDir))
+    const failure = state.headsUpFailure
+    if (failure) {
+      const ui = $.ui.resolve(e)
+      return (
+        <ui.Box key="heads-up-failure" flexDirection="row" marginTop={1}>
+          <ui.Text bold color={COLOR.danger}>{` \u2717 ${failure.text}  `}</ui.Text>
+          <ui.Button
+            key="heads-up-failure:dismiss"
+            hotkey="x"
+            label={'x \u00b7 dismiss'}
+            onPress={() => {
+              state.headsUpFailure = undefined
+              $.ui.invalidate('ui.render')
+            }}
+          />
+        </ui.Box>
+      )
+    }
+    // A note is one row and time-sensitive: the progress bands wait for its
+    // answer. Reading the session here subscribes the band to its changes.
+    const band = bandView((await read($, headsUp)).phase)
+    if (band) return headsUpRow($.ui.resolve(e), band, headsUpPresses($, state, band.id), state.headsUpTurnOffArmed === band.id)
     const working = state.specialist
     if (working) {
       const ui = $.ui.resolve(e)

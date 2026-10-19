@@ -3,18 +3,20 @@
 import { test, expect } from 'bun:test'
 import { paneOptions } from '../hooks/options'
 
-test('defaults: pane on, collapse when done, no wake, tool offered', () => {
-  expect(paneOptions({})).toEqual({ host: 'ask', collapsesWhenDone: true, wakesOnAsyncDone: false, offersTool: true, roundLimitSeconds: 3600 })
+test('defaults: pane on, collapse when done, no wake, tool offered, heads-up off', () => {
+  expect(paneOptions({})).toEqual({ host: 'ask', collapsesWhenDone: true, wakesOnAsyncDone: false, offersTool: true, roundLimitSeconds: 3600, headsUp: false })
 })
 
 test('declared values are taken, anything that is not a boolean is ignored', () => {
-  expect(paneOptions({ pane_host: 'tmux', collapse_when_done: 'no', wake_on_async_done: true, council_tool: false })).toEqual({
+  expect(paneOptions({ pane_host: 'tmux', collapse_when_done: 'no', wake_on_async_done: true, council_tool: false, heads_up: true })).toEqual({
     host: 'tmux',
     collapsesWhenDone: true,
     wakesOnAsyncDone: true,
     offersTool: false,
     roundLimitSeconds: 3600,
+    headsUp: true,
   })
+  expect(paneOptions({ heads_up: 'on' }).headsUp).toBe(false)
 })
 
 test('an unknown pane_host value falls back to ask', () => {

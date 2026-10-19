@@ -224,13 +224,13 @@ council answers with a verified fallback model instead of failing, and says so
 in the response header:
 
 ```
-## ● Grok - grok-4.6 (grok-latest unavailable)
+## ● Grok - grok-4.7 (grok-latest unavailable)
 ```
 
 | Provider | Default | Fallback |
 |---|---|---|
 | openai | `gpt-6-astra` | `gpt-6.1-sol` |
-| grok | `grok-latest` | `grok-4.6` |
+| grok | `grok-latest` | `grok-4.7` |
 | gemini | `gemini-flash-latest` | `gemini-3.8-flash` |
 | perplexity | `low` | `fast` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
@@ -307,8 +307,10 @@ export PERPLEXITY_RECENCY="week"
 `PERPLEXITY_MODEL` takes an Agent API preset or a `provider/model` id:
 - `fast` - quick search answers (Perplexity's replacement for `sonar` and `sonar-pro`)
 - `low` - reasoning + search (replaces `sonar-reasoning-pro`, default)
-- `medium`, `high`, `xhigh` - deeper research, slower and costlier
+- `medium`, `high`, `xhigh` - deeper research, slower and costlier (`high` replaces `sonar-deep-research`)
 - a `provider/model` id such as `perplexity/sonar`, sent as `model` with web search still on
+
+The reasoning presets spend their thinking from the `max_output_tokens` budget. An answer cut off at that budget still prints, under a warning that names the reason. A reply with neither an answer nor an error message, such as HTML from a proxy, is an error that prints the raw body.
 
 Perplexity is useful when you need current information (latest framework versions, recent best practices) rather than just training-data knowledge.
 
@@ -376,6 +378,15 @@ it:
 export COUNCIL_PASS_ENV=NODE_OPTIONS,EXAMPLE_VAR   # comma-separated names passed to every provider
 ```
 
+The heads-up side-check ([usage](USAGE.md#heads-up-side-check-opt-in-off-by-default))
+reads three more, all optional:
+
+```bash
+export COUNCIL_HEADS_UP_SEAT_SECONDS=60   # the seat's deadline per check
+export COUNCIL_HEADS_UP_TURNS=5           # transcript window, in turns
+export COUNCIL_HEADS_UP_RESULTS=8         # tool results in the digest, 2,000 characters each
+```
+
 ## Display & Terminal Integration
 
 When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `fallback`, `cached`, `error`, `cancelled` with timing) and renders each response as it lands. Rendering prefers [Rich](https://github.com/Textualize/rich) when a Rich-capable Python is available (`python3` with a modern `rich` installed, or [`uv`](https://docs.astral.sh/uv/), which fetches it on demand): word-wrapped prose, tables fitted to the pane width, syntax-highlighted code, clickable links — styled with your terminal's own palette (cyan headings, yellow code, vendor-colored banners). Without one, a built-in dependency-free perl markdown renderer takes over with the same visual language, so nothing needs to be installed. Press **Esc** or **Ctrl-D** to close the pane.
@@ -438,13 +449,18 @@ bash scripts/query-council.sh --providers=gemini,openai --roles=balanced -- "Rev
 bash scripts/session-transcript.sh <session-id>
 bash scripts/transcript-digest.sh --turns last:25 <path/to/transcript.jsonl>
 
+# The last 5 turns plus the last 8 tool results inside them, each cut to 2000 characters
+bash scripts/transcript-digest.sh --turns last:5 --tool-results 8 --tool-result-chars 2000 <path/to/transcript.jsonl>
+
 # Pipe to formatter for terminal display
 bash scripts/query-council.sh --providers=gemini -- "Question" 2>/dev/null | bash scripts/format-output.sh
 
 # Check provider status. A passed key check for Gemini, OpenAI, Grok or Kimi is
 # followed by one chat request capped at 16 output tokens, since a models
 # listing answers for a key whose account cannot run inference; Perplexity's
-# only check is such a request. Each costs a fraction of a cent.
+# only check is such a request. Each costs a fraction of a cent. A
+# PERPLEXITY_MODEL the seat would refuse, such as a retired sonar-* id, shows
+# Unsupported model with the reason, and the check sends no request.
 bash scripts/check-status.sh
 
 # List configured providers (human-readable, with policy info)

@@ -260,6 +260,18 @@ router_seat_index() {
     echo "${BASH_REMATCH[1]}"
 }
 
+PROVIDERS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# True when $1 may be run as a seat by a caller that splices a configured name
+# into a script path (the stop gate, the heads-up runner). The registry is the
+# providers/ directory beside this library, so the allowlist cannot drift from
+# it. The shape test comes first: a name like "../../evil" or "a/b" never
+# reaches the filesystem.
+provider_allowlisted() {
+    [[ "$1" =~ ^[a-z][a-z0-9-]+$ ]] || return 1
+    [[ -f "${PROVIDERS_LIB_DIR}/../providers/$1.sh" ]]
+}
+
 # The script that answers for a provider name. Every name is its own filename
 # except the router's numbered seats, which share openrouter.sh.
 provider_script_path() {

@@ -37,6 +37,19 @@
 #                    string, the other shape the message format allows
 #   tool-narration - kimi only: an assistant message carrying tool_calls, whose
 #                    content narrates the call rather than answering
+#   heads-up-note  - a heads-up side-check finding: codex under --output-schema
+#                    writes it to the -o file and emits turn.completed; the
+#                    others print the NOTE:/TAG:/TOPIC:/TITLE:/POINT: lines
+#   heads-up-slow-note - codex only: the note after sleeping COUNCIL_FAKE_SLEEP
+#                    (default 5s)
+#   heads-up-none  - nothing to raise: codex writes {"none": true, ...}, the
+#                    others print "NONE."
+#   heads-up-blank - codex only: none false with an empty topic and headline,
+#                    an answer that fits the schema and says nothing
+#   heads-up-no-turn - codex only: writes a note, exits 0, but its events hold
+#                    no turn.completed, as codex looks after a SIGTERM
+#   off-contract   - a reply that neither starts NONE nor NOTE:, though it
+#                    carries a NOTE: further along
 #
 # Every invocation appends {bin, args} to $COUNCIL_FAKE_STATE_DIR/calls.jsonl
 # so tests can assert exactly what the plugin sent to the CLI.
@@ -81,6 +94,42 @@ EOF
 SPILLED=\$(printf '%s\\n' "\$@" | grep -o '[^[:space:]]*council-agy-prompt[^[:space:]]*' | head -1 || true)
 if [[ -n "\${SPILLED:-}" && -f "\$SPILLED" ]]; then
     cp "\$SPILLED" "\${COUNCIL_FAKE_STATE_DIR:?}/spill.txt"
+fi
+EOF
+    fi
+    if [[ "$bin" == "codex" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<'EOF'
+# The heads-up runner's structured call: codex exec --json ... --output-schema
+# SCHEMA -o FILE -. The prompt arrives on stdin (kept for inspection), the
+# answer goes to the -o file and the JSONL events to stdout. The real CLI exits
+# 0 on SIGTERM, so only a turn.completed event says the turn finished.
+if [[ " $* " == *" --output-schema "* ]]; then
+    OUT=""; PREV=""
+    for a in "$@"; do [[ "$PREV" == "-o" ]] && OUT="$a"; PREV="$a"; done
+    cat > "${COUNCIL_FAKE_STATE_DIR:?}/codex-stdin.txt"
+    note='{"none":false,"tag":"Heads up","topic":"backfill never ran","headline":"The migration test used an empty fixture, so the backfill path never ran.","title":"The backfill path never ran","points":["The fixture had no rows, so the loop had nothing to do.","Seed one row in C:\\fixtures\\empty.db and rerun the migration test."]}'
+    case "${COUNCIL_FAKE_BEHAVIOR:-valid}" in
+        heads-up-note|heads-up-slow-note)
+            [[ "$COUNCIL_FAKE_BEHAVIOR" == heads-up-slow-note ]] && sleep "${COUNCIL_FAKE_SLEEP:-5}"
+            echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
+            printf '%s\n' "$note" > "$OUT"
+            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            exit 0 ;;
+        heads-up-none)
+            echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
+            echo '{"none":true,"tag":"","topic":"","headline":"","title":"","points":[]}' > "$OUT"
+            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            exit 0 ;;
+        heads-up-blank)
+            echo '{"none":false,"tag":"Heads up","topic":"","headline":"","title":"","points":[]}' > "$OUT"
+            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            exit 0 ;;
+        heads-up-no-turn)
+            echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
+            printf '%s\n' "$note" > "$OUT"
+            echo "codex: interrupted" >&2
+            exit 0 ;;
+    esac
 fi
 EOF
     fi
@@ -260,6 +309,7 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     slow)           sleep "\${COUNCIL_FAKE_SLEEP:-5}"; echo "$marker: slow answer" ;;
     hang)           exec sleep "\${COUNCIL_FAKE_SLEEP:-300}" ;;
     hang-handled)   trap 'exit 0' TERM; sleep "\${COUNCIL_FAKE_SLEEP:-300}" & wait ;;
+    hang-orphan)    trap 'exit 0' TERM; ( trap '' TERM; exec sleep "\${COUNCIL_FAKE_SLEEP:-300}" ) & wait ;;
     error)          echo "Error: fake provider failure" >&2; exit 1 ;;
     sandbox-failure) echo "$marker: deterministic answer" ;;
     noisy-error)    printf '%070000d\\n' 0 >&2
@@ -267,6 +317,11 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     binary-error)   printf 'Error: caf\\351 broke\\n' >&2; exit 1 ;;
     sandbox-warning) echo "$marker: deterministic answer" ;;
     stdin-echo)     echo "$marker: stdin=[\$(cat)]" ;;
+    heads-up-note)  printf '%s\\n' "NOTE: The retry loop never backs off, so a 429 storm hammers the API." \\
+                        "TAG: You should know" "TOPIC: retry without backoff" "TITLE: Retries without backoff" \\
+                        "POINT: Each retry fires at once." "POINT: Add a growing delay." ;;
+    heads-up-none)  echo "NONE." ;;
+    off-contract)   printf '%s\\n' "Here is a thought worth raising." "NOTE: the retries look off" "TOPIC: retries" ;;
     *)              echo "Unknown COUNCIL_FAKE_BEHAVIOR: \${COUNCIL_FAKE_BEHAVIOR}" >&2; exit 64 ;;
 esac
 EOF
