@@ -174,7 +174,7 @@ Override default models via environment variables:
 export GEMINI_MODEL="gemini-flash-latest"           # default (tracks Google's current Flash)
 export OPENAI_MODEL="gpt-6-astra"                   # default
 export GROK_MODEL="grok-latest"                     # default (tracks xAI's current flagship)
-export PERPLEXITY_MODEL="sonar-reasoning-pro"       # default (reasoning + search)
+export PERPLEXITY_MODEL="low"                       # default (Agent API preset, reasoning + search)
 export KIMI_MODEL="kimi-k3"                         # default (reads images)
 export KIMI_VISION=1                                # only needed when KIMI_MODEL
                                                     # names an image-capable model
@@ -232,7 +232,7 @@ in the response header:
 | openai | `gpt-6-astra` | `gpt-6.1-sol` |
 | grok | `grok-latest` | `grok-4.6` |
 | gemini | `gemini-flash-latest` | `gemini-3.8-flash` |
-| perplexity | `sonar-reasoning-pro` | `sonar-pro` |
+| perplexity | `low` | `fast` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
 | ollama | first local model (`OLLAMA_MODEL` to pin) | — |
 | openrouter | `anthropic/claude-fable-5.1` | `anthropic/claude-opus-5.5` |
@@ -259,7 +259,7 @@ The bump applies to:
 - **OpenAI**: `codex-*`, `*-codex`, `o3-*`, `o4-*`, `gpt-5.[4-9]*`, `gpt-[6-9]*`
 - **Gemini**: `gemini-3*`, `*thinking*`, `gemini-*-latest`
 - **Grok**: `*reasoning*`, `grok-4*`, `grok-3-mini-*`, `grok-build-*`, `grok-latest`
-- **Perplexity**: `sonar-reasoning*`, `*deep-research*`
+- **Perplexity**: the `low`, `medium`, `high` and `xhigh` presets
 - **Kimi**: `kimi-k*` (so the default model always triggers the bump)
 - **OpenRouter**: every routed model. The seat can be pointed at any id, and a
   pattern list misses reasoning models whose names carry no tell
@@ -297,18 +297,18 @@ Grok's token accounting depends on the model: `grok-build` counts thinking token
 
 ## Perplexity Search Features
 
-Perplexity's sonar models are search-augmented, providing web-grounded responses with citations:
+The Perplexity seat uses the Agent API (`/v1/agent`) with its `web_search` tool, so answers are web-grounded with inline citations. Sonar Chat Completions ended on 2026-09-27. The seat refuses an old `sonar-*` model id before any request and names the preset to use instead.
 
 ```bash
 # Filter search results by recency: day, week, month, year
 export PERPLEXITY_RECENCY="week"
 ```
 
-Available models:
-- `sonar` - Fast, search-enabled
-- `sonar-pro` - More capable, search-enabled
-- `sonar-reasoning` - Chain-of-thought reasoning + search
-- `sonar-reasoning-pro` - Best reasoning + search (default)
+`PERPLEXITY_MODEL` takes an Agent API preset or a `provider/model` id:
+- `fast` - quick search answers (Perplexity's replacement for `sonar` and `sonar-pro`)
+- `low` - reasoning + search (replaces `sonar-reasoning-pro`, default)
+- `medium`, `high`, `xhigh` - deeper research, slower and costlier
+- a `provider/model` id such as `perplexity/sonar`, sent as `model` with web search still on
 
 Perplexity is useful when you need current information (latest framework versions, recent best practices) rather than just training-data knowledge.
 

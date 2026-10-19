@@ -136,6 +136,7 @@ setup() {
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
 # region block. Without the 403 arm these lose their remediation line entirely.
+# Perplexity's bare 403 carries no invalid_api_key marker, so it is the one plain error.
 @test "check-status: HTTP 403 reports auth failure with regenerate remediation" {
     shadow_curl
     export COUNCIL_FAKE_HTTP_CODE=403
@@ -143,7 +144,77 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Auth failed (HTTP 403)"* ]]
     [[ "$output" == *"key rejected - regenerate it"* ]]
+    [ "$(auth_failures "$output")" -eq 5 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
+}
+
+# Perplexity answers a bad key with 401 invalid_api_key. Its 403 for a retired
+# endpoint names the cause in the body, and "regenerate it" would send the user
+# after a key that works (seen 2026-10-19 on /chat/completions).
+@test "check-status: a Perplexity 403 that is not about the key is a plain error" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=403
+    export COUNCIL_FAKE_HTTP_BODY='{"error":{"message":"Sonar is now the Agent API.","type":"chat_completions_not_available","code":403}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)            Sonar is now the Agent API."* ]]
+    # The other five API rows keep their auth reading of a bare 403
+    [ "$(auth_failures "$output")" -eq 5 ]
+}
+
+# Only invalid_api_key is evidence of a bad key. A 403 page from a proxy or WAF,
+# or JSON with no error type, says nothing about the key either way.
+@test "check-status: a Perplexity 403 with an HTML body is a plain error" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=403
+    export COUNCIL_FAKE_HTTP_BODY='<html><body>403 Forbidden</body></html>'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
+    [ "$(auth_failures "$output")" -eq 5 ]
+}
+
+@test "check-status: a Perplexity 403 with no error type is a plain error" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=403
+    export COUNCIL_FAKE_HTTP_BODY='{"detail":"Forbidden"}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Error (HTTP 403)"* ]]
+    [ "$(auth_failures "$output")" -eq 5 ]
+}
+
+@test "check-status: a Perplexity 403 that names the key stays an auth failure" {
+    shadow_curl
+    export COUNCIL_FAKE_HTTP_CODE=403
+    export COUNCIL_FAKE_HTTP_BODY='{"error":{"message":"Invalid API key provided.","type":"invalid_api_key","code":403}}'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
     [ "$(auth_failures "$output")" -eq 6 ]
+}
+
+# A retired sonar-* id passes the key probe, which always sends perplexity/sonar,
+# while every query with it fails, so the row must name the id instead of
+# reading Connected. The refusal costs no request.
+@test "check-status: a retired Perplexity model id is an error row and sends no probe" {
+    record_curl
+    export PERPLEXITY_MODEL=sonar-pro
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\[[0-9;]*m//g')
+    [[ "$plain" == *"Perplexity    ✗  Unsupported model           PERPLEXITY_MODEL=sonar-pro is a retired Sonar id; use fast, another Agent API preset or a provider/model id"* ]]
+    [[ "$plain" == *"13/14 providers available"* ]]
+    grep -qF 'https://api.openai.com/v1/models' "$CS_ARGV_FILE"
+    run ! grep -qF 'api.perplexity.ai' "$CS_ARGV_FILE"
 }
 
 @test "check-status: HTTP 500 reports a generic error with the code" {
