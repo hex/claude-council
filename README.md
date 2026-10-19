@@ -82,7 +82,7 @@ Read this before the first question about your code.
   The `/config` row "Heads-up side-check" or a project's
   `.claude/council-heads-up.json` is the consent: from then on, mid-turn, the
   last five turns plus the last eight tool results (2,000 characters each; a
-  Bash result can hold a secret) go to the seats it names, codex by default,
+  Bash result can hold a secret) go to the one seat it names, codex by default,
   and the note shows how many bytes went where. Switch the row off, or give
   the project a file saying `"enabled": false`, to stop it
   ([Heads-up](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default)).

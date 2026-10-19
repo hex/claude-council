@@ -369,19 +369,19 @@ the conversation and surface one thing you may have missed: a trade-off nobody
 called out, a result that looks off. It needs the council-pane mod (Claude Code
 with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, 2.1.302 or later) and one of two
 switches. The `/config` row "Heads-up side-check" turns it on in every project.
-A project file turns it on, or off, for that project alone and picks the seats
+A project file turns it on, or off, for that project alone and picks the seat
 and cadence:
 
 ```bash
 cat > .claude/council-heads-up.json <<'EOF'
-{"enabled": true, "seats": ["codex"], "every": 3}
+{"enabled": true, "seat": "codex", "every": 3}
 EOF
 ```
 
 `enabled` is optional: `true` turns the check on here, `false` turns it off
-here whatever the row says, and without it the row decides. `seats` is the
-order asked, first answer that is not NONE wins, no synthesis; it defaults to
-`["codex"]`. `every` is model requests per check inside a turn, default 3, so
+here whatever the row says, and without it the row decides. `seat` is the one
+provider asked, no panel and no synthesis; it defaults to `codex`. `every` is
+model requests per check inside a turn, default 3, so
 a check runs at the third, sixth, ninth request. Either switch is the consent:
 nothing asks before a check sends.
 
@@ -400,18 +400,18 @@ note shows counts as typing past it, and that many later checks are skipped.
 Claude never sees a note you did not tell it about.
 
 `/heads-up setup` asks in Claude Code's own dialog: where the check runs
-(this project, every project, or off here), which seats reread the turn (the
-providers with a CLI on PATH or a key in your environment, up to four; type
-any other list under Other), how often, then for each seat which model (its
-current one, codex's catalog, or one you type) and for codex how hard to think;
-then it writes the project file, and sets the `/config` row for "every
-project". By hand, the picks live under `models`: `"models": {"codex":
-{"model": "gpt-6.1-sol", "effort": "high"}, "gemini": {"model":
-"gemini-2.5-pro"}}`; a model goes to that provider's own `*_MODEL` variable for
-the check, an effort only to codex. A seat gets 60 seconds per check (`COUNCIL_HEADS_UP_SEAT_SECONDS`), so a slow CLI such as antigravity, which the council itself allows twenty minutes, times out here; pick codex, gemini or another fast seat. `/heads-up on`
-and `/heads-up off` write the project file for you, keeping its seats and
-cadence; `/heads-up on gemini,grok-cli` names the seats to ask, any provider
-the council runs, in the order asked. `/heads-up` alone (or `/heads-up
+(this project, every project, or off here), which one seat rereads the turn
+(the providers with a CLI on PATH or a key in your environment, up to four;
+type any other seat under Other), how often, then which model that seat uses
+(its current one, codex's catalog, or one you type) and for codex how hard to
+think; then it writes the project file, and sets the `/config` row for "every
+project". By hand, the pick lives under `model`: `"model": {"model":
+"gpt-6.1-sol", "effort": "high"}`; the model goes to the seat's own `*_MODEL`
+variable for the check, an effort only to codex. A file with a `seats` list or
+a `models` map keeps the check off, and the reason names the key. The seat gets 60 seconds per check (`COUNCIL_HEADS_UP_SEAT_SECONDS`), so a slow CLI such as antigravity, which the council itself allows twenty minutes, times out here; pick codex, gemini or another fast seat. `/heads-up on`
+and `/heads-up off` write the project file for you, keeping its seat and
+cadence; `/heads-up on gemini` names the seat to ask, any one provider the
+council runs, and drops a `model` picked for a different seat. `/heads-up` alone (or `/heads-up
 status`) says whether the
 check is on here and which switch set it, then the counts kept on this machine
 and never sent anywhere: checks run, with how many found nothing, drew a note,
@@ -426,18 +426,17 @@ flag in the plugin store keeps it from coming back.
 Privacy: unlike `/claude-council:advise`, nothing asks before a send. Each
 check digests the last five turns of this session's transcript plus the last
 eight tool results inside them, cut to 2,000 characters each, and sends that
-to the seats in order until one answers. Tool results can carry what a command
+to the one seat. Tool results can carry what a command
 printed, a secret included; messages from other sessions, hook output and
 thinking never go. Each check logs or shows the bytes sent and the seat that
 answered. The seat rules under Stop-gate review above apply: `ollama` keeps it
 on the machine, a CLI seat sends it to that vendor under your subscription,
 `openrouter` discloses twice.
 
-Environment: `COUNCIL_HEADS_UP_SEAT_SECONDS` (per seat, default 60),
-`COUNCIL_HEADS_UP_RUN_SECONDS` (per check, default 180),
-`COUNCIL_HEADS_UP_TURNS` (default 5) and `COUNCIL_HEADS_UP_RESULTS` (default
-8). A seat that times out or errors passes to the next; a check whose seats all
-fail logs one line and shows nothing.
+Environment: `COUNCIL_HEADS_UP_SEAT_SECONDS` (the seat's deadline, default
+60), `COUNCIL_HEADS_UP_TURNS` (default 5) and `COUNCIL_HEADS_UP_RESULTS`
+(default 8). A check whose seat times out or errors logs one line and shows
+nothing.
 
 ## Specialists (experimental)
 

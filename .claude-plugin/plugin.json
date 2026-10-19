@@ -68,7 +68,7 @@
     "heads_up": {
       "type": "boolean",
       "title": "Heads-up side-check",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. While Claude works a long turn, codex rereads the last five turns and the last eight tool results and may show one line above the prompt. Nothing asks before a send: that material leaves the machine on every check. A project's .claude/council-heads-up.json can turn it on or off for that project alone and pick the seats and cadence.",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. While Claude works a long turn, codex rereads the last five turns and the last eight tool results and may show one line above the prompt. Nothing asks before a send: that material leaves the machine on every check. A project's .claude/council-heads-up.json can turn it on or off for that project alone and pick the seat and cadence.",
       "default": false
     },
     "specialists": {

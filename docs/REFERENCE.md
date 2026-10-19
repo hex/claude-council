@@ -377,11 +377,10 @@ export COUNCIL_PASS_ENV=NODE_OPTIONS,EXAMPLE_VAR   # comma-separated names passe
 ```
 
 The heads-up side-check ([usage](USAGE.md#heads-up-side-check-opt-in-off-by-default))
-reads four more, all optional:
+reads three more, all optional:
 
 ```bash
-export COUNCIL_HEADS_UP_SEAT_SECONDS=60   # per seat
-export COUNCIL_HEADS_UP_RUN_SECONDS=180   # per check, all seats together
+export COUNCIL_HEADS_UP_SEAT_SECONDS=60   # the seat's deadline per check
 export COUNCIL_HEADS_UP_TURNS=5           # transcript window, in turns
 export COUNCIL_HEADS_UP_RESULTS=8         # tool results in the digest, 2,000 characters each
 ```

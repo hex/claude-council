@@ -432,10 +432,10 @@ keeps the two in sync.
 Opt-in via .claude/council-heads-up.json, read by the mod at each
 turn.step of the main loop. heads-up.ts decides (cadence from the
 message count, backoff, one note per turn); pane.tsx forks
-heads-up.sh --run-dir --session --seats --avoid-file, which returns
-its worker's pid at once. The worker: session-transcript.sh ->
+heads-up.sh --run-dir --session --seat --avoid-file [--model], which
+returns its worker's pid at once. The worker: session-transcript.sh ->
 transcript-digest.sh --tool-results -> prompts/heads-up.md ->
-seats in order (codex: codex exec --output-schema, gated on
+the one seat (codex: codex exec --output-schema, gated on
 turn.completed; others: providers/<seat>.sh, first-line NONE or
 NOTE:/TOPIC:/DETAIL:) -> result.json (temp name, mv) -> .done.
 The pane polls .done, settles $.state (claude-council.headsUp),
@@ -672,7 +672,7 @@ claude-council/
 │   ├── format-output.sh         # Terminal formatter
 │   ├── check-status.sh          # Provider health check
 │   ├── stop-review-gate.sh      # Opt-in Stop hook reviewer
-│   ├── heads-up.sh              # Detached side-check runner: digest, seats in order, result.json
+│   ├── heads-up.sh              # Detached side-check runner: digest, one seat, result.json
 │   ├── heads-up.schema.json     # Codex answer contract for the side-check, passed as --output-schema
 │   ├── session-transcript.sh    # Conversation id to transcript path, refusing ambiguity
 │   ├── transcript-digest.sh     # Session JSONL to a markdown digest for /advise and the side-check
