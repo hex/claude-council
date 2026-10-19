@@ -23,26 +23,28 @@ export const COUNTS_KEY = 'heads-up-counts'
 export const INTRO_KEY = 'heads-up-intro-shown'
 export const COMMAND = 'heads-up'
 
-/** The effective setting. Only parseConfig builds one; `seats` are shape-checked words, the runner owns the list. */
-/** A seat's picks: the model goes to its *_MODEL variable, the effort to codex's -c flag; other seats ignore it. */
+/** The seat's picks: the model goes to its *_MODEL variable, the effort to codex's -c flag; other seats ignore it. */
 export type SeatPick = { readonly model?: string; readonly effort?: string }
 
+/** The effective setting. Only parseConfig builds one; `seat` is a shape-checked word, the runner owns the allowlist. */
 export type HeadsUpConfig =
-  | { enabled: true; seats: readonly string[]; every: number; models?: Readonly<Record<string, SeatPick>> }
+  | { enabled: true; seat: string; every: number; model?: SeatPick }
   | { enabled: false; problem?: string }
 
+const DEFAULT_SEAT = 'codex'
 const EFFORT_SHAPE = /^[a-z]+$/
 
 /**
  * Two switches, the /config row and the project file: on when the file says
  * `enabled: true`, or when the row is on and the file does not say
- * `enabled: false`. The file's seats and every apply either way. Malformed
+ * `enabled: false`. The file's seat, model and every apply either way. Malformed
  * JSON, a non-object, an `enabled` that is not a boolean, a seat that is not a
- * plain word, or an `every` below 2 -> off with a problem the shell logs once,
- * whatever the row says: a side-agent that never fires should say why.
+ * plain word, a `seats` or `models` key, or an `every` below 2 -> off with a
+ * problem the shell logs once, whatever the row says: a side-agent that never
+ * fires should say why. An empty `model` reads as no pick.
  */
 export function parseConfig(text: string | undefined, rowOn: boolean): HeadsUpConfig {
-  if (text === undefined) return rowOn ? { enabled: true, seats: ['codex'], every: DEFAULT_EVERY } : { enabled: false }
+  if (text === undefined) return rowOn ? { enabled: true, seat: DEFAULT_SEAT, every: DEFAULT_EVERY } : { enabled: false }
   const off = (why: string): HeadsUpConfig => ({ enabled: false, problem: `${CONFIG_FILE}${why}; heads-up is off` })
   let raw: unknown
   try {
@@ -52,26 +54,22 @@ export function parseConfig(text: string | undefined, rowOn: boolean): HeadsUpCo
   }
   if (!isRecord(raw)) return off(' must hold a JSON object')
   if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') return off(': enabled must be true or false')
-  const seats = raw.seats ?? ['codex']
-  if (!Array.isArray(seats) || seats.length === 0) return off(': seats must be a non-empty list of seat names')
-  const words = seats.filter((seat): seat is string => typeof seat === 'string' && SEAT_SHAPE.test(seat))
-  const badSeat: unknown = seats.find(seat => !words.includes(seat))
-  if (words.length !== seats.length) return off(`: seat ${JSON.stringify(badSeat)} is not a plain lowercase word`)
+  if (raw.seats !== undefined) return off(': seats is not a key; one seat goes under "seat"')
+  if (raw.models !== undefined) return off(': models is not a key; the seat\'s pick goes under "model"')
+  const seat = raw.seat ?? DEFAULT_SEAT
+  if (typeof seat !== 'string' || !SEAT_SHAPE.test(seat)) return off(`: seat ${JSON.stringify(seat)} is not a plain lowercase word`)
   const every = raw.every ?? DEFAULT_EVERY
   if (typeof every !== 'number' || !Number.isInteger(every) || every < 2) return off(`: every must be a whole number of at least 2, got ${JSON.stringify(every)}`)
-  let models: Record<string, SeatPick> | undefined
-  if (raw.models !== undefined) {
-    if (!isRecord(raw.models)) return off(': models must be an object of seat name to {model, effort}')
-    models = {}
-    for (const [seat, pick] of Object.entries(raw.models)) {
-      if (!isRecord(pick)) return off(`: models.${seat} must be an object of {model, effort}`)
-      if (pick.model !== undefined && typeof pick.model !== 'string') return off(`: model for ${seat} must be a string, got ${JSON.stringify(pick.model)}`)
-      if (pick.effort !== undefined && (typeof pick.effort !== 'string' || !EFFORT_SHAPE.test(pick.effort))) return off(`: effort for ${seat} must be lowercase letters, got ${JSON.stringify(pick.effort)}`)
-      models[seat] = { ...(pick.model === undefined ? {} : { model: pick.model }), ...(pick.effort === undefined ? {} : { effort: pick.effort }) }
-    }
+  let model: SeatPick | undefined
+  if (raw.model !== undefined) {
+    const pick = raw.model
+    if (!isRecord(pick)) return off(': model must be an object of {model, effort}')
+    if (pick.model !== undefined && typeof pick.model !== 'string') return off(`: model for ${seat} must be a string, got ${JSON.stringify(pick.model)}`)
+    if (pick.effort !== undefined && (typeof pick.effort !== 'string' || !EFFORT_SHAPE.test(pick.effort))) return off(`: effort for ${seat} must be lowercase letters, got ${JSON.stringify(pick.effort)}`)
+    if (pick.model !== undefined || pick.effort !== undefined) model = { ...(pick.model === undefined ? {} : { model: pick.model }), ...(pick.effort === undefined ? {} : { effort: pick.effort }) }
   }
   if (raw.enabled === false || (raw.enabled === undefined && !rowOn)) return { enabled: false }
-  return { enabled: true, seats: words, every, ...(models === undefined ? {} : { models }) }
+  return { enabled: true, seat, every, ...(model === undefined ? {} : { model }) }
 }
 
 /**
@@ -112,33 +110,37 @@ export function countsLine(c: Counts): string {
 
 export type HeadsUpCommand =
   | { action: 'status' }
-  | { action: 'on'; seats: readonly string[] }
+  | { action: 'on'; seat?: string }
   | { action: 'off' }
   | { action: 'setup' }
   | { action: 'unknown'; why: string }
 
 /**
  * The /heads-up argument: nothing or status shows the state; on, with the
- * seats to ask (commas or spaces) or none to keep the file's, and off write
- * the project file. A seat is checked here as the file's are.
+ * one seat to ask or none to keep the file's, and off write the project file.
+ * The seat is checked here as the file's is; two seats are refused.
  */
 export function headsUpCommand(args: string): HeadsUpCommand {
   const [word = '', ...rest] = args.trim().toLowerCase().split(/[\s,]+/).filter(part => part !== '')
   if (word === '' || word === 'status') return { action: 'status' }
-  if (word === 'off') return rest.length === 0 ? { action: 'off' } : { action: 'unknown', why: 'off takes no seats' }
+  if (word === 'off') return rest.length === 0 ? { action: 'off' } : { action: 'unknown', why: 'off takes no words' }
   if (word === 'setup') return rest.length === 0 ? { action: 'setup' } : { action: 'unknown', why: 'setup takes no words' }
   if (word !== 'on') return { action: 'unknown', why: `unknown word ${JSON.stringify(word)}` }
-  const bad = rest.find(seat => !SEAT_SHAPE.test(seat))
-  if (bad !== undefined) return { action: 'unknown', why: `seat ${JSON.stringify(bad)} is not a plain lowercase word` }
-  return { action: 'on', seats: rest }
+  if (rest.length > 1) return { action: 'unknown', why: `on takes one seat, got ${rest.length}: ${rest.join(', ')}` }
+  const [seat] = rest
+  if (seat === undefined) return { action: 'on' }
+  if (!SEAT_SHAPE.test(seat)) return { action: 'unknown', why: `seat ${JSON.stringify(seat)} is not a plain lowercase word` }
+  return { action: 'on', seat }
 }
 
 /**
  * The project file with `enabled` set (or dropped, so the row decides) and,
- * when given, the seats and cadence; its other fields kept. A missing or
- * unreadable file starts over. One line of JSON, as the docs show it.
+ * when given, the seat, cadence and pick; its other fields kept. A pick
+ * belongs to its seat, so a different seat drops the file's `model`; an empty
+ * `model` is never written. A missing or unreadable file starts over. One
+ * line of JSON, as the docs show it.
  */
-export function withEnabled(text: string | undefined, on: boolean | undefined, seats: readonly string[], every?: number, models?: Readonly<Record<string, SeatPick>>): string {
+export function withEnabled(text: string | undefined, on: boolean | undefined, seat?: string, every?: number, model?: SeatPick): string {
   let kept: Record<string, unknown> = {}
   if (text !== undefined) {
     try {
@@ -149,10 +151,13 @@ export function withEnabled(text: string | undefined, on: boolean | undefined, s
     }
   }
   const { enabled: _dropped, ...rest } = kept
-  if (seats.length > 0) rest.seats = [...seats]
+  if (seat !== undefined) {
+    if (seat !== (rest.seat ?? DEFAULT_SEAT)) delete rest.model
+    rest.seat = seat
+  }
   if (every !== undefined) rest.every = every
-  if (models !== undefined) rest.models = models
-  if (isRecord(rest.models) && Object.keys(rest.models).length === 0) delete rest.models
+  if (model !== undefined) rest.model = model
+  if (isRecord(rest.model) && Object.keys(rest.model).length === 0) delete rest.model
   const json = (value: unknown): string => {
     if (Array.isArray(value)) return `[${value.map(item => JSON.stringify(item)).join(', ')}]`
     if (isRecord(value)) return `{${Object.entries(value).map(([key, item]) => `${JSON.stringify(key)}: ${json(item)}`).join(', ')}}`
@@ -162,7 +167,7 @@ export function withEnabled(text: string | undefined, on: boolean | undefined, s
   return `{${entries.join(', ')}}\n`
 }
 
-/** What /heads-up status prints: the effective state, which switch set it, the seats and cadence, then the counts. */
+/** What /heads-up status prints: the effective state, which switch set it, the seat and cadence, then the counts. */
 export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: string | undefined, counts: Counts): string {
   const row = rowOn ? 'on' : 'off'
   const file = fileText === undefined ? undefined : fileEnabled(fileText)
@@ -170,16 +175,16 @@ export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: stri
   if (!config.enabled && config.problem !== undefined) line = `Heads-up side-check: off: ${config.problem}`
   else if (config.enabled) {
     const by = file === true ? `on for this project, by ${CONFIG_FILE} (the /config row is ${row})` : `on for every project, by the /config row (${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`})`
-    line = `Heads-up side-check: ${by} · seats ${config.seats.map(seat => seatLabel(seat, config.models?.[seat])).join(', ')} · every ${config.every} requests`
-  } else if (file === false) line = `Heads-up side-check: off for this project, by ${CONFIG_FILE} (the /config row is ${row}) · /${COMMAND} on [seats] turns it on here`
-  else line = `Heads-up side-check: off (the /config row is off, ${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`}) · /${COMMAND} on [seats] turns it on for this project, /config row "Heads-up side-check" for every project`
+    line = `Heads-up side-check: ${by} · seat ${seatLabel(config.seat, config.model)} · every ${config.every} requests`
+  } else if (file === false) line = `Heads-up side-check: off for this project, by ${CONFIG_FILE} (the /config row is ${row}) · /${COMMAND} on [seat] turns it on here`
+  else line = `Heads-up side-check: off (the /config row is off, ${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`}) · /${COMMAND} on [seat] turns it on for this project, /config row "Heads-up side-check" for every project`
   return `${line}\nOn this machine: ${countsLine(counts)}`
 }
 
-/** The /heads-up setup dialogs: scope, seats, cadence. */
+/** The /heads-up setup dialogs: scope, seat, cadence. */
 export const SCOPE = { project: 'This project', all: 'Every project', off: 'Off for this project' } as const
 export const SCOPE_QUESTION = 'Where should the heads-up side-check run?'
-export const SEATS_QUESTION = 'Which seats should reread the turn? (first answer that is not NONE wins)'
+export const SEAT_QUESTION = 'Which seat should reread the turn?'
 export const EVERY_QUESTION = 'How often should a long turn be checked?'
 export const EVERY_LABELS = ['Every 3 requests', 'Every 6 requests', 'Every 9 requests'] as const
 
@@ -206,18 +211,19 @@ export function availableSeats(onPath: (bin: string) => boolean, hasKey: (name: 
   return SEAT_SIGNS.filter(sign => (sign.bin !== undefined && onPath(sign.bin)) || (sign.keys ?? []).some(hasKey)).map(sign => sign.seat)
 }
 
-/** The dialog takes two to four options; the person types any other list under Other. */
+/** The dialog takes two to four options; the person types any other seat under Other. */
 export function seatOptions(available: readonly string[]): string[] {
   const picks = available.slice(0, 4)
   return picks.length >= 2 ? picks : ['codex', 'gemini']
 }
 
-/** The dialog's answer: labels comma-joined, or a typed list. */
-export function seatsFromAnswer(answer: string): { seats: string[] } | { why: string } {
-  const seats = answer.toLowerCase().split(/[\s,]+/).filter(part => part !== '')
-  if (seats.length === 0) return { why: 'no seat named' }
-  const bad = seats.find(seat => !SEAT_SHAPE.test(seat))
-  return bad === undefined ? { seats } : { why: `seat ${JSON.stringify(bad)} is not a plain lowercase word` }
+/** The dialog's answer: one label, or a typed seat name. */
+export function seatFromAnswer(answer: string): { seat: string } | { why: string } {
+  const words = answer.toLowerCase().split(/[\s,]+/).filter(part => part !== '')
+  const [seat] = words
+  if (seat === undefined) return { why: 'no seat named' }
+  if (words.length > 1) return { why: `one seat, got ${words.length}: ${words.join(', ')}` }
+  return SEAT_SHAPE.test(seat) ? { seat } : { why: `seat ${JSON.stringify(seat)} is not a plain lowercase word` }
 }
 
 export function everyFromAnswer(answer: string): { every: number } | { why: string } {
@@ -269,10 +275,9 @@ export function seatLabel(seat: string, pick: SeatPick | undefined): string {
   return parts.length === 0 ? seat : `${seat} (${parts.join(', ')})`
 }
 
-/** The runner's --models file: the picks for the seats asked, '' when there are none. */
-export function modelsFile(config: Extract<HeadsUpConfig, { enabled: true }>): string {
-  const picks = Object.fromEntries(config.seats.flatMap(seat => (config.models?.[seat] === undefined ? [] : [[seat, config.models[seat]]])))
-  return Object.keys(picks).length === 0 ? '' : JSON.stringify(picks)
+/** The runner's --model file: the seat's pick, '' when there is none. */
+export function modelFile(config: Extract<HeadsUpConfig, { enabled: true }>): string {
+  return config.model === undefined ? '' : JSON.stringify(config.model)
 }
 
 // The file's own `enabled`, when it parses; undefined when absent or not a boolean.

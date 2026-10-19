@@ -11,7 +11,7 @@ mkdir -p "$RUN"
 : > "$RUN/avoid.txt"
 
 t0=$(date +%s)
-bash "$ROOT/scripts/heads-up.sh" --run-dir "$RUN" --session "$SID" --seats codex --avoid-file "$RUN/avoid.txt"
+bash "$ROOT/scripts/heads-up.sh" --run-dir "$RUN" --session "$SID" --seat codex --avoid-file "$RUN/avoid.txt"
 tick=0
 until [ -f "$RUN/.done" ]; do
     tick=$((tick + 1)); [ "$tick" -lt 200 ] || { echo "FAIL: no .done after 200 s" >&2; exit 1; }

@@ -90,7 +90,7 @@ memory() { jq -c '.["heads-up"] // {}' "$HOME"/.claude/plugins/store/claude-coun
 counts() { jq -c '.["heads-up-counts"] // {}' "$HOME"/.claude/plugins/store/claude-council_inline-*.json | head -1; }
 
 git -C "$PROJECT" init -q -b main
-printf '{"enabled": false, "seats": ["codex"], "every": 2}\n' > "$PROJECT/.claude/council-heads-up.json"
+printf '{"enabled": false, "seat": "codex", "every": 2}\n' > "$PROJECT/.claude/council-heads-up.json"
 echo "project: $PROJECT"
 
 tmux new-session -d -s "$SESSION" -x 160 -y 45 -c "$PROJECT" \
@@ -107,8 +107,8 @@ tmux send-keys -t "$SESSION" -l '/heads-up'; key Enter
 wait_for 'Heads-up side-check: off for this project, by .claude/council-heads-up.json (the /config row is off)'
 screen | grep -qF 'Tip: /heads-up on lets another model watch long turns and flag what Claude missed' && fail "the intro tail is still drawn after typing"
 tmux send-keys -t "$SESSION" -l '/heads-up on'; key Enter
-wait_for 'Heads-up side-check: on for this project, by .claude/council-heads-up.json (the /config row is off) · seats codex · every 2 requests'
-[ "$(cat "$PROJECT/.claude/council-heads-up.json")" = '{"enabled": true, "seats": ["codex"], "every": 2}' ] || fail "the file after /heads-up on is $(cat "$PROJECT/.claude/council-heads-up.json")"
+wait_for 'Heads-up side-check: on for this project, by .claude/council-heads-up.json (the /config row is off) · seat codex · every 2 requests'
+[ "$(cat "$PROJECT/.claude/council-heads-up.json")" = '{"enabled": true, "seat": "codex", "every": 2}' ] || fail "the file after /heads-up on is $(cat "$PROJECT/.claude/council-heads-up.json")"
 screen > "$OUT/0-switch.txt"
 
 echo "1. a turn of three shell commands reaches the cadence (every 2) and the fake seat's note is drawn"

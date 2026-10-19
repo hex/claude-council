@@ -51,10 +51,6 @@
 #   off-contract   - a reply that neither starts NONE nor NOTE:, though it
 #                    carries a NOTE: further along
 #
-# COUNCIL_FAKE_BEHAVIOR_<BIN> (CODEX, AGY, CURSOR_AGENT, ...) overrides
-# COUNCIL_FAKE_BEHAVIOR for that one binary, so one test can give two seats
-# different behaviours.
-#
 # Every invocation appends {bin, args} to $COUNCIL_FAKE_STATE_DIR/calls.jsonl
 # so tests can assert exactly what the plugin sent to the CLI.
 
@@ -74,14 +70,12 @@ install_fake_clis() {
 
 write_fake_cli() {
     local bin="$1"
-    local marker override
+    local marker
     marker="FAKE-$(echo "$bin" | tr '[:lower:]' '[:upper:]')-RESPONSE"
-    override="COUNCIL_FAKE_BEHAVIOR_$(echo "$bin" | tr '[:lower:]-' '[:upper:]_')"
     cat > "$FAKE_BIN_DIR/$bin" <<EOF
 #!/bin/bash
 # Fake $bin CLI: records its invocation, then acts per COUNCIL_FAKE_BEHAVIOR
 set -euo pipefail
-COUNCIL_FAKE_BEHAVIOR="\${$override:-\${COUNCIL_FAKE_BEHAVIOR:-valid}}"
 jq -cn --arg bin "$bin" '{bin: \$bin, args: \$ARGS.positional}' --args -- "\$@" \\
     >> "\${COUNCIL_FAKE_STATE_DIR:?}/calls.jsonl"
 # Version probes succeed regardless of behavior, mirroring real CLIs where

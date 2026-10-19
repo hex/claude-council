@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # ABOUTME: Tests for heads-up.sh, the detached side-check runner the council pane forks
-# ABOUTME: Seats are asked in order and the first note wins; every outcome lands in result.json
+# ABOUTME: One seat is asked once; its outcome, note or none or failure, lands in result.json
 
 load test_helper
 load fixtures/fake-clis
@@ -44,12 +44,12 @@ write_transcript() {
     } > "$TRANSCRIPT"
 }
 
-# $1 the seats; any further words are passed as they are (--models FILE).
+# $1 the seat; any further words are passed as they are (--model FILE).
 start_runner() {
-    local seats="$1"
+    local seat="$1"
     shift
     run "$HOST_BASH" "$RUNNER" --run-dir "$RUN_DIR" --session "$SESSION_ID" \
-        --seats "$seats" --avoid-file "$AVOID" "$@"
+        --seat "$seat" --avoid-file "$AVOID" "$@"
 }
 
 # Polls for the worker's .done, up to $1 seconds (default 30).
@@ -69,11 +69,18 @@ result() {
 }
 
 @test "heads-up: a seat name that is not a provider exits 1 before anything forks" {
-    start_runner "codex,../../evil"
+    start_runner "../../evil"
     [ "$status" -eq 1 ]
     [ "$output" = "Error: not a council seat: ../../evil" ]
     [ ! -f "$RUN_DIR/pid" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "heads-up: two seats are not one seat and exit 1 before anything forks" {
+    start_runner "codex,antigravity"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error: not a council seat: codex,antigravity" ]
+    [ ! -f "$RUN_DIR/pid" ]
 }
 
 @test "heads-up: the call returns with the worker's pid before the seat answers" {
@@ -91,10 +98,10 @@ result() {
     [ "$(result .kind)" = "note" ]
 }
 
-@test "heads-up: a codex note wins and result.json carries it" {
+@test "heads-up: a codex note lands in result.json" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note
     export CODEX_MODEL=gpt-test
-    start_runner codex,antigravity
+    start_runner codex
     [ "$status" -eq 0 ]
     wait_done
     [ "$(result .kind)" = "note" ]
@@ -112,8 +119,21 @@ result() {
     [ "$(result .tag)" = "Heads up" ]
     [ "$(result '.seats | length')" = "1" ]
     [ "$(result '.seats[0].seat + " " + .seats[0].outcome')" = "codex note" ]
-    # First note wins: the second seat is never asked.
     [ "$(jq -r .bin "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = "codex" ]
+}
+
+@test "heads-up: a text seat's NOTE lines become the note" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    start_runner antigravity
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ "$(result .seat)" = "antigravity" ]
+    [ "$(result .headline)" = "The retry loop never backs off, so a 429 storm hammers the API." ]
+    [ "$(result .tag)" = "You should know" ]
+    [ "$(result .topic)" = "retry without backoff" ]
+    [ "$(result .title)" = "Retries without backoff" ]
+    [ "$(result '.points | join("|")')" = "Each retry fires at once.|Add a growing delay." ]
+    [ "$(result '[.seats[] | .seat + " " + .outcome] | join(",")')" = "antigravity note" ]
 }
 
 @test "heads-up: codex is asked through the schema with the prompt on stdin" {
@@ -123,7 +143,7 @@ result() {
     local args dir
     args=$(jq -r '.args | join(" ")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
     dir=$(cd "$SCRIPTS_DIR" && pwd)
-    [ "$args" = "exec --json --skip-git-repo-check -s read-only --output-schema ${dir}/heads-up.schema.json -o ${RUN_DIR}/seat-1.out -" ]
+    [ "$args" = "exec --json --skip-git-repo-check -s read-only --output-schema ${dir}/heads-up.schema.json -o ${RUN_DIR}/seat.out -" ]
     cmp "$RUN_DIR/prompt.md" "$COUNCIL_FAKE_STATE_DIR/codex-stdin.txt"
 }
 
@@ -158,32 +178,33 @@ result() {
     [ ! "$RUN_DIR/.done" -ot "$RUN_DIR/result.json" ]
 }
 
-@test "heads-up: codex says none, a text seat says NONE., and the check is none" {
+@test "heads-up: codex says none and the check is none" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-none
-    start_runner codex,antigravity
+    start_runner codex
     wait_done
     [ "$(result .kind)" = "none" ]
-    [ "$(result '[.seats[] | .seat + " " + .outcome] | join(",")')" = "codex none,antigravity none" ]
+    [ "$(result '[.seats[] | .seat + " " + .outcome] | join(",")')" = "codex none" ]
     [ "$(result 'has("headline") or has("seat")')" = "false" ]
     [ "$(result .bytes)" = "$(wc -c < "$RUN_DIR/prompt.md" | tr -d ' ')" ]
 }
 
-@test "heads-up: codex hangs past the seat deadline, the timeout is recorded, the next seat's note wins" {
+@test "heads-up: a text seat says NONE. and the check is none" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-none
+    start_runner antigravity
+    wait_done
+    [ "$(result .kind)" = "none" ]
+    [ "$(result '[.seats[] | .seat + " " + .outcome] | join(",")')" = "antigravity none" ]
+}
+
+@test "heads-up: codex hangs past the seat deadline, the timeout is recorded and codex is ended" {
     # An odd sleep length, so the check below cannot match another test's fake.
     export COUNCIL_HEADS_UP_SEAT_SECONDS=2 COUNCIL_FAKE_SLEEP=297
-    export COUNCIL_FAKE_BEHAVIOR_CODEX=hang COUNCIL_FAKE_BEHAVIOR_AGY=heads-up-note
-    start_runner codex,antigravity
+    export COUNCIL_FAKE_BEHAVIOR=hang
+    start_runner codex
     wait_done 20
-    [ "$(result .kind)" = "note" ]
-    [ "$(result .seat)" = "antigravity" ]
-    [ "$(result .headline)" = "The retry loop never backs off, so a 429 storm hammers the API." ]
-    [ "$(result .tag)" = "You should know" ]
-    [ "$(result .topic)" = "retry without backoff" ]
-    [ "$(result .title)" = "Retries without backoff" ]
-    [ "$(result '.points | join("|")')" = "Each retry fires at once.|Add a growing delay." ]
+    [ "$(result .kind)" = "failed" ]
+    [ "$(result '.seats | length')" = "1" ]
     [ "$(result '.seats[0] | .seat + " " + .outcome + " " + .detail')" = "codex timeout no answer in 2s" ]
-    [ "$(result '.seats[1].outcome')" = "note" ]
-    # The hung codex was ended, not left running.
     run ! pgrep -f "sleep 297"
 }
 
@@ -204,15 +225,22 @@ result() {
     [ "$(result '.seats[0] | .outcome + " " + .detail')" = "error none false with an empty topic or headline" ]
 }
 
-@test "heads-up: every seat erroring is kind failed, with each seat's reason" {
+@test "heads-up: codex erroring is kind failed, with its reason" {
     export COUNCIL_FAKE_BEHAVIOR=error
-    start_runner codex,antigravity
+    start_runner codex
     wait_done
     [ "$(result .kind)" = "failed" ]
     [ "$(result '.seats[0] | .seat + " " + .outcome + " " + .detail')" = "codex error exit 1 without turn.completed: Error: fake provider failure" ]
-    [ "$(result '.seats[1] | .seat + " " + .outcome')" = "antigravity error" ]
-    [ "$(result '.seats[1].detail | startswith("exit 1: ")')" = "true" ]
-    [ "$(result '.seats[1].detail | length > 8')" = "true" ]
+}
+
+@test "heads-up: a text seat erroring is kind failed, with its exit status and last stderr line" {
+    export COUNCIL_FAKE_BEHAVIOR=error
+    start_runner antigravity
+    wait_done
+    [ "$(result .kind)" = "failed" ]
+    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "antigravity error" ]
+    [ "$(result '.seats[0].detail | startswith("exit 1: ")')" = "true" ]
+    [ "$(result '.seats[0].detail | length > 8')" = "true" ]
 }
 
 @test "heads-up: an off-contract text reply is an error, never a note, even holding a NOTE: line" {
@@ -222,25 +250,6 @@ result() {
     [ "$(result .kind)" = "failed" ]
     [ "$(result '.seats[0] | .outcome + " " + .detail')" = "error off contract: Here is a thought worth raising." ]
     [ "$(result 'has("headline")')" = "false" ]
-}
-
-@test "heads-up: a none from one seat beats errors from the rest" {
-    export COUNCIL_FAKE_BEHAVIOR_CODEX=error COUNCIL_FAKE_BEHAVIOR_AGY=heads-up-none
-    start_runner codex,antigravity
-    wait_done
-    [ "$(result .kind)" = "none" ]
-    [ "$(result '[.seats[] | .outcome] | join(",")')" = "error,none" ]
-}
-
-@test "heads-up: the run budget cuts a seat short and skips the seats after it" {
-    export COUNCIL_HEADS_UP_SEAT_SECONDS=60 COUNCIL_HEADS_UP_RUN_SECONDS=2 COUNCIL_FAKE_SLEEP=300
-    export COUNCIL_FAKE_BEHAVIOR_CODEX=hang COUNCIL_FAKE_BEHAVIOR_AGY=heads-up-note
-    start_runner codex,antigravity
-    wait_done 20
-    [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0] | .outcome + " " + .detail')" = "timeout no answer in 2s" ]
-    [ "$(result '.seats[1] | .seat + " " + .outcome + " " + .detail')" = "antigravity timeout run budget of 2s spent before this seat" ]
-    [ "$(jq -r .bin "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = "codex" ]
 }
 
 @test "heads-up: a session with no transcript is kind failed, saying so" {
@@ -264,27 +273,24 @@ result() {
     [ ! -f "$RUN_DIR/pid" ]
 }
 
-@test "heads-up: --models sets a seat's model through its own variable and codex's effort through -c" {
-    export COUNCIL_FAKE_BEHAVIOR_CODEX=heads-up-none COUNCIL_FAKE_BEHAVIOR_GROK=heads-up-note
-    printf '%s\n' '{"codex": {"model": "gpt-test-pick", "effort": "high"}, "grok-cli": {"model": "grok-test-pick"}}' > "$RUN_DIR/models.json"
-    start_runner codex,grok-cli --models "$RUN_DIR/models.json"
+@test "heads-up: --model sets the seat's model through its own variable and codex's effort through -c" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    printf '%s\n' '{"model": "gpt-test-pick", "effort": "high"}' > "$RUN_DIR/model.json"
+    start_runner codex --model "$RUN_DIR/model.json"
     [ "$status" -eq 0 ]
     wait_done
     [ "$(result .kind)" = "note" ]
-    [ "$(result .seat)" = "grok-cli" ]
-    [ "$(result .model)" = "grok-test-pick" ]
-    local codex_args grok_args
-    codex_args=$(jq -c 'select(.bin == "codex") | .args' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | head -1)
-    grok_args=$(jq -c 'select(.bin == "grok") | .args' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | head -1)
+    [ "$(result .model)" = "gpt-test-pick" ]
+    local codex_args
+    codex_args=$(jq -c '.args' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
     [ "$(jq -r 'index("-m") as $i | .[$i + 1]' <<< "$codex_args")" = "gpt-test-pick" ]
     [ "$(jq -r 'index("-c") as $i | .[$i + 1]' <<< "$codex_args")" = 'model_reasoning_effort="high"' ]
-    [ "$(jq -r 'index("-m") as $i | .[$i + 1]' <<< "$grok_args")" = "grok-test-pick" ]
 }
 
-@test "heads-up: a --models effort that is not lowercase letters is refused before the fork" {
-    printf '%s\n' '{"codex": {"effort": "hi gh"}}' > "$RUN_DIR/models.json"
-    start_runner codex --models "$RUN_DIR/models.json"
+@test "heads-up: a --model effort that is not lowercase letters is refused before the fork" {
+    printf '%s\n' '{"effort": "hi gh"}' > "$RUN_DIR/model.json"
+    start_runner codex --model "$RUN_DIR/model.json"
     [ "$status" -eq 1 ]
-    [ "$output" = "Error: --models: effort for codex must be lowercase letters, got: hi gh" ]
+    [ "$output" = "Error: --model: effort must be lowercase letters, got: hi gh" ]
     [ ! -f "$RUN_DIR/pid" ]
 }

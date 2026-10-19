@@ -1,22 +1,22 @@
 #!/bin/bash
-# ABOUTME: Runs the heads-up side-check detached: digests the transcript, asks the seats in order, first non-NONE wins
+# ABOUTME: Runs the heads-up side-check detached: digests the transcript and asks one seat once
 # ABOUTME: Writes result.json then .done into the run dir the mod passed; the mod polls, never waits
 #
-# Usage: heads-up.sh --run-dir DIR --session ID --seats codex[,gemini,...] --avoid-file FILE [--models FILE]
-#   --models FILE   JSON object, seat name -> {model?, effort?}: the model goes to the seat's own
+# Usage: heads-up.sh --run-dir DIR --session ID --seat NAME --avoid-file FILE [--model FILE]
+#   --model FILE    JSON object {model?, effort?}, the seat's pick: the model goes to the seat's own
 #                   *_MODEL variable for its call; the effort to codex's -c model_reasoning_effort
 #
 # Prints the detached worker's pid and exits 0 at once. Exit 1 before the fork
 # when the arguments are unusable (the mod logs stderr once). The worker writes:
 #   DIR/pid, DIR/start                before the fork returns
 #   DIR/digest.md, DIR/prompt.md      what left the machine; kept until the mod removes the dir
-#   DIR/seat-<n>.{out,err,events}     each seat's raw output
+#   DIR/seat.{out,err,events}         the seat's raw output
 #   DIR/result.json                   {kind:note|none|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
-#                                      seats:[{seat,outcome,ms,detail?}]}; written to a temp name and moved
+#                                      seats:[{seat,outcome,ms,detail?}]}; seats holds the seat's outcome, none
+#                                      when the run failed before asking it; written to a temp name and moved
 #   DIR/.done                         last; the mod trusts result.json only after it
 # Env (COUNCIL_* so provider_env_scrub keeps them):
-#   COUNCIL_HEADS_UP_SEAT_SECONDS   per seat, default 60
-#   COUNCIL_HEADS_UP_RUN_SECONDS    whole run, default 180
+#   COUNCIL_HEADS_UP_SEAT_SECONDS   the seat's deadline, default 60
 #   COUNCIL_HEADS_UP_TURNS          digest window, default 5
 #   COUNCIL_HEADS_UP_RESULTS        tool results in the digest, default 8, 2000 characters each
 
@@ -27,7 +27,7 @@ source "${SCRIPT_DIR}/lib/providers.sh"
 source "${SCRIPT_DIR}/lib/clock.sh"
 
 usage() {
-    echo "Usage: heads-up.sh --run-dir DIR --session ID --seats codex[,gemini,...] --avoid-file FILE" >&2
+    echo "Usage: heads-up.sh --run-dir DIR --session ID --seat NAME --avoid-file FILE [--model FILE]" >&2
     exit 1
 }
 
@@ -36,8 +36,7 @@ die() {
     exit 1
 }
 
-RUN_DIR="" SESSION_ID="" SEATS_ARG="" AVOID_FILE="" MODELS_FILE=""
-SEATS=()
+RUN_DIR="" SESSION_ID="" SEAT="" AVOID_FILE="" PICK_FILE=""
 
 # A whole number of 1 or more, read base-10 so a padded 08 is not octal.
 require_count() {
@@ -50,14 +49,14 @@ require_count() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --run-dir|--session|--seats|--avoid-file|--models)
+            --run-dir|--session|--seat|--avoid-file|--model)
                 [[ $# -ge 2 ]] || die "$1 needs a value."
                 case "$1" in
                     --run-dir) RUN_DIR="$2" ;;
                     --session) SESSION_ID="$2" ;;
-                    --seats) SEATS_ARG="$2" ;;
+                    --seat) SEAT="$2" ;;
                     --avoid-file) AVOID_FILE="$2" ;;
-                    --models) MODELS_FILE="$2" ;;
+                    --model) PICK_FILE="$2" ;;
                 esac
                 shift 2
                 ;;
@@ -69,37 +68,29 @@ parse_args() {
     done
     [[ -n "$RUN_DIR" ]] || die "--run-dir is required."
     [[ -n "$SESSION_ID" ]] || die "--session is required."
-    [[ -n "$SEATS_ARG" ]] || die "--seats is required."
+    [[ -n "$SEAT" ]] || die "--seat is required."
     [[ -n "$AVOID_FILE" ]] || die "--avoid-file is required."
     [[ -d "$RUN_DIR" ]] || die "run dir not found: $RUN_DIR"
     [[ -f "$AVOID_FILE" ]] || die "avoid file not found: $AVOID_FILE"
-    if [[ -n "$MODELS_FILE" ]]; then
-        [[ -f "$MODELS_FILE" ]] || die "models file not found: $MODELS_FILE"
-        jq -e 'type == "object"' "$MODELS_FILE" > /dev/null 2>&1 || die "--models: $MODELS_FILE must hold a JSON object"
+    if [[ -n "$PICK_FILE" ]]; then
+        [[ -f "$PICK_FILE" ]] || die "model file not found: $PICK_FILE"
+        jq -e 'type == "object"' "$PICK_FILE" > /dev/null 2>&1 || die "--model: $PICK_FILE must hold a JSON object"
     fi
 
-    # The seat name is spliced into a script path and run, so each one passes
-    # the one allowlist, derived from the providers/ registry.
-    local seat
-    IFS=, read -r -a SEATS <<< "$SEATS_ARG"
-    [[ ${#SEATS[@]} -gt 0 ]] || die "--seats names no seat."
-    for seat in "${SEATS[@]}"; do
-        provider_allowlisted "$seat" || die "not a council seat: $seat"
-        local effort
-        effort=$(seat_pick "$seat" effort)
-        [[ -z "$effort" || "$effort" =~ ^[a-z]+$ ]] || die "--models: effort for $seat must be lowercase letters, got: $effort"
-    done
+    # The seat name is spliced into a script path and run, so it passes the
+    # one allowlist, derived from the providers/ registry.
+    provider_allowlisted "$SEAT" || die "not a council seat: $SEAT"
+    local effort
+    effort=$(seat_pick effort)
+    [[ -z "$effort" || "$effort" =~ ^[a-z]+$ ]] || die "--model: effort must be lowercase letters, got: $effort"
 
     SEAT_SECONDS="${COUNCIL_HEADS_UP_SEAT_SECONDS:-60}"
-    RUN_SECONDS="${COUNCIL_HEADS_UP_RUN_SECONDS:-180}"
     TURNS="${COUNCIL_HEADS_UP_TURNS:-5}"
     RESULTS="${COUNCIL_HEADS_UP_RESULTS:-8}"
     require_count COUNCIL_HEADS_UP_SEAT_SECONDS "$SEAT_SECONDS"
-    require_count COUNCIL_HEADS_UP_RUN_SECONDS "$RUN_SECONDS"
     require_count COUNCIL_HEADS_UP_TURNS "$TURNS"
     require_count COUNCIL_HEADS_UP_RESULTS "$RESULTS"
     SEAT_SECONDS=$((10#$SEAT_SECONDS))
-    RUN_SECONDS=$((10#$RUN_SECONDS))
 }
 
 # The last line of a seat's stderr, one line and at most 300 characters, for a
@@ -137,12 +128,12 @@ build_digest() {
 
 # Runs "$@" in the background under a deadline of $1 ticks of `sleep 1`, never
 # a $((SECONDS+N)) deadline, which bash 3.2 can reach in milliseconds. A
-# watchdog does the ticking so a fast command returns at once; it records each
-# tick so the run budget can be charged. Sets RC, TIMED_OUT and TICKS.
+# watchdog does the ticking so a fast command returns at once. Sets RC and
+# TIMED_OUT.
 run_with_ticks() {
-    local limit="$1" pid watchdog ticks_file="${RUN_DIR}/ticks" fired="${RUN_DIR}/deadline"
+    local limit="$1" pid watchdog fired="${RUN_DIR}/deadline"
     shift
-    rm -f "$ticks_file" "$fired"
+    rm -f "$fired"
     "$@" &
     pid="$!"
     (
@@ -150,7 +141,6 @@ run_with_ticks() {
         while (( t < limit )); do
             sleep 1
             t=$((t + 1))
-            echo "$t" > "$ticks_file"
             kill -0 "$pid" 2>/dev/null || exit 0
         done
         : > "$fired"
@@ -165,8 +155,7 @@ run_with_ticks() {
     wait "$watchdog" 2>/dev/null || true
     TIMED_OUT=0
     [[ -f "$fired" ]] && TIMED_OUT=1
-    TICKS=$(cat "$ticks_file" 2>/dev/null || echo 0)
-    rm -f "$ticks_file" "$fired"
+    rm -f "$fired"
 }
 
 # One string field of codex's answer file, on one line, without its trailing
@@ -175,13 +164,13 @@ answer_field() {
     jq -r "$2 | tostring | gsub(\"[\\r\\n\\t]+\"; \" \")" "$1" | tr -d '\r'
 }
 
-# A seat's pick from --models: "model" or "effort", empty without one.
+# The seat's pick from --model: "model" or "effort", empty without one.
 seat_pick() {
-    [[ -n "$MODELS_FILE" ]] || { echo ""; return 0; }
-    jq -r --arg seat "$1" --arg field "$2" '.[$seat][$field] // "" | tostring' "$MODELS_FILE"
+    [[ -n "$PICK_FILE" ]] || { echo ""; return 0; }
+    jq -r --arg field "$1" '.[$field] // "" | tostring' "$PICK_FILE"
 }
 
-# The variable get_model reads for a seat, so a --models pick lands where the
+# The variable get_model reads for a seat, so a --model pick lands where the
 # provider script and the band's model name both look.
 seat_model_var() {
     case "$1" in
@@ -196,39 +185,39 @@ seat_model_var() {
     esac
 }
 
-# Exports the seat's model pick for the rest of this worker (seats run one at
-# a time, each with its own variable) and prints the codex effort flags.
+# Exports the seat's model pick for the rest of this worker, in the seat's own
+# variable.
 apply_pick() {
-    local seat="$1" model var
-    model=$(seat_pick "$seat" model)
-    var=$(seat_model_var "$seat")
+    local model var
+    model=$(seat_pick model)
+    var=$(seat_model_var "$SEAT")
     [[ -n "$model" && -n "$var" ]] && export "$var=$model"
     return 0
 }
 
 codex_call() {
-    local n="$1" effort
+    local effort
     local args=(exec --json --skip-git-repo-check -s read-only)
     [[ -n "${CODEX_MODEL:-}" ]] && args+=(-m "$CODEX_MODEL")
-    effort=$(seat_pick codex effort)
+    effort=$(seat_pick effort)
     [[ -n "$effort" ]] && args+=(-c "model_reasoning_effort=\"${effort}\"")
-    args+=(--output-schema "${SCRIPT_DIR}/heads-up.schema.json" -o "${RUN_DIR}/seat-${n}.out" -)
+    args+=(--output-schema "${SCRIPT_DIR}/heads-up.schema.json" -o "${RUN_DIR}/seat.out" -)
     ( provider_env_scrub codex; exec codex "${args[@]}" ) \
-        < "${RUN_DIR}/prompt.md" > "${RUN_DIR}/seat-${n}.events" 2> "${RUN_DIR}/seat-${n}.err"
+        < "${RUN_DIR}/prompt.md" > "${RUN_DIR}/seat.events" 2> "${RUN_DIR}/seat.err"
 }
 
 # codex: structured output. Success only on a "turn.completed" event, since
 # codex exits 0 on SIGTERM. Sets OUTCOME (none|note|error|timeout), DETAIL and,
 # for a note, TAG, TOPIC, HEADLINE, TITLE and POINTS_JSON (a JSON array).
 ask_codex() {
-    local n="$1" limit="$2" answer="${RUN_DIR}/seat-${1}.out"
-    run_with_ticks "$limit" codex_call "$n"
+    local limit="$1" answer="${RUN_DIR}/seat.out"
+    run_with_ticks "$limit" codex_call
     if (( TIMED_OUT )); then
         OUTCOME=timeout DETAIL="no answer in ${limit}s"
         return 0
     fi
-    if ! grep -q '"type":"turn.completed"' "${RUN_DIR}/seat-${n}.events" 2>/dev/null; then
-        DETAIL=$(last_error_line "${RUN_DIR}/seat-${n}.err")
+    if ! grep -q '"type":"turn.completed"' "${RUN_DIR}/seat.events" 2>/dev/null; then
+        DETAIL=$(last_error_line "${RUN_DIR}/seat.err")
         OUTCOME=error DETAIL="exit ${RC} without turn.completed${DETAIL:+: $DETAIL}"
         return 0
     fi
@@ -258,28 +247,28 @@ ask_codex() {
 # script reports its deadline as exit 1, so were the two equal, whichever fired
 # first would decide whether the seat logs a timeout or an error.
 text_call() {
-    local n="$1" seat="$2" limit="$3"
-    ( provider_env_scrub "$seat"
-      COUNCIL_TIMEOUT="$(( limit + 5 ))" exec bash "${SCRIPT_DIR}/providers/${seat}.sh" --prompt-file "${RUN_DIR}/prompt.md" ) \
-        > "${RUN_DIR}/seat-${n}.out" 2> "${RUN_DIR}/seat-${n}.err"
+    local limit="$1"
+    ( provider_env_scrub "$SEAT"
+      COUNCIL_TIMEOUT="$(( limit + 5 ))" exec bash "${SCRIPT_DIR}/providers/${SEAT}.sh" --prompt-file "${RUN_DIR}/prompt.md" ) \
+        > "${RUN_DIR}/seat.out" 2> "${RUN_DIR}/seat.err"
 }
 
 # Any other seat: its provider script under the scrubbed env; the first line
 # decides. NONE by the builtin's regex; "NOTE: <headline>" then "TAG: ...",
 # "TOPIC: ...", "TITLE: ..." and "POINT: ..." lines; anything else is an error, never a note.
 ask_text_seat() {
-    local n="$1" seat="$2" limit="$3" first line
-    run_with_ticks "$limit" text_call "$n" "$seat" "$limit"
+    local limit="$1" first line
+    run_with_ticks "$limit" text_call "$limit"
     if (( TIMED_OUT )) || (( RC == 143 )); then
         OUTCOME=timeout DETAIL="no answer in ${limit}s"
         return 0
     fi
     if (( RC != 0 )); then
-        DETAIL=$(last_error_line "${RUN_DIR}/seat-${n}.err")
+        DETAIL=$(last_error_line "${RUN_DIR}/seat.err")
         OUTCOME=error DETAIL="exit ${RC}${DETAIL:+: $DETAIL}"
         return 0
     fi
-    first=$(head -n 1 "${RUN_DIR}/seat-${n}.out" | tr -d '\r')
+    first=$(head -n 1 "${RUN_DIR}/seat.out" | tr -d '\r')
     # The builtin's NONE test. In a POSIX bracket a backslash is literal, so the
     # brackets are placed by position: "]" first, "[" just before the "-".
     local none_re='^[Nn][Oo][Nn][Ee][[:space:]]*([].!?():;,[-]|$)'
@@ -300,7 +289,7 @@ ask_text_seat() {
             elif [[ "$line" =~ ^POINT:[[:space:]]*(.+)$ ]]; then
                 POINTS_JSON=$(jq -c --arg point "${BASH_REMATCH[1]}" '. + [$point]' <<< "$POINTS_JSON")
             fi
-        done < <(tail -n +2 "${RUN_DIR}/seat-${n}.out")
+        done < <(tail -n +2 "${RUN_DIR}/seat.out")
         if [[ -n "$TOPIC" ]]; then
             OUTCOME=note DETAIL=""
             return 0
@@ -324,7 +313,7 @@ record_seat() {
 write_result() {
     local kind="$1"
     jq -n --arg kind "$kind" --argjson bytes "${BYTES:-0}" --argjson seats "$SEATS_JSON" \
-        --arg seat "${WIN_SEAT:-}" --arg model "${WIN_MODEL:-}" --argjson ms "${WIN_MS:-0}" --arg topic "${TOPIC:-}" \
+        --arg seat "$SEAT" --arg model "${NOTE_MODEL:-}" --argjson ms "${NOTE_MS:-0}" --arg topic "${TOPIC:-}" \
         --arg headline "${HEADLINE:-}" --arg title "${TITLE:-}" --argjson points "${POINTS_JSON:-[]}" --arg tag "${TAG:-}" --arg failure "${FAILURE:-}" \
         '{kind: $kind, bytes: $bytes}
          + (if $kind == "note" then {seat: $seat, model: $model, ms: $ms, tag: $tag, topic: $topic, headline: $headline, title: $title, points: $points}
@@ -352,34 +341,24 @@ worker() {
         write_result failed
         return 0
     fi
-    local n=0 seat start ms budget="$RUN_SECONDS" limit any_none=0
-    for seat in "${SEATS[@]}"; do
-        n=$((n + 1))
-        if (( budget <= 0 )); then
-            record_seat "$seat" timeout 0 "run budget of ${RUN_SECONDS}s spent before this seat"
-            continue
-        fi
-        limit=$(( SEAT_SECONDS < budget ? SEAT_SECONDS : budget ))
-        apply_pick "$seat"
-        start=$(now_ms)
-        if [[ "$seat" == codex ]]; then
-            ask_codex "$n" "$limit"
-        else
-            ask_text_seat "$n" "$seat" "$limit"
-        fi
-        ms=$(( $(now_ms) - start ))
-        budget=$(( budget - TICKS ))
-        record_seat "$seat" "$OUTCOME" "$ms" "$DETAIL"
-        case "$OUTCOME" in
-            note)
-                WIN_SEAT="$seat" WIN_MS="$ms" WIN_MODEL="$(get_model "$seat")"
-                write_result note
-                return 0
-                ;;
-            none) any_none=1 ;;
-        esac
-    done
-    if (( any_none )); then write_result none; else write_result failed; fi
+    local start ms
+    apply_pick
+    start=$(now_ms)
+    if [[ "$SEAT" == codex ]]; then
+        ask_codex "$SEAT_SECONDS"
+    else
+        ask_text_seat "$SEAT_SECONDS"
+    fi
+    ms=$(( $(now_ms) - start ))
+    record_seat "$SEAT" "$OUTCOME" "$ms" "$DETAIL"
+    case "$OUTCOME" in
+        note)
+            NOTE_MS="$ms" NOTE_MODEL="$(get_model "$SEAT")"
+            write_result note
+            ;;
+        none) write_result none ;;
+        *) write_result failed ;;
+    esac
 }
 
 main() {
