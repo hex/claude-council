@@ -372,13 +372,13 @@ file:
 
 ```bash
 cat > .claude/council-heads-up.json <<'EOF'
-{"enabled": true, "seats": ["codex"], "every": 6}
+{"enabled": true, "seats": ["codex"], "every": 3}
 EOF
 ```
 
 `seats` is the order asked, first answer that is not NONE wins, no synthesis;
-it defaults to `["codex"]`. `every` is messages per check inside a turn,
-default 6. The file is the consent and the only switch: delete it, or set
+it defaults to `["codex"]`. `every` is model requests per check inside a
+turn, default 3, so a check runs at the third, sixth, ninth request. The file is the consent and the only switch: delete it, or set
 `"enabled": false`, and nothing runs.
 
 The note sits above the prompt:

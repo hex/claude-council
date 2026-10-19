@@ -14,10 +14,10 @@ Opt in once per project:
 
 ```json
 // .claude/council-heads-up.json   (absent or malformed: off)
-{ "enabled": true, "seats": ["codex"], "every": 6 }
+{ "enabled": true, "seats": ["codex"], "every": 3 }
 ```
 
-`seats` defaults to `["codex"]`; `every` is messages per check, default 6. No `/config` row exists: the file is the consent and the only switch.
+`seats` defaults to `["codex"]`; `every` is model requests per check, default 3. No `/config` row exists: the file is the consent and the only switch.
 
 During a long turn, above the prompt:
 
@@ -65,7 +65,7 @@ Flow: `turn.step` on main → `decide` (pure) → `launch` writes `avoid.txt`, f
 Load-bearing decisions:
 
 - **Digest = Path A, `transcript-digest.sh` extended with `--tool-results K --tool-result-chars N`, off by default.** One privacy filter, already under 37 tests, stays the single source of truth (per boundary-discipline). A TS filter over `$.session.messages()` would be a second copy of the same policy with no origin field to build it on. The mod passes `$.session.id()` (the main session's id, so the subagent trap `/advise` documents does not apply) and the runner resolves it through `session-transcript.sh`, the one resolver. `turn.step` fires after the previous records were appended, so the lag is one unanswered `tool_use` at most. Tool results: the last K=8 whose `tool_use` sits inside the `last:5` window, text only, 2000 characters each (jq slices codepoints), tool name kept and inputs left out, `is_error` shown as `[error]`, AskUserQuestion results skipped because `ANSWER_FILTER` already covers them. Measured on the largest transcript: about 7.3 KB of turns plus about 5 KB of results, 12.7 KB in all, 27 KB worst case; both under the 32K argv ceiling, and the codex path uses stdin anyway. `/advise` and its tests keep their meaning; new tests pin the opposite rule under the flag, and that peer and notification rows stay out.
-- **Cadence reads the message count, not a guess at it.** `turn.step` carries `messageCount`, the whole conversation's; `Session.turnBase` records it at the turn's first step, and the message index within the turn is the difference. The check fires when that index is a positive multiple of `every`, the builtin's rule read off a direct fact. (A tool step carries two messages, so this is every third step at `every: 6`, but the code never assumes it.)
+- **Cadence reads the step's index in its turn.** `turn.step` carries `index`, the request's position in the turn from 0; the check fires when it is a positive multiple of `every`. The first design read `messageCount` deltas instead, taking a tool step for two messages; measured live (2026-10-19) the count grew by 14, 10 and 9 per step, since it counts every message the request carries, so a multiple of 6 landed by luck and a four-tool turn never checked. `Session.turnBase` went with it.
 - **Offered-this-turn is stamped when a note lands, not when a check launches.** A NONE result leaves later cadence points of the same turn free to check again; several seat calls per long turn are accepted by ruling. `phase: checking` alone keeps checks from overlapping. A note that lands after its turn ended stamps the turn it was launched in.
 - **Runner = `scripts/heads-up.sh`, the stop gate's direct-exec pattern, sequential seats.** `query-council.sh` joins every seat, caches, falls back to sibling models and merges stderr into answers; each of those contradicts "first non-NONE in seat order, the named seat answered".
 - **Codex NONE is structural: a direct `codex exec --json --output-schema` inside the runner, prompt on stdin, success gated on a `turn.completed` event** (codex exits 0 on SIGTERM). The schema `{none, topic, headline, detail}` is strict-required. Other seats get a first-line `NONE` / `NOTE:` + `TOPIC:` + `DETAIL:` contract and the builtin's NONE regex; an off-contract reply is an error, never shown. The shared `providers/codex.sh` is untouched: a schema mode there would be a second way to call codex for one caller.
@@ -114,7 +114,9 @@ Accepted deviations, each by the lead on merge (2026-10-18):
 - `provider_allowlisted` is derived (a plain-word name whose `providers/<name>.sh` exists), which admits `claude-cli` and `copilot-cli` to the stop gate where the old hand-written list did not.
 - `now_ms` moved to `scripts/lib/clock.sh` on its third copy.
 
-Unresolved: the pane's drawing, the poll and the hook wiring have no automated test; the first real codex run and the per-step `messageCount` delta are measured by the lead before release.
+- `every` counts model requests, not messages, after the live measurement above; default 3.
+
+Unresolved: the pane's drawing, the poll and the hook wiring have no automated test.
 
 ## Open questions and risks
 

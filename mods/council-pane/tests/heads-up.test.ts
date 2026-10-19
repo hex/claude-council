@@ -8,8 +8,8 @@ test('a missing file is off with nothing to report', () => {
   expect(parseConfig(undefined)).toEqual({ enabled: false })
 })
 
-test('an enabled file takes the defaults: codex, every 6', () => {
-  expect(parseConfig('{"enabled": true}')).toEqual({ enabled: true, seats: ['codex'], every: 6 })
+test('an enabled file takes the defaults: codex, every 3', () => {
+  expect(parseConfig('{"enabled": true}')).toEqual({ enabled: true, seats: ['codex'], every: 3 })
   expect(parseConfig('{"enabled": true, "seats": ["gemini", "grok-cli"], "every": 4}')).toEqual({ enabled: true, seats: ['gemini', 'grok-cli'], every: 4 })
 })
 
@@ -68,37 +68,32 @@ test('the avoid list is every seen and known topic once, one per line', () => {
   expect(avoidList({ seen: ['a', 'b'], known: ['B', 'c'], typedPastInARow: 0, looksToSkip: 0 })).toBe('a\nb\nc\n')
 })
 
-const on: HeadsUpConfig = { enabled: true, seats: ['codex'], every: 6 }
-const inTurn = (messageCount: number): Session => ({ ...FRESH_SESSION, turnBase: { turnId: 't1', messageCount } })
+const on: HeadsUpConfig = { enabled: true, seats: ['codex'], every: 3 }
 const note: Note = { id: 'c1', tag: 'Heads up', topic: 'Backfill never ran', headline: 'The test ran on an empty DB.', detail: 'So the backfill path was skipped.', seat: 'codex', model: 'gpt-6.1-sol', payloadBytes: 12698, elapsedMs: 27400 }
 
-test('a step of a new turn records where the turn starts and does not fire there', () => {
-  expect(decide(on, FRESH_SESSION, EMPTY_MEMORY, { turnId: 't1', index: 0, messageCount: 10 }, 1000)).toEqual({ kind: 'skip', why: 'off-cadence', session: inTurn(10) })
-  expect(decide(on, inTurn(4), EMPTY_MEMORY, { turnId: 't2', index: 0, messageCount: 22 }, 1000)).toEqual({ kind: 'skip', why: 'off-cadence', session: { ...FRESH_SESSION, turnBase: { turnId: 't2', messageCount: 22 } } })
-})
-
-test('a check fires at each positive multiple of every messages into the turn', () => {
-  expect(decide(on, inTurn(10), EMPTY_MEMORY, { turnId: 't1', index: 2, messageCount: 14 }, 1000)).toEqual({ kind: 'skip', why: 'off-cadence', session: inTurn(10) })
-  expect(decide(on, inTurn(10), EMPTY_MEMORY, { turnId: 't1', index: 3, messageCount: 16 }, 1000)).toEqual({ kind: 'launch', checkId: 'check-1000', session: inTurn(10) })
-  expect(decide(on, inTurn(10), EMPTY_MEMORY, { turnId: 't1', index: 6, messageCount: 22 }, 2000)).toEqual({ kind: 'launch', checkId: 'check-2000', session: inTurn(10) })
-  expect(decide({ ...on, every: 4 }, inTurn(10), EMPTY_MEMORY, { turnId: 't1', index: 2, messageCount: 14 }, 3000)).toEqual({ kind: 'launch', checkId: 'check-3000', session: inTurn(10) })
+test('a check fires at each positive multiple of every requests into a turn, never at its first', () => {
+  expect(decide(on, FRESH_SESSION, EMPTY_MEMORY, { turnId: 't1', index: 0 }, 1000)).toEqual({ kind: 'skip', why: 'off-cadence' })
+  expect(decide(on, FRESH_SESSION, EMPTY_MEMORY, { turnId: 't1', index: 2 }, 1000)).toEqual({ kind: 'skip', why: 'off-cadence' })
+  expect(decide(on, FRESH_SESSION, EMPTY_MEMORY, { turnId: 't1', index: 3 }, 1000)).toEqual({ kind: 'launch', checkId: 'check-1000' })
+  expect(decide(on, FRESH_SESSION, EMPTY_MEMORY, { turnId: 't1', index: 6 }, 2000)).toEqual({ kind: 'launch', checkId: 'check-2000' })
+  expect(decide({ ...on, every: 2 }, FRESH_SESSION, EMPTY_MEMORY, { turnId: 't1', index: 2 }, 3000)).toEqual({ kind: 'launch', checkId: 'check-3000' })
 })
 
 test('a cadence point is skipped while off, a note shows, a check runs, or the turn had its note', () => {
-  const step = { turnId: 't1', index: 3, messageCount: 16 }
-  expect(decide({ enabled: false }, inTurn(10), EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'disabled', session: inTurn(10) })
-  const showing: Session = { ...inTurn(10), phase: { kind: 'showing', note, expanded: false } }
-  expect(decide(on, showing, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'showing', session: showing })
-  const checking: Session = { ...inTurn(10), phase: { kind: 'checking', turnId: 't1', checkId: 'c0', runDir: '/r/c0', startedMs: 1 } }
-  expect(decide(on, checking, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'checking', session: checking })
-  const offered: Session = { ...inTurn(10), offeredTurn: 't1' }
-  expect(decide(on, offered, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'offered-this-turn', session: offered })
+  const step = { turnId: 't1', index: 3 }
+  expect(decide({ enabled: false }, FRESH_SESSION, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'disabled' })
+  const showing: Session = { ...FRESH_SESSION, phase: { kind: 'showing', note, expanded: false } }
+  expect(decide(on, showing, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'showing' })
+  const checking: Session = { ...FRESH_SESSION, phase: { kind: 'checking', turnId: 't1', checkId: 'c0', runDir: '/r/c0', startedMs: 1 } }
+  expect(decide(on, checking, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'checking' })
+  const offered: Session = { ...FRESH_SESSION, offeredTurn: 't1' }
+  expect(decide(on, offered, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'offered-this-turn' })
 })
 
 test('backoff spends one skipped check per cadence point and hands back the memory to write', () => {
   const backedOff = { ...EMPTY_MEMORY, typedPastInARow: 2, looksToSkip: 2 }
-  expect(decide(on, inTurn(10), backedOff, { turnId: 't1', index: 3, messageCount: 16 }, 1000)).toEqual({ kind: 'skip', why: 'backoff', session: inTurn(10), memory: { ...EMPTY_MEMORY, typedPastInARow: 2, looksToSkip: 1 } })
-  expect(decide(on, inTurn(10), backedOff, { turnId: 't1', index: 2, messageCount: 14 }, 1000)).toEqual({ kind: 'skip', why: 'off-cadence', session: inTurn(10) })
+  expect(decide(on, FRESH_SESSION, backedOff, { turnId: 't1', index: 3 }, 1000)).toEqual({ kind: 'skip', why: 'backoff', memory: { ...EMPTY_MEMORY, typedPastInARow: 2, looksToSkip: 1 } })
+  expect(decide(on, FRESH_SESSION, backedOff, { turnId: 't1', index: 2 }, 1000)).toEqual({ kind: 'skip', why: 'off-cadence' })
 })
 
 const codexNone = { seat: 'codex', outcome: 'none', ms: 27400 }
@@ -153,11 +148,10 @@ test('a repeat is a topic already seen or known, trimmed and case-folded', () =>
   expect(isRepeat(m, 'Something else')).toBe(false)
 })
 
-const checking: Session = { ...inTurn(10), phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1 } }
+const checking: Session = { ...FRESH_SESSION, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1 } }
 
-test('a note shows and stamps the turn its check was launched in, even after that turn ended', () => {
-  const later: Session = { ...checking, turnBase: { turnId: 't2', messageCount: 30 } }
-  expect(settle(later, EMPTY_MEMORY, { kind: 'note', note, seats: [] })).toEqual({ ...later, offeredTurn: 't1', phase: { kind: 'showing', note, expanded: false } })
+test('a note shows and stamps the turn its check was launched in', () => {
+  expect(settle(checking, EMPTY_MEMORY, { kind: 'note', note, seats: [] })).toEqual({ ...checking, offeredTurn: 't1', phase: { kind: 'showing', note, expanded: false } })
 })
 
 test('a repeat, a none or a failure settles back to idle with the turn left free', () => {
@@ -168,19 +162,19 @@ test('a repeat, a none or a failure settles back to idle with the turn left free
 })
 
 test('a result with no check in flight changes nothing', () => {
-  const showing: Session = { ...inTurn(10), phase: { kind: 'showing', note, expanded: false } }
+  const showing: Session = { ...FRESH_SESSION, phase: { kind: 'showing', note, expanded: false } }
   expect(settle(showing, EMPTY_MEMORY, { kind: 'none', payloadBytes: 1, seats: [] })).toBe(showing)
   expect(settle(FRESH_SESSION, EMPTY_MEMORY, { kind: 'note', note, seats: [] })).toBe(FRESH_SESSION)
 })
 
 test('typing past a shown note takes it down; with none shown nothing changes', () => {
-  const showing: Session = { ...inTurn(10), offeredTurn: 't1', phase: { kind: 'showing', note, expanded: true } }
-  expect(typedPast(showing)).toEqual({ ...inTurn(10), offeredTurn: 't1', phase: { kind: 'idle' } })
+  const showing: Session = { ...FRESH_SESSION, offeredTurn: 't1', phase: { kind: 'showing', note, expanded: true } }
+  expect(typedPast(showing)).toEqual({ ...FRESH_SESSION, offeredTurn: 't1', phase: { kind: 'idle' } })
   expect(typedPast(checking)).toBe(checking)
 })
 
 test('learn expands the note; tell, knew and dismiss close it', () => {
-  const showing: Session = { ...inTurn(10), phase: { kind: 'showing', note, expanded: false } }
+  const showing: Session = { ...FRESH_SESSION, phase: { kind: 'showing', note, expanded: false } }
   expect(pressed(showing, 'learn')).toEqual({ ...showing, phase: { kind: 'showing', note, expanded: true } })
   expect(pressed({ ...showing, phase: { kind: 'showing', note, expanded: true } }, 'tell')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(showing, 'knew')).toEqual({ ...showing, phase: { kind: 'idle' } })

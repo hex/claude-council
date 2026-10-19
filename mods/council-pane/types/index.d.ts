@@ -3,8 +3,6 @@
 
 /** Per-session state in $.state; survives hot reload, never crosses sessions. */
 export type Session = {
-  /** The running turn and the conversation's message count at its first step: the message index within the turn is the difference. */
-  readonly turnBase: { turnId: string; messageCount: number } | null
   /** The turn a note was offered in; at most one note per turn. */
   readonly offeredTurn: string | null
   readonly phase: Phase

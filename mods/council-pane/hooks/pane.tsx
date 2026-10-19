@@ -614,25 +614,20 @@ async function launchHeadsUp($: EngineInterface, seats: readonly string[], memor
 // One main-loop step: decide, write the session when it changed, and launch
 // on a cadence point. The session says checking before the fork, so a step
 // that lands while the runner starts cannot launch a second check.
-async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions, step: { turnId: string; index: number; messageCount: number }): Promise<void> {
+async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions, step: { turnId: string; index: number }): Promise<void> {
   const config = await readHeadsUpConfig($, state)
   const memory = await loadMemory($)
   const now = await $.clock.now()
   const held = await $.state.get(HEADS_UP)
-  const before = held.value ?? FRESH_SESSION
-  const decision = decide(config, before, memory, step, now)
-  const runDir = decision.kind === 'launch' ? `${await watchRoot($)}/heads-up/${decision.checkId}` : ''
-  const session: Session = decision.kind === 'launch'
-    ? { ...decision.session, phase: { kind: 'checking', turnId: step.turnId, checkId: decision.checkId, runDir, startedMs: now } }
-    : decision.session
-  if (session !== before) {
-    // A press or a poll wrote in between: this step's reading is stale, and
-    // the next step decides again on the new session.
-    const written = await $.state.set(HEADS_UP, session, { ifVersion: held.version })
-    if (!written.isSet) return
-  }
+  const decision = decide(config, held.value ?? FRESH_SESSION, memory, step, now)
   if (decision.kind === 'skip' && decision.why === 'backoff') await saveMemory($, decision.memory)
   if (decision.kind !== 'launch' || !config.enabled) return
+  const runDir = `${await watchRoot($)}/heads-up/${decision.checkId}`
+  const session: Session = { ...(held.value ?? FRESH_SESSION), phase: { kind: 'checking', turnId: step.turnId, checkId: decision.checkId, runDir, startedMs: now } }
+  // A press or a poll wrote in between: this step's reading is stale, and
+  // the next step decides again on the new session.
+  const written = await $.state.set(HEADS_UP, session, { ifVersion: held.version })
+  if (!written.isSet) return
   await startWatching($, state, settings)
   try {
     await launchHeadsUp($, config.seats, memory, runDir)
@@ -1059,7 +1054,7 @@ export const register: Register = (on, options) => {
   on('turn.step', async function* ($, e, next) {
     const response = next(e)
     if (e.agentId === undefined) {
-      const step = { turnId: e.turnId, index: e.index, messageCount: e.messageCount }
+      const step = { turnId: e.turnId, index: e.index }
       void logFailure($, state, () => stepHeadsUp($, state, settings, step), 'heads-up')
     }
     return yield* response

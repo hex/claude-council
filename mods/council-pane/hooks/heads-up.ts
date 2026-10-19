@@ -4,7 +4,7 @@
 import type { Note, Phase, Session, Tag } from '../types'
 
 /** Fire when the message index within the turn is a positive multiple of this; the builtin's number. */
-export const DEFAULT_EVERY = 6
+export const DEFAULT_EVERY = 3
 /** seen and known each keep this many topics, newest last; the builtin's cap. */
 export const TOPIC_CAP = 50
 export const TOPIC_CHARS = 140
@@ -113,36 +113,32 @@ export function avoidList(m: Memory): string {
   return topics.map(topic => `${topic}\n`).join('')
 }
 
-export const FRESH_SESSION: Session = { turnBase: null, offeredTurn: null, phase: { kind: 'idle' } }
+export const FRESH_SESSION: Session = { offeredTurn: null, phase: { kind: 'idle' } }
 
-/** What turn.step carries that the rules read: the turn, and the conversation's message count at this step. */
-export type StepFacts = { turnId: string; index: number; messageCount: number }
+/** What turn.step carries that the rules read: the turn, and this request's position in it, from 0. */
+export type StepFacts = { turnId: string; index: number }
 
-/** Every decision carries the session to write; the caller persists it when it differs. */
 export type Decision =
-  | { kind: 'skip'; why: 'disabled' | 'off-cadence' | 'showing' | 'checking' | 'offered-this-turn'; session: Session }
-  | { kind: 'skip'; why: 'backoff'; session: Session; memory: Memory }
-  | { kind: 'launch'; checkId: string; session: Session }
+  | { kind: 'skip'; why: 'disabled' | 'off-cadence' | 'showing' | 'checking' | 'offered-this-turn' }
+  | { kind: 'skip'; why: 'backoff'; memory: Memory }
+  | { kind: 'launch'; checkId: string }
 
 /**
- * The builtin's rules in order. A step whose turn differs from turnBase starts
- * a turn: turnBase = {turnId, messageCount}. The message index within the turn
- * is messageCount - turnBase.messageCount; the check fires when it is a
- * positive multiple of every. Backoff consumes one looksToSkip and returns the
- * memory to write. A launch does not stamp offeredTurn: a NONE result leaves
- * later cadence points of the turn free; `checking` alone stops overlap.
+ * The builtin's rules in order. The check fires when the request's index in
+ * its turn is a positive multiple of every (the engine's own count; the
+ * conversation's messageCount is not a per-step fact, it grows by whatever the
+ * request carries). Backoff consumes one looksToSkip and returns the memory to
+ * write. A launch does not stamp offeredTurn: a NONE result leaves later
+ * cadence points of the turn free; `checking` alone stops overlap.
  */
 export function decide(cfg: HeadsUpConfig, s: Session, m: Memory, e: StepFacts, nowMs: number): Decision {
-  if (!cfg.enabled) return { kind: 'skip', why: 'disabled', session: s }
-  const turnBase = s.turnBase?.turnId === e.turnId ? s.turnBase : { turnId: e.turnId, messageCount: e.messageCount }
-  const session: Session = turnBase === s.turnBase ? s : { ...s, turnBase }
-  const index = e.messageCount - turnBase.messageCount
-  if (index <= 0 || index % cfg.every !== 0) return { kind: 'skip', why: 'off-cadence', session }
-  if (session.phase.kind === 'showing') return { kind: 'skip', why: 'showing', session }
-  if (session.phase.kind === 'checking') return { kind: 'skip', why: 'checking', session }
-  if (session.offeredTurn === e.turnId) return { kind: 'skip', why: 'offered-this-turn', session }
-  if (m.looksToSkip > 0) return { kind: 'skip', why: 'backoff', session, memory: { ...m, looksToSkip: m.looksToSkip - 1 } }
-  return { kind: 'launch', checkId: `check-${nowMs}`, session }
+  if (!cfg.enabled) return { kind: 'skip', why: 'disabled' }
+  if (e.index <= 0 || e.index % cfg.every !== 0) return { kind: 'skip', why: 'off-cadence' }
+  if (s.phase.kind === 'showing') return { kind: 'skip', why: 'showing' }
+  if (s.phase.kind === 'checking') return { kind: 'skip', why: 'checking' }
+  if (s.offeredTurn === e.turnId) return { kind: 'skip', why: 'offered-this-turn' }
+  if (m.looksToSkip > 0) return { kind: 'skip', why: 'backoff', memory: { ...m, looksToSkip: m.looksToSkip - 1 } }
+  return { kind: 'launch', checkId: `check-${nowMs}` }
 }
 
 export type SeatOutcome = {
