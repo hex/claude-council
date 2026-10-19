@@ -100,10 +100,12 @@ wait_for '❯'
 sleep 3
 screen | grep -qF 'trust' && fail "the trust dialog showed; the seed in ~/.claude.json did not take"
 
-echo "0. the once-per-install line shows while the check is off; /heads-up reads the state and switches the project on"
-wait_for 'heads-up side-check: codex can reread a long turn'
+echo "0. the once-per-install tail sits on the prompt hint while the check is off; /heads-up reads the state and switches the project on"
+wait_for 'heads-up side-check is off: /heads-up on, or /config'
+screen > "$OUT/0-intro.txt"
 tmux send-keys -t "$SESSION" -l '/heads-up'; key Enter
 wait_for 'Heads-up side-check: off for this project, by .claude/council-heads-up.json (the /config row is off)'
+screen | grep -qF 'heads-up side-check is off: /heads-up on, or /config' && fail "the intro tail is still drawn after typing"
 tmux send-keys -t "$SESSION" -l '/heads-up on'; key Enter
 wait_for 'Heads-up side-check: on for this project, by .claude/council-heads-up.json (the /config row is off) · seats codex · every 2 requests'
 [ "$(cat "$PROJECT/.claude/council-heads-up.json")" = '{"enabled": true, "seats": ["codex"], "every": 2}' ] || fail "the file after /heads-up on is $(cat "$PROJECT/.claude/council-heads-up.json")"

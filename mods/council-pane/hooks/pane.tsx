@@ -4,7 +4,7 @@ import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren } from 'claude-code'
 import {
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
-  bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introLine, parseCounts, statusText, withEnabled, type Counts,
+  bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
   type Answer, type BandView, type Memory, type RunResult,
 } from './heads-up'
 import type { Note, Session } from '../types'
@@ -88,6 +88,8 @@ type PaneState = {
   headsUpProblem: string
   // The last heads-up failure logged (see logFailure).
   headsUpError: string
+  // The intro tail on the prompt hint; '' once typed past, turned on, or never due.
+  headsUpTip: string
   // When the followed specialist round's process was last checked.
   specialistCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
@@ -363,9 +365,12 @@ async function introduceSpecialists($: EngineInterface, specialists: number): Pr
 
 // Once per install, while the check is off: the store flag is shared by every session.
 async function introduceHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
-  const notice = introLine({ shown: (await $.store.get(HEADS_UP_INTRO_KEY)) === true, enabled: (await readHeadsUpConfig($, state, settings)).enabled })
-  if (notice.log) $.ui.log(notice.log)
-  if (notice.markShown) await $.store.set(HEADS_UP_INTRO_KEY, true)
+  const intro = introTail({ shown: (await $.store.get(HEADS_UP_INTRO_KEY)) === true, enabled: (await readHeadsUpConfig($, state, settings)).enabled })
+  if (intro.tail !== undefined) {
+    state.headsUpTip = intro.tail
+    $.ui.invalidate('ui.render')
+  }
+  if (intro.markShown) await $.store.set(HEADS_UP_INTRO_KEY, true)
 }
 
 async function foldTemplates($: EngineInterface, state: PaneState): Promise<void> {
@@ -1014,7 +1019,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', headsUpError: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', headsUpError: '', headsUpTip: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -1290,6 +1295,7 @@ export const register: Register = (on, options) => {
     if (action !== 'status') {
       const file = await headsUpFile($)
       await $.fs.write(file.path, withEnabled(file.text, action === 'on'))
+      state.headsUpTip = ''
     }
     const file = await headsUpFile($)
     return { text: statusText(parseConfig(file.text, settings.headsUp), settings.headsUp, file.text, parseCounts(await $.store.get(COUNTS_KEY))) }
@@ -1304,6 +1310,18 @@ export const register: Register = (on, options) => {
     if (command.action === 'unknown') return { text: 'Usage: /council-pane [ask]. Choose the pane in /config, row "Pane opens in".' }
     if (state.view) await $.ui.open({ id: PANE_ID, title: 'Council' })
     return { text: reopenReply(state.view !== undefined) }
+  })
+
+  // The intro rides the dim hint under the prompt while it is empty; the
+  // first typed character retires it for good.
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    if (state.headsUpTip === '') return next(e)
+    if (e.props.isDraft) {
+      state.headsUpTip = ''
+      return next(e)
+    }
+    if (e.props.isWorking) return next(e)
+    return next({ ...e, props: { ...e.props, tail: state.headsUpTip } })
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

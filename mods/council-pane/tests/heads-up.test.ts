@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, headsUpCommand, withEnabled, statusText, introLine } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, headsUpCommand, withEnabled, statusText, introTail } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -278,8 +278,8 @@ test('status names the effective state and which switch set it, then the counts'
     + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
 })
 
-test('the one-time intro shows once, and only while the check is off', () => {
-  expect(introLine({ shown: false, enabled: false })).toEqual({ log: 'heads-up side-check: codex can reread a long turn and show one line above the prompt about something you may have missed; it is off. /heads-up on turns it on for this project, the /config row "Heads-up side-check" for every project.', markShown: true })
-  expect(introLine({ shown: false, enabled: true })).toEqual({ markShown: true })
-  expect(introLine({ shown: true, enabled: false })).toEqual({ markShown: false })
+test('the one-time intro is a tail on the prompt hint, once per install, only while the check is off', () => {
+  expect(introTail({ shown: false, enabled: false })).toEqual({ tail: 'heads-up side-check is off: /heads-up on, or /config', markShown: true })
+  expect(introTail({ shown: false, enabled: true })).toEqual({ markShown: true })
+  expect(introTail({ shown: true, enabled: false })).toEqual({ markShown: false })
 })

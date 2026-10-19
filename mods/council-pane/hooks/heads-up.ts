@@ -146,11 +146,15 @@ function fileEnabled(text: string): boolean | undefined {
   }
 }
 
-/** The once-per-install line at session start, only while the check is off; marked shown either way so it never repeats. */
-export function introLine(p: { shown: boolean; enabled: boolean }): { log?: string; markShown: boolean } {
+/**
+ * The once-per-install introduction: a dim tail on the prompt's hint line
+ * while the prompt is empty, only while the check is off; marked shown either
+ * way so it never repeats on this machine.
+ */
+export function introTail(p: { shown: boolean; enabled: boolean }): { tail?: string; markShown: boolean } {
   if (p.shown) return { markShown: false }
   if (p.enabled) return { markShown: true }
-  return { log: `heads-up side-check: codex can reread a long turn and show one line above the prompt about something you may have missed; it is off. /${COMMAND} on turns it on for this project, the /config row "Heads-up side-check" for every project.`, markShown: true }
+  return { tail: `heads-up side-check is off: /${COMMAND} on, or /config`, markShown: true }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -405,8 +405,9 @@ check is on here and which switch set it, then the counts kept on this machine
 and never sent anywhere: checks run, with how many found nothing, drew a note,
 repeated a topic already seen, or failed; and the presses, learn, tell, knew,
 dismiss and typed past. The first session on a machine where the check is off
-logs one line saying it exists; a flag in the plugin store keeps it from coming
-back.
+adds a dim note to the hint under the empty prompt, `heads-up side-check is
+off: /heads-up on, or /config`, until you type; a flag in the plugin store
+keeps it from coming back.
 
 Privacy: unlike `/claude-council:advise`, nothing asks before a send. Each
 check digests the last five turns of this session's transcript plus the last
