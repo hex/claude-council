@@ -151,8 +151,8 @@ export function withEnabled(text: string | undefined, on: boolean | undefined, s
   const { enabled: _dropped, ...rest } = kept
   if (seats.length > 0) rest.seats = [...seats]
   if (every !== undefined) rest.every = every
-  if (models !== undefined && Object.keys(models).length > 0) rest.models = models
-  else if (models !== undefined) delete rest.models
+  if (models !== undefined) rest.models = models
+  if (isRecord(rest.models) && Object.keys(rest.models).length === 0) delete rest.models
   const json = (value: unknown): string => {
     if (Array.isArray(value)) return `[${value.map(item => JSON.stringify(item)).join(', ')}]`
     if (isRecord(value)) return `{${Object.entries(value).map(([key, item]) => `${JSON.stringify(key)}: ${json(item)}`).join(', ')}}`

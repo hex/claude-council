@@ -93,6 +93,8 @@ type PaneState = {
   headsUpTip: string
   // The last check that found nothing, on the prompt hint until a keystroke or the next check.
   headsUpReceipt: string
+  // The last check that failed, drawn in red above the prompt for a while; the transcript keeps the reason.
+  headsUpFailure?: FinishNotice
   // When the followed specialist round's process was last checked.
   specialistCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
@@ -531,6 +533,10 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.finished = undefined
     $.ui.invalidate('ui.render')
   }
+  if (state.headsUpFailure && !noticeIsLive(state.headsUpFailure, now)) {
+    state.headsUpFailure = undefined
+    $.ui.invalidate('ui.render')
+  }
   if (state.pendingWake) await wakeWhenFetchable($, state)
   if ((await read($, headsUp)).phase.kind === 'checking') await pollHeadsUp($, state, now)
   if (!state.runDir) {
@@ -762,7 +768,11 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, now: number): P
   else return
   const memory = await loadMemory($)
   const settled = await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(s, memory, result) : s))
-  if (result.kind === 'failed') $.ui.log(checkLine(result))
+  if (result.kind === 'failed') {
+    $.ui.log(checkLine(result))
+    state.headsUpFailure = { text: checkLine(result), untilMs: now + FINISH_NOTICE_MS, isFailure: true }
+    $.ui.invalidate('ui.render')
+  }
   if (result.kind === 'none') {
     state.headsUpReceipt = receiptLine(result)
     $.ui.invalidate('ui.render')
@@ -1447,6 +1457,24 @@ export const register: Register = (on, options) => {
       )
     }
     if (retry && runDir) return retryRow($.ui.resolve(e), retry, retryPresses($, runDir))
+    const failure = state.headsUpFailure
+    if (failure) {
+      const ui = $.ui.resolve(e)
+      return (
+        <ui.Box key="heads-up-failure" flexDirection="row" marginTop={1}>
+          <ui.Text bold color={COLOR.danger}>{` \u2717 ${failure.text}  `}</ui.Text>
+          <ui.Button
+            key="heads-up-failure:dismiss"
+            hotkey="x"
+            label={'x \u00b7 dismiss'}
+            onPress={() => {
+              state.headsUpFailure = undefined
+              $.ui.invalidate('ui.render')
+            }}
+          />
+        </ui.Box>
+      )
+    }
     // A note is one row and time-sensitive: the progress bands wait for its
     // answer. Reading the session here subscribes the band to its changes.
     const band = bandView((await read($, headsUp)).phase)
