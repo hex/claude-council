@@ -1,7 +1,7 @@
 // ABOUTME: Hooks module that draws a council run's progress and answers in a Claude Code pane
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import { atom, read, update } from 'claude-code'
-import type { Elements, EngineInterface, Register, RenderChildren } from 'claude-code'
+import type { Elements, EngineInterface, Register, RenderChildren, Timer } from 'claude-code'
 import {
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
   bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
@@ -87,6 +87,9 @@ type PaneState = {
   pidCheckedAtMs: number
   // When the heads-up check's worker was last asked whether it is alive.
   headsUpCheckedAtMs: number
+  // The heads-up's own poll, from a launch until the check settles and its failure notice is gone.
+  headsUpTimer?: Timer
+  isPollingHeadsUp: boolean
   // The last config problem logged, so a broken file is reported once.
   headsUpProblem: string
   // The last heads-up failure logged (see logFailure).
@@ -518,12 +521,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.finished = undefined
     $.ui.invalidate('ui.render')
   }
-  if (state.headsUpFailure && !noticeIsLive(state.headsUpFailure, now)) {
-    state.headsUpFailure = undefined
-    $.ui.invalidate('ui.render')
-  }
   if (state.pendingWake) await wakeWhenFetchable($, state)
-  if ((await read($, headsUp)).phase.kind === 'checking') await pollHeadsUp($, state, now)
   if (!state.runDir) {
     const name = unseenRun(await $.fs.list(state.root), state.shown)
     if (!name) return
@@ -744,7 +742,7 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
     await $.process.run(['rm', '-rf', runDir])
     return
   }
-  await startWatching($, state, settings)
+  watchHeadsUp($, state)
   try {
     await launchHeadsUp($, config, runDir, avoidFile)
     await count($, 'checks')
@@ -758,11 +756,38 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
   }
 }
 
-// The poll's heads-up branch: a result once .done lands, or a failure when
-// the worker or its dir is gone without one. Every check's dir is removed.
-async function pollHeadsUp($: EngineInterface, state: PaneState, now: number): Promise<void> {
-  const phase = (await read($, headsUp)).phase
-  if (phase.kind !== 'checking') return
+// The heads-up check polls on its own timer, so a check starts none of the
+// council's: started at a launch, and again at session.start when a reload
+// finds a check in flight. It stops once nothing is checking and no failure
+// notice is left to expire.
+function watchHeadsUp($: EngineInterface, state: PaneState): void {
+  if (state.headsUpTimer) return
+  state.headsUpTimer = $.clock.every(POLL_MS, () => { void logFailure($, state, () => headsUpTick($, state), 'heads-up') })
+}
+
+async function headsUpTick($: EngineInterface, state: PaneState): Promise<void> {
+  if (state.isPollingHeadsUp) return
+  state.isPollingHeadsUp = true
+  try {
+    const now = await $.clock.now()
+    if (state.headsUpFailure && !noticeIsLive(state.headsUpFailure, now)) {
+      state.headsUpFailure = undefined
+      $.ui.invalidate('ui.render')
+    }
+    const phase = (await read($, headsUp)).phase
+    if (phase.kind === 'checking') await pollHeadsUp($, state, phase, now)
+    else if (!state.headsUpFailure) {
+      state.headsUpTimer?.cancel()
+      state.headsUpTimer = undefined
+    }
+  } finally {
+    state.isPollingHeadsUp = false
+  }
+}
+
+// A result once .done lands, or a failure when the worker or its dir is gone
+// without one. Every check's dir is removed.
+async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<Session['phase'], { kind: 'checking' }>, now: number): Promise<void> {
   const { runDir, checkId } = phase
   const lost = (detail: string): RunResult => ({ kind: 'failed', payloadBytes: 0, seats: [{ seat: 'runner', outcome: 'error', elapsedMs: now - phase.startedMs, detail }] })
   let result: RunResult
@@ -1146,7 +1171,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', headsUpError: '', headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', headsUpError: '', headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -1178,8 +1203,8 @@ export const register: Register = (on, options) => {
     await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists, hasRuns), inputSchema: specialistSchema(roster.specialists, hasRuns) })
     void logFailure($, state, () => introduceSpecialists($, roster.specialists.length))
     void logFailure($, state, () => introduceHeadsUp($, state, settings), 'heads-up')
-    // A reload drops the poll timer; a check still in flight needs it back.
-    if ((await read($, headsUp)).phase.kind === 'checking') await startWatching($, state, settings)
+    // A reload drops the heads-up timer; a check still in flight needs it back.
+    if ((await read($, headsUp)).phase.kind === 'checking') watchHeadsUp($, state)
     if (roster.specialists.length > 0 || hasRuns) {
       // The band's clock moves only while a round runs.
       $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })

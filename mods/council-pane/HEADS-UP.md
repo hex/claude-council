@@ -61,7 +61,7 @@ Data first. Three owners and nothing else:
 | `Session` {turnBase, offeredTurn, phase} | pane shell via `decide` and `settle` | `$.state` (`PluginState['claude-council']['headsUp']`) | per session, survives hot reload; `phase` is a tagged union so "checking and showing at once" cannot be represented |
 | run files | `scripts/heads-up.sh` | `council-mod.<sid>/heads-up/<checkId>/` | detached worker output; `result.json` written to a temp name and moved, `.done` last |
 
-Flow: `turn.step` on main → `decide` (pure) → `launch` writes `avoid.txt`, forks `heads-up.sh --session <id>` → the worker resolves the transcript with `session-transcript.sh`, builds the digest with `transcript-digest.sh --tool-results`, asks the seat once → `result.json` + `.done` → the pane's poll timer (started lazily) → `parseRunResult` (the only place the wire shape is read) → `settle` → `bandView` → row.
+Flow: `turn.step` on main → `decide` (pure) → `launch` writes `avoid.txt`, forks `heads-up.sh --session <id>` → the worker resolves the transcript with `session-transcript.sh`, builds the digest with `transcript-digest.sh --tool-results`, asks the seat once → `result.json` + `.done` → the heads-up's own poll timer (started at the launch) → `parseRunResult` (the only place the wire shape is read) → `settle` → `bandView` → row.
 
 Load-bearing decisions:
 
@@ -106,7 +106,7 @@ Accepted deviations, each by the lead on merge (2026-10-18):
 
 - `Session`, `Phase` and `Note` live in `types/index.d.ts`, not `heads-up.ts`: `claude plugin validate` refuses a `$.state` key unless the manifest names a self-contained contract, and a contract cannot import. `plugin.json` names it under `types`. The mod needs Claude Code 2.1.302 or later (`$.state`, `atom`, `read`, `update`).
 - `phase: checking` is written before the runner forks and reset to idle when the fork fails, so a step landing while the runner starts cannot launch a second check. The step's write carries `ifVersion`; a stale step does nothing.
-- The check rides the council's lazy poll timer; a reload with a check in flight restarts it at `session.start`. A run dir that vanishes without a result, or a dead worker without `.done`, settles as `failed`.
+- The check polls on its own 500 ms timer, started at the launch and stopped once nothing is checking and its failure notice has expired, so a check starts none of the council's timers; a reload with a check in flight restarts it at `session.start`. A run dir that vanishes without a result, or a dead worker without `.done`, settles as `failed`.
 - Only a none or failed check logs its line; a note shows its bytes and seat on the band, which is the ruling's report.
 - The runner's `--transcript PATH` became `--session ID`, resolved inside through `session-transcript.sh`. A failure before the seat ran (no transcript, an empty digest) is `kind: failed, bytes: 0, seats: []` with a top-level `detail`; `parseRunResult` reads it as the runner's own outcome.
 - Text seats get `COUNCIL_TIMEOUT` of the seat limit plus five seconds, so the runner's tick watchdog decides the timeout and the provider's own deadline is a backstop.
