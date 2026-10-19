@@ -434,6 +434,8 @@ run_provider_with_image() {
     grep -qxF 'https://api.perplexity.ai/v1/agent' "$ARGV_FILE"
     [ "$(jq -r '.preset' "$DATA_FILE")" = "low" ]
     [ "$(jq -r 'has("model")' "$DATA_FILE")" = "false" ]
+    [ "$(jq -r 'has("temperature")' "$DATA_FILE")" = "false" ]
+    [ "$(jq -r 'has("messages")' "$DATA_FILE")" = "false" ]
     [ "$(jq -r '.input' "$DATA_FILE")" = "hi" ]
     [ -n "$(jq -r '.instructions // empty' "$DATA_FILE")" ]
     [ "$(jq -r '.tools[0].type' "$DATA_FILE")" = "web_search" ]
@@ -448,6 +450,35 @@ run_provider_with_image() {
     [ "$(jq -r '.model' "$DATA_FILE")" = "perplexity/sonar" ]
     [ "$(jq -r 'has("preset")' "$DATA_FILE")" = "false" ]
     [ "$(jq -r '.max_output_tokens' "$DATA_FILE")" = "2048" ]
+}
+
+@test "perplexity: the fast preset is sent as preset with the configured cap unbumped" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k PERPLEXITY_MODEL=fast COUNCIL_MAX_TOKENS=2048
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.preset' "$DATA_FILE")" = "fast" ]
+    [ "$(jq -r 'has("model")' "$DATA_FILE")" = "false" ]
+    [ "$(jq -r '.max_output_tokens' "$DATA_FILE")" = "2048" ]
+}
+
+# The Agent API answers a pre-migration id with a 400 that names no replacement
+# ("validation failed: model \"sonar-reasoning-pro\" is not supported", seen
+# 2026-10-19), so the seat refuses it before spending a request.
+@test "perplexity: a retired sonar id is refused before any request, naming its preset" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k PERPLEXITY_MODEL=sonar-reasoning-pro
+    [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+    [ "$stderr" = "Error: PERPLEXITY_MODEL=sonar-reasoning-pro is a retired Sonar id; use low, another Agent API preset or a provider/model id" ]
+    [ ! -s "$ARGV_FILE" ]
+}
+
+@test "perplexity: a value that is neither a preset nor a provider/model id is refused" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}]}'
+    run_provider perplexity.sh "hi" PERPLEXITY_API_KEY=k PERPLEXITY_MODEL=hgih
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: PERPLEXITY_MODEL=hgih is not an Agent API preset (fast, low, medium, high, xhigh) or a provider/model id" ]
+    [ ! -s "$ARGV_FILE" ]
 }
 
 @test "perplexity: the recency filter rides on the web_search tool" {

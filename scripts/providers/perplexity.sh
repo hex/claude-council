@@ -53,13 +53,11 @@ fi
 
 # Model selection (override via PERPLEXITY_MODEL env var): an Agent API preset
 # (fast, low, medium, high, xhigh) or a provider/model id such as perplexity/sonar.
-# Sonar Chat Completions ended 2026-09-27 and the old sonar-* ids are refused;
-# Perplexity maps sonar-reasoning-pro to low and sonar-pro to fast.
 MODEL="$(get_model perplexity)"
-case "$MODEL" in
-    fast|low|medium|high|xhigh) MODEL_FIELD="preset" ;;
-    *)                          MODEL_FIELD="model" ;;
-esac
+if ! MODEL_FIELD=$(perplexity_model_field "$MODEL"); then
+    echo "Error: $MODEL_FIELD" >&2
+    exit 1
+fi
 
 ENDPOINT="https://api.perplexity.ai/v1/agent"
 
