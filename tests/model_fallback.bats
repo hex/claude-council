@@ -125,7 +125,7 @@ mf() {
     mf 'model_fallback_for grok'
     [ "$output" = "grok-4.6" ]
     mf 'model_fallback_for perplexity'
-    [ "$output" = "sonar-pro" ]
+    [ "$output" = "fast" ]
     mf 'model_fallback_for gemini'
     # A flash id, not another pro id: gemini's default is an alias, and the pro id
     # it currently serves would make the retry re-send the failed request.

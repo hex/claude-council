@@ -51,18 +51,21 @@ if [[ -z "$API_KEY" ]]; then
     exit 1
 fi
 
-# Model selection (override via PERPLEXITY_MODEL env var)
-# Available: sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro
+# Model selection (override via PERPLEXITY_MODEL env var): an Agent API preset
+# (fast, low, medium, high, xhigh) or a provider/model id such as perplexity/sonar.
 MODEL="$(get_model perplexity)"
+if ! MODEL_FIELD=$(perplexity_model_field "$MODEL"); then
+    echo "Error: $MODEL_FIELD" >&2
+    exit 1
+fi
 
-# Perplexity API endpoint (OpenAI-compatible)
-ENDPOINT="https://api.perplexity.ai/chat/completions"
+ENDPOINT="https://api.perplexity.ai/v1/agent"
 
-# Token limit (override via COUNCIL_MAX_TOKENS env var). Reasoning models
-# (sonar-reasoning*, *deep-research*) emit visible <think> output that shares
-# the max_tokens budget, so bump the cap to avoid mid-response truncation.
+# Token limit (override via COUNCIL_MAX_TOKENS env var). The reasoning presets
+# spend their thinking from the max_output_tokens budget, so bump the cap to
+# avoid mid-response truncation.
 BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
-bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'sonar-reasoning*' '*deep-research*'
+bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'low' 'medium' 'high' 'xhigh'
 
 # Search recency filter: day, week, month, year (override via PERPLEXITY_RECENCY)
 # Empty means no filter (all time)
@@ -84,63 +87,41 @@ stage_prompt_file
 # The user-message content embeds the prompt, so it reaches the payload build
 # on stdin: printf is a builtin, so neither the argv limit nor a temp file is
 # involved, where --argjson would put the whole prompt back on argv.
-# Build request payload
-# Perplexity extends OpenAI format with search-specific parameters.
-# The user message content is either a bare prompt string or, when an image is
-# supplied, an OpenAI-shaped [text, image_url] array. Building it once here keeps
-# the image variant orthogonal to the recency branch below (no 2x2 duplication).
+# Build request payload (Agent API, Responses-shaped).
+# The input is either the bare prompt string or, when an image is supplied, one
+# user message of [input_text, input_image] parts. Building it once here keeps
+# the image variant orthogonal to the recency filter below.
 if [[ -n "$IMAGE_FILE" ]]; then
-    USER_CONTENT=$(jq -n --rawfile prompt "$PROMPT_FILE" --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '[
-        { type: "text",      text: $prompt },
-        { type: "image_url", image_url: { url: ("data:" + $mime + ";base64," + $b64) } }
-    ]')
+    USER_INPUT=$(jq -n --rawfile prompt "$PROMPT_FILE" --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '[{
+        type: "message", role: "user", content: [
+            { type: "input_text",  text: $prompt },
+            { type: "input_image", image_url: ("data:" + $mime + ";base64," + $b64) }
+        ]
+    }]')
 else
-    USER_CONTENT=$(jq -n --rawfile prompt "$PROMPT_FILE" '$prompt')
+    USER_INPUT=$(jq -n --rawfile prompt "$PROMPT_FILE" '$prompt')
 fi
 
-if [[ -n "$RECENCY" ]]; then
-    PAYLOAD=$(printf '%s' "$USER_CONTENT" | jq \
-        --arg model "$MODEL" \
-        --argjson tokens "$TOKENS" \
-        --arg system "$SYSTEM" \
-        --arg recency "$RECENCY" \
-        '{
-            model: $model,
-            messages: [{
-                role: "system",
-                content: $system
-            }, {
-                role: "user",
-                content: .
-            }],
-            temperature: 0.7,
-            max_tokens: $tokens,
-            return_citations: true,
-            search_recency_filter: $recency
-        }')
-else
-    PAYLOAD=$(printf '%s' "$USER_CONTENT" | jq \
-        --arg model "$MODEL" \
-        --argjson tokens "$TOKENS" \
-        --arg system "$SYSTEM" \
-        '{
-            model: $model,
-            messages: [{
-                role: "system",
-                content: $system
-            }, {
-                role: "user",
-                content: .
-            }],
-            temperature: 0.7,
-            max_tokens: $tokens,
-            return_citations: true
-        }')
-fi
+# web_search is named explicitly: a preset carries its own tools, but a bare
+# provider/model id searches nothing without it.
+PAYLOAD=$(printf '%s' "$USER_INPUT" | jq \
+    --arg field "$MODEL_FIELD" \
+    --arg model "$MODEL" \
+    --argjson tokens "$TOKENS" \
+    --arg system "$SYSTEM" \
+    --arg recency "$RECENCY" \
+    '{
+        ($field): $model,
+        instructions: $system,
+        input: .,
+        max_output_tokens: $tokens,
+        tools: [{ type: "web_search" }
+                + (if $recency != "" then { filters: { search_recency_filter: $recency } } else {} end)]
+    }')
 
 if [[ -n "$DEBUG" ]]; then
     echo "=== DEBUG: Perplexity ===" >&2
-    echo "Model: $MODEL" >&2
+    echo "Model ($MODEL_FIELD): $MODEL" >&2
     echo "Max tokens: $TOKENS" >&2
     [[ -n "$RECENCY" ]] && echo "Recency filter: $RECENCY" >&2
 fi
@@ -162,20 +143,37 @@ if [[ -n "$DEBUG" ]]; then
     echo "=== DEBUG: Response metadata ===" >&2
     echo "$RESPONSE" | jq '{
         model: .model,
+        status: .status,
         usage: .usage,
-        citations: (if .citations then (.citations | length) else 0 end)
+        output_types: [.output[]?.type]
     }' >&2 2>/dev/null || true
 fi
 
-# Extract text from response (OpenAI-compatible format)
-TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+# Only a JSON object is read: a proxy's HTML page on a 200 would otherwise end
+# the script on jq's parse error, and it falls to the raw-body report below.
+TEXT="" ERROR=""
+if jq -e 'type == "object"' >/dev/null 2>&1 <<<"$RESPONSE"; then
+    # A reasoning preset that spends max_output_tokens stops early with status
+    # incomplete. Its partial answer still prints, under this warning.
+    if [[ "$(jq -r '.status' <<<"$RESPONSE")" == incomplete ]]; then
+        echo "Warning from Perplexity: response incomplete ($(jq -r '(.incomplete_details | objects | .reason | strings) // "no reason given"' <<<"$RESPONSE")), the answer may be cut off" >&2
+    fi
+    # The message item's output_text parts. The raw JSON carries no top-level
+    # output_text (only the SDKs add it), and an error body has no .output.
+    TEXT=$(jq -r '[.output[]? | objects | select(.type == "message") | .content | arrays | .[] | objects | select(.type == "output_text") | .text | strings] | join("")' <<<"$RESPONSE")
+    ERROR=$(jq -r '(if (.error | type) == "object" then (.error.message // "") elif (.error | type) == "string" then .error else "" end)' <<<"$RESPONSE")
+fi
 
     # Whitespace-stripped, not just empty: a model that answers with a single
     # space passes a bare -z test, and the council would store that as a
     # successful answer and weigh it in the synthesis like any other.
 if [[ ! "$TEXT" =~ [^[:space:]] ]]; then
-    ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // "") elif (.error | type) == "string" then .error else "" end) | select(. != "") // "Unknown error"')
-    echo "Error from Perplexity: $ERROR" >&2
+    if [[ -n "$ERROR" ]]; then
+        echo "Error from Perplexity: $ERROR" >&2
+    else
+        echo "Error from Perplexity: Unable to parse response" >&2
+        echo "Raw response: $RESPONSE" >&2
+    fi
     is_model_unavailable_error "$RESPONSE" && exit 3
     exit 1
 fi

@@ -172,6 +172,14 @@ check_provider() {
         return
     fi
 
+    # The Perplexity probe always sends perplexity/sonar, so it would read
+    # Connected for a model value every query fails on.
+    local refusal
+    if [[ "$name" == perplexity ]] && ! refusal=$(perplexity_model_field "$model"); then
+        echo "bad_model:${refusal}"
+        return
+    fi
+
     # Measure response time with a minimal request
     local start_time end_time duration
     start_time=$(now_ms)
@@ -231,15 +239,17 @@ check_provider() {
             ;;
         perplexity)
             # Perplexity has no /models endpoint, so auth can only be probed with
-            # a (billable) chat request. The API rejects anything under 16 output
-            # tokens, so 16 is as close to free as the status check can get.
+            # a (billable) Agent API request. A bare perplexity/sonar with no
+            # tools runs no web search (~$0.00004 against ~$0.0012 for a preset,
+            # measured 2026-10-19), and 16 output tokens was the old API's floor.
+            # The body is kept: a 403 can name a cause other than the key.
             cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
                 -X POST \
                 --config "$cfg" \
                 -H "Content-Type: application/json" \
-                -d '{"model":"sonar","messages":[{"role":"user","content":"hi"}],"max_tokens":16}' \
-                "https://api.perplexity.ai/chat/completions" 2>/dev/null || true)
+                -d '{"model":"perplexity/sonar","input":"hi","max_output_tokens":16}' \
+                "https://api.perplexity.ai/v1/agent" 2>/dev/null || true)
             rm -f "$cfg"
             ;;
     esac
@@ -254,7 +264,23 @@ check_provider() {
     if [[ "$http_code" == "400" ]] && rejected_key "$name" "$body_file"; then
         rejected=1
     fi
+    # Perplexity marks a bad key invalid_api_key, and only that marker reads as
+    # a rejected key. Any other 403 (chat_completions_not_available for a
+    # retired endpoint, a proxy's HTML page) is a plain error carrying the
+    # vendor's message, flattened to one line, with its backslashes doubled for
+    # the echo -e that prints the row.
+    local other_403=""
+    if [[ "$name" == perplexity && "$http_code" == "403" ]] \
+        && ! jq -e 'try (.error.type == "invalid_api_key") catch false' "$body_file" >/dev/null 2>&1; then
+        other_403=$(jq -r 'try (.error.message | strings | gsub("[[:cntrl:]]+"; " ") | gsub("\\\\"; "\\\\")) catch empty' \
+            "$body_file" 2>/dev/null || true)
+        other_403="error:403${other_403:+:${other_403}}"
+    fi
     rm -f "$body_file"
+    if [[ -n "$other_403" ]]; then
+        echo "$other_403"
+        return
+    fi
     if (( rejected )); then
         # This branch only runs on 400, so report it under the code the vendor sent
         echo "auth_error:400"
@@ -472,10 +498,20 @@ format_status() {
             plain_state="Rate limited (HTTP ${status#rate_limited:})"
             painted_state="${RED}${plain_state}${RESET}"
             ;;
-        error:*)
+        bad_model:*)
             icon="${RED}✗ ${RESET}"
-            plain_state="Error (HTTP ${status#error:})"
+            plain_state="Unsupported model";   painted_state="${RED}${plain_state}${RESET}"
+            plain_detail="${status#bad_model:}"; painted_detail="${DIM}${plain_detail}${RESET}"
+            ;;
+        error:*)
+            # error:<code>, or error:<code>:<vendor message> for the detail column
+            local rest="${status#error:}"
+            icon="${RED}✗ ${RESET}"
+            plain_state="Error (HTTP ${rest%%:*})"
             painted_state="${RED}${plain_state}${RESET}"
+            if [[ "$rest" == *:* ]]; then
+                plain_detail="${rest#*:}"; painted_detail="${DIM}${plain_detail}${RESET}"
+            fi
             ;;
         ok:*)
             local rest="${status#ok:}"

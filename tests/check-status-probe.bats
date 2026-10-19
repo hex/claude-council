@@ -30,13 +30,17 @@ setup() {
     [ "$status" -eq 0 ]
     [ -s "$CS_ARGV_FILE" ]
     local payload max_tokens
-    payload=$(grep -o '{"model":"sonar".*}' "$CS_ARGV_FILE" | head -1)
+    payload=$(grep -o '{"model":"perplexity/sonar".*}' "$CS_ARGV_FILE" | head -1)
     [ -n "$payload" ]
-    max_tokens=$(printf '%s' "$payload" | jq -r '.max_tokens')
+    # No tools: a web search would add ~$0.001 to every status check
+    [ "$(printf '%s' "$payload" | jq -r 'has("tools")')" = "false" ]
+    max_tokens=$(printf '%s' "$payload" | jq -r '.max_output_tokens')
     [ "$max_tokens" -ge 16 ]
     # The request is billed, so the probe must sit at the floor, not merely above it
     [ "$max_tokens" -le 32 ]
-    # A GET on /chat/completions answers 405, rendering a working key as broken
+    # /chat/completions answers 403 chat_completions_not_available since 2026-09-27
+    grep -qxF 'https://api.perplexity.ai/v1/agent' "$CS_ARGV_FILE"
+    # A GET on a POST endpoint answers 405, rendering a working key as broken
     grep -qxF -- '-X' "$CS_ARGV_FILE"
     grep -qxF -- 'POST' "$CS_ARGV_FILE"
 }
@@ -145,9 +149,9 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [ -s "$CS_ARGV_FILE" ]
-    # OpenAI's error body echoes a redacted key and nothing reads it; Perplexity's
-    # and OpenRouter's are never read either. Only Gemini and xAI keep a body.
-    [ "$(grep -c '^/dev/null$' "$CS_ARGV_FILE" || true)" -eq 3 ]
+    # OpenAI's error body echoes a redacted key and nothing reads it; OpenRouter's
+    # is never read either. Perplexity's is kept: its 403 can name a non-key cause.
+    [ "$(grep -c '^/dev/null$' "$CS_ARGV_FILE" || true)" -eq 2 ]
 }
 
 # A probe body and the curl config that carries the key both live in TMPDIR for
@@ -180,7 +184,8 @@ setup() {
     grep -qxF 'https://api.moonshot.ai/v1/chat/completions' "$CS_ARGV_FILE"
     grep -qE '^https://generativelanguage\.googleapis\.com/v1beta/models/[^/]+:generateContent$' "$CS_ARGV_FILE"
     grep -qF '"max_completion_tokens":16' "$CS_ARGV_FILE"
-    [ "$(grep -cF '"max_tokens":16' "$CS_ARGV_FILE" || true)" -eq 3 ]
+    # grok and kimi; Perplexity's Agent API probe caps max_output_tokens instead
+    [ "$(grep -cF '"max_tokens":16' "$CS_ARGV_FILE" || true)" -eq 2 ]
     grep -qF '"maxOutputTokens":16' "$CS_ARGV_FILE"
 }
 

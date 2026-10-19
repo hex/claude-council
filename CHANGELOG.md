@@ -4,6 +4,12 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixes
+- The Perplexity seat works again. Sonar Chat Completions ended on 2026-09-27, and `/chat/completions` answers 403 `chat_completions_not_available` on keys Perplexity has moved over (others still get answers for now). The seat now posts to the Agent API (`/v1/agent`) with the `web_search` tool, and `PERPLEXITY_MODEL` takes a preset (`fast`, `low`, `medium`, `high`, `xhigh`) or a `provider/model` id. The default is `low` and the fallback `fast`, Perplexity's own mapping for `sonar-reasoning-pro` and `sonar-pro`. The seat refuses any other value, such as a `sonar-*` id from before the move, before any request, with an error naming what to set instead: `fast` for `sonar` and `sonar-pro`, `low` for `sonar-reasoning-pro`, `high` for `sonar-deep-research`. An answer cut off at `max_output_tokens` arrives under a warning naming the reason, and a reply with no answer in it, HTML from a proxy included, shows its raw body. `temperature` is no longer sent. Reported and fixed by @bartoszcholewa. (#62, #63)
+- `/claude-council:status` probes Perplexity on the Agent API with `perplexity/sonar` and no tools (about $0.00004 a check). A Perplexity 403 reads as a rejected key only when its body says `invalid_api_key`; any other 403 reads `Error (HTTP 403)` with Perplexity's message beside it instead of telling you to regenerate a working key. A `PERPLEXITY_MODEL` the seat would refuse shows `Unsupported model` and what to set instead, and sends no request.
+
 ## 2026.10.5
 
 ### Features

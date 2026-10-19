@@ -382,7 +382,7 @@ get_model() {
         openai)     echo "${OPENAI_MODEL:-gpt-6-astra}" ;;
         grok)       echo "${GROK_MODEL:-grok-latest}" ;;
         grok-cli)   cli_model grok-cli "${GROK_CLI_MODEL:-}" ;;
-        perplexity) echo "${PERPLEXITY_MODEL:-sonar-reasoning-pro}" ;;
+        perplexity) echo "${PERPLEXITY_MODEL:-low}" ;;
         codex)      cli_model codex "${CODEX_MODEL:-}" ;;
         antigravity) cli_model antigravity "${ANTIGRAVITY_MODEL:-}" ;;
         kimi)       echo "${KIMI_MODEL:-kimi-k3}" ;;
@@ -421,6 +421,29 @@ get_model() {
             ;;
         *)          echo "unknown" ;;
     esac
+}
+
+# Which Agent API request field a PERPLEXITY_MODEL value goes in: prints
+# "preset" or "model". Any other value prints why it is refused and returns 1.
+# The API answers a sonar-* id with a 400 that names no replacement, so the
+# seat and /status both refuse it here, before a request, with Perplexity's own
+# mapping of the ids Sonar Chat Completions served until 2026-09-27.
+# Usage: perplexity_model_field <value>
+perplexity_model_field() {
+    local preset
+    case "$1" in
+        fast|low|medium|high|xhigh) echo preset; return 0 ;;
+        */*)                        echo model;  return 0 ;;
+        sonar|sonar-pro)            preset=fast ;;
+        sonar-reasoning-pro)        preset=low ;;
+        sonar-deep-research)        preset=high ;;
+        *)
+            echo "PERPLEXITY_MODEL=$1 is not an Agent API preset (fast, low, medium, high, xhigh) or a provider/model id"
+            return 1
+            ;;
+    esac
+    echo "PERPLEXITY_MODEL=$1 is a retired Sonar id; use $preset, another Agent API preset or a provider/model id"
+    return 1
 }
 
 # True (exit 0) if the provider's default model accepts image input. The MVP
