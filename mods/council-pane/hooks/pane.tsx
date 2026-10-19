@@ -92,8 +92,8 @@ type PaneState = {
   isPollingHeadsUp: boolean
   // The last config problem logged, so a broken file is reported once.
   headsUpProblem: string
-  // The last heads-up failure logged (see logFailure).
-  headsUpError: string
+  // The last background failure logged, per kind (see logFailure).
+  lastFailure: Record<FailureKind, string>
   // The intro tail on the prompt hint; '' once typed past, turned on, or never due.
   headsUpTip: string
   // The last check that found nothing, on the prompt hint until a keystroke or the next check.
@@ -133,7 +133,6 @@ type PaneState = {
   // Runs whose end is being written up now, so one tick does not repeat another's.
   finishing: Set<string>
   identityFailures: Set<string>
-  specialistError: string
   specialistFrame: number
   // Frames left to retry following a just-opened pane: it becomes scrollable
   // only once drawn, milliseconds after $.ui.open settles.
@@ -630,15 +629,16 @@ async function aimRun($: EngineInterface, state: PaneState, settings: PaneOption
 
 // A background failure is logged once per distinct message, never dropped.
 // Each kind keeps its own last message, so one's success never re-arms the other's.
-async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>, kind: 'specialist' | 'heads-up' = 'specialist'): Promise<void> {
-  const last = kind === 'specialist' ? 'specialistError' : 'headsUpError'
+type FailureKind = 'specialist' | 'heads-up'
+
+async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>, kind: FailureKind = 'specialist'): Promise<void> {
   try {
     await work()
-    state[last] = ''
+    state.lastFailure[kind] = ''
   } catch (error) {
     const message = `${kind}: ${String(error)}`
-    if (message !== state[last]) $.ui.log(message)
-    state[last] = message
+    if (message !== state.lastFailure[kind]) $.ui.log(message)
+    state.lastFailure[kind] = message
   }
 }
 
@@ -1174,7 +1174,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', headsUpError: '', headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: { specialist: '', 'heads-up': '' }, headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
