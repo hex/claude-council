@@ -1,0 +1,9 @@
+project: <tmp>
+1. a turn of three shell commands reaches the cadence (every 2) and the fake seat's note is drawn
+   band drawn; seat line: codex · gpt-6.1-sol · N KB · N s
+2. Learn more opens the title and bullets, the action bold last
+3. Tell Claude closes the band and puts the draft in the prompt box, unsent
+   memory: {"seen":["backfill never ran"],"known":[],"typedPastInARow":0,"looksToSkip":0}
+4. the person sends the draft; Claude answers a note it only learned from them
+5. /exit leaves no claude behind
+PASS (<tmp>)
