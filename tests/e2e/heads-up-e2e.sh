@@ -78,14 +78,19 @@ press() {
     fi
 }
 screen() { tmux capture-pane -p -S -400 -t "$SESSION"; }
-# A check takes the fake a moment, the engine draws on its own clock, and the
-# model turn before the check is a real Haiku turn: a minute covers all three.
-wait_for() {
-    local tick=0
-    until screen | grep -qF -- "$1"; do
-        tick=$((tick + 1)); [ "$tick" -lt 90 ] || fail "never saw '$1'"; sleep 1
+# Runs the command once a second until it succeeds, failing with the reason
+# after that many tries.
+wait_until() {
+    local ticks="$1" why="$2" tick=0
+    shift 2
+    until "$@"; do
+        tick=$((tick + 1)); [ "$tick" -lt "$ticks" ] || fail "$why"; sleep 1
     done
 }
+on_screen() { screen | grep -qF -- "$1"; }
+# A check takes the fake a moment, the engine draws on its own clock, and the
+# model turn before the check is a real Haiku turn: a minute covers all three.
+wait_for() { wait_until 90 "never saw '$1'" on_screen "$1"; }
 memory() { jq -c '.["heads-up"] // {}' "$HOME"/.claude/plugins/store/claude-council_inline-*.json | head -1; }
 counts() { jq -c '.["heads-up-counts"] // {}' "$HOME"/.claude/plugins/store/claude-council_inline-*.json | head -1; }
 
@@ -150,21 +155,20 @@ echo "4. the person sends the draft; Claude answers a note it only learned from 
 # gone once the screen redraws, so the new one is told apart by its wording.
 tmux send-keys -t "$SESSION" -l ' Answer in one sentence and run nothing.'; sleep 1
 key Enter
-tick=0
-until screen | grep -qF 'run nothing.' && screen | grep -qE '✻ .* done [0-9]' && ! screen | grep -qE '^[✶✻✽✾✿❀❁] [A-Z][a-z]+…'; do
-    tick=$((tick + 1)); [ "$tick" -lt 180 ] || fail "the turn never finished"; sleep 1
-done
+turn_finished() { screen | grep -qF 'run nothing.' && screen | grep -qE '✻ .* done [0-9]' && ! screen | grep -qE '^[✶✻✽✾✿❀❁] [A-Z][a-z]+…'; }
+wait_until 180 "the turn never finished" turn_finished
 screen > "$OUT/4-answered.txt"
 
 echo "5. /heads-up status counts the checks, the one drawn note and the two presses"
 # Claude's answer to the draft may run tools and launch a check of its own,
 # which finds the same topic again: a repeat, nothing drawn. Every launched
 # check settles before the counts are read.
-tick=0
-until [ "$(counts | jq '.checks == (.none + .notes + .repeats + .failed)')" = true ]; do
-    tick=$((tick + 1)); [ "$tick" -lt 90 ] || fail "a check never settled: $(counts)"; sleep 1
-done
-C="$(counts)"
+checks_settled() {
+    counts > "$OUT/counts.json"
+    [ "$(jq '.checks == (.none + .notes + .repeats + .failed)' "$OUT/counts.json")" = true ]
+}
+wait_until 90 "a check never settled: the last counts read are in $OUT/counts.json" checks_settled
+C="$(cat "$OUT/counts.json")"
 [ "$(printf '%s' "$C" | jq '.notes == 1 and .learn == 1 and .tell == 1 and .knew == 0 and .dismiss == 0 and .typedPast == 0 and .none == 0 and .failed == 0 and .checks == 1 + .repeats')" = true ] || fail "counts are $C"
 # The engine redraws the whole screen, so earlier status lines are gone from
 # the capture; the new one is told apart by its counts, which the earlier two
@@ -178,7 +182,7 @@ echo "   counts: $(printf '%s' "$C" | jq -c 'del(.repeats, .checks)') and every 
 
 echo "6. /exit leaves no claude behind"
 tmux send-keys -t "$SESSION" -l '/exit'; key Enter
-tick=0
-while pgrep -f -- "--plugin-dir $ROOT --debug-file $LOG" > /dev/null; do tick=$((tick + 1)); [ "$tick" -lt 15 ] || fail "claude is still running after /exit"; sleep 1; done
+claude_gone() { ! pgrep -f -- "--plugin-dir $ROOT --debug-file $LOG" > /dev/null; }
+wait_until 15 "claude is still running after /exit" claude_gone
 
 echo "PASS ($OUT)"
