@@ -168,7 +168,7 @@ every call asks you first.
   [Running from a local clone](docs/REFERENCE.md#running-from-a-local-clone).
 - **No providers found.** Run `/claude-council:status`. Export keys in the
   shell you start Claude Code from. Or use `--local`.
-- **A different model answered.** A header like `grok-4.6 (grok-latest
+- **A different model answered.** A header like `grok-4.7 (grok-latest
   unavailable)` is a [model fallback](docs/REFERENCE.md#model-fallback).
   Setting the provider's `_MODEL` variable turns it off.
 - **No pane.** It needs tmux, or the variable above for the pane inside Claude

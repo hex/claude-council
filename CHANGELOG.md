@@ -11,6 +11,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - `transcript-digest.sh --tool-results K --tool-result-chars N` adds the last K tool results inside the window, text only, capped; `/advise` does not use it and its digest is unchanged.
 
 ### Changes
+- The Grok fallback is `grok-4.7` (released 2026-09-02), the model `grok-latest` serves today; it answers when the alias itself is refused.
 - The stop gate's reviewer allowlist is now derived from the provider scripts on disk (`provider_allowlisted`), so `claude-cli` and `copilot-cli` can review; a `copilot-cli` reviewer spends a premium request per stop.
 - `.claude-plugin/plugin.json` names a `types` contract (`mods/council-pane/types/index.d.ts`) for the mod's `$.state` key.
 

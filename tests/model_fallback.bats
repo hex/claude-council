@@ -123,7 +123,7 @@ mf() {
     mf 'model_fallback_for openrouter'
     [ "$output" = "anthropic/claude-opus-5.5" ]
     mf 'model_fallback_for grok'
-    [ "$output" = "grok-4.6" ]
+    [ "$output" = "grok-4.7" ]
     mf 'model_fallback_for perplexity'
     [ "$output" = "fast" ]
     mf 'model_fallback_for gemini'
@@ -261,9 +261,9 @@ mf() {
     # availability moves on its own schedule, so neither branch may fail the test.
     local model
     model=$(jq -r '.round1.grok.model' <<<"$output")
-    [[ "$model" == "grok-latest" || "$model" == "grok-4.6" ]]
+    [[ "$model" == "grok-latest" || "$model" == "grok-4.7" ]]
     [ "$(jq -r '.round1.grok.status' <<<"$output")" = "success" ]
-    if [[ "$model" == "grok-4.6" ]]; then
+    if [[ "$model" == "grok-4.7" ]]; then
         [ "$(jq -r '.round1.grok.model_fallback' <<<"$output")" = "grok-latest" ]
     fi
 }

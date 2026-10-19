@@ -224,13 +224,13 @@ council answers with a verified fallback model instead of failing, and says so
 in the response header:
 
 ```
-## ● Grok - grok-4.6 (grok-latest unavailable)
+## ● Grok - grok-4.7 (grok-latest unavailable)
 ```
 
 | Provider | Default | Fallback |
 |---|---|---|
 | openai | `gpt-6-astra` | `gpt-6.1-sol` |
-| grok | `grok-latest` | `grok-4.6` |
+| grok | `grok-latest` | `grok-4.7` |
 | gemini | `gemini-flash-latest` | `gemini-3.8-flash` |
 | perplexity | `low` | `fast` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
