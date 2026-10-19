@@ -128,7 +128,11 @@ build_digest() {
 
 # Runs "$@" in the background under a deadline of $1 ticks of `sleep 1`, never
 # a $((SECONDS+N)) deadline, which bash 3.2 can reach in milliseconds. A
-# watchdog does the ticking so a fast command returns at once. Sets RC and
+# watchdog does the ticking so a fast command returns at once. At the
+# deadline it TERMs the tree as it stands, then KILLs those same pids five
+# seconds later: a child that outlives its wrapper is reparented and would
+# otherwise be lost to a second tree walk, so the walk happens once, and the
+# escalation runs to its end before the seat is reported. Sets RC and
 # TIMED_OUT.
 run_with_ticks() {
     local limit="$1" pid watchdog fired="${RUN_DIR}/deadline"
@@ -144,17 +148,22 @@ run_with_ticks() {
             kill -0 "$pid" 2>/dev/null || exit 0
         done
         : > "$fired"
-        signal_tree TERM "$pid"
+        # shellcheck disable=SC2207 # pids hold no spaces or globs
+        tree=($(process_tree "$pid"))
+        kill -TERM "${tree[@]}" 2>/dev/null || true
         sleep 5
-        signal_tree KILL "$pid"
+        kill -KILL "${tree[@]}" 2>/dev/null || true
     ) &
     watchdog="$!"
     RC=0
     wait "$pid" || RC=$?
-    kill "$watchdog" 2>/dev/null || true
-    wait "$watchdog" 2>/dev/null || true
     TIMED_OUT=0
-    [[ -f "$fired" ]] && TIMED_OUT=1
+    if [[ -f "$fired" ]]; then
+        TIMED_OUT=1
+    else
+        kill "$watchdog" 2>/dev/null || true
+    fi
+    wait "$watchdog" 2>/dev/null || true
     rm -f "$fired"
 }
 

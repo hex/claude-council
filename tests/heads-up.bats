@@ -225,6 +225,15 @@ result() {
     run ! pgrep -f "sleep 297"
 }
 
+@test "heads-up: a seat whose wrapper obeys TERM but whose child ignores it is still ended by the deadline" {
+    export COUNCIL_HEADS_UP_SEAT_SECONDS=2 COUNCIL_FAKE_SLEEP=311
+    export COUNCIL_FAKE_BEHAVIOR=hang-orphan
+    start_runner codex
+    wait_done 20
+    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex timeout" ]
+    run ! pgrep -f "sleep 311"
+}
+
 @test "heads-up: codex exiting 0 without turn.completed is an error, never a note" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-no-turn
     start_runner codex

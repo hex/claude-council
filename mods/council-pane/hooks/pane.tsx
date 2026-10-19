@@ -63,6 +63,8 @@ const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: 
 // The settings field holding every specialist, as $.config names it; hidden
 // from the /config menu, since /specialists edits it.
 const LIST_KEY = `claude-council.${LIST_FIELD}`
+// The /config row that turns the heads-up on for every project, as $.config names it.
+const HEADS_UP_ROW_KEY = 'claude-council.heads_up'
 // The heads-up runner forks and returns its pid; anything slower is a fault.
 const HEADS_UP_LAUNCH_MS = 10_000
 
@@ -442,7 +444,7 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
   await $.fs.write(file.path, withEnabled(file.text, scope === SCOPE.project ? true : undefined, seat, every.every, pick))
   state.headsUpTip = ''
   if (scope === SCOPE.all && !settings.headsUp) {
-    const written = await $.config.set({ key: 'heads_up', value: true })
+    const written = await $.config.set({ key: HEADS_UP_ROW_KEY, value: true })
     if (written.deny) return `The file is written, but the /config row was refused: ${written.deny}`
   }
   const after = await headsUpFile($)
@@ -723,9 +725,7 @@ async function readHeadsUpConfig($: EngineInterface, state: PaneState, settings:
 
 // Writes the avoid list and forks the runner, which returns once its worker
 // is detached; an exit that is not 0 leaves nothing behind and is reported.
-async function launchHeadsUp($: EngineInterface, config: Extract<HeadsUpConfig, { enabled: true }>, memory: Memory, runDir: string): Promise<void> {
-  const avoidFile = `${runDir}/avoid.txt`
-  await $.fs.write(avoidFile, avoidList(memory))
+async function launchHeadsUp($: EngineInterface, config: Extract<HeadsUpConfig, { enabled: true }>, runDir: string, avoidFile: string): Promise<void> {
   const args = ['--run-dir', runDir, '--session', await $.session.id(), '--seat', config.seat, '--avoid-file', avoidFile]
   const pick = modelFile(config)
   if (pick !== '') {
@@ -750,14 +750,22 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
   if (decision.kind === 'skip' && decision.why === 'backoff') await saveMemory($, decision.memory)
   if (decision.kind !== 'launch' || !config.enabled) return
   const runDir = `${await watchRoot($)}/heads-up/${decision.checkId}`
+  // The run dir exists before the session says `checking`: a poll that lands
+  // in between would otherwise read a dir that is not there yet as a run
+  // that vanished, and idle the session under the launch.
+  const avoidFile = `${runDir}/avoid.txt`
+  await $.fs.write(avoidFile, avoidList(memory))
   const session: Session = { ...(held.value ?? FRESH_SESSION), phase: { kind: 'checking', turnId: step.turnId, checkId: decision.checkId, runDir, startedMs: now } }
   // A press or a poll wrote in between: this step's reading is stale, and
   // the next step decides again on the new session.
   const written = await $.state.set(HEADS_UP, session, { ifVersion: held.version })
-  if (!written.isSet) return
+  if (!written.isSet) {
+    await $.process.run(['rm', '-rf', runDir])
+    return
+  }
   await startWatching($, state, settings)
   try {
-    await launchHeadsUp($, config, memory, runDir)
+    await launchHeadsUp($, config, runDir, avoidFile)
     await count($, 'checks')
   } catch (error) {
     await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))

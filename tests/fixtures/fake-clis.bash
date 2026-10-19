@@ -309,6 +309,7 @@ case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
     slow)           sleep "\${COUNCIL_FAKE_SLEEP:-5}"; echo "$marker: slow answer" ;;
     hang)           exec sleep "\${COUNCIL_FAKE_SLEEP:-300}" ;;
     hang-handled)   trap 'exit 0' TERM; sleep "\${COUNCIL_FAKE_SLEEP:-300}" & wait ;;
+    hang-orphan)    trap 'exit 0' TERM; ( trap '' TERM; exec sleep "\${COUNCIL_FAKE_SLEEP:-300}" ) & wait ;;
     error)          echo "Error: fake provider failure" >&2; exit 1 ;;
     sandbox-failure) echo "$marker: deterministic answer" ;;
     noisy-error)    printf '%070000d\\n' 0 >&2
