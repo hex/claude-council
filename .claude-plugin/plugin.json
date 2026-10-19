@@ -64,6 +64,12 @@
       "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. A specialist round still running after this many minutes is stopped, and nothing it did is committed. Fractions count to the second. 0 means no limit.",
       "default": 60
     },
+    "heads_up": {
+      "type": "boolean",
+      "title": "Heads-up side-check",
+      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. While Claude works a long turn, codex rereads the last five turns and the last eight tool results and may show one line above the prompt. Nothing asks before a send: that material leaves the machine on every check. A project's .claude/council-heads-up.json can turn it on or off for that project alone and pick the seats and cadence.",
+      "default": false
+    },
     "specialists": {
       "type": "string",
       "title": "Specialists",

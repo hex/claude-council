@@ -20,18 +20,21 @@ const SEAT_SHAPE = /^[a-z][a-z0-9-]+$/
 export const CONFIG_FILE = '.claude/council-heads-up.json'
 export const STORE_KEY = 'heads-up'
 
-/** Parsed project file. Only parseConfig builds one; `seats` are shape-checked words, the runner owns the list. */
+/** The effective setting. Only parseConfig builds one; `seats` are shape-checked words, the runner owns the list. */
 export type HeadsUpConfig =
   | { enabled: true; seats: readonly string[]; every: number }
   | { enabled: false; problem?: string }
 
 /**
- * Missing -> off. Malformed JSON, a non-object, `enabled !== true`, a seat that
- * is not a plain word, or an `every` below 2 -> off with a problem the shell
- * logs once: a side-agent that never fires should say why.
+ * Two switches, the /config row and the project file: on when the file says
+ * `enabled: true`, or when the row is on and the file does not say
+ * `enabled: false`. The file's seats and every apply either way. Malformed
+ * JSON, a non-object, an `enabled` that is not a boolean, a seat that is not a
+ * plain word, or an `every` below 2 -> off with a problem the shell logs once,
+ * whatever the row says: a side-agent that never fires should say why.
  */
-export function parseConfig(text: string | undefined): HeadsUpConfig {
-  if (text === undefined) return { enabled: false }
+export function parseConfig(text: string | undefined, rowOn: boolean): HeadsUpConfig {
+  if (text === undefined) return rowOn ? { enabled: true, seats: ['codex'], every: DEFAULT_EVERY } : { enabled: false }
   const off = (why: string): HeadsUpConfig => ({ enabled: false, problem: `${CONFIG_FILE}${why}; heads-up is off` })
   let raw: unknown
   try {
@@ -40,7 +43,7 @@ export function parseConfig(text: string | undefined): HeadsUpConfig {
     return off(' is not valid JSON')
   }
   if (!isRecord(raw)) return off(' must hold a JSON object')
-  if (raw.enabled !== true) return off(': enabled is not true')
+  if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') return off(': enabled must be true or false')
   const seats = raw.seats ?? ['codex']
   if (!Array.isArray(seats) || seats.length === 0) return off(': seats must be a non-empty list of seat names')
   const words = seats.filter((seat): seat is string => typeof seat === 'string' && SEAT_SHAPE.test(seat))
@@ -48,6 +51,7 @@ export function parseConfig(text: string | undefined): HeadsUpConfig {
   if (words.length !== seats.length) return off(`: seat ${JSON.stringify(badSeat)} is not a plain lowercase word`)
   const every = raw.every ?? DEFAULT_EVERY
   if (typeof every !== 'number' || !Number.isInteger(every) || every < 2) return off(`: every must be a whole number of at least 2, got ${JSON.stringify(every)}`)
+  if (raw.enabled === false || (raw.enabled === undefined && !rowOn)) return { enabled: false }
   return { enabled: true, seats: words, every }
 }
 

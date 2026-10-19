@@ -6,18 +6,18 @@ The "You should know" side-agent: while Claude works a long turn, a council seat
 
 The trigger must leave its hook within milliseconds (`turn.step` runs before every model request), but a codex call takes about 27 s per 8 KB of prompt, so the check runs in a self-detaching script and the pane polls for its result, as council runs and specialist rounds already do. Codex ignores a prose output contract (measured: it opened with "Alex," under its `~/.codex` AGENTS.md instead of answering NONE), so NONE must be structural for that seat. The digest now carries tool results, which the existing `transcript-digest.sh` keeps out on purpose (its tests at :64 and :342 pin that), and `$.session.messages()` carries no origin field, so a live-memory digest cannot tell a human prompt from a peer message. `$.store` is shared by every session, `$.state.set` is refused during a render, `$` may only reach top-level functions, and the AbovePrompt band is one instance drawn by one hook.
 
-Rulings (fixed): codex by default, a per-project panel, first non-NONE in seat order, no synthesis; consent is the opt-in project file alone, no preview, the note shows payload size and seat; mid-turn trigger with the builtin's cadence, backoff and NONE test; the last few tool results in the digest capped near 2 KB each, peer messages excluded; shipped in this plugin.
+Rulings (fixed): codex by default, a per-project panel, first non-NONE in seat order, no synthesis; consent is the opt-in project file alone (amended 2026-10-19 by Alex: a `/config` row is a second switch, the file can still say no per project), no preview, the note shows payload size and seat; mid-turn trigger with the builtin's cadence, backoff and NONE test; the last few tool results in the digest capped near 2 KB each, peer messages excluded; shipped in this plugin.
 
 ## Usage (caller's view)
 
 Opt in once per project:
 
 ```json
-// .claude/council-heads-up.json   (absent or malformed: off)
+// .claude/council-heads-up.json   (malformed: off; absent: the /config row decides)
 { "enabled": true, "seats": ["codex"], "every": 3 }
 ```
 
-`seats` defaults to `["codex"]`; `every` is model requests per check, default 3. No `/config` row exists: the file is the consent and the only switch.
+`seats` defaults to `["codex"]`; `every` is model requests per check, default 3. The `/config` row `heads_up` (off by default) turns the check on in every project; the file's `enabled: true` turns it on for one project, `enabled: false` turns it off there whatever the row says, and an absent `enabled` follows the row. Either switch is the consent.
 
 During a long turn, above the prompt:
 
@@ -115,6 +115,7 @@ Accepted deviations, each by the lead on merge (2026-10-18):
 - `now_ms` moved to `scripts/lib/clock.sh` on its third copy.
 
 - `every` counts model requests, not messages, after the live measurement above; default 3.
+- A `/config` row `heads_up` joined the project file as a second switch (Alex, 2026-10-19: the file alone was undiscoverable); `parseConfig(text, rowOn)` holds the rule, a broken file stays off with the row on too.
 - The expanded note is the builtin's shape, a title and bullets, in place of the first cut's two or three sentences; `detail` became `title` and `points` on the wire (Alex, 2026-10-19, from a side-by-side with the builtin).
 
 Unresolved: the pane's drawing, the poll and the hook wiring have no automated test.

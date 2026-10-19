@@ -4,27 +4,34 @@ import { test, expect } from 'bun:test'
 import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
-test('a missing file is off with nothing to report', () => {
-  expect(parseConfig(undefined)).toEqual({ enabled: false })
+test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
+  expect(parseConfig(undefined, false)).toEqual({ enabled: false })
+  expect(parseConfig('{"enabled": true}', false)).toEqual({ enabled: true, seats: ['codex'], every: 3 })
+  expect(parseConfig('{"enabled": true, "seats": ["gemini", "grok-cli"], "every": 4}', false)).toEqual({ enabled: true, seats: ['gemini', 'grok-cli'], every: 4 })
+  expect(parseConfig('{"seats": ["gemini"]}', false)).toEqual({ enabled: false })
+  expect(parseConfig('{"enabled": false}', false)).toEqual({ enabled: false })
 })
 
-test('an enabled file takes the defaults: codex, every 3', () => {
-  expect(parseConfig('{"enabled": true}')).toEqual({ enabled: true, seats: ['codex'], every: 3 })
-  expect(parseConfig('{"enabled": true, "seats": ["gemini", "grok-cli"], "every": 4}')).toEqual({ enabled: true, seats: ['gemini', 'grok-cli'], every: 4 })
+test('with the row on, it is on unless the file says enabled false; the file still sets seats and every', () => {
+  expect(parseConfig(undefined, true)).toEqual({ enabled: true, seats: ['codex'], every: 3 })
+  expect(parseConfig('{"seats": ["gemini"], "every": 5}', true)).toEqual({ enabled: true, seats: ['gemini'], every: 5 })
+  expect(parseConfig('{"enabled": true, "every": 2}', true)).toEqual({ enabled: true, seats: ['codex'], every: 2 })
+  expect(parseConfig('{"enabled": false, "seats": ["gemini"]}', true)).toEqual({ enabled: false })
 })
 
-test('a file that does not hold a usable config is off and says why', () => {
-  expect(parseConfig('{"enabled": tru')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' })
-  expect(parseConfig('[true]')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json must hold a JSON object; heads-up is off' })
-  expect(parseConfig('null')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json must hold a JSON object; heads-up is off' })
-  expect(parseConfig('{"enabled": false}')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: enabled is not true; heads-up is off' })
-  expect(parseConfig('{"enabled": "yes"}')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: enabled is not true; heads-up is off' })
-  expect(parseConfig('{"enabled": true, "seats": ["../x"]}')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: seat "../x" is not a plain lowercase word; heads-up is off' })
-  expect(parseConfig('{"enabled": true, "seats": [3]}')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: seat 3 is not a plain lowercase word; heads-up is off' })
-  expect(parseConfig('{"enabled": true, "seats": "codex"}')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: seats must be a non-empty list of seat names; heads-up is off' })
-  expect(parseConfig('{"enabled": true, "seats": []}')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: seats must be a non-empty list of seat names; heads-up is off' })
-  expect(parseConfig('{"enabled": true, "every": 1}')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: every must be a whole number of at least 2, got 1; heads-up is off' })
-  expect(parseConfig('{"enabled": true, "every": 2.5}')).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: every must be a whole number of at least 2, got 2.5; heads-up is off' })
+test('a file that does not hold a usable config is off and says why, whatever the row', () => {
+  for (const row of [false, true]) {
+    expect(parseConfig('{"enabled": tru', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' })
+    expect(parseConfig('[true]', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json must hold a JSON object; heads-up is off' })
+    expect(parseConfig('null', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json must hold a JSON object; heads-up is off' })
+    expect(parseConfig('{"enabled": "yes"}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: enabled must be true or false; heads-up is off' })
+    expect(parseConfig('{"enabled": true, "seats": ["../x"]}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: seat "../x" is not a plain lowercase word; heads-up is off' })
+    expect(parseConfig('{"enabled": true, "seats": [3]}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: seat 3 is not a plain lowercase word; heads-up is off' })
+    expect(parseConfig('{"enabled": true, "seats": "codex"}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: seats must be a non-empty list of seat names; heads-up is off' })
+    expect(parseConfig('{"enabled": true, "seats": []}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: seats must be a non-empty list of seat names; heads-up is off' })
+    expect(parseConfig('{"enabled": true, "every": 1}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: every must be a whole number of at least 2, got 1; heads-up is off' })
+    expect(parseConfig('{"enabled": true, "every": 2.5}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: every must be a whole number of at least 2, got 2.5; heads-up is off' })
+  }
 })
 
 test('a stored memory off its shape reads field by field as empty', () => {

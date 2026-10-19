@@ -10,6 +10,8 @@ export type PaneOptions = {
   offersTool: boolean
   // How long a specialist round may run, in whole seconds; 0 means no limit.
   roundLimitSeconds: number
+  // The heads-up side-check's global switch; a project file can still say no.
+  headsUp: boolean
 }
 
 // The setting is in minutes and may be fractional; the round takes whole
@@ -30,5 +32,6 @@ export function paneOptions(options: Record<string, unknown>): PaneOptions {
     wakesOnAsyncDone: flag(options.wake_on_async_done, false),
     offersTool: flag(options.council_tool, true),
     roundLimitSeconds: limitSeconds(options.specialist_round_limit, 3600),
+    headsUp: flag(options.heads_up, false),
   }
 }

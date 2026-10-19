@@ -78,11 +78,13 @@ Read this before the first question about your code.
   ([Provider environment](docs/REFERENCE.md#provider-environment)).
 - **`/claude-council:advise` sends part of this conversation.** It shows the
   size, the turn count and the opening lines, and asks before anything leaves.
-- **The heads-up side-check sends it without asking, once a project opts in.**
-  A `.claude/council-heads-up.json` file is the consent: from then on, mid-turn,
-  the last five turns plus the last eight tool results (2,000 characters each;
-  a Bash result can hold a secret) go to the seats it names, codex by default,
-  and the note shows how many bytes went where. Delete the file to stop it
+- **The heads-up side-check sends it without asking, once you switch it on.**
+  The `/config` row "Heads-up side-check" or a project's
+  `.claude/council-heads-up.json` is the consent: from then on, mid-turn, the
+  last five turns plus the last eight tool results (2,000 characters each; a
+  Bash result can hold a secret) go to the seats it names, codex by default,
+  and the note shows how many bytes went where. Switch the row off, or give
+  the project a file saying `"enabled": false`, to stop it
   ([Heads-up](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default)).
 
 ## Everyday commands

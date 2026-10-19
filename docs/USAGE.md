@@ -367,8 +367,10 @@ contain secrets.
 While Claude works a long turn inside Claude Code, a council seat can reread
 the conversation and surface one thing you may have missed: a trade-off nobody
 called out, a result that looks off. It needs the council-pane mod (Claude Code
-with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, 2.1.302 or later) and a project
-file:
+with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, 2.1.302 or later) and one of two
+switches. The `/config` row "Heads-up side-check" turns it on in every project.
+A project file turns it on, or off, for that project alone and picks the seats
+and cadence:
 
 ```bash
 cat > .claude/council-heads-up.json <<'EOF'
@@ -376,10 +378,12 @@ cat > .claude/council-heads-up.json <<'EOF'
 EOF
 ```
 
-`seats` is the order asked, first answer that is not NONE wins, no synthesis;
-it defaults to `["codex"]`. `every` is model requests per check inside a
-turn, default 3, so a check runs at the third, sixth, ninth request. The file is the consent and the only switch: delete it, or set
-`"enabled": false`, and nothing runs.
+`enabled` is optional: `true` turns the check on here, `false` turns it off
+here whatever the row says, and without it the row decides. `seats` is the
+order asked, first answer that is not NONE wins, no synthesis; it defaults to
+`["codex"]`. `every` is model requests per check inside a turn, default 3, so
+a check runs at the third, sixth, ninth request. Either switch is the consent:
+nothing asks before a check sends.
 
 The note sits above the prompt:
 

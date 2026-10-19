@@ -140,7 +140,7 @@ The mod records the detached round subshell's pid and process start time before 
 
 ## Heads-up side-check
 
-Off until a project opts in with `.claude/council-heads-up.json`: `{"enabled": true, "seats": ["codex"], "every": 3}` (`seats` defaults to `["codex"]`, `every` to 3, at least 2). A file that does not parse, or a seat name that is not a plain lowercase word, keeps it off and logs the reason once. The file is the consent and the only switch; [HEADS-UP.md](HEADS-UP.md) is the design.
+Off by default. Two switches: the `/config` row "Heads-up side-check" (`heads_up`) turns it on everywhere, and a project's `.claude/council-heads-up.json` turns it on or off for that project and picks the seats and cadence: `{"enabled": true, "seats": ["codex"], "every": 3}` (`enabled` optional, `true` on, `false` off whatever the row says, absent follows the row; `seats` defaults to `["codex"]`, `every` to 3, at least 2). A file that does not parse, or a seat name that is not a plain lowercase word, keeps it off and logs the reason once, with the row on too. Either switch is the consent; [HEADS-UP.md](HEADS-UP.md) is the design.
 
 On the main loop's `turn.step`, every `every` model requests into a turn (the step's own index), the mod forks `scripts/heads-up.sh` with the session id, the seats and an avoid list of topics already shown. The request is never held up. While a check runs no other starts; a turn gets at most one note. The poll reads `result.json` once `.done` lands, or reports the check failed once the worker or its dir has vanished, and removes the dir. A check that found nothing, or whose seats all failed, logs one `heads-up:` line with its seats, payload and time.
 

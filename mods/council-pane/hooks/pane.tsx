@@ -590,9 +590,9 @@ async function recordAnswer($: EngineInterface, topic: string, answer: Answer): 
 
 // The project file is the consent and the only switch; it is read at each
 // step, so turning it on or off needs no reload. A broken file is logged once.
-async function readHeadsUpConfig($: EngineInterface, state: PaneState) {
+async function readHeadsUpConfig($: EngineInterface, state: PaneState, settings: PaneOptions) {
   const path = `${await $.session.cwd()}/${CONFIG_FILE}`
-  const config = parseConfig((await $.fs.exists(path)) ? await $.fs.read(path) : undefined)
+  const config = parseConfig((await $.fs.exists(path)) ? await $.fs.read(path) : undefined, settings.headsUp)
   const problem = config.enabled ? '' : config.problem ?? ''
   if (problem && problem !== state.headsUpProblem) $.ui.log(problem)
   state.headsUpProblem = problem
@@ -615,7 +615,7 @@ async function launchHeadsUp($: EngineInterface, seats: readonly string[], memor
 // on a cadence point. The session says checking before the fork, so a step
 // that lands while the runner starts cannot launch a second check.
 async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions, step: { turnId: string; index: number }): Promise<void> {
-  const config = await readHeadsUpConfig($, state)
+  const config = await readHeadsUpConfig($, state, settings)
   const memory = await loadMemory($)
   const now = await $.clock.now()
   const held = await $.state.get(HEADS_UP)
