@@ -5,6 +5,7 @@ import type { Elements, EngineInterface, Register, RenderChildren } from 'claude
 import {
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
   bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
+  availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEATS_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine,
   type Answer, type BandView, type Memory, type RunResult,
 } from './heads-up'
 import type { Note, Session } from '../types'
@@ -90,6 +91,8 @@ type PaneState = {
   headsUpError: string
   // The intro tail on the prompt hint; '' once typed past, turned on, or never due.
   headsUpTip: string
+  // The last check that found nothing, on the prompt hint until a keystroke or the next check.
+  headsUpReceipt: string
   // When the followed specialist round's process was last checked.
   specialistCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
@@ -361,6 +364,49 @@ async function introduceSpecialists($: EngineInterface, specialists: number): Pr
   const notice = introNotice({ shown, specialists, codexReady })
   if (notice.log) $.ui.log(notice.log)
   if (notice.markShown) await $.store.set(INTRO_KEY, true)
+}
+
+// Three of the engine's own dialogs: scope, seats, cadence. The file is
+// written first; "every project" then sets the /config row, which reloads
+// this module, so the status that follows may not print.
+async function setupHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<string | undefined> {
+  let scope: string
+  try {
+    scope = await $.ui.ask(SCOPE_QUESTION, { header: 'Heads-up', options: [SCOPE.project, SCOPE.all, SCOPE.off] })
+  } catch {
+    return 'Setup closed; nothing changed.'
+  }
+  const file = await headsUpFile($)
+  if (scope === SCOPE.off) {
+    await $.fs.write(file.path, withEnabled(file.text, false, []))
+    return statusText(parseConfig((await headsUpFile($)).text, settings.headsUp), settings.headsUp, (await headsUpFile($)).text, parseCounts(await $.store.get(COUNTS_KEY)))
+  }
+  if (scope !== SCOPE.project && scope !== SCOPE.all) return `Setup closed: ${JSON.stringify(scope)} is not one of the choices; nothing changed.`
+  const bins = (await $.process.run(['bash', '-c', 'for b in codex agy claude copilot cursor-agent grok kimi ollama; do command -v "$b" > /dev/null 2>&1 && echo "$b"; done'])).stdout.split('\n').filter(line => line !== '')
+  const keys = new Set<string>()
+  for (const name of ['GEMINI_API_KEY', 'GROK_API_KEY', 'XAI_API_KEY', 'KIMI_API_KEY', 'MOONSHOT_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'PERPLEXITY_API_KEY']) {
+    if (((await $.env.get(name)) ?? '') !== '') keys.add(name)
+  }
+  let seatsAnswer: string
+  let everyAnswer: string
+  try {
+    seatsAnswer = await $.ui.ask(SEATS_QUESTION, { header: 'Heads-up', options: seatOptions(availableSeats(bin => bins.includes(bin), name => keys.has(name))), multiSelect: true })
+    everyAnswer = await $.ui.ask(EVERY_QUESTION, { header: 'Heads-up', options: [...EVERY_LABELS] })
+  } catch {
+    return 'Setup closed; nothing changed.'
+  }
+  const seats = seatsFromAnswer(seatsAnswer)
+  if ('why' in seats) return `Setup closed: ${seats.why}; nothing changed.`
+  const every = everyFromAnswer(everyAnswer)
+  if ('why' in every) return `Setup closed: ${every.why}; nothing changed.`
+  await $.fs.write(file.path, withEnabled(file.text, scope === SCOPE.project ? true : undefined, seats.seats, every.every))
+  state.headsUpTip = ''
+  if (scope === SCOPE.all && !settings.headsUp) {
+    const written = await $.config.set({ key: 'heads_up', value: true })
+    if (written.deny) return `The file is written, but the /config row was refused: ${written.deny}`
+  }
+  const after = await headsUpFile($)
+  return statusText(parseConfig(after.text, scope === SCOPE.all || settings.headsUp), scope === SCOPE.all || settings.headsUp, after.text, parseCounts(await $.store.get(COUNTS_KEY)))
 }
 
 // Once per install, while the check is off: the store flag is shared by every session.
@@ -675,7 +721,11 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, now: number): P
   else return
   const memory = await loadMemory($)
   const settled = await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(s, memory, result) : s))
-  if (result.kind !== 'note') $.ui.log(checkLine(result))
+  if (result.kind === 'failed') $.ui.log(checkLine(result))
+  if (result.kind === 'none') {
+    state.headsUpReceipt = receiptLine(result)
+    $.ui.invalidate('ui.render')
+  }
   const drawn = settled.phase.kind === 'showing' && settled.phase.note.id === checkId
   await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
   await $.process.run(['rm', '-rf', runDir])
@@ -1019,12 +1069,12 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', headsUpError: '', headsUpTip: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, headsUpProblem: '', headsUpError: '', headsUpTip: '', headsUpReceipt: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistError: '', specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     await $.command.register({ name: SETUP_COMMAND, description: 'Add, edit or remove specialists', immediate: true })
-    await $.command.register({ name: HEADS_UP_COMMAND, description: 'Heads-up side-check: switch it on for this project, naming the seats to ask, or off, or show its state and counts', argumentHint: '[on [seat,...] | off | status]', immediate: true })
+    await $.command.register({ name: HEADS_UP_COMMAND, description: 'Heads-up side-check: set it up in three questions, switch it on for this project naming the seats, or off, or show its state and counts', argumentHint: '[setup | on [seat,...] | off | status]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     // An entry that does not parse is reported, never dropped quietly.
     const roster = specialistRoster(options)
@@ -1291,8 +1341,11 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: HEADS_UP_COMMAND }, async ($, e) => {
     const command = headsUpCommand(e.args)
-    if (command.action === 'unknown') return { text: `${command.why}. Usage: /${HEADS_UP_COMMAND} [on [seat,...] | off | status]; a seat is a provider name such as codex, gemini or grok-cli.` }
-    if (command.action !== 'status') {
+    if (command.action === 'unknown') return { text: `${command.why}. Usage: /${HEADS_UP_COMMAND} [on [seat,...] | off | setup | status]; a seat is a provider name such as codex, gemini or grok-cli.` }
+    if (command.action === 'setup') {
+      const outcome = await setupHeadsUp($, state, settings)
+      if (outcome !== undefined) return { text: outcome }
+    } else if (command.action !== 'status') {
       const file = await headsUpFile($)
       await $.fs.write(file.path, withEnabled(file.text, command.action === 'on', command.action === 'on' ? command.seats : []))
       state.headsUpTip = ''
@@ -1315,13 +1368,14 @@ export const register: Register = (on, options) => {
   // The intro rides the dim hint under the prompt while it is empty; the
   // first typed character retires it for good.
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
-    if (state.headsUpTip === '') return next(e)
+    const tail = state.headsUpTip !== '' ? state.headsUpTip : state.headsUpReceipt
+    if (tail === '') return next(e)
     if (e.props.isDraft) {
       state.headsUpTip = ''
+      state.headsUpReceipt = ''
       return next(e)
     }
-    if (e.props.isWorking) return next(e)
-    return next({ ...e, props: { ...e.props, tail: state.headsUpTip } })
+    return next({ ...e, props: { ...e.props, tail } })
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

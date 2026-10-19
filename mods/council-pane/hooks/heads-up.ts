@@ -98,6 +98,7 @@ export type HeadsUpCommand =
   | { action: 'status' }
   | { action: 'on'; seats: readonly string[] }
   | { action: 'off' }
+  | { action: 'setup' }
   | { action: 'unknown'; why: string }
 
 /**
@@ -109,6 +110,7 @@ export function headsUpCommand(args: string): HeadsUpCommand {
   const [word = '', ...rest] = args.trim().toLowerCase().split(/[\s,]+/).filter(part => part !== '')
   if (word === '' || word === 'status') return { action: 'status' }
   if (word === 'off') return rest.length === 0 ? { action: 'off' } : { action: 'unknown', why: 'off takes no seats' }
+  if (word === 'setup') return rest.length === 0 ? { action: 'setup' } : { action: 'unknown', why: 'setup takes no words' }
   if (word !== 'on') return { action: 'unknown', why: `unknown word ${JSON.stringify(word)}` }
   const bad = rest.find(seat => !SEAT_SHAPE.test(seat))
   if (bad !== undefined) return { action: 'unknown', why: `seat ${JSON.stringify(bad)} is not a plain lowercase word` }
@@ -116,11 +118,11 @@ export function headsUpCommand(args: string): HeadsUpCommand {
 }
 
 /**
- * The project file with `enabled` set and, when given, the seats; its other
- * fields kept. A missing or unreadable file starts over. One line of JSON, as
- * the docs show it.
+ * The project file with `enabled` set (or dropped, so the row decides) and,
+ * when given, the seats and cadence; its other fields kept. A missing or
+ * unreadable file starts over. One line of JSON, as the docs show it.
  */
-export function withEnabled(text: string | undefined, on: boolean, seats: readonly string[]): string {
+export function withEnabled(text: string | undefined, on: boolean | undefined, seats: readonly string[], every?: number): string {
   let kept: Record<string, unknown> = {}
   if (text !== undefined) {
     try {
@@ -132,7 +134,9 @@ export function withEnabled(text: string | undefined, on: boolean, seats: readon
   }
   const { enabled: _dropped, ...rest } = kept
   if (seats.length > 0) rest.seats = [...seats]
-  const entries = Object.entries({ enabled: on, ...rest }).map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`)
+  if (every !== undefined) rest.every = every
+  const json = (value: unknown): string => (Array.isArray(value) ? `[${value.map(item => JSON.stringify(item)).join(', ')}]` : JSON.stringify(value))
+  const entries = Object.entries(on === undefined ? rest : { enabled: on, ...rest }).map(([key, value]) => `${JSON.stringify(key)}: ${json(value)}`)
   return `{${entries.join(', ')}}\n`
 }
 
@@ -148,6 +152,62 @@ export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: stri
   } else if (file === false) line = `Heads-up side-check: off for this project, by ${CONFIG_FILE} (the /config row is ${row}) · /${COMMAND} on [seats] turns it on here`
   else line = `Heads-up side-check: off (the /config row is off, ${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`}) · /${COMMAND} on [seats] turns it on for this project, /config row "Heads-up side-check" for every project`
   return `${line}\nOn this machine: ${countsLine(counts)}`
+}
+
+/** The /heads-up setup dialogs: scope, seats, cadence. */
+export const SCOPE = { project: 'This project', all: 'Every project', off: 'Off for this project' } as const
+export const SCOPE_QUESTION = 'Where should the heads-up side-check run?'
+export const SEATS_QUESTION = 'Which seats should reread the turn? (first answer that is not NONE wins)'
+export const EVERY_QUESTION = 'How often should a long turn be checked?'
+export const EVERY_LABELS = ['Every 3 requests', 'Every 6 requests', 'Every 9 requests'] as const
+
+// How a seat shows it is set up: its CLI on PATH, or a key in the environment.
+const SEAT_SIGNS: ReadonlyArray<{ seat: string; bin?: string; keys?: readonly string[] }> = [
+  { seat: 'codex', bin: 'codex' },
+  { seat: 'antigravity', bin: 'agy' },
+  { seat: 'claude-cli', bin: 'claude' },
+  { seat: 'copilot-cli', bin: 'copilot' },
+  { seat: 'cursor-cli', bin: 'cursor-agent' },
+  { seat: 'grok-cli', bin: 'grok' },
+  { seat: 'kimi-cli', bin: 'kimi' },
+  { seat: 'ollama', bin: 'ollama' },
+  { seat: 'gemini', keys: ['GEMINI_API_KEY'] },
+  { seat: 'grok', keys: ['GROK_API_KEY', 'XAI_API_KEY'] },
+  { seat: 'kimi', keys: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'] },
+  { seat: 'openai', keys: ['OPENAI_API_KEY'] },
+  { seat: 'openrouter', keys: ['OPENROUTER_API_KEY'] },
+  { seat: 'perplexity', keys: ['PERPLEXITY_API_KEY'] },
+]
+
+/** The seats that look set up on this machine, CLIs before API seats, codex first. */
+export function availableSeats(onPath: (bin: string) => boolean, hasKey: (name: string) => boolean): string[] {
+  return SEAT_SIGNS.filter(sign => (sign.bin !== undefined && onPath(sign.bin)) || (sign.keys ?? []).some(hasKey)).map(sign => sign.seat)
+}
+
+/** The dialog takes two to four options; the person types any other list under Other. */
+export function seatOptions(available: readonly string[]): string[] {
+  const picks = available.slice(0, 4)
+  return picks.length >= 2 ? picks : ['codex', 'gemini']
+}
+
+/** The dialog's answer: labels comma-joined, or a typed list. */
+export function seatsFromAnswer(answer: string): { seats: string[] } | { why: string } {
+  const seats = answer.toLowerCase().split(/[\s,]+/).filter(part => part !== '')
+  if (seats.length === 0) return { why: 'no seat named' }
+  const bad = seats.find(seat => !SEAT_SHAPE.test(seat))
+  return bad === undefined ? { seats } : { why: `seat ${JSON.stringify(bad)} is not a plain lowercase word` }
+}
+
+export function everyFromAnswer(answer: string): { every: number } | { why: string } {
+  const digits = /^(?:every\s+)?(\d+)(?:\s+requests?)?$/i.exec(answer.trim())
+  const every = digits === null ? NaN : Number(digits[1])
+  return Number.isInteger(every) && every >= 2 ? { every } : { why: `every must be a whole number of at least 2, got ${JSON.stringify(answer.trim())}` }
+}
+
+/** What a check that found nothing leaves on the prompt hint: "heads-up: gemini read 8.5 KB in 11 s, nothing to flag". */
+export function receiptLine(r: Extract<RunResult, { kind: 'none' }>): string {
+  const ms = r.seats.reduce((total, seat) => total + seat.elapsedMs, 0)
+  return `heads-up: ${r.seats.map(seat => seat.seat).join(', ')} read ${kilobytes(r.payloadBytes)} in ${seconds(ms)}, nothing to flag`
 }
 
 // The file's own `enabled`, when it parses; undefined when absent or not a boolean.

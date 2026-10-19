@@ -399,14 +399,21 @@ Claude puts a draft quoting the note in your prompt box, and you send or edit it
 note shows counts as typing past it, and that many later checks are skipped.
 Claude never sees a note you did not tell it about.
 
-`/heads-up on` and `/heads-up off` write the project file for you, keeping its
-seats and cadence; `/heads-up on gemini,grok-cli` names the seats to ask, any
-provider the council runs, in the order asked. `/heads-up` alone (or
-`/heads-up status`) says whether the
+`/heads-up setup` asks three questions in Claude Code's own dialog: where
+the check runs (this project, every project, or off here), which seats reread
+the turn (the providers with a CLI on PATH or a key in your environment, up to
+four; type any other list under Other), and how often; then it writes the
+project file, and sets the `/config` row for "every project". `/heads-up on`
+and `/heads-up off` write the project file for you, keeping its seats and
+cadence; `/heads-up on gemini,grok-cli` names the seats to ask, any provider
+the council runs, in the order asked. `/heads-up` alone (or `/heads-up
+status`) says whether the
 check is on here and which switch set it, then the counts kept on this machine
 and never sent anywhere: checks run, with how many found nothing, drew a note,
 repeated a topic already seen, or failed; and the presses, learn, tell, knew,
-dismiss and typed past. The first session on a machine where the check is off
+dismiss and typed past. A check that found nothing leaves a dim receipt on the
+hint under the prompt, `heads-up: gemini read 8.3 KB in 11 s, nothing to flag`,
+until you type or the next check; only a failed check writes a transcript row. The first session on a machine where the check is off
 adds a dim tip to the hint under the empty prompt, `Tip: /heads-up on lets
 another model watch long turns and flag what Claude missed`, until you type; a
 flag in the plugin store keeps it from coming back.

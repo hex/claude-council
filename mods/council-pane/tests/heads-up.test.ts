@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, headsUpCommand, withEnabled, statusText, introTail } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, headsUpCommand, withEnabled, statusText, introTail, availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -253,6 +253,8 @@ test('the heads-up command reads on with optional seats, off and status, and ref
   expect(headsUpCommand('OFF')).toEqual({ action: 'off' })
   expect(headsUpCommand('off gemini')).toEqual({ action: 'unknown', why: 'off takes no seats' })
   expect(headsUpCommand('maybe')).toEqual({ action: 'unknown', why: 'unknown word "maybe"' })
+  expect(headsUpCommand('setup')).toEqual({ action: 'setup' })
+  expect(headsUpCommand('setup now')).toEqual({ action: 'unknown', why: 'setup takes no words' })
 })
 
 test('switching the project file keeps its seats and every, takes new seats when given, and starts a fresh file when there is none or it is broken', () => {
@@ -264,6 +266,8 @@ test('switching the project file keeps its seats and every, takes new seats when
   expect(withEnabled(undefined, true, ['gemini'])).toBe('{"enabled": true, "seats": ["gemini"]}\n')
   expect(withEnabled('{"enabled": tru', true, [])).toBe('{"enabled": true}\n')
   expect(withEnabled('[1]', true, [])).toBe('{"enabled": true}\n')
+  expect(withEnabled('{"every": 5}', true, ['gemini'], 9)).toBe('{"enabled": true, "every": 9, "seats": ["gemini"]}\n')
+  expect(withEnabled(undefined, undefined, ['gemini'], 3)).toBe('{"seats": ["gemini"], "every": 3}\n')
 })
 
 test('status names the effective state and which switch set it, then the counts', () => {
@@ -289,4 +293,38 @@ test('the one-time intro is a tail on the prompt hint, once per install, only wh
   expect(introTail({ shown: false, enabled: false })).toEqual({ tail: 'Tip: /heads-up on lets another model watch long turns and flag what Claude missed', markShown: true })
   expect(introTail({ shown: false, enabled: true })).toEqual({ markShown: true })
   expect(introTail({ shown: true, enabled: false })).toEqual({ markShown: false })
+})
+
+test('the seats on offer are the providers with a CLI on PATH or a key in the environment, codex first', () => {
+  const onPath = (bin: string) => ['codex', 'grok', 'ollama'].includes(bin)
+  const hasKey = (name: string) => ['GEMINI_API_KEY', 'XAI_API_KEY'].includes(name)
+  expect(availableSeats(onPath, hasKey)).toEqual(['codex', 'grok-cli', 'ollama', 'gemini', 'grok'])
+  expect(availableSeats(() => false, () => false)).toEqual([])
+})
+
+test('the dialog offers at most four seats, and the answer reads back as a checked list', () => {
+  expect(seatOptions(['codex', 'grok-cli', 'ollama', 'gemini', 'grok'])).toEqual(['codex', 'grok-cli', 'ollama', 'gemini'])
+  expect(seatOptions([])).toEqual(['codex', 'gemini'])
+  expect(seatsFromAnswer('codex, gemini')).toEqual({ seats: ['codex', 'gemini'] })
+  expect(seatsFromAnswer('grok-cli openai')).toEqual({ seats: ['grok-cli', 'openai'] })
+  expect(seatsFromAnswer('')).toEqual({ why: 'no seat named' })
+  expect(seatsFromAnswer('../x')).toEqual({ why: 'seat "../x" is not a plain lowercase word' })
+})
+
+test('the cadence answer is one of the three labels or a typed whole number of at least 2', () => {
+  expect(EVERY_LABELS).toEqual(['Every 3 requests', 'Every 6 requests', 'Every 9 requests'])
+  expect(everyFromAnswer('Every 6 requests')).toEqual({ every: 6 })
+  expect(everyFromAnswer('12')).toEqual({ every: 12 })
+  expect(everyFromAnswer('every 4')).toEqual({ every: 4 })
+  expect(everyFromAnswer('1')).toEqual({ why: 'every must be a whole number of at least 2, got "1"' })
+  expect(everyFromAnswer('lots')).toEqual({ why: 'every must be a whole number of at least 2, got "lots"' })
+})
+
+test('the scope labels name the three outcomes', () => {
+  expect(SCOPE).toEqual({ project: 'This project', all: 'Every project', off: 'Off for this project' })
+})
+
+test('a check that found nothing leaves a receipt for the prompt hint', () => {
+  expect(receiptLine({ kind: 'none', payloadBytes: 8500, seats: [{ seat: 'gemini', outcome: 'none', elapsedMs: 11200 }] })).toBe('heads-up: gemini read 8.3 KB in 11 s, nothing to flag')
+  expect(receiptLine({ kind: 'none', payloadBytes: 900, seats: [{ seat: 'codex', outcome: 'timeout', elapsedMs: 60000 }, { seat: 'gemini', outcome: 'none', elapsedMs: 3600 }] })).toBe('heads-up: codex, gemini read 0.9 KB in 64 s, nothing to flag')
 })
