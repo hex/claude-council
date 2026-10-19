@@ -126,51 +126,6 @@ build_digest() {
     BYTES=$(wc -c < "${RUN_DIR}/prompt.md" | tr -d ' ')
 }
 
-# Runs "$@" in the background under a deadline of $1 ticks of `sleep 1`, never
-# a $((SECONDS+N)) deadline, which bash 3.2 can reach in milliseconds. A
-# watchdog does the ticking so a fast command returns at once. At the
-# deadline it TERMs the tree as it stands, then KILLs those same pids five
-# seconds later: a child that outlives its wrapper is reparented and would
-# otherwise be lost to a second tree walk, so the walk happens once, and the
-# escalation runs to its end before the seat is reported. Sets RC and
-# TIMED_OUT.
-run_with_ticks() {
-    local limit="$1" pid watchdog fired="${RUN_DIR}/deadline"
-    shift
-    rm -f "$fired"
-    "$@" &
-    pid="$!"
-    (
-        t=0
-        while (( t < limit )); do
-            sleep 1
-            t=$((t + 1))
-            kill -0 "$pid" 2>/dev/null || exit 0
-        done
-        : > "$fired"
-        # shellcheck disable=SC2207 # pids hold no spaces or globs
-        tree=($(process_tree "$pid"))
-        kill -TERM "${tree[@]}" 2>/dev/null || true
-        # Up to five seconds of grace, cut short once every pid is gone.
-        for _ in 1 2 3 4 5; do
-            sleep 1
-            any_alive "${tree[@]}" || exit 0
-        done
-        kill -KILL "${tree[@]}" 2>/dev/null || true
-    ) &
-    watchdog="$!"
-    RC=0
-    wait "$pid" || RC=$?
-    TIMED_OUT=0
-    if [[ -f "$fired" ]]; then
-        TIMED_OUT=1
-    else
-        kill "$watchdog" 2>/dev/null || true
-    fi
-    wait "$watchdog" 2>/dev/null || true
-    rm -f "$fired"
-}
-
 # One string field of codex's answer file, on one line, without its trailing
 # newline or a Windows jq's \r.
 answer_field() {
@@ -223,15 +178,15 @@ codex_call() {
 # codex exits 0 on SIGTERM. Sets OUTCOME (none|note|error|timeout), DETAIL and,
 # for a note, TAG, TOPIC, HEADLINE, TITLE and POINTS_JSON (a JSON array).
 ask_codex() {
-    local limit="$1" answer="${RUN_DIR}/seat.out"
-    run_with_ticks "$limit" codex_call
-    if (( TIMED_OUT )); then
+    local limit="$1" answer="${RUN_DIR}/seat.out" rc=0
+    run_with_deadline "$limit" codex_call || rc=$?
+    if (( rc == 143 )); then
         OUTCOME=timeout DETAIL="no answer in ${limit}s"
         return 0
     fi
     if ! grep -q '"type":"turn.completed"' "${RUN_DIR}/seat.events" 2>/dev/null; then
         DETAIL=$(last_error_line "${RUN_DIR}/seat.err")
-        OUTCOME=error DETAIL="exit ${RC} without turn.completed${DETAIL:+: $DETAIL}"
+        OUTCOME=error DETAIL="exit ${rc} without turn.completed${DETAIL:+: $DETAIL}"
         return 0
     fi
     if jq -e '.none == true' "$answer" > /dev/null 2>&1; then
@@ -270,15 +225,15 @@ text_call() {
 # decides. NONE by the builtin's regex; "NOTE: <headline>" then "TAG: ...",
 # "TOPIC: ...", "TITLE: ..." and "POINT: ..." lines; anything else is an error, never a note.
 ask_text_seat() {
-    local limit="$1" first line
-    run_with_ticks "$limit" text_call "$limit"
-    if (( TIMED_OUT )) || (( RC == 143 )); then
+    local limit="$1" first line rc=0
+    run_with_deadline "$limit" text_call "$limit" || rc=$?
+    if (( rc == 143 )); then
         OUTCOME=timeout DETAIL="no answer in ${limit}s"
         return 0
     fi
-    if (( RC != 0 )); then
+    if (( rc != 0 )); then
         DETAIL=$(last_error_line "${RUN_DIR}/seat.err")
-        OUTCOME=error DETAIL="exit ${RC}${DETAIL:+: $DETAIL}"
+        OUTCOME=error DETAIL="exit ${rc}${DETAIL:+: $DETAIL}"
         return 0
     fi
     first=$(head -n 1 "${RUN_DIR}/seat.out" | tr -d '\r')
