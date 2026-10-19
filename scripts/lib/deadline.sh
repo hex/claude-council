@@ -96,14 +96,14 @@ run_with_deadline() {
         # reparented, and a second walk from the command's pid would miss it.
         trap '' TERM
         # shellcheck disable=SC2207 # pids hold no spaces or globs
-        tree=($(process_tree "$pid"))
-        kill -TERM "${tree[@]}" 2>/dev/null || true
+        tree_pids=($(process_tree "$pid"))
+        kill -TERM "${tree_pids[@]}" 2>/dev/null || true
         grace=5
         while (( grace-- > 0 )); do
             sleep 1
-            any_alive "${tree[@]}" || exit 99
+            any_alive "${tree_pids[@]}" || exit 99
         done
-        kill -KILL "${tree[@]}" 2>/dev/null || true
+        kill -KILL "${tree_pids[@]}" 2>/dev/null || true
         exit 99
     ) >/dev/null 2>&1 3>&- &
     watchdog=$!
