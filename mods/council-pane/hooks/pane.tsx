@@ -5,7 +5,7 @@ import type { Elements, EngineInterface, Register, RenderChildren } from 'claude
 import {
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
   bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
-  availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEATS_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine,
+  availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEATS_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelsFile, type HeadsUpConfig,
   type Answer, type BandView, type Memory, type RunResult,
 } from './heads-up'
 import type { Note, Session } from '../types'
@@ -678,10 +678,15 @@ async function readHeadsUpConfig($: EngineInterface, state: PaneState, settings:
 
 // Writes the avoid list and forks the runner, which returns once its worker
 // is detached; an exit that is not 0 leaves nothing behind and is reported.
-async function launchHeadsUp($: EngineInterface, seats: readonly string[], memory: Memory, runDir: string): Promise<void> {
+async function launchHeadsUp($: EngineInterface, config: Extract<HeadsUpConfig, { enabled: true }>, memory: Memory, runDir: string): Promise<void> {
   const avoidFile = `${runDir}/avoid.txt`
   await $.fs.write(avoidFile, avoidList(memory))
-  const args = ['--run-dir', runDir, '--session', await $.session.id(), '--seats', seats.join(','), '--avoid-file', avoidFile]
+  const args = ['--run-dir', runDir, '--session', await $.session.id(), '--seats', config.seats.join(','), '--avoid-file', avoidFile]
+  const picks = modelsFile(config)
+  if (picks !== '') {
+    await $.fs.write(`${runDir}/models.json`, picks)
+    args.push('--models', `${runDir}/models.json`)
+  }
   const run = await $.process.run(['bash', `${$.plugin.root}/scripts/heads-up.sh`, ...args], { timeoutMs: HEADS_UP_LAUNCH_MS })
   if (run.exitCode === 0) return
   await $.process.run(['rm', '-rf', runDir])
@@ -707,7 +712,7 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
   if (!written.isSet) return
   await startWatching($, state, settings)
   try {
-    await launchHeadsUp($, config.seats, memory, runDir)
+    await launchHeadsUp($, config, memory, runDir)
     await count($, 'checks')
   } catch (error) {
     await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))

@@ -44,9 +44,12 @@ write_transcript() {
     } > "$TRANSCRIPT"
 }
 
+# $1 the seats; any further words are passed as they are (--models FILE).
 start_runner() {
+    local seats="$1"
+    shift
     run "$HOST_BASH" "$RUNNER" --run-dir "$RUN_DIR" --session "$SESSION_ID" \
-        --seats "$1" --avoid-file "$AVOID"
+        --seats "$seats" --avoid-file "$AVOID" "$@"
 }
 
 # Polls for the worker's .done, up to $1 seconds (default 30).
@@ -258,5 +261,30 @@ result() {
     start_runner codex
     [ "$status" -eq 1 ]
     [ "$output" = "Error: COUNCIL_HEADS_UP_SEAT_SECONDS needs a whole number, got: 60s" ]
+    [ ! -f "$RUN_DIR/pid" ]
+}
+
+@test "heads-up: --models sets a seat's model through its own variable and codex's effort through -c" {
+    export COUNCIL_FAKE_BEHAVIOR_CODEX=heads-up-none COUNCIL_FAKE_BEHAVIOR_GROK=heads-up-note
+    printf '%s\n' '{"codex": {"model": "gpt-test-pick", "effort": "high"}, "grok-cli": {"model": "grok-test-pick"}}' > "$RUN_DIR/models.json"
+    start_runner codex,grok-cli --models "$RUN_DIR/models.json"
+    [ "$status" -eq 0 ]
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ "$(result .seat)" = "grok-cli" ]
+    [ "$(result .model)" = "grok-test-pick" ]
+    local codex_args grok_args
+    codex_args=$(jq -c 'select(.bin == "codex") | .args' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | head -1)
+    grok_args=$(jq -c 'select(.bin == "grok") | .args' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | head -1)
+    [ "$(jq -r 'index("-m") as $i | .[$i + 1]' <<< "$codex_args")" = "gpt-test-pick" ]
+    [ "$(jq -r 'index("-c") as $i | .[$i + 1]' <<< "$codex_args")" = 'model_reasoning_effort="high"' ]
+    [ "$(jq -r 'index("-m") as $i | .[$i + 1]' <<< "$grok_args")" = "grok-test-pick" ]
+}
+
+@test "heads-up: a --models effort that is not lowercase letters is refused before the fork" {
+    printf '%s\n' '{"codex": {"effort": "hi gh"}}' > "$RUN_DIR/models.json"
+    start_runner codex --models "$RUN_DIR/models.json"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error: --models: effort for codex must be lowercase letters, got: hi gh" ]
     [ ! -f "$RUN_DIR/pid" ]
 }

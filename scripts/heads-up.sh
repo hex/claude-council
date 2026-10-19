@@ -2,7 +2,9 @@
 # ABOUTME: Runs the heads-up side-check detached: digests the transcript, asks the seats in order, first non-NONE wins
 # ABOUTME: Writes result.json then .done into the run dir the mod passed; the mod polls, never waits
 #
-# Usage: heads-up.sh --run-dir DIR --session ID --seats codex[,gemini,...] --avoid-file FILE
+# Usage: heads-up.sh --run-dir DIR --session ID --seats codex[,gemini,...] --avoid-file FILE [--models FILE]
+#   --models FILE   JSON object, seat name -> {model?, effort?}: the model goes to the seat's own
+#                   *_MODEL variable for its call; the effort to codex's -c model_reasoning_effort
 #
 # Prints the detached worker's pid and exits 0 at once. Exit 1 before the fork
 # when the arguments are unusable (the mod logs stderr once). The worker writes:
@@ -34,7 +36,7 @@ die() {
     exit 1
 }
 
-RUN_DIR="" SESSION_ID="" SEATS_ARG="" AVOID_FILE=""
+RUN_DIR="" SESSION_ID="" SEATS_ARG="" AVOID_FILE="" MODELS_FILE=""
 SEATS=()
 
 # A whole number of 1 or more, read base-10 so a padded 08 is not octal.
@@ -48,13 +50,14 @@ require_count() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --run-dir|--session|--seats|--avoid-file)
+            --run-dir|--session|--seats|--avoid-file|--models)
                 [[ $# -ge 2 ]] || die "$1 needs a value."
                 case "$1" in
                     --run-dir) RUN_DIR="$2" ;;
                     --session) SESSION_ID="$2" ;;
                     --seats) SEATS_ARG="$2" ;;
                     --avoid-file) AVOID_FILE="$2" ;;
+                    --models) MODELS_FILE="$2" ;;
                 esac
                 shift 2
                 ;;
@@ -70,6 +73,10 @@ parse_args() {
     [[ -n "$AVOID_FILE" ]] || die "--avoid-file is required."
     [[ -d "$RUN_DIR" ]] || die "run dir not found: $RUN_DIR"
     [[ -f "$AVOID_FILE" ]] || die "avoid file not found: $AVOID_FILE"
+    if [[ -n "$MODELS_FILE" ]]; then
+        [[ -f "$MODELS_FILE" ]] || die "models file not found: $MODELS_FILE"
+        jq -e 'type == "object"' "$MODELS_FILE" > /dev/null 2>&1 || die "--models: $MODELS_FILE must hold a JSON object"
+    fi
 
     # The seat name is spliced into a script path and run, so each one passes
     # the one allowlist, derived from the providers/ registry.
@@ -78,6 +85,9 @@ parse_args() {
     [[ ${#SEATS[@]} -gt 0 ]] || die "--seats names no seat."
     for seat in "${SEATS[@]}"; do
         provider_allowlisted "$seat" || die "not a council seat: $seat"
+        local effort
+        effort=$(seat_pick "$seat" effort)
+        [[ -z "$effort" || "$effort" =~ ^[a-z]+$ ]] || die "--models: effort for $seat must be lowercase letters, got: $effort"
     done
 
     SEAT_SECONDS="${COUNCIL_HEADS_UP_SEAT_SECONDS:-60}"
@@ -165,10 +175,43 @@ answer_field() {
     jq -r "$2 | tostring | gsub(\"[\\r\\n\\t]+\"; \" \")" "$1" | tr -d '\r'
 }
 
+# A seat's pick from --models: "model" or "effort", empty without one.
+seat_pick() {
+    [[ -n "$MODELS_FILE" ]] || { echo ""; return 0; }
+    jq -r --arg seat "$1" --arg field "$2" '.[$seat][$field] // "" | tostring' "$MODELS_FILE"
+}
+
+# The variable get_model reads for a seat, so a --models pick lands where the
+# provider script and the band's model name both look.
+seat_model_var() {
+    case "$1" in
+        gemini) echo GEMINI_MODEL ;;        openai) echo OPENAI_MODEL ;;
+        grok) echo GROK_MODEL ;;            grok-cli) echo GROK_CLI_MODEL ;;
+        perplexity) echo PERPLEXITY_MODEL ;; codex) echo CODEX_MODEL ;;
+        antigravity) echo ANTIGRAVITY_MODEL ;; kimi) echo KIMI_MODEL ;;
+        kimi-cli) echo KIMI_CLI_MODEL ;;    cursor-cli) echo CURSOR_CLI_MODEL ;;
+        claude-cli) echo CLAUDE_CLI_MODEL ;; copilot-cli) echo COPILOT_CLI_MODEL ;;
+        ollama) echo OLLAMA_MODEL ;;        openrouter) echo OPENROUTER_MODEL ;;
+        *) echo "" ;;
+    esac
+}
+
+# Exports the seat's model pick for the rest of this worker (seats run one at
+# a time, each with its own variable) and prints the codex effort flags.
+apply_pick() {
+    local seat="$1" model var
+    model=$(seat_pick "$seat" model)
+    var=$(seat_model_var "$seat")
+    [[ -n "$model" && -n "$var" ]] && export "$var=$model"
+    return 0
+}
+
 codex_call() {
-    local n="$1"
+    local n="$1" effort
     local args=(exec --json --skip-git-repo-check -s read-only)
     [[ -n "${CODEX_MODEL:-}" ]] && args+=(-m "$CODEX_MODEL")
+    effort=$(seat_pick codex effort)
+    [[ -n "$effort" ]] && args+=(-c "model_reasoning_effort=\"${effort}\"")
     args+=(--output-schema "${SCRIPT_DIR}/heads-up.schema.json" -o "${RUN_DIR}/seat-${n}.out" -)
     ( provider_env_scrub codex; exec codex "${args[@]}" ) \
         < "${RUN_DIR}/prompt.md" > "${RUN_DIR}/seat-${n}.events" 2> "${RUN_DIR}/seat-${n}.err"
@@ -317,6 +360,7 @@ worker() {
             continue
         fi
         limit=$(( SEAT_SECONDS < budget ? SEAT_SECONDS : budget ))
+        apply_pick "$seat"
         start=$(now_ms)
         if [[ "$seat" == codex ]]; then
             ask_codex "$n" "$limit"

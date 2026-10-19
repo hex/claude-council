@@ -24,9 +24,14 @@ export const INTRO_KEY = 'heads-up-intro-shown'
 export const COMMAND = 'heads-up'
 
 /** The effective setting. Only parseConfig builds one; `seats` are shape-checked words, the runner owns the list. */
+/** A seat's picks: the model goes to its *_MODEL variable, the effort to codex's -c flag; other seats ignore it. */
+export type SeatPick = { readonly model?: string; readonly effort?: string }
+
 export type HeadsUpConfig =
-  | { enabled: true; seats: readonly string[]; every: number }
+  | { enabled: true; seats: readonly string[]; every: number; models?: Readonly<Record<string, SeatPick>> }
   | { enabled: false; problem?: string }
+
+const EFFORT_SHAPE = /^[a-z]+$/
 
 /**
  * Two switches, the /config row and the project file: on when the file says
@@ -54,8 +59,19 @@ export function parseConfig(text: string | undefined, rowOn: boolean): HeadsUpCo
   if (words.length !== seats.length) return off(`: seat ${JSON.stringify(badSeat)} is not a plain lowercase word`)
   const every = raw.every ?? DEFAULT_EVERY
   if (typeof every !== 'number' || !Number.isInteger(every) || every < 2) return off(`: every must be a whole number of at least 2, got ${JSON.stringify(every)}`)
+  let models: Record<string, SeatPick> | undefined
+  if (raw.models !== undefined) {
+    if (!isRecord(raw.models)) return off(': models must be an object of seat name to {model, effort}')
+    models = {}
+    for (const [seat, pick] of Object.entries(raw.models)) {
+      if (!isRecord(pick)) return off(`: models.${seat} must be an object of {model, effort}`)
+      if (pick.model !== undefined && typeof pick.model !== 'string') return off(`: model for ${seat} must be a string, got ${JSON.stringify(pick.model)}`)
+      if (pick.effort !== undefined && (typeof pick.effort !== 'string' || !EFFORT_SHAPE.test(pick.effort))) return off(`: effort for ${seat} must be lowercase letters, got ${JSON.stringify(pick.effort)}`)
+      models[seat] = { ...(pick.model === undefined ? {} : { model: pick.model }), ...(pick.effort === undefined ? {} : { effort: pick.effort }) }
+    }
+  }
   if (raw.enabled === false || (raw.enabled === undefined && !rowOn)) return { enabled: false }
-  return { enabled: true, seats: words, every }
+  return { enabled: true, seats: words, every, ...(models === undefined ? {} : { models }) }
 }
 
 /**
@@ -122,7 +138,7 @@ export function headsUpCommand(args: string): HeadsUpCommand {
  * when given, the seats and cadence; its other fields kept. A missing or
  * unreadable file starts over. One line of JSON, as the docs show it.
  */
-export function withEnabled(text: string | undefined, on: boolean | undefined, seats: readonly string[], every?: number): string {
+export function withEnabled(text: string | undefined, on: boolean | undefined, seats: readonly string[], every?: number, models?: Readonly<Record<string, SeatPick>>): string {
   let kept: Record<string, unknown> = {}
   if (text !== undefined) {
     try {
@@ -135,7 +151,12 @@ export function withEnabled(text: string | undefined, on: boolean | undefined, s
   const { enabled: _dropped, ...rest } = kept
   if (seats.length > 0) rest.seats = [...seats]
   if (every !== undefined) rest.every = every
-  const json = (value: unknown): string => (Array.isArray(value) ? `[${value.map(item => JSON.stringify(item)).join(', ')}]` : JSON.stringify(value))
+  if (models !== undefined) rest.models = models
+  const json = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(item => JSON.stringify(item)).join(', ')}]`
+    if (isRecord(value)) return `{${Object.entries(value).map(([key, item]) => `${JSON.stringify(key)}: ${json(item)}`).join(', ')}}`
+    return JSON.stringify(value)
+  }
   const entries = Object.entries(on === undefined ? rest : { enabled: on, ...rest }).map(([key, value]) => `${JSON.stringify(key)}: ${json(value)}`)
   return `{${entries.join(', ')}}\n`
 }
@@ -148,7 +169,7 @@ export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: stri
   if (!config.enabled && config.problem !== undefined) line = `Heads-up side-check: off: ${config.problem}`
   else if (config.enabled) {
     const by = file === true ? `on for this project, by ${CONFIG_FILE} (the /config row is ${row})` : `on for every project, by the /config row (${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`})`
-    line = `Heads-up side-check: ${by} · seats ${config.seats.join(', ')} · every ${config.every} requests`
+    line = `Heads-up side-check: ${by} · seats ${config.seats.map(seat => seatLabel(seat, config.models?.[seat])).join(', ')} · every ${config.every} requests`
   } else if (file === false) line = `Heads-up side-check: off for this project, by ${CONFIG_FILE} (the /config row is ${row}) · /${COMMAND} on [seats] turns it on here`
   else line = `Heads-up side-check: off (the /config row is off, ${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`}) · /${COMMAND} on [seats] turns it on for this project, /config row "Heads-up side-check" for every project`
   return `${line}\nOn this machine: ${countsLine(counts)}`
@@ -208,6 +229,18 @@ export function everyFromAnswer(answer: string): { every: number } | { why: stri
 export function receiptLine(r: Extract<RunResult, { kind: 'none' }>): string {
   const ms = r.seats.reduce((total, seat) => total + seat.elapsedMs, 0)
   return `heads-up: ${r.seats.map(seat => seat.seat).join(', ')} read ${kilobytes(r.payloadBytes)} in ${seconds(ms)}, nothing to flag`
+}
+
+/** "codex (gpt-6.1-sol, high)", "gemini (gemini-2.5-pro)", or the bare name. */
+export function seatLabel(seat: string, pick: SeatPick | undefined): string {
+  const parts = [pick?.model, pick?.effort].filter((part): part is string => part !== undefined && part !== '')
+  return parts.length === 0 ? seat : `${seat} (${parts.join(', ')})`
+}
+
+/** The runner's --models file: the picks for the seats asked, '' when there are none. */
+export function modelsFile(config: Extract<HeadsUpConfig, { enabled: true }>): string {
+  const picks = Object.fromEntries(config.seats.flatMap(seat => (config.models?.[seat] === undefined ? [] : [[seat, config.models[seat]]])))
+  return Object.keys(picks).length === 0 ? '' : JSON.stringify(picks)
 }
 
 // The file's own `enabled`, when it parses; undefined when absent or not a boolean.

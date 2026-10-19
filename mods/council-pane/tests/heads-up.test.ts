@@ -1,13 +1,14 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, headsUpCommand, withEnabled, statusText, introTail, availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, headsUpCommand, withEnabled, statusText, introTail, availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelsFile } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
   expect(parseConfig(undefined, false)).toEqual({ enabled: false })
   expect(parseConfig('{"enabled": true}', false)).toEqual({ enabled: true, seats: ['codex'], every: 3 })
   expect(parseConfig('{"enabled": true, "seats": ["gemini", "grok-cli"], "every": 4}', false)).toEqual({ enabled: true, seats: ['gemini', 'grok-cli'], every: 4 })
+  expect(parseConfig('{"enabled": true, "models": {"codex": {"model": "gpt-6.1-sol", "effort": "high"}, "gemini": {"model": "gemini-2.5-pro"}}}', false)).toEqual({ enabled: true, seats: ['codex'], every: 3, models: { codex: { model: 'gpt-6.1-sol', effort: 'high' }, gemini: { model: 'gemini-2.5-pro' } } })
   expect(parseConfig('{"seats": ["gemini"]}', false)).toEqual({ enabled: false })
   expect(parseConfig('{"enabled": false}', false)).toEqual({ enabled: false })
 })
@@ -31,6 +32,9 @@ test('a file that does not hold a usable config is off and says why, whatever th
     expect(parseConfig('{"enabled": true, "seats": []}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: seats must be a non-empty list of seat names; heads-up is off' })
     expect(parseConfig('{"enabled": true, "every": 1}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: every must be a whole number of at least 2, got 1; heads-up is off' })
     expect(parseConfig('{"enabled": true, "every": 2.5}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: every must be a whole number of at least 2, got 2.5; heads-up is off' })
+    expect(parseConfig('{"enabled": true, "models": ["codex"]}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: models must be an object of seat name to {model, effort}; heads-up is off' })
+    expect(parseConfig('{"enabled": true, "models": {"codex": {"effort": "Hi gh"}}}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: effort for codex must be lowercase letters, got "Hi gh"; heads-up is off' })
+    expect(parseConfig('{"enabled": true, "models": {"codex": {"model": 3}}}', row)).toEqual({ enabled: false, problem: '.claude/council-heads-up.json: model for codex must be a string, got 3; heads-up is off' })
   }
 })
 
@@ -268,6 +272,7 @@ test('switching the project file keeps its seats and every, takes new seats when
   expect(withEnabled('[1]', true, [])).toBe('{"enabled": true}\n')
   expect(withEnabled('{"every": 5}', true, ['gemini'], 9)).toBe('{"enabled": true, "every": 9, "seats": ["gemini"]}\n')
   expect(withEnabled(undefined, undefined, ['gemini'], 3)).toBe('{"seats": ["gemini"], "every": 3}\n')
+  expect(withEnabled('{"models": {"gemini": {"model": "old"}}}', true, ['codex'], 3, { codex: { model: 'gpt-6.1-sol', effort: 'high' } })).toBe('{"enabled": true, "models": {"codex": {"model": "gpt-6.1-sol", "effort": "high"}}, "seats": ["codex"], "every": 3}\n')
 })
 
 test('status names the effective state and which switch set it, then the counts', () => {
@@ -275,8 +280,8 @@ test('status names the effective state and which switch set it, then the counts'
   expect(statusText({ enabled: true, seats: ['codex'], every: 3 }, false, '{"enabled": true}', counts)).toBe(
     'Heads-up side-check: on for this project, by .claude/council-heads-up.json (the /config row is off) · seats codex · every 3 requests\n'
     + 'On this machine: checks 4 (none 3, notes 1, repeats 0, failed 0) · learn 1, tell 0, knew 0, dismiss 0, typed past 0')
-  expect(statusText({ enabled: true, seats: ['codex', 'gemini'], every: 3 }, true, undefined, EMPTY_COUNTS)).toBe(
-    'Heads-up side-check: on for every project, by the /config row (no .claude/council-heads-up.json here) · seats codex, gemini · every 3 requests\n'
+  expect(statusText({ enabled: true, seats: ['codex', 'gemini'], every: 3, models: { codex: { model: 'gpt-6.1-sol', effort: 'high' }, gemini: { model: 'gemini-2.5-pro' } } }, true, undefined, EMPTY_COUNTS)).toBe(
+    'Heads-up side-check: on for every project, by the /config row (no .claude/council-heads-up.json here) · seats codex (gpt-6.1-sol, high), gemini (gemini-2.5-pro) · every 3 requests\n'
     + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
   expect(statusText({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS)).toBe(
     'Heads-up side-check: off for this project, by .claude/council-heads-up.json (the /config row is on) · /heads-up on [seats] turns it on here\n'
@@ -327,4 +332,9 @@ test('the scope labels name the three outcomes', () => {
 test('a check that found nothing leaves a receipt for the prompt hint', () => {
   expect(receiptLine({ kind: 'none', payloadBytes: 8500, seats: [{ seat: 'gemini', outcome: 'none', elapsedMs: 11200 }] })).toBe('heads-up: gemini read 8.3 KB in 11 s, nothing to flag')
   expect(receiptLine({ kind: 'none', payloadBytes: 900, seats: [{ seat: 'codex', outcome: 'timeout', elapsedMs: 60000 }, { seat: 'gemini', outcome: 'none', elapsedMs: 3600 }] })).toBe('heads-up: codex, gemini read 0.9 KB in 64 s, nothing to flag')
+})
+
+test('the models file for the runner holds only the seats asked, and is empty when nothing was picked', () => {
+  expect(modelsFile({ enabled: true, seats: ['codex', 'gemini'], every: 3 })).toBe('')
+  expect(modelsFile({ enabled: true, seats: ['codex'], every: 3, models: { codex: { effort: 'high' }, gemini: { model: 'x' } } })).toBe('{"codex":{"effort":"high"}}')
 })
