@@ -52,7 +52,6 @@ DIFF=$(git diff HEAD 2>/dev/null || true)
 [[ -z "$DIFF" ]] && exit 0
 
 PROVIDER_SCRIPT="${SCRIPT_DIR}/providers/${PROVIDER}.sh"
-[[ -f "$PROVIDER_SCRIPT" ]] || exit 0
 
 source "${SCRIPT_DIR}/lib/prompts.sh"
 TEMPLATE=$(load_prompt_template stop-review-gate)
