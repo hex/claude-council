@@ -68,9 +68,9 @@ parse_args() {
     [[ -f "$AVOID_FILE" ]] || die "avoid file not found: $AVOID_FILE"
     if [[ -n "$PICK_FILE" ]]; then
         [[ -f "$PICK_FILE" ]] || die "model file not found: $PICK_FILE"
-        jq -e 'type == "object"' "$PICK_FILE" > /dev/null 2>&1 || die "--model: $PICK_FILE must hold a JSON object"
         local pick
-        pick=$(jq -r '[.model, .effort] | map(. // "" | tostring | gsub("[\t\r\n]"; "")) | join("\t")' "$PICK_FILE")
+        pick=$(jq -er 'select(type == "object") | [.model, .effort] | map(. // "" | tostring | gsub("[\t\r\n]"; "")) | join("\t")' "$PICK_FILE" 2> /dev/null) \
+            || die "--model: $PICK_FILE must hold a JSON object"
         PICK_MODEL="${pick%%$'\t'*}" PICK_EFFORT="${pick#*$'\t'}"
     fi
 
