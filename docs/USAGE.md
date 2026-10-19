@@ -354,7 +354,8 @@ name that is not one allows every stop without a review or a message. A
 
 Privacy: the review sends your full uncommitted `git diff` to the configured
 provider, named by its provider id. With `ollama` it never leaves the machine.
-A CLI provider (`codex`, `antigravity`, `grok-cli`, `kimi-cli`, `cursor-cli`) sends
+A CLI provider (`codex`, `antigravity`, `grok-cli`, `kimi-cli`, `cursor-cli`,
+`claude-cli`, `copilot-cli`) sends
 it to that CLI's vendor under your subscription rather than an API key, and an
 API provider (`gemini`, `openai`, `grok`, `perplexity`, `kimi`) sends it to that
 third-party API — `kimi` sends it to Moonshot. `openrouter` is the one seat that
@@ -382,7 +383,8 @@ EOF
 here whatever the row says, and without it the row decides. `seat` is the one
 provider asked, no panel and no synthesis; it defaults to `codex`. `every` is
 model requests per check inside a turn, default 3, so
-a check runs at the third, sixth, ninth request. Either switch is the consent:
+a check runs at the third, sixth, ninth request. `every` must be a whole number
+of at least 2; any other value keeps the check off and logs the reason once. Either switch is the consent:
 nothing asks before a check sends.
 
 The note sits above the prompt:
@@ -438,7 +440,7 @@ on the machine, a CLI seat sends it to that vendor under your subscription,
 Environment: `COUNCIL_HEADS_UP_SEAT_SECONDS` (the seat's deadline, default
 60), `COUNCIL_HEADS_UP_TURNS` (default 5) and `COUNCIL_HEADS_UP_RESULTS`
 (default 8). A check whose seat times out or errors logs one line and shows
-nothing.
+the red failure row above the prompt.
 
 ## Specialists (experimental)
 
