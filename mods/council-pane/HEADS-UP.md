@@ -110,7 +110,7 @@ Accepted deviations, each by the lead on merge (2026-10-18):
 - Only a none or failed check logs its line; a note shows its bytes and seat on the band, which is the ruling's report.
 - The runner's `--transcript PATH` became `--session ID`, resolved inside through `session-transcript.sh`. A failure before the seat ran (no transcript, an empty digest) is `kind: failed, bytes: 0, seats: []` with a top-level `detail`; `parseRunResult` reads it as the runner's own outcome.
 - Text seats get `COUNCIL_TIMEOUT` of the seat limit plus five seconds, so the runner's tick watchdog decides the timeout and the provider's own deadline is a backstop.
-- The NONE regex for bash is `([].!?():;,[-]|$)`: a backslash is literal inside a bracket, so the builtin's `[.!?()\[\]:;,-]` never matched "NONE." there. The TypeScript regex is the builtin's.
+- The NONE regex for bash is `([].!?():;,[-]|$)`: a backslash is literal inside a bracket, so the builtin's `[.!?()\[\]:;,-]` never matched "NONE." there.
 - The digest admits a tool-result row only when it has no `origin.kind` and no `isMeta` (unknown shapes refused, not known bad ones listed); tool names lose newlines and `\u0001` before they become a heading; a result whose text is empty still takes one of the K slots; `--tool-result-chars` without `--tool-results` is refused.
 - `provider_allowlisted` is derived (a plain-word name whose `providers/<name>.sh` exists), which admits `claude-cli` and `copilot-cli` to the stop gate where the old hand-written list did not.
 - `now_ms` moved to `scripts/lib/clock.sh` on its third copy.

@@ -3,6 +3,7 @@
 import { nameProblem, parseSpecialist, WHEN_MAX, type Specialist } from './specialist'
 import { EFFORT_STYLE, type Style } from './theme'
 import { skillNames } from './skills'
+import { isRecord } from './json'
 
 // effortHelp is Codex's own one-line description of each effort; defaultEffort
 // is what the model uses when nothing sets one.
@@ -337,7 +338,6 @@ export function setupView(setup: SetupState, entries: unknown[], problem?: strin
 }
 
 const SET_ASIDE: Status = { kind: 'note', text: 'An earlier draft could not be read and was set aside.' }
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const DRAFT_TEXT = ['baseline', 'name', 'model', 'effort', 'when', 'skills'] as const
 
 const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every(item => typeof item === 'string')

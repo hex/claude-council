@@ -2,6 +2,7 @@
 // ABOUTME: No engine calls, so every rule runs under bun test; pane.tsx is the shell that feeds events in
 
 import type { Note, Phase, Session, Tag } from '../types'
+import { isRecord } from './json'
 
 /** Fire when the message index within the turn is a positive multiple of this; the builtin's number. */
 export const DEFAULT_EVERY = 3
@@ -12,8 +13,6 @@ export const TITLE_CHARS = 80
 export const POINT_CHARS = 200
 export const MAX_POINTS = 6
 export const HEADLINE_CHARS = 200
-/** The builtin's test for "nothing to say", applied to a text seat's first line. */
-export const NONE = /^none\s*(?:[.!?()[\]:;,-]|$)/i
 /** A seat name becomes a script path in the runner, so it is only ever a plain word here. */
 const SEAT_SHAPE = /^[a-z][a-z0-9-]+$/
 
@@ -96,8 +95,7 @@ export const EMPTY_COUNTS: Counts = { checks: 0, none: 0, notes: 0, repeats: 0, 
 
 export function parseCounts(raw: unknown): Counts {
   if (!isRecord(raw)) return EMPTY_COUNTS
-  const count = (value: unknown): number => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0)
-  return Object.fromEntries(COUNT_KEYS.map(key => [key, count(raw[key])])) as Record<keyof Counts, number>
+  return Object.fromEntries(COUNT_KEYS.map(key => [key, countOr0(raw[key])])) as Record<keyof Counts, number>
 }
 
 export function bumped(c: Counts, key: keyof Counts): Counts {
@@ -324,10 +322,6 @@ export function introTail(p: { shown: boolean; enabled: boolean }): { tail?: str
   return { tail: `Tip: /${COMMAND} on lets another model watch long turns and flag what Claude missed`, markShown: true }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
 /** Persisted in $.store under STORE_KEY, shared across sessions (read-merge-write). */
 export type Memory = {
   /** Topics already shown, any answer. Newest last. */
@@ -345,8 +339,7 @@ export const EMPTY_MEMORY: Memory = { seen: [], known: [], typedPastInARow: 0, l
 export function parseMemory(raw: unknown): Memory {
   if (!isRecord(raw)) return EMPTY_MEMORY
   const topics = (value: unknown): string[] => (Array.isArray(value) && value.every(item => typeof item === 'string') ? value : [])
-  const count = (value: unknown): number => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0)
-  return { seen: topics(raw.seen), known: topics(raw.known), typedPastInARow: count(raw.typedPastInARow), looksToSkip: count(raw.looksToSkip) }
+  return { seen: topics(raw.seen), known: topics(raw.known), typedPastInARow: countOr0(raw.typedPastInARow), looksToSkip: countOr0(raw.looksToSkip) }
 }
 
 const fold = (topic: string) => topic.trim().toLowerCase()
@@ -491,6 +484,9 @@ function cut(text: string, chars: number): string {
 function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0
 }
+
+// A stored counter off its shape reads as 0.
+const countOr0 = (value: unknown): number => (isCount(value) ? value : 0)
 
 const OUTCOMES: readonly SeatOutcome['outcome'][] = ['none', 'note', 'error', 'timeout']
 

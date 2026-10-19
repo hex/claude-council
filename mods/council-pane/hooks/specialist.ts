@@ -3,6 +3,7 @@
 import { spinner } from './view'
 import { COLOR } from './theme'
 import type { Fields } from './setup'
+import { isRecord } from './json'
 
 // effort is Codex's reasoning effort; without it the user's own Codex default applies.
 // skills: the installed skills whose SKILL.md opens every task it starts; without them it just follows the task.
@@ -25,8 +26,6 @@ export const LIST_FIELD = 'specialists'
 export function nameProblem(name: string): string | undefined {
   return NAME.test(name) ? undefined : `name '${name}' must be lowercase letters, digits and dashes, starting with a letter`
 }
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
 // A field a person or another version wrote by hand must say what is wrong
 // with it; a misspelt key would otherwise be dropped without a word.
