@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, headsUpCommand, withEnabled, statusText, introLine } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -225,4 +225,61 @@ test('kilobytes reads to one decimal', () => {
   expect(kilobytes(0)).toBe('0.0 KB')
   expect(kilobytes(12698)).toBe('12.4 KB')
   expect(kilobytes(1024)).toBe('1.0 KB')
+})
+
+test('stored counts read field by field as zero; any other key is dropped', () => {
+  expect(parseCounts(undefined)).toEqual(EMPTY_COUNTS)
+  expect(parseCounts({ checks: 3, none: 2, notes: 1, learn: -1, tell: 'x', extra: 9 })).toEqual({ ...EMPTY_COUNTS, checks: 3, none: 2, notes: 1 })
+})
+
+test('a bump adds one to its count and leaves the rest', () => {
+  expect(bumped(EMPTY_COUNTS, 'checks')).toEqual({ ...EMPTY_COUNTS, checks: 1 })
+  expect(bumped(bumped(EMPTY_COUNTS, 'typedPast'), 'typedPast').typedPast).toBe(2)
+})
+
+test('the counts line names every count in a fixed order', () => {
+  expect(countsLine(EMPTY_COUNTS)).toBe('checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
+  expect(countsLine({ checks: 12, none: 8, notes: 2, repeats: 1, failed: 1, learn: 2, tell: 1, knew: 0, dismiss: 1, typedPast: 3 })).toBe('checks 12 (none 8, notes 2, repeats 1, failed 1) · learn 2, tell 1, knew 0, dismiss 1, typed past 3')
+})
+
+test('the heads-up command reads on, off and status, and nothing else', () => {
+  expect(headsUpCommand('')).toBe('status')
+  expect(headsUpCommand(' Status ')).toBe('status')
+  expect(headsUpCommand('on')).toBe('on')
+  expect(headsUpCommand('OFF')).toBe('off')
+  expect(headsUpCommand('maybe')).toBe('unknown')
+})
+
+test('switching the project file keeps its seats and every, and starts a fresh file when there is none or it is broken', () => {
+  expect(withEnabled(undefined, true)).toBe('{"enabled": true}\n')
+  expect(withEnabled(undefined, false)).toBe('{"enabled": false}\n')
+  expect(withEnabled('{"enabled": true, "seats": ["gemini"], "every": 5}', false)).toBe('{"enabled": false, "seats": ["gemini"], "every": 5}\n')
+  expect(withEnabled('{"seats": ["gemini"]}', true)).toBe('{"enabled": true, "seats": ["gemini"]}\n')
+  expect(withEnabled('{"enabled": tru', true)).toBe('{"enabled": true}\n')
+  expect(withEnabled('[1]', true)).toBe('{"enabled": true}\n')
+})
+
+test('status names the effective state and which switch set it, then the counts', () => {
+  const counts = { ...EMPTY_COUNTS, checks: 4, none: 3, notes: 1, learn: 1 }
+  expect(statusText({ enabled: true, seats: ['codex'], every: 3 }, false, '{"enabled": true}', counts)).toBe(
+    'Heads-up side-check: on for this project, by .claude/council-heads-up.json (the /config row is off) · seats codex · every 3 requests\n'
+    + 'On this machine: checks 4 (none 3, notes 1, repeats 0, failed 0) · learn 1, tell 0, knew 0, dismiss 0, typed past 0')
+  expect(statusText({ enabled: true, seats: ['codex', 'gemini'], every: 3 }, true, undefined, EMPTY_COUNTS)).toBe(
+    'Heads-up side-check: on for every project, by the /config row (no .claude/council-heads-up.json here) · seats codex, gemini · every 3 requests\n'
+    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
+  expect(statusText({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS)).toBe(
+    'Heads-up side-check: off for this project, by .claude/council-heads-up.json (the /config row is on) · /heads-up on turns it on here\n'
+    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
+  expect(statusText({ enabled: false }, false, undefined, EMPTY_COUNTS)).toBe(
+    'Heads-up side-check: off (the /config row is off, no .claude/council-heads-up.json here) · /heads-up on turns it on for this project, /config row "Heads-up side-check" for every project\n'
+    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
+  expect(statusText({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' }, true, '{', EMPTY_COUNTS)).toBe(
+    'Heads-up side-check: off: .claude/council-heads-up.json is not valid JSON; heads-up is off\n'
+    + 'On this machine: checks 0 (none 0, notes 0, repeats 0, failed 0) · learn 0, tell 0, knew 0, dismiss 0, typed past 0')
+})
+
+test('the one-time intro shows once, and only while the check is off', () => {
+  expect(introLine({ shown: false, enabled: false })).toEqual({ log: 'heads-up side-check: codex can reread a long turn and show one line above the prompt about something you may have missed; it is off. /heads-up on turns it on for this project, the /config row "Heads-up side-check" for every project.', markShown: true })
+  expect(introLine({ shown: false, enabled: true })).toEqual({ markShown: true })
+  expect(introLine({ shown: true, enabled: false })).toEqual({ markShown: false })
 })

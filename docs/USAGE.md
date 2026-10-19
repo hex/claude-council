@@ -399,6 +399,15 @@ Claude puts a draft quoting the note in your prompt box, and you send or edit it
 note shows counts as typing past it, and that many later checks are skipped.
 Claude never sees a note you did not tell it about.
 
+`/heads-up on` and `/heads-up off` write the project file for you, keeping its
+seats and cadence; `/heads-up` alone (or `/heads-up status`) says whether the
+check is on here and which switch set it, then the counts kept on this machine
+and never sent anywhere: checks run, with how many found nothing, drew a note,
+repeated a topic already seen, or failed; and the presses, learn, tell, knew,
+dismiss and typed past. The first session on a machine where the check is off
+logs one line saying it exists; a flag in the plugin store keeps it from coming
+back.
+
 Privacy: unlike `/claude-council:advise`, nothing asks before a send. Each
 check digests the last five turns of this session's transcript plus the last
 eight tool results inside them, cut to 2,000 characters each, and sends that

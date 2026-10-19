@@ -4,6 +4,7 @@ import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren } from 'claude-code'
 import {
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
+  bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introLine, parseCounts, statusText, withEnabled, type Counts,
   type Answer, type BandView, type Memory, type RunResult,
 } from './heads-up'
 import type { Note, Session } from '../types'
@@ -360,6 +361,13 @@ async function introduceSpecialists($: EngineInterface, specialists: number): Pr
   if (notice.markShown) await $.store.set(INTRO_KEY, true)
 }
 
+// Once per install, while the check is off: the store flag is shared by every session.
+async function introduceHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<void> {
+  const notice = introLine({ shown: (await $.store.get(HEADS_UP_INTRO_KEY)) === true, enabled: (await readHeadsUpConfig($, state, settings)).enabled })
+  if (notice.log) $.ui.log(notice.log)
+  if (notice.markShown) await $.store.set(HEADS_UP_INTRO_KEY, true)
+}
+
 async function foldTemplates($: EngineInterface, state: PaneState): Promise<void> {
   const { templatesOpen, ...setup } = currentSetup(state)
   await keepSetup($, state, templatesOpen ? setup : { ...setup, templatesOpen: true })
@@ -586,13 +594,23 @@ async function saveMemory($: EngineInterface, ours: Memory): Promise<void> {
 
 async function recordAnswer($: EngineInterface, topic: string, answer: Answer): Promise<void> {
   await saveMemory($, applyAnswer(await loadMemory($), topic, answer))
+  await count($, answer === 'typed-past' ? 'typedPast' : answer)
+}
+
+// Read, add one, write: a count, never a lock (see Counts).
+async function count($: EngineInterface, key: keyof Counts): Promise<void> {
+  await $.store.set(COUNTS_KEY, bumped(parseCounts(await $.store.get(COUNTS_KEY)), key))
 }
 
 // The project file is the consent and the only switch; it is read at each
 // step, so turning it on or off needs no reload. A broken file is logged once.
-async function readHeadsUpConfig($: EngineInterface, state: PaneState, settings: PaneOptions) {
+async function headsUpFile($: EngineInterface): Promise<{ path: string; text: string | undefined }> {
   const path = `${await $.session.cwd()}/${CONFIG_FILE}`
-  const config = parseConfig((await $.fs.exists(path)) ? await $.fs.read(path) : undefined, settings.headsUp)
+  return { path, text: (await $.fs.exists(path)) ? await $.fs.read(path) : undefined }
+}
+
+async function readHeadsUpConfig($: EngineInterface, state: PaneState, settings: PaneOptions) {
+  const config = parseConfig((await headsUpFile($)).text, settings.headsUp)
   const problem = config.enabled ? '' : config.problem ?? ''
   if (problem && problem !== state.headsUpProblem) $.ui.log(problem)
   state.headsUpProblem = problem
@@ -631,6 +649,7 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
   await startWatching($, state, settings)
   try {
     await launchHeadsUp($, config.seats, memory, runDir)
+    await count($, 'checks')
   } catch (error) {
     await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))
     throw error
@@ -650,8 +669,10 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, now: number): P
   else if (await runHasDied($, state, runDir, now, 'headsUpCheckedAtMs')) result = lost('heads-up.sh stopped without writing a result')
   else return
   const memory = await loadMemory($)
-  await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(s, memory, result) : s))
+  const settled = await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(s, memory, result) : s))
   if (result.kind !== 'note') $.ui.log(checkLine(result))
+  const drawn = settled.phase.kind === 'showing' && settled.phase.note.id === checkId
+  await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
   await $.process.run(['rm', '-rf', runDir])
 }
 
@@ -998,6 +1019,7 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     await $.command.register({ name: SETUP_COMMAND, description: 'Add, edit or remove specialists', immediate: true })
+    await $.command.register({ name: HEADS_UP_COMMAND, description: 'Heads-up side-check: switch it on or off for this project, or show its state and counts', argumentHint: '[on|off|status]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     // An entry that does not parse is reported, never dropped quietly.
     const roster = specialistRoster(options)
@@ -1023,6 +1045,7 @@ export const register: Register = (on, options) => {
     const hasRuns = Object.values(await loadRuns($)).some(record => record.state !== 'finished')
     await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists, hasRuns), inputSchema: specialistSchema(roster.specialists, hasRuns) })
     void logFailure($, state, () => introduceSpecialists($, roster.specialists.length))
+    void logFailure($, state, () => introduceHeadsUp($, state, settings), 'heads-up')
     // A reload drops the poll timer; a check still in flight needs it back.
     if ((await read($, headsUp)).phase.kind === 'checking') await startWatching($, state, settings)
     if (roster.specialists.length > 0 || hasRuns) {
@@ -1259,6 +1282,17 @@ export const register: Register = (on, options) => {
       : finished.exitCode === 7 ? `the worktree holds changes no round committed (a round failed or its commit was refused); commit them in ${current.worktree} or ask for another round, or discard the run:\n${lines}`
       : finished.stderr.trim() || 'finish failed'
     return { result: `Run ${current.id} not finished: ${why}`, isError: true }
+  })
+
+  on('command.run', { command: HEADS_UP_COMMAND }, async ($, e) => {
+    const action = headsUpCommand(e.args)
+    if (action === 'unknown') return { text: `Usage: /${HEADS_UP_COMMAND} [on|off|status]` }
+    if (action !== 'status') {
+      const file = await headsUpFile($)
+      await $.fs.write(file.path, withEnabled(file.text, action === 'on'))
+    }
+    const file = await headsUpFile($)
+    return { text: statusText(parseConfig(file.text, settings.headsUp), settings.headsUp, file.text, parseCounts(await $.store.get(COUNTS_KEY))) }
   })
 
   on('command.run', { command: REOPEN_COMMAND }, async ($, e) => {

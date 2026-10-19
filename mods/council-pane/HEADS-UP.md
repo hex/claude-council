@@ -116,6 +116,7 @@ Accepted deviations, each by the lead on merge (2026-10-18):
 
 - `every` counts model requests, not messages, after the live measurement above; default 3.
 - A `/config` row `heads_up` joined the project file as a second switch (Alex, 2026-10-19: the file alone was undiscoverable); `parseConfig(text, rowOn)` holds the rule, a broken file stays off with the row on too.
+- `/heads-up [on|off|status]` (Alex, 2026-10-19): on and off write the project file through `withEnabled`, status prints `statusText`. Usage counts live in the store under `heads-up-counts`, a read-add-write per event (a concurrent bump can lose one; the numbers guide the dogfood decision, they are not billing), and are shown by this command rather than by `/claude-council:status`, whose bash script cannot read the plugin store. A once-per-install intro line (`introLine`) shows while the check is off.
 - The expanded note is the builtin's shape, a title and bullets, in place of the first cut's two or three sentences; `detail` became `title` and `points` on the wire (Alex, 2026-10-19, from a side-by-side with the builtin).
 
 Unresolved: the pane's drawing, the poll and the hook wiring have no automated test.

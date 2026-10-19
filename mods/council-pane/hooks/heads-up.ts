@@ -19,6 +19,9 @@ const SEAT_SHAPE = /^[a-z][a-z0-9-]+$/
 
 export const CONFIG_FILE = '.claude/council-heads-up.json'
 export const STORE_KEY = 'heads-up'
+export const COUNTS_KEY = 'heads-up-counts'
+export const INTRO_KEY = 'heads-up-intro-shown'
+export const COMMAND = 'heads-up'
 
 /** The effective setting. Only parseConfig builds one; `seats` are shape-checked words, the runner owns the list. */
 export type HeadsUpConfig =
@@ -53,6 +56,101 @@ export function parseConfig(text: string | undefined, rowOn: boolean): HeadsUpCo
   if (typeof every !== 'number' || !Number.isInteger(every) || every < 2) return off(`: every must be a whole number of at least 2, got ${JSON.stringify(every)}`)
   if (raw.enabled === false || (raw.enabled === undefined && !rowOn)) return { enabled: false }
   return { enabled: true, seats: words, every }
+}
+
+/**
+ * Usage on this machine, in $.store under COUNTS_KEY, shared by every
+ * session. Each bump reads, adds one and writes, so two sessions bumping at
+ * once can lose one; the numbers guide a decision, they are not billing.
+ */
+export type Counts = {
+  readonly checks: number
+  readonly none: number
+  readonly notes: number
+  /** A seat's note on a topic already seen or known: nothing drawn. */
+  readonly repeats: number
+  readonly failed: number
+  readonly learn: number
+  readonly tell: number
+  readonly knew: number
+  readonly dismiss: number
+  readonly typedPast: number
+}
+export const COUNT_KEYS = ['checks', 'none', 'notes', 'repeats', 'failed', 'learn', 'tell', 'knew', 'dismiss', 'typedPast'] as const
+export const EMPTY_COUNTS: Counts = { checks: 0, none: 0, notes: 0, repeats: 0, failed: 0, learn: 0, tell: 0, knew: 0, dismiss: 0, typedPast: 0 }
+
+export function parseCounts(raw: unknown): Counts {
+  if (!isRecord(raw)) return EMPTY_COUNTS
+  const count = (value: unknown): number => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0)
+  return Object.fromEntries(COUNT_KEYS.map(key => [key, count(raw[key])])) as Record<keyof Counts, number>
+}
+
+export function bumped(c: Counts, key: keyof Counts): Counts {
+  return { ...c, [key]: c[key] + 1 }
+}
+
+/** "checks 12 (none 8, notes 2, repeats 1, failed 1) · learn 2, tell 1, knew 0, dismiss 1, typed past 3" */
+export function countsLine(c: Counts): string {
+  return `checks ${c.checks} (none ${c.none}, notes ${c.notes}, repeats ${c.repeats}, failed ${c.failed}) · learn ${c.learn}, tell ${c.tell}, knew ${c.knew}, dismiss ${c.dismiss}, typed past ${c.typedPast}`
+}
+
+/** The /heads-up argument: nothing or status shows the state; on and off write the project file. */
+export function headsUpCommand(args: string): 'status' | 'on' | 'off' | 'unknown' {
+  const word = args.trim().toLowerCase()
+  if (word === '' || word === 'status') return 'status'
+  if (word === 'on' || word === 'off') return word
+  return 'unknown'
+}
+
+/**
+ * The project file with `enabled` set, its other fields kept; a missing or
+ * unreadable file starts over with `enabled` alone. One line, two-space-free
+ * JSON, as the docs show it.
+ */
+export function withEnabled(text: string | undefined, on: boolean): string {
+  let kept: Record<string, unknown> = {}
+  if (text !== undefined) {
+    try {
+      const raw: unknown = JSON.parse(text)
+      if (isRecord(raw)) kept = raw
+    } catch {
+      kept = {}
+    }
+  }
+  const { enabled: _dropped, ...rest } = kept
+  const entries = Object.entries({ enabled: on, ...rest }).map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`)
+  return `{${entries.join(', ')}}\n`
+}
+
+/** What /heads-up status prints: the effective state, which switch set it, the seats and cadence, then the counts. */
+export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: string | undefined, counts: Counts): string {
+  const row = rowOn ? 'on' : 'off'
+  const file = fileText === undefined ? undefined : fileEnabled(fileText)
+  let line: string
+  if (!config.enabled && config.problem !== undefined) line = `Heads-up side-check: off: ${config.problem}`
+  else if (config.enabled) {
+    const by = file === true ? `on for this project, by ${CONFIG_FILE} (the /config row is ${row})` : `on for every project, by the /config row (${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`})`
+    line = `Heads-up side-check: ${by} · seats ${config.seats.join(', ')} · every ${config.every} requests`
+  } else if (file === false) line = `Heads-up side-check: off for this project, by ${CONFIG_FILE} (the /config row is ${row}) · /${COMMAND} on turns it on here`
+  else line = `Heads-up side-check: off (the /config row is off, ${fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`}) · /${COMMAND} on turns it on for this project, /config row "Heads-up side-check" for every project`
+  return `${line}\nOn this machine: ${countsLine(counts)}`
+}
+
+// The file's own `enabled`, when it parses; undefined when absent or not a boolean.
+function fileEnabled(text: string): boolean | undefined {
+  try {
+    const raw: unknown = JSON.parse(text)
+    return isRecord(raw) && typeof raw.enabled === 'boolean' ? raw.enabled : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The once-per-install line at session start, only while the check is off; marked shown either way so it never repeats. */
+export function introLine(p: { shown: boolean; enabled: boolean }): { log?: string; markShown: boolean } {
+  if (p.shown) return { markShown: false }
+  if (p.enabled) return { markShown: true }
+  return { log: `heads-up side-check: codex can reread a long turn and show one line above the prompt about something you may have missed; it is off. /${COMMAND} on turns it on for this project, the /config row "Heads-up side-check" for every project.`, markShown: true }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
