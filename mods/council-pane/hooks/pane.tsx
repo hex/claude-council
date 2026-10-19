@@ -419,7 +419,9 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
     if ('why' in effort) return `Setup closed: ${effort.why}; nothing changed.`
     if (effort.effort !== undefined) pick = { ...pick, effort: effort.effort }
   }
-  await $.fs.write(file.path, withEnabled(file.text, scope === SCOPE.project ? true : undefined, seat, every.every, pick))
+  // "Keep <current>" with no effort is no pick at all: the file's own model
+  // stays, and withEnabled drops it only when the seat changed.
+  await $.fs.write(file.path, withEnabled(file.text, scope === SCOPE.project ? true : undefined, seat, every.every, Object.keys(pick).length === 0 ? undefined : pick))
   state.headsUpTip = ''
   if (scope === SCOPE.all && !settings.headsUp) {
     const written = await $.config.set({ key: HEADS_UP_ROW_KEY, value: true })
