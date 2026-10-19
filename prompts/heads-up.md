@@ -26,32 +26,44 @@ If nothing clears the bar, your ENTIRE answer is the single word:
 
 NONE
 
-Otherwise your ENTIRE answer is exactly four lines and nothing else:
+Otherwise your ENTIRE answer is these lines and nothing else:
 
 NOTE: <one sentence, about 20 words, under 200 characters, naming the thing and its consequence>
 TAG: <You should know | Heads up>
 TOPIC: <a short stable label for it, under 140 characters>
-DETAIL: <two or three plain sentences on one line, under 600 characters: what the material shows, why it matters, and what to check or do next>
+TITLE: <a short title for the expanded note, under 80 characters, naming the thing>
+POINT: <a plain bullet>
+POINT: <another; three to six POINT lines in all, under 120 words together: what the material shows, why it matters, and as the last one what to check or do next>
 
 Examples of a good answer:
 
 NOTE: test_calc.py asserts divide(1, 0) == 0, but divide returns a / b, which raises ZeroDivisionError, so the test cannot pass.
 TAG: Heads up
 TOPIC: divide by zero assertion
-DETAIL: The assistant wrote the test as asked and then reported that the tests pass without running them. Run python -m pytest test_calc.py and decide whether divide(1, 0) should raise or return a value before trusting that report.
+TITLE: A test that cannot pass was reported green
+POINT: test_calc.py asserts divide(1, 0) == 0, while divide returns a / b and raises ZeroDivisionError.
+POINT: The assistant wrote the test as asked and reported that the tests pass without running them.
+POINT: Run python -m pytest test_calc.py and decide whether divide(1, 0) should raise or return a value before trusting that report.
 
 NOTE: The retry loop in client.py re-sends the POST body on every attempt, and the endpoint is not idempotent, so a timeout can create the order twice.
 TAG: Heads up
 TOPIC: retry re-sends a non-idempotent POST
-DETAIL: The assistant added the retry to fix timeouts and did not mention duplicates. Check whether the endpoint accepts an idempotency key, or retry only on connection errors before the request is sent.
+TITLE: Retries can create the order twice
+POINT: The retry loop in client.py re-sends the POST body on every attempt.
+POINT: The endpoint creates an order per request and has no idempotency key, so a timeout after a successful create makes a duplicate.
+POINT: The assistant added the retry to fix timeouts and did not mention duplicates.
+POINT: Check whether the endpoint accepts an idempotency key, or retry only on connection errors raised before the request is sent.
 
 NOTE: The YAML parser this repo uses reads the bare word no as false, which is why the country code for Norway keeps turning into false in config.yml.
 TAG: You should know
 TOPIC: YAML reads no as false
-DETAIL: Older YAML rules treat yes, no, on and off as booleans. Quote the value ("no") in config.yml, and expect the same surprise anywhere else a country code or a yes/no word appears unquoted.
+TITLE: YAML 1.1 turns the bare word no into false
+POINT: Older YAML rules treat yes, no, on and off as booleans, and this repo's parser follows them.
+POINT: The country code for Norway is the bare word no in config.yml, so it loads as false.
+POINT: Quote the value ("no") in config.yml, and expect the same anywhere a country code or a yes/no word appears unquoted.
 
 Examples of a bad answer, and why: "The assistant used a helper function here" (trivia, no consequence); "You may want to read the docs on caching" (a teaser, says nothing); "The second option is cheaper than the first one" (a week later, nobody knows which options those were).
 
-When you were given an output schema, answer through it instead: nothing to raise is `{"none": true, "tag": "", "topic": "", "headline": "", "detail": ""}`, and a finding is `{"none": false, "tag": "<Heads up or You should know>", "topic": "<label>", "headline": "<the sentence>", "detail": "<the two or three sentences>"}`.
+When you were given an output schema, answer through it instead: nothing to raise is `{"none": true, "tag": "", "topic": "", "headline": "", "title": "", "points": []}`, and a finding is `{"none": false, "tag": "<Heads up or You should know>", "topic": "<label>", "headline": "<the sentence>", "title": "<the title>", "points": ["<bullet>", "<bullet>", "<the action>"]}`.
 
 {{DIGEST}}

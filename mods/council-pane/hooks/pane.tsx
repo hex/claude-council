@@ -697,16 +697,24 @@ function headsUpRow(
   band: BandView,
   press: Record<Exclude<Answer, 'typed-past'>, () => void>,
 ) {
+  const { more } = band
   return (
     <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
       <ui.Box flexDirection="row">
         <ui.Box flexShrink={0}><ui.Text color={COLOR.accent}>{'\u2726 '}</ui.Text></ui.Box>
         <ui.Box flexGrow={1} flexShrink={1} flexDirection="column">
           <ui.Text wrap="wrap"><ui.Text bold>{band.tag}</ui.Text>{` \u00b7 ${band.headline}`}</ui.Text>
-          {band.detail !== null && <ui.Text wrap="wrap">{band.detail}</ui.Text>}
+          {more !== null && (
+            <ui.Box flexDirection="column" marginTop={1} marginBottom={1}>
+              {more.title !== '' && <ui.Text bold wrap="wrap">{more.title}</ui.Text>}
+              {more.points.map((point, at) => (
+                <ui.Text key={`heads-up:point:${at}`} wrap="wrap" bold={at === more.points.length - 1}>{`- ${point}`}</ui.Text>
+              ))}
+            </ui.Box>
+          )}
           <ui.Box flexDirection="row">
             <ui.Box flexShrink={0} flexDirection="row">
-              {band.detail === null
+              {more === null
                 ? [
                     <ui.Button key="heads-up:learn" hotkey="1" label="Learn more" plain onPress={press.learn} />,
                     <ui.Text key="gap-1">{'   '}</ui.Text>,

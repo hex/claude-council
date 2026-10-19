@@ -69,7 +69,7 @@ test('the avoid list is every seen and known topic once, one per line', () => {
 })
 
 const on: HeadsUpConfig = { enabled: true, seats: ['codex'], every: 3 }
-const note: Note = { id: 'c1', tag: 'Heads up', topic: 'Backfill never ran', headline: 'The test ran on an empty DB.', detail: 'So the backfill path was skipped.', seat: 'codex', model: 'gpt-6.1-sol', payloadBytes: 12698, elapsedMs: 27400 }
+const note: Note = { id: 'c1', tag: 'Heads up', topic: 'Backfill never ran', headline: 'The test ran on an empty DB.', title: 'The backfill path was skipped', points: ['The fixture had no rows, so the backfill loop never ran.', 'Seed one row and rerun the migration test.'], seat: 'codex', model: 'gpt-6.1-sol', payloadBytes: 12698, elapsedMs: 27400 }
 
 test('a check fires at each positive multiple of every requests into a turn, never at its first', () => {
   expect(decide(on, FRESH_SESSION, EMPTY_MEMORY, { turnId: 't1', index: 0 }, 1000)).toEqual({ kind: 'skip', why: 'off-cadence' })
@@ -99,7 +99,7 @@ test('backoff spends one skipped check per cadence point and hands back the memo
 const codexNone = { seat: 'codex', outcome: 'none', ms: 27400 }
 
 test('a note result reads into the note the band draws, its seat outcomes kept', () => {
-  const text = JSON.stringify({ kind: 'note', bytes: 12698, seat: 'codex', model: 'gpt-6.1-sol', ms: 27400, tag: 'Heads up', topic: 'Backfill never ran', headline: 'The test ran on an empty DB.', detail: 'So the backfill path was skipped.', seats: [{ seat: 'codex', outcome: 'note', ms: 27400 }] })
+  const text = JSON.stringify({ kind: 'note', bytes: 12698, seat: 'codex', model: 'gpt-6.1-sol', ms: 27400, tag: 'Heads up', topic: 'Backfill never ran', headline: 'The test ran on an empty DB.', title: 'The backfill path was skipped', points: ['The fixture had no rows, so the backfill loop never ran.', 'Seed one row and rerun the migration test.'], seats: [{ seat: 'codex', outcome: 'note', ms: 27400 }] })
   expect(parseRunResult('c1', text)).toEqual({ kind: 'note', note, seats: [{ seat: 'codex', outcome: 'note', elapsedMs: 27400 }] })
   // A runner that names no model leaves it empty; the band then shows the seat alone.
   expect(parseRunResult('c1', text.replace('"model":"gpt-6.1-sol",', '')).kind).toBe('note')
@@ -126,19 +126,29 @@ test('a result that does not read is a failure naming the text, never a quiet no
   const runner = (detail: string) => ({ kind: 'failed', payloadBytes: 0, seats: [{ seat: 'runner', outcome: 'error', elapsedMs: 0, detail }] })
   expect(parseRunResult('c1', '')).toEqual(runner('result.json does not read as a run result: ""'))
   expect(parseRunResult('c1', '{"kind":"maybe","bytes":1,"seats":[]}')).toEqual(runner('result.json does not read as a run result: "{\\"kind\\":\\"maybe\\",\\"bytes\\":1,\\"seats\\":[]}"'))
-  expect(parseRunResult('c1', '{"kind":"note","bytes":1,"seat":"codex","ms":5,"topic":"","headline":"h","detail":"","seats":[]}').kind).toBe('failed')
+  expect(parseRunResult('c1', '{"kind":"note","bytes":1,"seat":"codex","ms":5,"topic":"","headline":"h","title":"","points":[],"seats":[]}').kind).toBe('failed')
+  expect(parseRunResult('c1', '{"kind":"note","bytes":1,"seat":"codex","ms":5,"topic":"t","headline":"h","title":"","points":"one","seats":[]}').kind).toBe('failed')
   expect(parseRunResult('c1', '{"kind":"none","bytes":1,"seats":[{"seat":"codex","outcome":"maybe","ms":1}]}').kind).toBe('failed')
   expect(parseRunResult('c1', `{"kind":"none","bytes":1,"seats":[]}${'x'.repeat(300)}`)).toEqual(runner(`result.json does not read as a run result: "{\\"kind\\":\\"none\\",\\"bytes\\":1,\\"seats\\":[]}${'x'.repeat(163)}…"`))
 })
 
-test('a headline is cut to one line of 200 characters; topic and detail to theirs', () => {
-  const long = { kind: 'note', bytes: 1, seat: 'codex', ms: 1, topic: `  ${'t'.repeat(150)}  `, headline: `First line\n  second ${'h'.repeat(300)}`, detail: 'd'.repeat(700), seats: [] }
+test('a headline is cut to one line of 200 characters; topic, title and points to theirs, blank points dropped, seven points to six', () => {
+  const long = { kind: 'note', bytes: 1, seat: 'codex', ms: 1, topic: `  ${'t'.repeat(150)}  `, headline: `First line\n  second ${'h'.repeat(300)}`, title: `  ${'a'.repeat(100)}`, points: ['', ' one ', 'p'.repeat(250), '3', '4', '5', '6', '7'], seats: [] }
   const result = parseRunResult('c1', JSON.stringify(long))
   if (result.kind !== 'note') throw new Error(`expected a note, got ${result.kind}`)
   expect(result.note.headline).toBe(`First line second ${'h'.repeat(181)}…`)
   expect(result.note.headline.length).toBe(200)
   expect(result.note.topic).toBe('t'.repeat(140))
-  expect(result.note.detail).toBe('d'.repeat(600))
+  expect(result.note.title).toBe('a'.repeat(80))
+  expect(result.note.points).toEqual(['one', 'p'.repeat(200), '3', '4', '5', '6'])
+})
+
+test('a markdown link in a title or point is flattened to its text and address', () => {
+  const linked = { kind: 'note', bytes: 1, seat: 'codex', ms: 1, topic: 't', headline: 'h', title: 'See the [advisory](https://example.com/a)', points: ['Read [this](https://example.com/b) and [that](https://example.com/c).'], seats: [] }
+  const result = parseRunResult('c1', JSON.stringify(linked))
+  if (result.kind !== 'note') throw new Error(`expected a note, got ${result.kind}`)
+  expect(result.note.title).toBe('See the advisory (https://example.com/a)')
+  expect(result.note.points).toEqual(['Read this (https://example.com/b) and that (https://example.com/c).'])
 })
 
 test('a repeat is a topic already seen or known, trimmed and case-folded', () => {
@@ -182,12 +192,12 @@ test('learn expands the note; tell, knew and dismiss close it', () => {
   expect(pressed(checking, 'dismiss')).toBe(checking)
 })
 
-test('the band draws the headline, the seat, payload and time, and the detail once expanded', () => {
+test('the band draws the headline, the seat, payload and time, and the title and points once expanded', () => {
   expect(bandView({ kind: 'idle' })).toBeNull()
   expect(bandView({ kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1 })).toBeNull()
   expect(bandView({ kind: 'showing', note: { ...note, tag: 'You should know' }, expanded: false })?.tag).toBe('You should know')
-  expect(bandView({ kind: 'showing', note, expanded: false })).toEqual({ tag: 'Heads up', headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', detail: null })
-  expect(bandView({ kind: 'showing', note, expanded: true })).toEqual({ tag: 'Heads up', headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', detail: 'So the backfill path was skipped.' })
+  expect(bandView({ kind: 'showing', note, expanded: false })).toEqual({ tag: 'Heads up', headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', more: null })
+  expect(bandView({ kind: 'showing', note, expanded: true })).toEqual({ tag: 'Heads up', headline: 'The test ran on an empty DB.', meta: 'codex · gpt-6.1-sol · 12.4 KB · 27 s', more: { title: 'The backfill path was skipped', points: ['The fixture had no rows, so the backfill loop never ran.', 'Seed one row and rerun the migration test.'] } })
   expect(bandView({ kind: 'showing', note: { ...note, model: '' }, expanded: false })?.meta).toBe('codex · 12.4 KB · 27 s')
 })
 
@@ -200,8 +210,8 @@ test('every finished check logs one line with its seats, payload and time', () =
 })
 
 test('the tell-Claude draft quotes the note for the person to send, naming the seat', () => {
-  expect(tellClaudeDraft(note)).toBe('A side check by codex (not you) raised this: The test ran on an empty DB. So the backfill path was skipped. What do you make of it?')
-  expect(tellClaudeDraft({ ...note, detail: '' })).toBe('A side check by codex (not you) raised this: The test ran on an empty DB. What do you make of it?')
+  expect(tellClaudeDraft(note)).toBe('A side check by codex (not you) raised this: The test ran on an empty DB. The backfill path was skipped: The fixture had no rows, so the backfill loop never ran. Seed one row and rerun the migration test. What do you make of it?')
+  expect(tellClaudeDraft({ ...note, title: '', points: [] })).toBe('A side check by codex (not you) raised this: The test ran on an empty DB. What do you make of it?')
 })
 
 test('kilobytes reads to one decimal', () => {

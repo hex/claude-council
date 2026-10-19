@@ -8,7 +8,9 @@ export const DEFAULT_EVERY = 3
 /** seen and known each keep this many topics, newest last; the builtin's cap. */
 export const TOPIC_CAP = 50
 export const TOPIC_CHARS = 140
-export const DETAIL_CHARS = 600
+export const TITLE_CHARS = 80
+export const POINT_CHARS = 200
+export const MAX_POINTS = 6
 export const HEADLINE_CHARS = 200
 /** The builtin's test for "nothing to say", applied to a text seat's first line. */
 export const NONE = /^none\s*(?:[.!?()[\]:;,-]|$)/i
@@ -155,7 +157,7 @@ export type RunResult =
   | { kind: 'failed'; payloadBytes: number; seats: readonly SeatOutcome[] }
 
 /**
- * Wire shape: {kind, bytes, seat?, model?, ms?, tag?, topic?, headline?, detail?, seats:[{seat,outcome,ms,detail?}]}.
+ * Wire shape: {kind, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, seats:[{seat,outcome,ms,detail?}]}.
  * A text that does not parse to it is `failed` naming the text, so a runner
  * change can never read as "no note". A headline is cut to HEADLINE_CHARS, one line.
  */
@@ -181,17 +183,22 @@ export function parseRunResult(checkId: string, text: string): RunResult {
     return { kind: 'failed', payloadBytes: raw.bytes, seats: [...runner, ...seats] }
   }
   if (raw.kind !== 'note') return unread
-  const { seat, ms, topic, headline, detail } = raw
-  if (typeof seat !== 'string' || !isCount(ms) || typeof topic !== 'string' || typeof headline !== 'string' || typeof detail !== 'string') return unread
+  const { seat, ms, topic, headline, title, points } = raw
+  if (typeof seat !== 'string' || !isCount(ms) || typeof topic !== 'string' || typeof headline !== 'string' || typeof title !== 'string') return unread
+  if (!Array.isArray(points) || !points.every((point): point is string => typeof point === 'string')) return unread
   const note: Note = {
     id: checkId, tag: tagOf(raw.tag), seat, model: typeof raw.model === 'string' ? raw.model.trim() : '', payloadBytes: raw.bytes, elapsedMs: ms,
     topic: topic.trim().slice(0, TOPIC_CHARS),
     headline: cut(headline.replace(/\s+/g, ' ').trim(), HEADLINE_CHARS),
-    detail: detail.trim().slice(0, DETAIL_CHARS),
+    title: plainLinks(title).trim().slice(0, TITLE_CHARS),
+    points: points.map(point => plainLinks(point).trim().slice(0, POINT_CHARS)).filter(point => point !== '').slice(0, MAX_POINTS),
   }
   if (note.topic === '' || note.headline === '') return unread
   return { kind: 'note', note, seats }
 }
+
+// The band draws plain text, so a markdown link a seat wrote anyway becomes "text (address)".
+const plainLinks = (text: string) => text.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '$1 ($2)')
 
 // A seat's tag, case-folded; anything but the builtin's two reads as Heads up,
 // the tag for this session's own work, which is what the check is asked for.
@@ -260,8 +267,8 @@ export type BandView = {
   readonly headline: string
   /** "codex · gpt-6.1-sol · 12.4 KB · 27 s"; the model is left out when the runner named none. */
   readonly meta: string
-  /** Non-null once expanded; the band then offers tell Claude and close instead of the three choices. */
-  readonly detail: string | null
+  /** Non-null once expanded: the bold title and the bullets, the last one the action; the band then offers tell Claude and close instead of the three choices. */
+  readonly more: { readonly title: string; readonly points: readonly string[] } | null
 }
 export function bandView(p: Phase): BandView | null {
   if (p.kind !== 'showing') return null
@@ -270,7 +277,7 @@ export function bandView(p: Phase): BandView | null {
     tag: note.tag,
     headline: note.headline,
     meta: [note.seat, note.model, kilobytes(note.payloadBytes), seconds(note.elapsedMs)].filter(part => part !== '').join(' · '),
-    detail: p.expanded ? note.detail : null,
+    more: p.expanded ? { title: note.title, points: note.points } : null,
   }
 }
 
@@ -293,7 +300,8 @@ export function checkLine(r: RunResult): string {
  */
 export function tellClaudeDraft(n: Note): string {
   const raised = `A side check by ${n.seat} (not you) raised this: ${n.headline}`
-  return `${n.detail === '' ? raised : `${raised} ${n.detail}`} What do you make of it?`
+  const more = [n.title === '' ? '' : `${n.title}:`, ...n.points].filter(part => part !== '').join(' ')
+  return `${more === '' ? raised : `${raised} ${more}`} What do you make of it?`
 }
 
 /** "12.4 KB" style, one decimal. */

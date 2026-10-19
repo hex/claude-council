@@ -26,7 +26,7 @@ During a long turn, above the prompt:
   codex · gpt-6.1-sol · 12.4 KB · 27 s      1: Learn more   2: Knew this already   0: Dismiss
 ```
 
-- `1` expands the band to the seat's detail (up to 600 characters). The expanded band offers `1 · tell Claude` and `0 · close`; `tell Claude` puts a draft quoting the note in the prompt box ("A side check by codex (not you) raised this: <headline> <detail> What do you make of it?"), as the builtin does, and the person sends or edits it. Reading the detail alone tells Claude nothing, and nothing is submitted on the person's behalf.
+- `1` expands the band the way the builtin does: a bold title (80 characters) and three to six bullets (200 characters each, under 120 words together), the last one the action, drawn bold. The expanded band offers `1 · tell Claude` and `0 · close`; `tell Claude` puts a draft quoting the note in the prompt box ("A side check by codex (not you) raised this: <headline> <title>: <bullets> What do you make of it?"), as the builtin does, and the person sends or edits it. Reading the note alone tells Claude nothing, and nothing is submitted on the person's behalf.
 - `2` records the topic as known; `0` as seen. Both are fed back so no seat raises it again.
 - Typing a prompt while a note is up is typing past it: the next `typedPastInARow` checks are skipped. Any press resets the counter.
 
@@ -68,7 +68,7 @@ Load-bearing decisions:
 - **Cadence reads the step's index in its turn.** `turn.step` carries `index`, the request's position in the turn from 0; the check fires when it is a positive multiple of `every`. The first design read `messageCount` deltas instead, taking a tool step for two messages; measured live (2026-10-19) the count grew by 14, 10 and 9 per step, since it counts every message the request carries, so a multiple of 6 landed by luck and a four-tool turn never checked. `Session.turnBase` went with it.
 - **Offered-this-turn is stamped when a note lands, not when a check launches.** A NONE result leaves later cadence points of the same turn free to check again; several seat calls per long turn are accepted by ruling. `phase: checking` alone keeps checks from overlapping. A note that lands after its turn ended stamps the turn it was launched in.
 - **Runner = `scripts/heads-up.sh`, the stop gate's direct-exec pattern, sequential seats.** `query-council.sh` joins every seat, caches, falls back to sibling models and merges stderr into answers; each of those contradicts "first non-NONE in seat order, the named seat answered".
-- **Codex NONE is structural: a direct `codex exec --json --output-schema` inside the runner, prompt on stdin, success gated on a `turn.completed` event** (codex exits 0 on SIGTERM). The schema `{none, topic, headline, detail}` is strict-required. Other seats get a first-line `NONE` / `NOTE:` + `TOPIC:` + `DETAIL:` contract and the builtin's NONE regex; an off-contract reply is an error, never shown. The shared `providers/codex.sh` is untouched: a schema mode there would be a second way to call codex for one caller.
+- **Codex NONE is structural: a direct `codex exec --json --output-schema` inside the runner, prompt on stdin, success gated on a `turn.completed` event** (codex exits 0 on SIGTERM). The schema `{none, tag, topic, headline, title, points}` is strict-required. Other seats get a first-line `NONE` / `NOTE:` + `TAG:` + `TOPIC:` + `TITLE:` + `POINT:` lines contract and the builtin's NONE regex; an off-contract reply is an error, never shown. The shared `providers/codex.sh` is untouched: a schema mode there would be a second way to call codex for one caller.
 - **The seat list has one owner: `provider_allowlisted` in `lib/providers.sh`, derived from the registry the library already holds (a plain-word name whose `providers/<name>.sh` exists), not a third hand-written list.** `stop-review-gate.sh` moves onto it in this change. TypeScript checks only the name's shape (`^[a-z][a-z0-9-]+$`, so a name cannot carry a path) and never holds the list.
 - **Errors fail open, reported once.** A seat timeout or error moves to the next seat; all seats failing writes `kind: failed` with each reason, which the pane logs through `logFailure`. The band never nags about infrastructure. Deadlines: 60 s per seat, 180 s per run, counted in ticks of `sleep 1`, never `$((SECONDS+N))`.
 - **Learn more expands in place; tell Claude fills the prompt box.** Two presses, because reading more and telling Claude are different decisions. `$.prompt.submit` would start a turn the person did not ask for, and a hidden `prompt.submit` context vanished without a trace when pressed (seen live). `$.prompt.fill` puts a draft the person can read, edit and send, which is the builtin's behaviour and the promise: the main agent learns of a note only through the person.
@@ -115,12 +115,14 @@ Accepted deviations, each by the lead on merge (2026-10-18):
 - `now_ms` moved to `scripts/lib/clock.sh` on its third copy.
 
 - `every` counts model requests, not messages, after the live measurement above; default 3.
+- The expanded note is the builtin's shape, a title and bullets, in place of the first cut's two or three sentences; `detail` became `title` and `points` on the wire (Alex, 2026-10-19, from a side-by-side with the builtin).
 
 Unresolved: the pane's drawing, the poll and the hook wiring have no automated test.
 
 ## Open questions and risks
 
 - Is 60 s per seat right when a three-seat panel can then take three minutes? Should a note that lands after `turn.complete` still show? Proposed: yes, while the session is idle.
+- A check reads the transcript as it stood mid-turn and answers 15 to 40 s later, so a note can land after the main agent's final reply has covered the point (seen live 2026-10-19: the 0.0.0.0 note arrived as the test Claude's own caveat printed). The builtin shares the race. When judging the dogfood week, count a note as a hit only when the final reply left it out; if duplicates are frequent, re-read the transcript before drawing the band.
 - Topic dedupe is exact, case-folded, on the seat's own `topic`. If a seat rephrases, repeats get through; the `AVOID` list in the prompt is the first defence.
 - Risk: codex time scales with prompt size; the first real measurement on a 13 KB digest decides the default deadline.
 

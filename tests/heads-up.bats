@@ -99,7 +99,10 @@ result() {
     [ "$(result .topic)" = "backfill never ran" ]
     [ "$(result .headline)" = "The migration test used an empty fixture, so the backfill path never ran." ]
     # A backslash in the seat's text arrives single, as the seat wrote it.
-    [ "$(result .detail)" = 'Seed one row in C:\fixtures\empty.db and rerun the migration test.' ]
+    [ "$(result .title)" = "The backfill path never ran" ]
+    [ "$(result '.points | length')" = "2" ]
+    [ "$(result '.points[0]')" = "The fixture had no rows, so the loop had nothing to do." ]
+    [ "$(result '.points[1]')" = 'Seed one row in C:\fixtures\empty.db and rerun the migration test.' ]
     [ "$(result '.ms | type')" = "number" ]
     # The model the seat ran, as get_model resolves it, so the band can name it.
     [ "$(result .model)" = "gpt-test" ]
@@ -173,7 +176,8 @@ result() {
     [ "$(result .headline)" = "The retry loop never backs off, so a 429 storm hammers the API." ]
     [ "$(result .tag)" = "You should know" ]
     [ "$(result .topic)" = "retry without backoff" ]
-    [ "$(result .detail)" = "Each retry fires at once; add a growing delay." ]
+    [ "$(result .title)" = "Retries without backoff" ]
+    [ "$(result '.points | join("|")')" = "Each retry fires at once.|Add a growing delay." ]
     [ "$(result '.seats[0] | .seat + " " + .outcome + " " + .detail')" = "codex timeout no answer in 2s" ]
     [ "$(result '.seats[1].outcome')" = "note" ]
     # The hung codex was ended, not left running.

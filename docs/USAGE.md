@@ -385,10 +385,11 @@ The note sits above the prompt:
 
 ```
 ✦ Heads up · The migration test passed against the empty fixture DB, so the backfill path never ran.
-  codex · gpt-6.1-sol · 12.4 KB · 27 s      1: Learn more   2: Knew this already   0: Dismiss
+  1: Learn more   2: Knew this already   0: Dismiss      codex · gpt-6.1-sol · 12.4 KB · 27 s
 ```
 
-`1` shows the seat's detail and offers `1: Tell Claude` and `0: Close`; tell
+`1` opens the note as the builtin draws it, a bold title and three to six
+bullets with the action last, and offers `1: Tell Claude` and `0: Close`; tell
 Claude puts a draft quoting the note in your prompt box, and you send or edit it.
 `2` and `0` record the topic so no seat raises it again. Typing a prompt while a
 note shows counts as typing past it, and that many later checks are skipped.

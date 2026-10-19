@@ -26,8 +26,10 @@ export type Note = {
   readonly topic: string
   /** The one sentence after the tag and a dot. */
   readonly headline: string
-  /** Shown on learn more and sent with the next prompt. */
-  readonly detail: string
+  /** Shown on learn more, bold above the points; '' when the seat gave none. */
+  readonly title: string
+  /** Shown on learn more as bullets, the last one the action; three to six, at most MAX_POINTS. */
+  readonly points: readonly string[]
   readonly seat: string
   /** The model the seat ran, as the runner resolved it; '' when it named none. */
   readonly model: string
