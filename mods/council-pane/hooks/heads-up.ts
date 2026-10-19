@@ -225,6 +225,37 @@ export function everyFromAnswer(answer: string): { every: number } | { why: stri
   return Number.isInteger(every) && every >= 2 ? { every } : { why: `every must be a whole number of at least 2, got ${JSON.stringify(answer.trim())}` }
 }
 
+export const MODEL_QUESTION = (seat: string) => `Which model should ${seat} use?`
+export const EFFORT_QUESTION = 'How hard should codex think?'
+const KEEP = 'Keep '
+const TYPE_ONE = 'Type a model id under Other'
+
+/** The current model first; then the catalog's others, four in all; or a prompt to type one. */
+export function modelOptions(current: string, catalog: readonly string[] | undefined): string[] {
+  const keep = `${KEEP}${current}`
+  if (catalog === undefined || catalog.length === 0) return [keep, TYPE_ONE]
+  return [keep, ...catalog.filter(slug => slug !== current)].slice(0, 4)
+}
+
+/** The chosen model, or undefined to keep the provider's own. */
+export function modelFromAnswer(answer: string): string | undefined {
+  const text = answer.trim()
+  return text === '' || text.startsWith(KEEP) || text === TYPE_ONE ? undefined : text
+}
+
+export function effortOptions(efforts: readonly string[], defaultEffort: string): string[] {
+  const others = efforts.filter(effort => effort !== defaultEffort)
+  if (defaultEffort === '') return (others.length > 0 ? others : ['low', 'medium', 'high', 'xhigh']).slice(0, 4)
+  return [`${defaultEffort} (default)`, ...others].slice(0, 4)
+}
+
+/** The chosen effort, {} to keep codex's default, or why the answer is unusable. */
+export function effortFromAnswer(answer: string): { effort?: string } | { why: string } {
+  const text = answer.trim()
+  if (text.endsWith(' (default)')) return {}
+  return EFFORT_SHAPE.test(text) ? { effort: text } : { why: `effort must be lowercase letters, got ${JSON.stringify(text)}` }
+}
+
 /** What a check that found nothing leaves on the prompt hint: "heads-up: gemini read 8.5 KB in 11 s, nothing to flag". */
 export function receiptLine(r: Extract<RunResult, { kind: 'none' }>): string {
   const ms = r.seats.reduce((total, seat) => total + seat.elapsedMs, 0)

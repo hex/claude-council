@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, headsUpCommand, withEnabled, statusText, introTail, availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelsFile } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, headsUpCommand, withEnabled, statusText, introTail, availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelsFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -337,4 +337,23 @@ test('a check that found nothing leaves a receipt for the prompt hint', () => {
 test('the models file for the runner holds only the seats asked, and is empty when nothing was picked', () => {
   expect(modelsFile({ enabled: true, seats: ['codex', 'gemini'], every: 3 })).toBe('')
   expect(modelsFile({ enabled: true, seats: ['codex'], every: 3, models: { codex: { effort: 'high' }, gemini: { model: 'x' } } })).toBe('{"codex":{"effort":"high"}}')
+})
+
+test('the model dialog offers the current model first, then the catalog, four in all; without a catalog it says to type one', () => {
+  expect(MODEL_QUESTION('gemini')).toBe('Which model should gemini use?')
+  expect(modelOptions('gemini-flash-latest', undefined)).toEqual(['Keep gemini-flash-latest', 'Type a model id under Other'])
+  expect(modelOptions('gpt-6.1-sol', ['gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-mini', 'gpt-5', 'gpt-4'])).toEqual(['Keep gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-mini', 'gpt-5'])
+  expect(modelFromAnswer('Keep gpt-6.1-sol')).toBeUndefined()
+  expect(modelFromAnswer('Type a model id under Other')).toBeUndefined()
+  expect(modelFromAnswer('gpt-6-luna')).toBe('gpt-6-luna')
+  expect(modelFromAnswer('  ')).toBeUndefined()
+})
+
+test('the effort dialog offers the default first, four in all, and reads back lowercase letters', () => {
+  expect(EFFORT_QUESTION).toBe('How hard should codex think?')
+  expect(effortOptions(['low', 'medium', 'high', 'xhigh', 'max'], 'medium')).toEqual(['medium (default)', 'low', 'high', 'xhigh'])
+  expect(effortOptions([], '')).toEqual(['low', 'medium', 'high', 'xhigh'])
+  expect(effortFromAnswer('medium (default)')).toEqual({})
+  expect(effortFromAnswer('high')).toEqual({ effort: 'high' })
+  expect(effortFromAnswer('Hi gh')).toEqual({ why: 'effort must be lowercase letters, got "Hi gh"' })
 })

@@ -399,11 +399,16 @@ Claude puts a draft quoting the note in your prompt box, and you send or edit it
 note shows counts as typing past it, and that many later checks are skipped.
 Claude never sees a note you did not tell it about.
 
-`/heads-up setup` asks three questions in Claude Code's own dialog: where
-the check runs (this project, every project, or off here), which seats reread
-the turn (the providers with a CLI on PATH or a key in your environment, up to
-four; type any other list under Other), and how often; then it writes the
-project file, and sets the `/config` row for "every project". `/heads-up on`
+`/heads-up setup` asks in Claude Code's own dialog: where the check runs
+(this project, every project, or off here), which seats reread the turn (the
+providers with a CLI on PATH or a key in your environment, up to four; type
+any other list under Other), how often, then for each seat which model (its
+current one, codex's catalog, or one you type) and for codex how hard to think;
+then it writes the project file, and sets the `/config` row for "every
+project". By hand, the picks live under `models`: `"models": {"codex":
+{"model": "gpt-6.1-sol", "effort": "high"}, "gemini": {"model":
+"gemini-2.5-pro"}}`; a model goes to that provider's own `*_MODEL` variable for
+the check, an effort only to codex. `/heads-up on`
 and `/heads-up off` write the project file for you, keeping its seats and
 cadence; `/heads-up on gemini,grok-cli` names the seats to ask, any provider
 the council runs, in the order asked. `/heads-up` alone (or `/heads-up

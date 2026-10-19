@@ -5,7 +5,7 @@ import type { Elements, EngineInterface, Register, RenderChildren } from 'claude
 import {
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
   bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
-  availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEATS_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelsFile, type HeadsUpConfig,
+  availableSeats, seatOptions, seatsFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEATS_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelsFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
   type Answer, type BandView, type Memory, type RunResult,
 } from './heads-up'
 import type { Note, Session } from '../types'
@@ -407,7 +407,35 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
   if ('why' in seats) return `Setup closed: ${seats.why}; nothing changed.`
   const every = everyFromAnswer(everyAnswer)
   if ('why' in every) return `Setup closed: ${every.why}; nothing changed.`
-  await $.fs.write(file.path, withEnabled(file.text, scope === SCOPE.project ? true : undefined, seats.seats, every.every))
+  // One model question per seat; codex also takes an effort, from its own catalog.
+  const models: Record<string, SeatPick> = {}
+  for (const seat of seats.seats) {
+    const current = (await $.process.run(['bash', '-c', 'source "$1/scripts/lib/providers.sh" && get_model "$2"', '_', $.plugin.root, seat]).catch(() => ({ stdout: '' }))).stdout.trim()
+    const catalog = seat === 'codex' ? await readCatalog($) : undefined
+    const slugs = catalog !== undefined && 'models' in catalog ? catalog.models.filter(m => m.listed).map(m => m.slug) : undefined
+    let modelAnswer: string
+    try {
+      modelAnswer = await $.ui.ask(MODEL_QUESTION(seat), { header: 'Heads-up', options: modelOptions(current, slugs) })
+    } catch {
+      return 'Setup closed; nothing changed.'
+    }
+    const model = modelFromAnswer(modelAnswer)
+    const pick: SeatPick = model === undefined ? {} : { model }
+    if (seat === 'codex' && catalog !== undefined && 'models' in catalog) {
+      const entry = catalog.models.find(m => m.slug === (model ?? current))
+      let effortAnswer: string
+      try {
+        effortAnswer = await $.ui.ask(EFFORT_QUESTION, { header: 'Heads-up', options: effortOptions(entry?.efforts ?? [], entry?.defaultEffort ?? '') })
+      } catch {
+        return 'Setup closed; nothing changed.'
+      }
+      const effort = effortFromAnswer(effortAnswer)
+      if ('why' in effort) return `Setup closed: ${effort.why}; nothing changed.`
+      if (effort.effort !== undefined) models[seat] = { ...pick, effort: effort.effort }
+      else if (model !== undefined) models[seat] = pick
+    } else if (model !== undefined) models[seat] = pick
+  }
+  await $.fs.write(file.path, withEnabled(file.text, scope === SCOPE.project ? true : undefined, seats.seats, every.every, models))
   state.headsUpTip = ''
   if (scope === SCOPE.all && !settings.headsUp) {
     const written = await $.config.set({ key: 'heads_up', value: true })
