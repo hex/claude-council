@@ -408,7 +408,7 @@ then it writes the project file, and sets the `/config` row for "every
 project". By hand, the picks live under `models`: `"models": {"codex":
 {"model": "gpt-6.1-sol", "effort": "high"}, "gemini": {"model":
 "gemini-2.5-pro"}}`; a model goes to that provider's own `*_MODEL` variable for
-the check, an effort only to codex. `/heads-up on`
+the check, an effort only to codex. A seat gets 60 seconds per check (`COUNCIL_HEADS_UP_SEAT_SECONDS`), so a slow CLI such as antigravity, which the council itself allows twenty minutes, times out here; pick codex, gemini or another fast seat. `/heads-up on`
 and `/heads-up off` write the project file for you, keeping its seats and
 cadence; `/heads-up on gemini,grok-cli` names the seats to ask, any provider
 the council runs, in the order asked. `/heads-up` alone (or `/heads-up
