@@ -53,6 +53,17 @@ start_runner() {
 }
 
 # Polls for the worker's .done, up to $1 seconds (default 30).
+# Git Bash hands a path to a program as C:/... while the shell's own paths look
+# POSIX; one spelling for both sides of an argv comparison, elsewhere a no-op.
+same_paths() {
+    local word out=()
+    for word in "$@"; do
+        if command -v cygpath >/dev/null 2>&1 && [[ "$word" == /* || "$word" =~ ^[A-Za-z]:/ ]]; then word=$(cygpath -m "$word"); fi
+        out+=("$word")
+    done
+    printf '%s\n' "${out[*]}"
+}
+
 wait_done() {
     local ticks=$(( ${1:-30} * 10 ))
     while (( ticks-- > 0 )); do
@@ -140,10 +151,14 @@ result() {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note
     start_runner codex
     wait_done
-    local args dir
-    args=$(jq -r '.args | join(" ")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
+    local args dir expected
+    # shellcheck disable=SC2207  # the fake records one argv word per line, none with spaces
+    args=$(same_paths $(jq -r '.args[]' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl"))
     dir=$(cd "$SCRIPTS_DIR" && pwd)
-    [ "$args" = "exec --json --skip-git-repo-check -s read-only --output-schema ${dir}/heads-up.schema.json -o ${RUN_DIR}/seat.out -" ]
+    expected=$(same_paths exec --json --skip-git-repo-check -s read-only --output-schema "${dir}/heads-up.schema.json" -o "${RUN_DIR}/seat.out" -)
+    echo "recorded: $args"
+    echo "expected: $expected"
+    [ "$args" = "$expected" ]
     cmp "$RUN_DIR/prompt.md" "$COUNCIL_FAKE_STATE_DIR/codex-stdin.txt"
 }
 
