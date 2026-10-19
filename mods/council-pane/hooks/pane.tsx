@@ -3,7 +3,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren, Timer } from 'claude-code'
 import {
-  applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
+  applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, onCadence, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
   bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
   seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEAT_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
   type Answer, type BandView, type Memory, type RunResult,
@@ -722,12 +722,15 @@ async function launchHeadsUp($: EngineInterface, config: Extract<HeadsUpConfig, 
 // that lands while the runner starts cannot launch a second check.
 async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions, step: { turnId: string; index: number }): Promise<void> {
   const config = await readHeadsUpConfig($, state, settings)
+  // decide skips these two before reading anything else, so most steps cost
+  // one file read and nothing more.
+  if (!config.enabled || !onCadence(config.every, step.index)) return
   const memory = await loadMemory($)
   const now = await $.clock.now()
   const held = await $.state.get(HEADS_UP)
   const decision = decide(config, held.value ?? FRESH_SESSION, memory, step, now)
   if (decision.kind === 'skip' && decision.why === 'backoff') await saveMemory($, decision.memory)
-  if (decision.kind !== 'launch' || !config.enabled) return
+  if (decision.kind !== 'launch') return
   const runDir = `${await watchRoot($)}/heads-up/${decision.checkId}`
   // The run dir exists before the session says `checking`: a poll that lands
   // in between would otherwise read a dir that is not there yet as a run

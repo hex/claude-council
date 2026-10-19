@@ -374,6 +374,11 @@ export const FRESH_SESSION: Session = { offeredTurn: null, phase: { kind: 'idle'
 /** What turn.step carries that the rules read: the turn, and this request's position in it, from 0. */
 export type StepFacts = { turnId: string; index: number }
 
+/** The request's index in its turn is a positive multiple of every. */
+export function onCadence(every: number, index: number): boolean {
+  return index > 0 && index % every === 0
+}
+
 export type Decision =
   | { kind: 'skip'; why: 'disabled' | 'off-cadence' | 'showing' | 'checking' | 'offered-this-turn' }
   | { kind: 'skip'; why: 'backoff'; memory: Memory }
@@ -389,7 +394,7 @@ export type Decision =
  */
 export function decide(cfg: HeadsUpConfig, s: Session, m: Memory, e: StepFacts, nowMs: number): Decision {
   if (!cfg.enabled) return { kind: 'skip', why: 'disabled' }
-  if (e.index <= 0 || e.index % cfg.every !== 0) return { kind: 'skip', why: 'off-cadence' }
+  if (!onCadence(cfg.every, e.index)) return { kind: 'skip', why: 'off-cadence' }
   if (s.phase.kind === 'showing') return { kind: 'skip', why: 'showing' }
   if (s.phase.kind === 'checking') return { kind: 'skip', why: 'checking' }
   if (s.offeredTurn === e.turnId) return { kind: 'skip', why: 'offered-this-turn' }
