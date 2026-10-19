@@ -88,6 +88,18 @@ setup() {
     fi
 }
 
+# The wrapper exits on TERM while its child ignores it. Reparented, that child
+# is no longer under the wrapper's pid, so only a tree listed when the deadline
+# fired still names it. An odd sleep length, so no other test's fake matches.
+@test "run_with_deadline: a child that ignores the signal is killed after its parent exits" {
+    run --separate-stderr run_with_deadline 1 bash -c 'trap "exit 0" TERM; ( trap "" TERM; exec sleep 313 ) >/dev/null 2>&1 3>&- & wait'
+    [ "$status" -eq 143 ]
+    [ -z "$stderr" ]
+    if command -v pgrep >/dev/null 2>&1; then
+        run ! pgrep -f "sleep 313"
+    fi
+}
+
 @test "run_with_deadline: a command that ignores the signal is killed after a grace period" {
     local started
     started=$(date +%s)

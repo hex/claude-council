@@ -9,8 +9,9 @@
 # verdict, whatever the command did with the signal: the codex wrapper
 # handles SIGTERM by exiting 0 with nothing on stdout, agy by exiting 1 with
 # "context canceled", and either would otherwise pass for an answer. A
-# command still alive five seconds after the signal is killed outright. A
-# deadline of 0 means none, as `alarm 0` did; anything but an integer is
+# command, or any process under it when the signal went, still alive five
+# seconds later is killed outright. A deadline of 0 means none, as
+# `alarm 0` did; anything but an integer is
 # reported and nothing runs (status 2). GNU `timeout` is absent on stock macOS
 # and on Git Bash, and a perl alarm never reaches the child on Windows, where
 # perl emulates exec by spawning and waiting. The watchdog ticks once a second
@@ -91,14 +92,18 @@ run_with_deadline() {
         # Firing. The caller ends the watchdog once the command returns; from
         # here that must not pre-empt the verdict, so the watchdog exits 99
         # on its own instead.
+        # The tree is listed once: a child that outlives the command is
+        # reparented, and a second walk from the command's pid would miss it.
         trap '' TERM
-        signal_tree TERM "$pid"
+        # shellcheck disable=SC2207 # pids hold no spaces or globs
+        tree=($(process_tree "$pid"))
+        kill -TERM "${tree[@]}" 2>/dev/null || true
         grace=5
         while (( grace-- > 0 )); do
             sleep 1
-            kill -0 "$pid" 2>/dev/null || exit 99
+            any_alive "${tree[@]}" || exit 99
         done
-        signal_tree KILL "$pid"
+        kill -KILL "${tree[@]}" 2>/dev/null || true
         exit 99
     ) >/dev/null 2>&1 3>&- &
     watchdog=$!
