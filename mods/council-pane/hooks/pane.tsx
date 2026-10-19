@@ -383,10 +383,18 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
   }
   if (scope !== SCOPE.project && scope !== SCOPE.all) return `Setup closed: ${JSON.stringify(scope)} is not one of the choices; nothing changed.`
   const bins = (await $.process.run(['bash', '-c', 'for b in codex agy claude copilot cursor-agent grok kimi ollama; do command -v "$b" > /dev/null 2>&1 && echo "$b"; done'])).stdout.split('\n').filter(line => line !== '')
-  const keys = new Set<string>()
-  for (const name of ['GEMINI_API_KEY', 'GROK_API_KEY', 'XAI_API_KEY', 'KIMI_API_KEY', 'MOONSHOT_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'PERPLEXITY_API_KEY']) {
-    if (((await $.env.get(name)) ?? '') !== '') keys.add(name)
+  // $.env.get takes a literal name, checked when the module loads.
+  const keyValues: Record<string, string | undefined> = {
+    GEMINI_API_KEY: await $.env.get('GEMINI_API_KEY'),
+    GROK_API_KEY: await $.env.get('GROK_API_KEY'),
+    XAI_API_KEY: await $.env.get('XAI_API_KEY'),
+    KIMI_API_KEY: await $.env.get('KIMI_API_KEY'),
+    MOONSHOT_API_KEY: await $.env.get('MOONSHOT_API_KEY'),
+    OPENAI_API_KEY: await $.env.get('OPENAI_API_KEY'),
+    OPENROUTER_API_KEY: await $.env.get('OPENROUTER_API_KEY'),
+    PERPLEXITY_API_KEY: await $.env.get('PERPLEXITY_API_KEY'),
   }
+  const keys = new Set(Object.entries(keyValues).filter(([, value]) => (value ?? '') !== '').map(([name]) => name))
   let seatsAnswer: string
   let everyAnswer: string
   try {
