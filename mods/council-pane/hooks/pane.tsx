@@ -411,6 +411,8 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
   const chosen = seatFromAnswer(seatAnswer)
   if ('why' in chosen) return `Setup closed: ${chosen.why}; nothing changed.`
   const { seat } = chosen
+  const unknown = await notASeat($, seat)
+  if (unknown !== undefined) return `Setup closed: ${unknown}; nothing changed.`
   const every = everyFromAnswer(everyAnswer)
   if ('why' in every) return `Setup closed: ${every.why}; nothing changed.`
   // The seat's model; codex also takes an effort, from its own catalog.
@@ -695,6 +697,15 @@ async function count($: EngineInterface, key: keyof Counts): Promise<void> {
   await $.store.set(COUNTS_KEY, bumped(parseCounts(await $.store.get(COUNTS_KEY)), key))
 }
 
+// The runner's own allowlist (a providers/<seat>.sh exists) decides what a
+// seat is, so no second list lives here; the refusal names the real ones.
+async function notASeat($: EngineInterface, seat: string): Promise<string | undefined> {
+  const ok = await $.process.run(['bash', '-c', 'source "$1/scripts/lib/providers.sh" && provider_allowlisted "$2"', '_', $.plugin.root, seat])
+  if (ok.exitCode === 0) return undefined
+  const names = (await $.fs.list(`${$.plugin.root}/scripts/providers`)).map(entry => entry.name).filter(name => name.endsWith('.sh')).map(name => name.slice(0, -3)).sort()
+  return `${JSON.stringify(seat)} is not a council seat; one of ${names.join(', ')}`
+}
+
 // The project file is the consent and the only switch; it is read at each
 // step, so turning it on or off needs no reload. A broken file is logged once.
 async function headsUpFile($: EngineInterface): Promise<{ path: string; text: string | undefined }> {
@@ -750,6 +761,10 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
     await count($, 'checks')
   } catch (error) {
     await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))
+    // A check that never started is a failed check to the person: red above the prompt, counted, and logged by the caller.
+    state.headsUpFailure = { text: `heads-up: failed · ${String(error)}`, untilMs: now + FINISH_NOTICE_MS, isFailure: true }
+    $.ui.invalidate('ui.render')
+    await count($, 'failed')
     throw error
   }
 }
@@ -1419,6 +1434,8 @@ export const register: Register = (on, options) => {
       const outcome = await setupHeadsUp($, state, settings)
       if (outcome !== undefined) return { text: outcome }
     } else if (command.action !== 'status') {
+      const unknown = command.action === 'on' && command.seat !== undefined ? await notASeat($, command.seat) : undefined
+      if (unknown !== undefined) return { text: `${unknown}; nothing changed.` }
       const file = await headsUpFile($)
       await $.fs.write(file.path, withEnabled(file.text, command.action === 'on', command.action === 'on' ? command.seat : undefined))
       state.headsUpTip = ''
