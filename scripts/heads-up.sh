@@ -25,6 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/prompts.sh"
 source "${SCRIPT_DIR}/lib/providers.sh"
 source "${SCRIPT_DIR}/lib/clock.sh"
+source "${SCRIPT_DIR}/lib/cli-stderr.sh"
 
 usage() {
     echo "Usage: heads-up.sh --run-dir DIR --session ID --seat NAME --avoid-file FILE [--model FILE]" >&2
@@ -94,12 +95,14 @@ parse_args() {
     SEAT_SECONDS=$((10#$SEAT_SECONDS))
 }
 
-# The last line of a seat's stderr, one line and at most 300 characters, for a
+# The end of a stderr capture, on one line and at most 300 characters, for a
 # reason the pane logs once.
-last_error_line() {
-    local line
-    line=$(grep -v '^[[:space:]]*$' "$1" 2>/dev/null | tail -n 1 | tr -d '\r') || true
-    printf '%s' "${line:0:300}"
+error_excerpt() {
+    local text
+    text=$(stderr_excerpt "$1" 2>/dev/null) || true
+    text="${text%"${text##*[![:space:]]}"}"
+    if (( ${#text} > 300 )); then text="${text: -300}"; fi
+    printf '%s' "$text"
 }
 
 # Resolves the transcript and builds digest.md and prompt.md. On failure sets
@@ -107,13 +110,13 @@ last_error_line() {
 build_digest() {
     local transcript avoid
     if ! transcript=$(bash "${SCRIPT_DIR}/session-transcript.sh" "$SESSION_ID" 2> "${RUN_DIR}/transcript.err"); then
-        FAILURE="transcript: $(last_error_line "${RUN_DIR}/transcript.err")"
+        FAILURE="transcript: $(error_excerpt "${RUN_DIR}/transcript.err")"
         return 1
     fi
     if ! bash "${SCRIPT_DIR}/transcript-digest.sh" --turns "last:${TURNS}" \
             --tool-results "$RESULTS" --tool-result-chars 2000 -- "$transcript" \
             > "${RUN_DIR}/digest.md" 2> "${RUN_DIR}/digest.err"; then
-        FAILURE="digest: $(last_error_line "${RUN_DIR}/digest.err")"
+        FAILURE="digest: $(error_excerpt "${RUN_DIR}/digest.err")"
         return 1
     fi
     if [[ ! -s "${RUN_DIR}/digest.md" ]]; then
@@ -161,7 +164,7 @@ ask_codex() {
         return 0
     fi
     if ! grep -q '"type":"turn.completed"' "${RUN_DIR}/seat.events" 2>/dev/null; then
-        DETAIL=$(last_error_line "${RUN_DIR}/seat.err")
+        DETAIL=$(error_excerpt "${RUN_DIR}/seat.err")
         OUTCOME=error DETAIL="exit ${rc} without turn.completed${DETAIL:+: $DETAIL}"
         return 0
     fi
@@ -208,7 +211,7 @@ ask_text_seat() {
         return 0
     fi
     if (( rc != 0 )); then
-        DETAIL=$(last_error_line "${RUN_DIR}/seat.err")
+        DETAIL=$(error_excerpt "${RUN_DIR}/seat.err")
         OUTCOME=error DETAIL="exit ${rc}${DETAIL:+: $DETAIL}"
         return 0
     fi

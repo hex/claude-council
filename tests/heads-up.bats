@@ -259,7 +259,7 @@ result() {
     [ "$(result '.seats[0] | .seat + " " + .outcome + " " + .detail')" = "codex error exit 1 without turn.completed: Error: fake provider failure" ]
 }
 
-@test "heads-up: a text seat erroring is kind failed, with its exit status and last stderr line" {
+@test "heads-up: a text seat erroring is kind failed, with its exit status and the end of its stderr" {
     export COUNCIL_FAKE_BEHAVIOR=error
     start_runner antigravity
     wait_done
