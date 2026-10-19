@@ -36,7 +36,7 @@ die() {
     exit 1
 }
 
-RUN_DIR="" SESSION_ID="" SEAT="" AVOID_FILE="" PICK_FILE=""
+RUN_DIR="" SESSION_ID="" SEAT="" AVOID_FILE="" PICK_FILE="" PICK_MODEL="" PICK_EFFORT=""
 
 # A whole number of 1 or more, read base-10 so a padded 08 is not octal.
 require_count() {
@@ -75,14 +75,15 @@ parse_args() {
     if [[ -n "$PICK_FILE" ]]; then
         [[ -f "$PICK_FILE" ]] || die "model file not found: $PICK_FILE"
         jq -e 'type == "object"' "$PICK_FILE" > /dev/null 2>&1 || die "--model: $PICK_FILE must hold a JSON object"
+        local pick
+        pick=$(jq -r '[.model, .effort] | map(. // "" | tostring | gsub("[\t\r\n]"; "")) | join("\t")' "$PICK_FILE")
+        PICK_MODEL="${pick%%$'\t'*}" PICK_EFFORT="${pick#*$'\t'}"
     fi
 
     # The seat name is spliced into a script path and run, so it passes the
     # one allowlist, derived from the providers/ registry.
     provider_allowlisted "$SEAT" || die "not a council seat: $SEAT"
-    local effort
-    effort=$(seat_pick effort)
-    [[ -z "$effort" || "$effort" =~ ^[a-z]+$ ]] || die "--model: effort must be lowercase letters, got: $effort"
+    [[ -z "$PICK_EFFORT" || "$PICK_EFFORT" =~ ^[a-z]+$ ]] || die "--model: effort must be lowercase letters, got: $PICK_EFFORT"
 
     SEAT_SECONDS="${COUNCIL_HEADS_UP_SEAT_SECONDS:-60}"
     TURNS="${COUNCIL_HEADS_UP_TURNS:-5}"
@@ -132,43 +133,18 @@ answer_field() {
     jq -r "$2 | tostring | gsub(\"[\\r\\n\\t]+\"; \" \")" "$1" | tr -d '\r'
 }
 
-# The seat's pick from --model: "model" or "effort", empty without one.
-seat_pick() {
-    [[ -n "$PICK_FILE" ]] || { echo ""; return 0; }
-    jq -r --arg field "$1" '.[$field] // "" | tostring' "$PICK_FILE"
-}
-
-# The variable get_model reads for a seat, so a --model pick lands where the
-# provider script and the band's model name both look.
-seat_model_var() {
-    case "$1" in
-        gemini) echo GEMINI_MODEL ;;        openai) echo OPENAI_MODEL ;;
-        grok) echo GROK_MODEL ;;            grok-cli) echo GROK_CLI_MODEL ;;
-        perplexity) echo PERPLEXITY_MODEL ;; codex) echo CODEX_MODEL ;;
-        antigravity) echo ANTIGRAVITY_MODEL ;; kimi) echo KIMI_MODEL ;;
-        kimi-cli) echo KIMI_CLI_MODEL ;;    cursor-cli) echo CURSOR_CLI_MODEL ;;
-        claude-cli) echo CLAUDE_CLI_MODEL ;; copilot-cli) echo COPILOT_CLI_MODEL ;;
-        ollama) echo OLLAMA_MODEL ;;        openrouter) echo OPENROUTER_MODEL ;;
-        *) echo "" ;;
-    esac
-}
-
-# Exports the seat's model pick for the rest of this worker, in the seat's own
-# variable.
+# Exports the seat's model pick for the rest of this worker, in the variable
+# get_model reads for it, so the provider script and the band's model name both
+# see the pick.
 apply_pick() {
-    local model var
-    model=$(seat_pick model)
-    var=$(seat_model_var "$SEAT")
-    [[ -n "$model" && -n "$var" ]] && export "$var=$model"
+    [[ -n "$PICK_MODEL" ]] && export "$(provider_env_prefix "$SEAT")_MODEL=$PICK_MODEL"
     return 0
 }
 
 codex_call() {
-    local effort
     local args=(exec --json --skip-git-repo-check -s read-only)
     [[ -n "${CODEX_MODEL:-}" ]] && args+=(-m "$CODEX_MODEL")
-    effort=$(seat_pick effort)
-    [[ -n "$effort" ]] && args+=(-c "model_reasoning_effort=\"${effort}\"")
+    [[ -n "$PICK_EFFORT" ]] && args+=(-c "model_reasoning_effort=\"${PICK_EFFORT}\"")
     args+=(--output-schema "${SCRIPT_DIR}/heads-up.schema.json" -o "${RUN_DIR}/seat.out" -)
     ( provider_env_scrub codex; exec codex "${args[@]}" ) \
         < "${RUN_DIR}/prompt.md" > "${RUN_DIR}/seat.events" 2> "${RUN_DIR}/seat.err"
