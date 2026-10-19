@@ -26,6 +26,7 @@ source "${SCRIPT_DIR}/lib/prompts.sh"
 source "${SCRIPT_DIR}/lib/providers.sh"
 source "${SCRIPT_DIR}/lib/clock.sh"
 source "${SCRIPT_DIR}/lib/cli-stderr.sh"
+source "${SCRIPT_DIR}/lib/count.sh"
 
 usage() {
     echo "Usage: heads-up.sh --run-dir DIR --session ID --seat NAME --avoid-file FILE [--model FILE]" >&2
@@ -38,14 +39,6 @@ die() {
 }
 
 RUN_DIR="" SESSION_ID="" SEAT="" AVOID_FILE="" PICK_FILE="" PICK_MODEL="" PICK_EFFORT=""
-
-# A whole number of 1 or more, read base-10 so a padded 08 is not octal.
-require_count() {
-    case "$2" in
-        ''|*[!0-9]*) die "$1 needs a whole number, got: $2" ;;
-    esac
-    (( 10#$2 > 0 )) || die "$1 needs 1 or more, got: $2"
-}
 
 parse_args() {
     while [[ $# -gt 0 ]]; do

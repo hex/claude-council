@@ -3,6 +3,7 @@
 # ABOUTME: Takes an explicit transcript path — it never resolves "the current session"
 
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/count.sh"
 
 command -v jq >/dev/null 2>&1 || {
     echo "Error: jq is required (macOS: brew install jq)." >&2
@@ -105,20 +106,6 @@ if [[ -z "$TRANSCRIPT" ]]; then
     echo "Error: no transcript given." >&2
     usage
 fi
-
-# Base-10 and at least 1, for the same reasons --turns refuses 00 and 0.
-require_count() {
-    case "$2" in
-        ''|*[!0-9]*)
-            echo "Error: $1 needs a number, got: $2" >&2
-            exit 1
-            ;;
-    esac
-    if [ "$((10#$2))" -eq 0 ]; then
-        echo "Error: $1 needs 1 or more." >&2
-        exit 1
-    fi
-}
 
 # Tool results stay out unless asked for: each one is output the person never
 # typed and may never have read, so the mode is a deliberate choice per caller.
@@ -304,19 +291,9 @@ case "$TURNS" in
         ;;
     last:*)
         n="${TURNS#last:}"
-        case "$n" in
-            ''|*[!0-9]*)
-                echo "Error: --turns last:N needs a number, got: $n" >&2
-                exit 1
-                ;;
-        esac
-        # Base-10, so a padded 00 is not read as octal and not accepted as a
-        # window. Zero is refused rather than clamped: a caller computing a turn
-        # budget can reach 0, and the old code turned that into the whole file.
-        if [ "$((10#$n))" -eq 0 ]; then
-            echo "Error: --turns last:N needs N of 1 or more." >&2
-            exit 1
-        fi
+        # Zero is refused rather than clamped: a caller computing a turn budget
+        # can reach 0, and a window of none must not become the whole file.
+        require_count "--turns last:N" "$n"
         WINDOWED=1
         # tail reads its whole input, so jq is never killed by an early-exiting
         # consumer the way `| head -1` would kill it on a large transcript.

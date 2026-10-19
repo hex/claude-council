@@ -845,11 +845,11 @@ tool_result() {
 
     run "$HOST_BASH" "$SCRIPT" --tool-results 0 "$t"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"--tool-results needs 1 or more."* ]]
+    [[ "$output" == *"Error: --tool-results needs 1 or more, got: 0"* ]]
 
     run "$HOST_BASH" "$SCRIPT" --tool-results 8 --tool-result-chars abc "$t"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"--tool-result-chars needs a number, got: abc"* ]]
+    [[ "$output" == *"Error: --tool-result-chars needs a whole number, got: abc"* ]]
 }
 
 @test "tool-results: a cap without the mode is refused, not ignored" {

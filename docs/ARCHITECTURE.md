@@ -703,6 +703,7 @@ claude-council/
 │       ├── cache.sh             # Caching utilities
 │       ├── cli-stderr.sh        # The error line a CLI provider reports on a timeout or failure (the end of its stderr, colour codes removed)
 │       ├── clock.sh             # Millisecond clock shared by the scripts that time a seat or a run
+│       ├── count.sh             # require_count: a count argument must be a whole number of 1 or more, read base-10
 │       ├── deadline.sh          # Wall-clock bound for a command (no GNU timeout on macOS or Git Bash) + process-tree signalling
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
