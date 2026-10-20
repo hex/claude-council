@@ -36,6 +36,10 @@ def run(*args, env=None, check=True):
     return subprocess.run(args, cwd=ROOT, env=env, check=check, capture_output=True, text=True)
 
 
+def write_capture(path, text):
+    path.write_text(text.replace(str(Path.home()), "~"))
+
+
 class Capture:
     def __init__(self, name):
         self.name = name
@@ -249,7 +253,7 @@ class Capture:
             if "Where should the council pane open?" in text:
                 self.key("Enter")
             time.sleep(.5)
-        (self.work / f"failure-{self.theme}.ansi").write_text(self.screen())
+        write_capture(self.work / f"failure-{self.theme}.ansi", self.screen())
         raise RuntimeError(f"Never saw {phrase!r}; capture is in {self.work}")
 
     def key(self, *keys):
@@ -273,7 +277,7 @@ class Capture:
         while stop > start and not lines[stop - 1].strip():
             stop -= 1
         filename = f"{self.name}-{len(self.frames) if self.theme == 'light' else self.frame_index}-{self.theme}.ansi"
-        (self.work / filename).write_text(raw)
+        write_capture(self.work / filename, raw)
         item = {"file": filename, "crop": [start, stop]}
         if self.theme == "light":
             self.frames.append({"label": label, "captures": {"light": item}})
@@ -363,11 +367,12 @@ class Capture:
                 "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain.",
                 "terminal_defaults": THEMES,
                 "palette": "RGB and indexed ANSI colors are preserved; default colors are set in tmux.conf.",
+                "home_path": "The current home directory prefix is replaced with ~ when capture files are written.",
             },
             "frames": self.frames,
         }
         manifest = self.work / "manifest.json"
-        manifest.write_text(json.dumps(data, indent=2) + "\n")
+        write_capture(manifest, json.dumps(data, indent=2) + "\n")
         render(manifest, ROOT / f"assets/{self.name}.svg")
         for frame in self.frames:
             for item in frame["captures"].values():

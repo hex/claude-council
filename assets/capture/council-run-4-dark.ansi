@@ -1,13 +1,13 @@
 [38;5;231m[48;5;237m--no-auto-context --no-cache "Should a single-node demo app use SQLite or Postgres?"[39m
 [49m
-[38;5;114m⏺[39m [1mBash[0m(bash /Users/alex.geana/.claude-sessions/claude-council/scripts/run-council.sh
+[38;5;114m⏺[39m [1mBash[0m(bash ~/.claude-sessions/claude-council/scripts/run-council.sh
       --providers=codex,antigravity,grok-cli,kimi-cli,cursor-cli --verbosity=brief --no-auto-context
       --no-cache -- "Should a single-node demo app use SQLite or Postgres?")
 [38;5;246m  ⎿  [39m.claude/council-cache/council-1792497634.md
 [38;5;246m  ⎿  (timeout 10m)[39m
 
-[38;5;114m⏺[39m [1mRead[0m(]8;id=9frika;file:///Users/alex.geana/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497634.md\/Users/alex.geana/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/]8;;\
-  ]8;id=9frika;file:///Users/alex.geana/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497634.md\council-cache/council-1792497634.md]8;;\)
+[38;5;114m⏺[39m [1mRead[0m(]8;id=9frika;file://~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497634.md\~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/]8;;\
+  ]8;id=9frika;file://~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497634.md\council-cache/council-1792497634.md]8;;\)
 [38;5;246m  ⎿  [39mRead [1m37[0m lines
 
 [38;5;231m⏺[39m [1mCouncil responses[0m (5 seats queried, 2 answered)

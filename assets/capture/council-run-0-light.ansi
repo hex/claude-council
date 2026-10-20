@@ -3,7 +3,7 @@
 [38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project[39m
 
 [2m▎[0m [38;5;241mDebug[39m [38;5;241mmode[39m [38;5;241menabled[39m [38;5;241m·[39m [38;5;241mlogging[39m [38;5;241mto[39m
-[2m▎[0m [38;5;241m/Users/alex.geana/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/debug-light.log[39m
+[2m▎[0m [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/debug-light.log[39m
 
 [38;5;241m[48;5;255m❯[39m [38;5;16m/claude-council:ask --providers=codex,antigravity,grok-cli,kimi-cli,cursor-cli --verbosity=brief [39m
 [38;5;16m--no-auto-context --no-cache "Should a single-node demo app use SQLite or Postgres?"[39m

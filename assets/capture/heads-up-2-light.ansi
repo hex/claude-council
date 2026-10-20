@@ -3,7 +3,7 @@
 [38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;241m~/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/project[39m
 
 [2m▎[0m [38;5;241mDebug[39m [38;5;241mmode[39m [38;5;241menabled[39m [38;5;241m·[39m [38;5;241mlogging[39m [38;5;241mto[39m
-[2m▎[0m [38;5;241m/Users/alex.geana/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/debug-light.log[39m
+[2m▎[0m [38;5;241m~/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/debug-light.log[39m
 
 [38;5;241m[48;5;255m❯[39m [38;5;16m/heads-up[39m [49m
 [38;5;241m  ⎿  [39mclaude-council: Heads-up side-check: on for this project
@@ -22,11 +22,11 @@
 [38;5;241m  ⎿  (No output)[39m
 
 [38;5;65m⏺[39m [1mBash[0m(pwd)
-[38;5;241m  ⎿  [39m/Users/alex.geana/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/project
+[38;5;241m  ⎿  [39m~/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/project
 
 [38;5;16m⏺[39m Ran [38;5;105mdate[39m, [38;5;105mls[39m, and [38;5;105mpwd[39m in that order. The date is Tue Oct 20 14:08:49 EEST 2026. [38;5;105mls[39m printed nothing, so the
   directory is empty. The working directory is
-  [38;5;105m/Users/alex.geana/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/project[39m.
+  [38;5;105m~/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/project[39m.
 
   ok
 

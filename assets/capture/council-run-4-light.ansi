@@ -3,18 +3,18 @@
 [38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project[39m
 
 [2m▎[0m [38;5;241mDebug[39m [38;5;241mmode[39m [38;5;241menabled[39m [38;5;241m·[39m [38;5;241mlogging[39m [38;5;241mto[39m
-[2m▎[0m [38;5;241m/Users/alex.geana/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/debug-light.log[39m
+[2m▎[0m [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/debug-light.log[39m
 
 [38;5;241m[48;5;255m❯[39m [38;5;16m/claude-council:ask --providers=codex,antigravity,grok-cli,kimi-cli,cursor-cli --verbosity=brief [39m
 [38;5;16m--no-auto-context --no-cache "Should a single-node demo app use SQLite or Postgres?"[39m
 [49m
-[38;5;65m⏺[39m [1mBash[0m(bash /Users/alex.geana/.claude-sessions/claude-council/scripts/run-council.sh
+[38;5;65m⏺[39m [1mBash[0m(bash ~/.claude-sessions/claude-council/scripts/run-council.sh
       --providers=codex,antigravity,grok-cli,kimi-cli,cursor-cli --verbosity=brief --no-auto-context
       --no-cache -- "Should a single-node demo app use SQLite or Postgres?")
 [38;5;241m  ⎿  [39m.claude/council-cache/council-1792497573.md
 
-[38;5;65m⏺[39m [1mRead[0m(]8;id=90wfk0;file:///Users/alex.geana/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497573.md\/Users/alex.geana/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/]8;;\
-  ]8;id=90wfk0;file:///Users/alex.geana/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497573.md\council-cache/council-1792497573.md]8;;\)
+[38;5;65m⏺[39m [1mRead[0m(]8;id=90wfk0;file://~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497573.md\~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/]8;;\
+  ]8;id=90wfk0;file://~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497573.md\council-cache/council-1792497573.md]8;;\)
 [38;5;241m  ⎿  [39mRead [1m35[0m lines
 
 [38;5;16m⏺[39m Council ran once across the five requested seats. Two answered, three failed.

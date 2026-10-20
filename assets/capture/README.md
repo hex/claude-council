@@ -51,7 +51,10 @@ Scratch captures and failure logs remain available for inspection.
 `capture.py` writes raw `.ansi` files and a frame manifest. `render.py`
 converts those captures to SVG without replacing text or recoloring it.
 Each frame names the source file, its `SHA-256` hash, and a half-open range of
-terminal rows. The converter keeps all 110 columns. Light and dark are
+terminal rows. Capture writes replace the current home directory prefix with
+`~`, including failure captures and manifest text. The converter hashes the
+saved files and writes those hashes back to the manifest.
+The converter keeps all 110 columns. Light and dark are
 separate captures. Captured colors remain literal; tmux sets the default
 foreground and background recorded in the metadata.
 Terminal hyperlink controls become plain text, so the SVG contains no links

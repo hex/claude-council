@@ -165,6 +165,7 @@ def render(manifest, output):
         for capture in frame["captures"].values():
             source = manifest.parent / capture["file"]
             capture["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
+    manifest.write_text(json.dumps(data, indent=2) + "\n")
     element(root, "metadata", json.dumps(metadata, separators=(",", ":")))
     element(root, "style", (
         'text{font-family:Menlo,Consolas,"DejaVu Sans Mono",monospace;'
