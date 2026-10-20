@@ -1,51 +1,59 @@
 {
   "chrome_version": "Google Chrome 155.0.8059.85",
   "svg_sha256": {
-    "council-run.svg": "174dab77b62c23d6ab6f45511251d2ef5d0c761297156b0b80a75a51469e7af7",
     "banner.svg": "0328bf27780e341b5765ab5014c5cb9329e308783569b7a44e5fb94071ef7c77",
-    "tmux-pane.svg": "9056f3798b39dca688c549cf980ee1957290c23657859a479d2cf55c70b3762e",
-    "heads-up.svg": "df8d30e768b0a70d0abd04ad92ab000897ca626801dad4a2ee19cf474f8c271b"
+    "council-run.svg": "84e0c6bb9c299b635a9fc2f3768e2e0f028ec7c384a71adc7e081374711d8eef",
+    "heads-up.svg": "df8d30e768b0a70d0abd04ad92ab000897ca626801dad4a2ee19cf474f8c271b",
+    "tmux-pane.svg": "6cd692aeb2ba2e0653ca16e00e060a04a4bedc28487a29341926d992238eef49"
   },
   "static_previews": [
     {
+      "file": "banner-0-dark.png",
+      "sha256": "fc8b6e824ab8ef6746125204255f4280c22c37f16b24e3dd9cfd045de183f6bc"
+    },
+    {
+      "file": "banner-0-light.png",
+      "sha256": "0a066db2c803d2bf5e7906c4624c56bea573224d860c182ae2da9c69d4694420"
+    },
+    {
       "file": "council-run-0-dark.png",
-      "sha256": "1efc78e3b7fae2357d2de01d3ef8a079f8464e2fa522ce24220583cb6cc0064f"
+      "sha256": "98ff0289e235285bf68cf26e9453f7649f39e9337bac86a4c97082d2158061b3"
     },
     {
       "file": "council-run-0-light.png",
-      "sha256": "c064075ce2450ed68bf45473c46c98ac6382c6ee9c777b2871d77be0389f6f2b"
+      "sha256": "3eb765f719e0941f6ec2cca4839b89f35ed8460c839c91b0e05561bd891d99f4"
     },
     {
       "file": "council-run-1-dark.png",
-      "sha256": "eb3b20e71a3dcfdb984c95832ccd0884137746457dadde8e423e79ea2b1de078"
+      "sha256": "ecfc161cdf7045e6061b571846e6a02db1fb3e2ed43b4244398f78291ec37b2b"
     },
     {
       "file": "council-run-1-light.png",
-      "sha256": "c50d1a679ae6b3d1c2027d4f12c83e552b19e47c5578bc8ad62bc0ea0c577465"
+      "sha256": "952411fc2c5ef47f1f9ac4c0f825179b8420ca40be0ced8251e7c287b96e0b84"
     },
     {
       "file": "council-run-2-dark.png",
-      "sha256": "f954a52e64a00b49d5839d62ccf7f68ca5f85864b2d60cc3520c8aaed5c56d0b"
+      "sha256": "f3ebb6fc526ffb80ea9663c0a1b2958d90ad99b0c450be377e5fef512929f9fc"
     },
     {
       "file": "council-run-2-light.png",
-      "sha256": "c340159a00aecf75affb7bb767276e8b6ad126638c4139b136663e32570316b8"
+      "sha256": "609fd392c7e17235a139a4fc6d2e9ac774e929bfb2ab2ebbb4e7370f92139abf"
     },
     {
       "file": "council-run-3-dark.png",
-      "sha256": "c0926ff7167ddd667e611673063ee616376de0e1a45623a812acacaa3e7ccf55"
+      "sha256": "3abd989d11a371c537988d4c0be25c43f0ae7949f290c08301a6e9782f5b501b"
     },
     {
       "file": "council-run-3-light.png",
-      "sha256": "e4dc0316ec277fc9f01acee39b22fc129898fcfa16808fed5d58d951f0f0a9bc"
+      "sha256": "a7f184206922adc04cd776417ceaf4a8b12cb312265477a10dca3bbebdbc3e54"
     },
     {
       "file": "council-run-4-dark.png",
-      "sha256": "584acf68943c870598ee949d03f110ab74a56329bf05ddce545c2aa61413793f"
+      "sha256": "cd99d5f234995eaffc21bbca2786cf45f3f23120bc515c035080bef2467472c9"
     },
     {
       "file": "council-run-4-light.png",
-      "sha256": "46983fb318e9332fa771149b12394a9a3a527fa6a41abe2a6f40d9219560b614"
+      "sha256": "142b3be1ab5e8ba5014fc4388b7ef17336afe12fd357471a83bc128d28c1b10f"
     },
     {
       "file": "heads-up-0-dark.png",
@@ -81,39 +89,27 @@
     },
     {
       "file": "tmux-pane-0-dark.png",
-      "sha256": "8d23a6c7933730d06977fee72dd6eb78aafaa1daed0d6554e471d3e43ffec49d"
+      "sha256": "8ec56731ac64a777b396e7edb4c0a64442d01e158da2e3d941e85722b119e808"
     },
     {
       "file": "tmux-pane-0-light.png",
-      "sha256": "3a20ab9e502807ca9837d3741056f667ae51ec897cbcd693093a439704cb4daf"
+      "sha256": "c8e434968d0706b80176e9d3a9e32e66a8126729021b6996f2dbe01a2f7ff146"
     },
     {
       "file": "tmux-pane-1-dark.png",
-      "sha256": "1c88e952c54201da932975eab1f9a2de6bc5247c94123fc298afcfb36e29533e"
+      "sha256": "fb5fa64431db845bccc8610a6c3d1fb7587e239a2eb062778aab3be3e11d4fbd"
     },
     {
       "file": "tmux-pane-1-light.png",
-      "sha256": "bb73cccf4fb09b2516b3fda63874954fef7b1bfb34207e95ad0f375c583a1421"
+      "sha256": "f749b5b2ec061f8739f49035ce00d08aa124f3e71de5cbe9506cc066082e3288"
     },
     {
       "file": "tmux-pane-2-dark.png",
-      "sha256": "a2dcfa06562da12515ad8f56bea1cfed6042e89c714cf4909c61295ffcdc0fa3"
+      "sha256": "88d59708c776ec8403c5f57d920d0c3d890acbe9971f8994b1a3d2f79dec8a65"
     },
     {
       "file": "tmux-pane-2-light.png",
-      "sha256": "825a7c863353c8ddda9137735d12dbc62118b3bce3dab626f285c0f453eb1ce6"
-    },
-    {
-      "file": "banner-0-dark.png",
-      "sha256": "fc8b6e824ab8ef6746125204255f4280c22c37f16b24e3dd9cfd045de183f6bc"
-    },
-    {
-      "file": "banner-0-light.png",
-      "sha256": "0a066db2c803d2bf5e7906c4624c56bea573224d860c182ae2da9c69d4694420"
+      "sha256": "01333f23085b6df5aa8e03667e34aed4d7d06b12b0e207a939f139364654d25c"
     }
-  ],
-  "compression_pixel_difference": {
-    "light": 0,
-    "dark": 0
-  }
+  ]
 }

@@ -5,7 +5,7 @@ parallel. Compare their answers when one model's bias could mislead you:
 architecture decisions, debugging dead ends, security reviews, or framework
 choices.
 
-![Real Codex and Antigravity answers to the SQLite-or-Postgres question, with Grok, Cursor, and fake Kimi failures](assets/council-run.svg)
+![Codex, Antigravity, Gemini, and OpenAI answer the SQLite-or-Postgres question while fake Kimi fails](assets/council-run.svg)
 
 [![Tests](https://github.com/hex/claude-council/actions/workflows/tests.yml/badge.svg)](https://github.com/hex/claude-council/actions/workflows/tests.yml)
 
@@ -102,10 +102,10 @@ provider's status. It offers to retry failed seats. Esc closes it.
 `--no-pane` or `COUNCIL_NO_PANE=1` turns it off. Outside both pane modes,
 answers arrive in the chat. See [terminal integration](docs/REFERENCE.md#display--terminal-integration).
 
-The council and tmux animations show real subscription answers to
+The council and tmux animations show real answers to
 "Should a single-node demo app use SQLite or Postgres?" Codex and Antigravity
-answered; Grok lacked a login, and Cursor hit its usage limit. Kimi is a
-rate-limit fixture. The heads-up animation uses a fake seat and a real Claude Code host.
+use subscriptions; Gemini and OpenAI use their APIs. Kimi is a rate-limit
+fixture. The heads-up animation uses a fake seat and a real Claude Code host.
 [Capture scripts and raw frames](assets/capture/README.md) record how to
 reproduce them.
 

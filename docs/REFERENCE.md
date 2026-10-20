@@ -490,9 +490,9 @@ export COUNCIL_HEADS_UP_RESULTS=8         # tool results in the digest, 2,000 ch
 
 When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `fallback`, `cached`, `error`, `cancelled` with timing) and renders each response as it lands. Rendering prefers [Rich](https://github.com/Textualize/rich) when a Rich-capable Python is available (`python3` with a modern `rich` installed, or [`uv`](https://docs.astral.sh/uv/), which fetches it on demand): word-wrapped prose, tables fitted to the pane width, syntax-highlighted code, clickable links — styled with your terminal's own palette (cyan headings, yellow code, vendor-colored banners). Without one, a built-in dependency-free perl markdown renderer takes over with the same visual language, so nothing needs to be installed. Press **Esc** or **Ctrl-D** to close the pane.
 
-![Real subscription answers to the SQLite-or-Postgres question and a fake Kimi failure in tmux](../assets/tmux-pane.svg)
+![Four real answers to the SQLite-or-Postgres question and a fake Kimi failure in tmux](../assets/tmux-pane.svg)
 
-Four subscription seats and a fake Kimi rate-limit failure in the tmux pane,
+Two subscription seats, two API seats, and a fake Kimi failure in the tmux pane,
 zoomed to 110 columns. Each answer's banner names the model and elapsed time.
 
 A provider that fails shows its error text under a `✗ <provider> error` heading. A CLI seat whose API sibling answered shows an amber `↪ <provider> fell back` notice with the reason (the CLI's error text, or that the image went to a vision model), then the answer; it does not count as failed for the retry offer. When any provider has failed, the pane then offers `[r] retry failed (<providers>) · [esc/ctrl-d] close` with a countdown: **r** re-queries only the failed providers inside the same run, so a recovered answer reaches the synthesis, the saved transcript and the cache like any other; **Esc** closes the pane and the run carries on with what it has. The offer stays open for `COUNCIL_RETRY_WAIT` seconds (default 45; `0` disables it) and is made once per run. The run waits while the offer is open, so a retry extends the council's wall time by another provider round. `--async` jobs default to `0`: nobody is committed to answering a detached run's pane, so it never waits.
