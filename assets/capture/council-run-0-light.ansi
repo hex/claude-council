@@ -1,14 +1,14 @@
 [38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;241mv2.1.304[39m
 [38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;241mHaiku[39m [38;5;241m5.5[39m [38;5;241m·[39m [38;5;241mClaude[39m [38;5;241mMax[39m
-[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project[39m
+[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project[39m
 
 [2m▎[0m [38;5;241mDebug[39m [38;5;241mmode[39m [38;5;241menabled[39m [38;5;241m·[39m [38;5;241mlogging[39m [38;5;241mto[39m
-[2m▎[0m [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/debug-light.log[39m
+[2m▎[0m [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/debug-light.log[39m
 
-[38;5;241m[48;5;255m❯[39m [38;5;16m/claude-council:ask --providers=codex,antigravity,grok-cli,kimi-cli,cursor-cli --verbosity=brief [39m
+[38;5;241m[48;5;255m❯[39m [38;5;16m/claude-council:ask --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief [39m
 [38;5;16m--no-auto-context --no-cache "Should a single-node demo app use SQLite or Postgres?"[39m
 [49m
-[38;5;174m·[39m [38;5;174mElucidating… [38;5;241m(0s)[39m
+[38;5;174m✶[39m [38;5;174mCoalescing… [38;5;241m(0s)[39m
 
 [38;5;245m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 [38;5;241m❯ [7m[39m [0m

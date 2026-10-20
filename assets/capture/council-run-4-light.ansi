@@ -1,77 +1,77 @@
-[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;241mv2.1.304[39m
-[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;241mHaiku[39m [38;5;241m5.5[39m [38;5;241m·[39m [38;5;241mClaude[39m [38;5;241mMax[39m
-[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project[39m
-
-[2m▎[0m [38;5;241mDebug[39m [38;5;241mmode[39m [38;5;241menabled[39m [38;5;241m·[39m [38;5;241mlogging[39m [38;5;241mto[39m
-[2m▎[0m [38;5;241m~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/debug-light.log[39m
-
-[38;5;241m[48;5;255m❯[39m [38;5;16m/claude-council:ask --providers=codex,antigravity,grok-cli,kimi-cli,cursor-cli --verbosity=brief [39m
-[38;5;16m--no-auto-context --no-cache "Should a single-node demo app use SQLite or Postgres?"[39m
+[38;5;16m[48;5;255m--no-auto-context --no-cache "Should a single-node demo app use SQLite or Postgres?"[39m
 [49m
 [38;5;65m⏺[39m [1mBash[0m(bash ~/.claude-sessions/claude-council/scripts/run-council.sh
-      --providers=codex,antigravity,grok-cli,kimi-cli,cursor-cli --verbosity=brief --no-auto-context
-      --no-cache -- "Should a single-node demo app use SQLite or Postgres?")
-[38;5;241m  ⎿  [39m.claude/council-cache/council-1792497573.md
+      --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief --no-auto-context --no-cache --
+      "Should a single-node demo app use SQLite or Postgres?")
+[38;5;241m  ⎿  [39m.claude/council-cache/council-1792499574.md
+[38;5;241m  ⎿  (timeout 10m)[39m
 
-[38;5;65m⏺[39m [1mRead[0m(]8;id=90wfk0;file://~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497573.md\~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/]8;;\
-  ]8;id=90wfk0;file://~/.claude-sessions/claude-council/assets/capture/.council-run-_td5a4l5/project/.claude/council-cache/council-1792497573.md\council-cache/council-1792497573.md]8;;\)
-[38;5;241m  ⎿  [39mRead [1m35[0m lines
+[38;5;65m⏺[39m [1mRead[0m(]8;id=14396sd;file://~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project/.claude/council-cache/council-1792499574.md\~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project/.claude/]8;;\
+  ]8;id=14396sd;file://~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project/.claude/council-cache/council-1792499574.md\council-cache/council-1792499574.md]8;;\)
+[38;5;241m  ⎿  [39mRead [1m46[0m lines
 
-[38;5;16m⏺[39m Council ran once across the five requested seats. Two answered, three failed.
+[38;5;16m⏺[39m [1mCouncil responses (brief)[0m
 
-  [1mAntigravity (Gemini 3.8 Flash High):[0m Default to SQLite. It needs no setup and the demo is portable as one
-  file. Use Postgres only if the demo must show Postgres-specific features, and keep an ORM so migration stays
-  cheap.
+  [1mAntigravity (Gemini 3.8 Flash High)[0m
+  SQLite is the default, since it needs zero setup and keeps deployment to one file. Choose Postgres only if
+  the demo depends on engine-specific features such as pgvector, advanced JSON operators, or row-level
+  security, or if it must match a Postgres production stack.
 
-  [1mCodex (gpt-6-astra):[0m Use SQLite. It runs in-process, stores data in one file, and needs no server. Choose
-  Postgres only if the demo exists to validate an existing Postgres production stack.
+  [1mCodex (default)[0m
+  Use SQLite: no separate service, simple setup, and it's easy to reset. Keep the database on persistent local
+  storage and use migrations. Choose Postgres only for Postgres-specific features or a close production
+  match.
 
-  [1mCursor-cli:[0m Failed. The account has hit its usage limit.
+  [1mGemini (gemini-flash-latest)[0m
+  SQLite is usually better because there is no server, port, or credentials to manage, and the database is a
+  single file you can copy or reset. Choose Postgres only for features like JSONB operations, LISTEN/NOTIFY,
+  or strict production parity.
 
-  [1mGrok-cli (grok-4.7):[0m Failed. Not signed in. Run [38;5;105mgrok login[39m or set [38;5;105mXAI_API_KEY[39m.
+  [1mKimi-cli (moonshot-ai/kimi-k3)[0m
+  Error: 429 Too Many Requests. This seat was rate-limited and was not retried.
 
-  [1mKimi-cli (kimi-k3):[0m Failed with HTTP 429 (rate limited). This is the rate-limit fixture, so it was not
-  retried.
+  [1mOpenAI (gpt-6-astra)[0m
+  Use SQLite by default: no server, easy to reset or ship with sample data, and fine for modest traffic.
+  Enable WAL mode if you use it. Choose Postgres for Postgres-specific features, heavy concurrent writes, or
+  an existing production match. Don't add Postgres for hypothetical future scale.
 
   [1mSynthesis[0m
 
-  Both seats that answered recommend SQLite for a single-node demo, with Postgres justified only when the demo
-  must exercise Postgres itself.
+  Four of the five seats that answered recommend SQLite for a single-node demo, with Postgres reserved for
+  engine-specific features or a required production match, and the Kimi seat returned a rate-limit error
+  instead of an answer.
 
-  Full output saved: [38;5;105m.claude/council-cache/council-1792497573.md[39m
+  Full output saved: [38;5;105m.claude/council-cache/council-1792499574.md[39m
 
-[38;5;241m✻[39m [38;5;241mCooked for 56s · done 3:00 PM[39m
+[38;5;241m✻[39m [38;5;241mSautéed for 42s · done 3:33 PM[39m
 [2m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────[0m[38;5;241m✕[2m[39m─╮
-│[0m [1m2 of 5 answered · 3 error · 32.7s[0m                                                                          [2m│
-│[0m [38;5;103m● [38;5;105m1[39m: codex  [38;5;75m● [38;5;105m2[39m: antigravity  [38;5;131m✗ [38;5;105m3[39m: grok-cli  [38;5;131m✗ [38;5;105m4[39m: kimi-cli  [38;5;131m✗ [38;5;105m5[39m: cursor-cli  [38;5;102m≡ [38;5;105m0[39m: synthesis                [2m│
+│[0m [1m4 of 5 answered · 1 error · 15.8s[0m                                                                          [2m│
+│[0m [38;5;103m● [38;5;105m1[39m: codex  [38;5;75m● [38;5;105m2[39m: antigravity  [38;5;75m● [38;5;105m3[39m: gemini  [38;5;103m● [38;5;105m4[39m: openai  [38;5;131m✗ [38;5;105m5[39m: kimi-cli  [38;5;102m≡ [38;5;105m0[39m: synthesis                      [2m│
 │[0m                                                                                                            [2m│
 │[0m [38;5;105ma[39m: collapse all                                                                                            [2m│
 │[0m                                                                                                            [2m│
-│[0m [48;5;103m [1m[38;5;231m▸ CODEX[0;3m[38;5;231m[48;5;103m gpt-6-astra (32.7s)[0m[48;5;103m                                                                              [49m [2m│
+│[0m [48;5;103m [1m[38;5;231m▸ CODEX[0;3m[38;5;231m[48;5;103m default (15.8s)[0m[48;5;103m                                                                                  [49m [2m│
 │[0m                                                                                                            [2m│
-│[0m [48;5;75m [1m[38;5;231m▸ ANTIGRAVITY[0;3m[38;5;231m[48;5;75m Gemini 3.8 Flash (High) (15.0s)[0m[48;5;75m                                                            [49m [2m│
+│[0m [48;5;75m [1m[38;5;231m▸ ANTIGRAVITY[0;3m[38;5;231m[48;5;75m Gemini 3.8 Flash (High) (11.4s)[0m[48;5;75m                                                            [49m [2m│
 │[0m                                                                                                            [2m│
-│[0m [1m[38;5;131m▸ ✗ grok-cli error[0m                                                                                         [2m│
+│[0m [48;5;75m [1m[38;5;231m▸ GEMINI[0;3m[38;5;231m[48;5;75m gemini-flash-latest (5.9s)[0m[48;5;75m                                                                      [49m [2m│
+│[0m                                                                                                            [2m│
+│[0m [48;5;103m [1m[38;5;231m▸ OPENAI[0;3m[38;5;231m[48;5;103m gpt-6-astra (6.7s)[0m[48;5;103m                                                                              [49m [2m│
 │[0m                                                                                                            [2m│
 │[0m [1m[38;5;131m▸ ✗ kimi-cli error[0m                                                                                         [2m│
 │[0m                                                                                                            [2m│
-│[0m [1m[38;5;131m▸ ✗ cursor-cli error[0m                                                                                       [2m│
-│[0m                                                                                                            [2m│
 │[0m [48;5;173m [1m[38;5;231m▾ SYNTHESIS[0m[48;5;173m                                                                                              [49m [2m│
-│[0m Both seats that answered recommend SQLite for a single-node demo, with Postgres justified only when the    [2m│
-│[0m demo must exercise Postgres itself.                                                                        [2m│
+│[0m Four of the five seats that answered recommend SQLite for a single-node demo, with Postgres reserved for   [2m│
+│[0m engine-specific features or a required production match, and the Kimi seat returned a rate-limit error     [2m│
+│[0m instead of an answer.                                                                                      [2m│
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 [0m                                                                                                          [38;5;241m[-][39m
-[1m[38;5;231m[48;5;131m ✦ [0m[48;5;173m [1m[38;5;231mCOUNCIL[0m[48;5;173m [1m[49m ✓ finished: 2 of 5 answered, 3 error  [ o · open pane ][0m [1m[ x · dismiss ][0m
+[1m[38;5;231m[48;5;131m ✦ [0m[48;5;173m [1m[38;5;231mCOUNCIL[0m[48;5;173m [1m[49m ✓ finished: 4 of 5 answered, 1 error  [ o · open pane ][0m [1m[ x · dismiss ][0m
 
 [38;5;245m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ [7m [0m
 [38;5;245m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;131m⏵⏵ bypass permissions on[38;5;241m (shift+tab to cycle)[39m                                                 [38;5;241m29480 tokens[39m
-
-
-
-
+[39m  [38;5;131m⏵⏵ bypass permissions on[38;5;241m (shift+tab to cycle)[39m                                                 [38;5;241m29638 tokens[39m
 
 
 

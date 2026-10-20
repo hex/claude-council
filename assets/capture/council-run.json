@@ -2,25 +2,35 @@
   "title": "Five council seats inside Claude Code",
   "description": "Captured terminal output in real seat mode. Each state lasts 2.5 seconds.",
   "provenance": {
-    "checkout_head": "afff4c5a2f7dbeb3669e6c2f9df78290f0ffbae1",
+    "checkout_head": "9059e08271426d341c74361197caf4b42e709ad2",
     "seat_mode": "real",
+    "providers": [
+      "codex",
+      "antigravity",
+      "gemini",
+      "openai",
+      "kimi-cli"
+    ],
+    "api_key_names": [
+      "GEMINI_API_KEY",
+      "OPENAI_API_KEY"
+    ],
+    "api_models": {
+      "gemini": "gemini-flash-latest",
+      "openai": "gpt-6-astra"
+    },
+    "codex_home": "Temporary auth.json-only home, removed on exit",
     "question": "Should a single-node demo app use SQLite or Postgres?",
     "cli_versions": {
       "codex": "codex-cli 0.163.0",
-      "agy": "1.4.2",
-      "grok": "grok 1.0.60 (01a8e1c591c0) [stable]",
-      "cursor-agent": "2026.10.14-0f9edde",
+      "agy": "1.4.3",
       "kimi": "fake-kimi 0.0.1"
     },
     "real_invocations": [
       "dark-agy",
       "dark-codex",
-      "dark-cursor-agent",
-      "dark-grok",
       "light-agy",
-      "light-codex",
-      "light-cursor-agent",
-      "light-grok"
+      "light-codex"
     ],
     "capture_commands": [
       "COUNCIL_CAPTURE_SEATS=real bash assets/capture/council-run.sh",
@@ -31,7 +41,8 @@
       "host": "Claude Code --model haiku",
       "behavior": {
         "kimi": "rate-limit after 2s",
-        "other_seats": "real subscription CLIs"
+        "codex_and_agy": "real subscription CLIs",
+        "gemini_and_openai": "real APIs; no transport retries"
       }
     },
     "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain. Trailing focus-events hints are outside the crop; raw text is retained.",
@@ -58,7 +69,7 @@
             7,
             17
           ],
-          "sha256": "1184f26d9135e6d15937870fd305d317115685860aed25209ba4ef1aa5e3fae0"
+          "sha256": "092d80d88947a9bcecee7f89c18aa402849e7b797a0fcf041176c5a6b891402f"
         },
         "dark": {
           "file": "council-run-0-dark.ansi",
@@ -66,7 +77,7 @@
             7,
             17
           ],
-          "sha256": "afd051db09ea0f0c191c3376e4f22503bdf7f72464fedaf00db57979a7cb5796"
+          "sha256": "57567bab1dfee049b6b494e3788ad53ee323ec5972395d4f893feef294064619"
         }
       }
     },
@@ -77,17 +88,17 @@
           "file": "council-run-1-light.ansi",
           "crop": [
             16,
-            38
+            32
           ],
-          "sha256": "70fdebba2628e47378fe0a7d724edc4ff6dda7f9da96976f3e59a30c36970f59"
+          "sha256": "06f396c730f8f3f12495c153d22e777601e1c480ccca0f861f95f45acdef6aa6"
         },
         "dark": {
           "file": "council-run-1-dark.ansi",
           "crop": [
             16,
-            38
+            32
           ],
-          "sha256": "892b1bcb8e9843c9ef2121eac18e034ac5e4b9a4c349be2b832fd3eae06f959f"
+          "sha256": "ad8ae415f60cfb619468c36c826d7202f884d831255f2f9bfe51f1109b4e4a92"
         }
       }
     },
@@ -98,17 +109,17 @@
           "file": "council-run-2-light.ansi",
           "crop": [
             17,
-            44
+            36
           ],
-          "sha256": "be7f4d14b5681074c0ecd68ee5bc5b7ac2fa3865fdc7c710ca0d4f1058d13f58"
+          "sha256": "f5d55ea2fa4303994a89177cb2bf50eb4f7d20ebeb5bba50409c407508e99f95"
         },
         "dark": {
           "file": "council-run-2-dark.ansi",
           "crop": [
-            17,
-            44
+            16,
+            35
           ],
-          "sha256": "de9b1eefa5ee29b5b3e161099ee62ddf75b0483a13c3a4706d4afaa5efad2a64"
+          "sha256": "b34090a558f98fe67f41dea832be1da3c23ebcddde662f8ea24801d9671a2b4d"
         }
       }
     },
@@ -121,15 +132,15 @@
             17,
             50
           ],
-          "sha256": "bf21bb871c7d8114ae4f934db98b8eb5477ee5840c247c9f83bc20dc4166cefb"
+          "sha256": "928de1f3a7b26c0840a64d927d673c08b03dc1417143e85f6f3ddce1df37d8e3"
         },
         "dark": {
           "file": "council-run-3-dark.ansi",
           "crop": [
             17,
-            50
+            47
           ],
-          "sha256": "0a1b79bb666f4b897cecf0f988cf0505d4606cad23ad262e7bde78e57d3fd4b9"
+          "sha256": "48e3049cb6b8a743a46997208ae195ea342f5f895c2121975123c3f9f682c80a"
         }
       }
     },
@@ -139,18 +150,18 @@
         "light": {
           "file": "council-run-4-light.ansi",
           "crop": [
-            43,
-            70
+            46,
+            74
           ],
-          "sha256": "f4a4ce909379c3c4ad4f2120ccdaf64bcbc90aad727fa830405e99c374fdda22"
+          "sha256": "917fd4b8c561fc2db0cc3fc6089faa4374bf94a6f3dcc1e5ac28e97ef0e50803"
         },
         "dark": {
           "file": "council-run-4-dark.ansi",
           "crop": [
-            46,
-            73
+            39,
+            67
           ],
-          "sha256": "25c9811a3e84c13dda9c5977e5b6e4fde73b223ecf5ce1bc2641f53eda6e67c6"
+          "sha256": "3d7a665792b65baa572ab5a34d1c5223bc5601119a0d9dd06600276cebcbcf86"
         }
       }
     }
