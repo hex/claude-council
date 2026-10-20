@@ -276,6 +276,9 @@ class Capture:
         stop = len(lines)
         while stop > start and not lines[stop - 1].strip():
             stop -= 1
+        if (self.name in ("heads-up", "council-run") and stop > start
+                and lines[stop - 1].lstrip().startswith("tmux focus-events off")):
+            stop -= 1
         filename = f"{self.name}-{len(self.frames) if self.theme == 'light' else self.frame_index}-{self.theme}.ansi"
         write_capture(self.work / filename, raw)
         item = {"file": filename, "crop": [start, stop]}
@@ -364,7 +367,8 @@ class Capture:
                     {"codex": "slow 45s", "agy": "slow 65s", "grok": "slow 15s",
                      "kimi": "rate-limit after 12s", "cursor-agent": "valid after 30s"},
                 },
-                "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain.",
+                "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain. "
+                        "Trailing focus-events hints are outside the crop; raw text is retained.",
                 "terminal_defaults": THEMES,
                 "palette": "RGB and indexed ANSI colors are preserved; default colors are set in tmux.conf.",
                 "home_path": "The current home directory prefix is replaced with ~ when capture files are written.",

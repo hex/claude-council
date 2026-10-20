@@ -57,6 +57,9 @@ saved files and writes those hashes back to the manifest.
 The converter keeps all 110 columns. Light and dark are
 separate captures. Captured colors remain literal; tmux sets the default
 foreground and background recorded in the metadata.
+In council and heads-up captures, a trailing tmux `focus-events` hint stays
+in the raw file but falls outside the manifest's row range. A hint with
+required content after it stays in the range.
 Terminal hyperlink controls become plain text, so the SVG contains no links
 to external resources. Identical text elements share internal SVG references
 to keep the files below 80 KB. `shell.sh` keeps personal shell startup files out of

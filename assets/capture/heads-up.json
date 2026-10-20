@@ -12,7 +12,7 @@
       "host": "Claude Code --model haiku",
       "behavior": "heads-up-note"
     },
-    "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain.",
+    "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain. Trailing focus-events hints are outside the crop; raw text is retained.",
     "terminal_defaults": {
       "light": [
         "#302a24",
@@ -60,7 +60,7 @@
           "file": "heads-up-1-light.ansi",
           "crop": [
             29,
-            38
+            37
           ],
           "sha256": "6eaa19ef0bfa296d7786ebc1ba920b388abe1c3579beef4a27a2d5d2e919d01d"
         },
@@ -81,7 +81,7 @@
           "file": "heads-up-2-light.ansi",
           "crop": [
             36,
-            48
+            47
           ],
           "sha256": "de205e9c80c13d381539e6b64c79dabb30cc01aed1dcfe3af46a211c3cf241ba"
         },
@@ -89,7 +89,7 @@
           "file": "heads-up-2-dark.ansi",
           "crop": [
             35,
-            47
+            46
           ],
           "sha256": "d5510c25135d5e6850fee50d3ad6a989eeb2a441a9e9b063fc36ea160c221453"
         }
@@ -102,7 +102,7 @@
           "file": "heads-up-3-light.ansi",
           "crop": [
             35,
-            42
+            41
           ],
           "sha256": "66bc739fe6e4f7db3842744125fb1d09ac18e4e1c07b96c1e1e06e6689110478"
         },
@@ -110,7 +110,7 @@
           "file": "heads-up-3-dark.ansi",
           "crop": [
             34,
-            41
+            40
           ],
           "sha256": "4ad44a85c17d0afa8e283adc7346ad074cdc961d287d4b195306aa00a4e5ec60"
         }

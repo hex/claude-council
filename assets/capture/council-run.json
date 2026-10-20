@@ -34,7 +34,7 @@
         "other_seats": "real subscription CLIs"
       }
     },
-    "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain.",
+    "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain. Trailing focus-events hints are outside the crop; raw text is retained.",
     "terminal_defaults": {
       "light": [
         "#302a24",
