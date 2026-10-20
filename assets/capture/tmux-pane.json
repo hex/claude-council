@@ -1,0 +1,93 @@
+{
+  "title": "Council answers in a tmux side pane",
+  "description": "Real terminal captures with fixture council seats. Each state lasts 2.5 seconds.",
+  "provenance": {
+    "checkout_head": "34bb74a2e0ae5c9d0321b754cd94a704b765ebd3",
+    "capture_commands": [
+      "bash assets/capture/tmux-pane.sh",
+      "tmux -L svgcap capture-pane -p -e"
+    ],
+    "fixture": {
+      "source": "tests/fixtures/fake-clis.bash",
+      "host": null,
+      "behavior": {
+        "codex": "slow 45s",
+        "agy": "slow 65s",
+        "grok": "slow 15s",
+        "kimi": "rate-limit after 12s",
+        "cursor-agent": "valid after 30s"
+      }
+    },
+    "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain.",
+    "terminal_defaults": {
+      "light": [
+        "#302a24",
+        "#fbf6e9"
+      ],
+      "dark": [
+        "#eeeeee",
+        "#191919"
+      ]
+    },
+    "palette": "RGB and indexed ANSI colors are preserved; default colors are set in tmux.conf."
+  },
+  "frames": [
+    {
+      "label": "Seats querying in tmux",
+      "captures": {
+        "light": {
+          "file": "tmux-pane-0-light.ansi",
+          "crop": [
+            0,
+            1
+          ]
+        },
+        "dark": {
+          "file": "tmux-pane-0-dark.ansi",
+          "crop": [
+            0,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "label": "An answer lands in tmux",
+      "captures": {
+        "light": {
+          "file": "tmux-pane-1-light.ansi",
+          "crop": [
+            0,
+            10
+          ]
+        },
+        "dark": {
+          "file": "tmux-pane-1-dark.ansi",
+          "crop": [
+            0,
+            10
+          ]
+        }
+      }
+    },
+    {
+      "label": "The retry offer",
+      "captures": {
+        "light": {
+          "file": "tmux-pane-2-light.ansi",
+          "crop": [
+            0,
+            26
+          ]
+        },
+        "dark": {
+          "file": "tmux-pane-2-dark.ansi",
+          "crop": [
+            0,
+            26
+          ]
+        }
+      }
+    }
+  ]
+}
