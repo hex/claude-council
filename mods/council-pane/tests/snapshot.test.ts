@@ -60,3 +60,13 @@ test('the names in the cancel folder are the seats pressed for cancel', async ()
   expect((await readView(fs, RUN)).cancels).toEqual(['grok'])
   expect((await readView(runEndingAfter(1000), RUN)).cancels).toEqual([])
 })
+
+test('the names in the retry folder are the seats pressed for retry', async () => {
+  const fs = {
+    exists: async (path: string) => path === `${RUN}/retry` || path === `${RUN}/status`,
+    read: async (path: string) => (path === `${RUN}/status` ? 'grok\terror\t\t\n' : ''),
+    list: async (dir: string) => (dir === `${RUN}/retry` ? [{ kind: 'file', name: 'grok' }, { kind: 'file', name: '.tmp' }] : []),
+  }
+  expect((await readView(fs, RUN)).retries).toEqual(['grok'])
+  expect((await readView(runEndingAfter(1000), RUN)).retries).toEqual([])
+})

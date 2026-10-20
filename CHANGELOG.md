@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Features
+- Council pane: a seat that failed while other seats are still out shows a `retry` button where its `cancel` was, with the same digit; it re-queries that seat with the query it failed, once, and the row reads `retrying` until the seat is querying again. Once the last seat ends the band's retry offer takes over, and a seat retried from its row is not offered again.
+
 ## 2026.10.6
 
 ### Features

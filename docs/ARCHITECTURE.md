@@ -293,6 +293,22 @@ offered for retry, sits out round 2 and gets no rebuttal block from
 waited on. The result JSON and the synthesis see it as an error like any
 other.
 
+### Retrying a seat from its row
+
+The same loop looks for `retry/<provider>`, which the mod pane writes when
+the `retry` button on a seat's error row is pressed. A seat that ended in an
+error of its own (not cancelled) keeps its place in the loop with no job, so
+a later press can still re-query it this round; the launch is the one
+`launch_seat` the round and the band's retry use, so the seat gets exactly
+the query it failed, with its role. One row retry per seat (`RETRIED`): a
+seat that fails again is not offered by its row or by the band. The marker
+is spent when the re-queried seat ends, not at relaunch, so the pane cannot
+draw a second button in the moment before the seat logs itself `querying`
+again; the pane counts a seat's `querying` lines to know it had its retry.
+The loop only runs while some seat is live, so a press that lands once the
+last seat has ended is not honoured: the band's offer covers that case, and
+its relaunch spends any stale marker.
+
 ### Retry Logic (`scripts/lib/retry.sh`)
 
 ```

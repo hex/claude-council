@@ -11,6 +11,14 @@ test('the last line for a provider wins, in first-seen order', () => {
   ])
 })
 
+test('a seat queried again counts its attempts; one that failed on its first keeps none', () => {
+  const log = 'grok\tquerying\t\t\ngrok\terror\t\t\ngrok\tquerying\t\t\ngrok\terror\t\t\nkimi\tquerying\t\t\nkimi\terror\t\t\n'
+  expect(parseStatus(log)).toEqual([
+    { name: 'grok', state: 'error', attempts: 2 },
+    { name: 'kimi', state: 'error' },
+  ])
+})
+
 test('blank lines, a line with no state, CRLF endings and a non-numeric time are tolerated', () => {
   const log = '\nkimi\n\ngrok\terror\tsoon\t\r\n'
   expect(parseStatus(log)).toEqual([{ name: 'grok', state: 'error' }])

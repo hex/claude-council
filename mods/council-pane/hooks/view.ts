@@ -9,6 +9,8 @@ export type RunView = {
   errors: Record<string, string>
   // Seats pressed for cancel in the pane, from the watch dir's cancel folder.
   cancels?: string[]
+  // Seats pressed for retry on their error row, from the watch dir's retry folder.
+  retries?: string[]
   colors: Record<string, string>
   isDone: boolean
   // The status log's last event in words, for the band.
@@ -26,9 +28,10 @@ export function unseenRun(entries: readonly DirEntry[], shown: ReadonlySet<strin
 
 export type Section =
   | { kind: 'note'; text: string }
+  // retry: on an error row while another seat still queries, the same.
   // cancel: on a querying row while the run is live, the button's seat (the
   // name unpadded) and, for the first ten rows, its digit.
-  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; cancel?: { seat: string; hotkey?: string } }
+  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; cancel?: { seat: string; hotkey?: string }; retry?: { seat: string; hotkey?: string } }
   | { kind: 'summary'; text: string }
   // fold: what the jump opens, the fold of the section it lands on.
   | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string; fold?: string }[] }
@@ -46,8 +49,8 @@ export type Section =
   // Above the first section, closing every one while any is open, else opening all.
   | { kind: 'toggleAll'; closes: boolean; folds: string[] }
 
-const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger, fallback: COLOR.warning, cancelled: COLOR.muted, cancelling: COLOR.muted }
-export const CANCEL_HINT = 'click cancel on a row, or ctrl+x tab then its digit'
+const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, retrying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger, fallback: COLOR.warning, cancelled: COLOR.muted, cancelling: COLOR.muted }
+export const CANCEL_HINT = 'click cancel or retry on a row, or ctrl+x tab then its digit'
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
 const SPINNER = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f']
@@ -73,18 +76,20 @@ export function parseColors(log: string): Record<string, string> {
 const glyphColor = (name: string, state: string, vendor: (name: string) => string) =>
   state === 'error' ? COLOR.danger : state === 'cancelled' ? COLOR.muted : vendor(name)
 
-// Each seat cancel all would take carries its own cancel button, with the
-// row's digit for the first nine and 0 for the tenth, as a keyboard's number
-// row runs (once the run is done the digits jump to the answers instead, and
-// 0 to the synthesis), and a hint line follows the rows.
+// Each seat cancel all would take carries its own cancel button, and each
+// seat a row retry can take its retry button, with the row's digit for the
+// first nine and 0 for the tenth, as a keyboard's number row runs (once the
+// run is done the digits jump to the answers instead, and 0 to the
+// synthesis), and a hint line follows the rows.
 function statusRows(
   providers: ProviderStatus[],
   vendor: (name: string) => string,
   glyph: (state: string) => string,
   elapsed: (name: string) => string,
   cancellable: string[],
+  retriable: string[],
 ): Section[] {
-  const shownTime = ({ name, state, ms }: ProviderStatus) => (state === 'querying' ? elapsed(name) : seconds(ms))
+  const shownTime = ({ name, state, ms }: ProviderStatus) => (state === 'querying' || state === 'retrying' ? elapsed(name) : seconds(ms))
   const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
   const names = width(providers.map(provider => provider.name))
   const states = width(providers.map(provider => provider.state))
@@ -98,10 +103,21 @@ function statusRows(
     stateColor: STATE_COLORS[provider.state] ?? COLOR.muted,
     time: shownTime(provider).padStart(times),
     model: provider.model ?? '',
-    ...(cancellable.includes(provider.name) ? { cancel: { seat: provider.name, ...(index < 10 ? { hotkey: String((index + 1) % 10) } : {}) } } : {}),
+    ...(cancellable.includes(provider.name) ? { cancel: { seat: provider.name, ...digit(index) } } : {}),
+    ...(retriable.includes(provider.name) ? { retry: { seat: provider.name, ...digit(index) } } : {}),
   }))
-  if (rows.some(row => row.kind === 'status' && row.cancel)) rows.push({ kind: 'note', text: CANCEL_HINT })
+  if (rows.some(row => row.kind === 'status' && (row.cancel || row.retry))) rows.push({ kind: 'note', text: CANCEL_HINT })
   return rows
+}
+
+const digit = (index: number) => (index < 10 ? { hotkey: String((index + 1) % 10) } : {})
+
+// The seats whose error row can be retried: the run's loop over its seats
+// honours a press only while some seat is still out, and a seat gets one
+// retry, so one queried twice has had it. A pressed seat waits on the run.
+export function seatsToRetry({ providers, retries = [], isDone }: Pick<RunView, 'providers' | 'retries' | 'isDone'>): string[] {
+  if (isDone || !providers.some(({ state }) => state === 'querying')) return []
+  return providers.filter(({ name, state, attempts }) => state === 'error' && (attempts ?? 1) < 2 && !retries.includes(name)).map(({ name }) => name)
 }
 
 // What the band's cancel all presses: every seat a live run still has
@@ -156,7 +172,7 @@ export function queryingSince(since: Record<string, number>, providers: Provider
 }
 
 export function paneSections(
-  { providers, responses, errors, cancels = [], colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
+  { providers, responses, errors, cancels = [], retries = [], colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
   { collapsesWhenDone = true, frame = 0, nowMs = 0, fitText = (text: string) => text, closed = new Set<string>() }: { collapsesWhenDone?: boolean; frame?: number; nowMs?: number; fitText?: (text: string) => string; closed?: ReadonlySet<string> } = {},
 ): Section[] {
   if (providers.length === 0) {
@@ -164,10 +180,15 @@ export function paneSections(
   }
   // A seat still querying as far as the log knows, with its marker in the
   // watch dir, is cancelling: the run removes the marker once it logs the seat.
-  const shown = providers.map(provider => (provider.state === 'querying' && cancels.includes(provider.name) ? { ...provider, state: 'cancelling' } : provider))
+  const shown = providers.map(provider =>
+    provider.state === 'querying' && cancels.includes(provider.name) ? { ...provider, state: 'cancelling' }
+    : provider.state === 'error' && retries.includes(provider.name) && !isDone ? { ...provider, state: 'retrying' }
+    : provider,
+  )
   const vendor = (name: string) => `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`
   const glyph = (state: string) => {
     if (state === 'error') return '\u2717'
+    if (state === 'retrying') return '\u280b'
     if (state === 'cancelled' || state === 'cancelling') return '\u25cb'
     return state === 'querying' ? spinner(frame) : '\u25cf'
   }
@@ -181,7 +202,7 @@ export function paneSections(
     if (responses[name] !== undefined) return fold('banner', jumpKey(name))
     return errors[name] !== undefined ? fold('error', jumpKey(name)) : undefined
   }
-  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection, foldOf) : statusRows(shown, vendor, glyph, elapsed, seatsToCancel({ providers, cancels, isDone }))
+  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection, foldOf) : statusRows(shown, vendor, glyph, elapsed, seatsToCancel({ providers, cancels, isDone }), seatsToRetry({ providers, retries, isDone }))
   for (const { name, state, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]

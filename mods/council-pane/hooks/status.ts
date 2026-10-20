@@ -6,6 +6,9 @@ export type ProviderStatus = {
   state: string
   ms?: number
   model?: string
+  // How many times the seat was queried this run, when more than once: a
+  // second querying line is a retry, and a seat gets one.
+  attempts?: number
 }
 
 // The states in which a seat has an answer on disk: its own, a cached one, or
@@ -24,6 +27,7 @@ export function parseStatus(log: string): ProviderStatus[] {
     if (!name || !state) continue
     const seen = byName.get(name) ?? { name, state }
     seen.state = state
+    if (state === 'querying' && byName.has(name)) seen.attempts = (seen.attempts ?? 1) + 1
     if (ms && /^\d+$/.test(ms)) seen.ms = Number(ms)
     if (model) seen.model = model
     byName.set(name, seen)

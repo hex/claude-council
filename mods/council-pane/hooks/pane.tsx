@@ -1128,9 +1128,19 @@ function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label
 // out. The next poll reads it back and draws the row as cancelling until the
 // run's log line lands.
 function cancelSeat($: EngineInterface, state: PaneState, name: string): void {
+  pressSeat($, state, 'cancel', name)
+}
+
+// Retry a seat from its error row: the marker the run's seat loop polls for
+// while other seats are still out. It stays until the re-queried seat ends.
+function retrySeat($: EngineInterface, state: PaneState, name: string): void {
+  pressSeat($, state, 'retry', name)
+}
+
+function pressSeat($: EngineInterface, state: PaneState, press: 'cancel' | 'retry', name: string): void {
   const runDir = state.runDir
   if (!runDir) return
-  void $.fs.write(`${runDir}/cancel/${name}`, '').catch((err: unknown) => $.ui.log(`cancel ${name}: ${String(err)}`))
+  void $.fs.write(`${runDir}/${press}/${name}`, '').catch((err: unknown) => $.ui.log(`${press} ${name}: ${String(err)}`))
 }
 
 // A section header's press: close it if open, open it if closed.
@@ -1947,8 +1957,9 @@ export const register: Register = (on, options) => {
           return <Text key={key} dimColor>{section.text}</Text>
         case 'status': {
           const cancel = section.cancel
+          const retry = section.retry
           // The model takes the slack and gives way when narrow, so every
-          // row's cancel sits at the pane's right edge.
+          // row's cancel or retry sits at the pane's right edge.
           return (
             <Box key={key} flexDirection="row" width={columns}>
               <Box flexShrink={0}>
@@ -1966,6 +1977,12 @@ export const register: Register = (on, options) => {
                 <Box flexDirection="row" flexShrink={0}>
                   <Text>{'  '}</Text>
                   <Button key={`cancel:${cancel.seat}`} plain label="cancel" {...(cancel.hotkey ? { hotkey: cancel.hotkey } : {})} onPress={() => cancelSeat($, state, cancel.seat)} />
+                </Box>
+              )}
+              {retry && (
+                <Box flexDirection="row" flexShrink={0}>
+                  <Text>{'  '}</Text>
+                  <Button key={`retry:${retry.seat}`} plain label="retry" {...(retry.hotkey ? { hotkey: retry.hotkey } : {})} onPress={() => retrySeat($, state, retry.seat)} />
                 </Box>
               )}
             </Box>

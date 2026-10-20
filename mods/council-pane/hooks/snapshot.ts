@@ -43,6 +43,8 @@ export async function readView(fs: Files, runDir: string): Promise<RunView> {
     errors: await readFolder(fs, `${runDir}/errors`, '.txt'),
     // The seats the pane pressed for cancel; a marker stays until the run logs the seat as cancelled.
     cancels: await fileNames(fs, `${runDir}/cancel`),
+    // The seats pressed for retry on their error row; a marker stays until the re-queried seat ends.
+    retries: await fileNames(fs, `${runDir}/retry`),
     colors: parseColors(await readText(fs, `${runDir}/colors`)),
     isDone,
     ...(latest ? { latest } : {}),
