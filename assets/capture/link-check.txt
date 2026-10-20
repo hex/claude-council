@@ -1,0 +1,4 @@
+CLI checks passed for inline, HTML, reference, duplicate-heading, and fenced-code cases.
+Negative control exited 1 with exactly:
+missing anchor: guide.md#absent
+missing file: missing.md

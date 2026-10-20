@@ -1,0 +1,12 @@
+ts	phase	decision	why	evidence	result
+2026-10-20T10:45:00Z	frame	Use real host Haiku turns and fake council seats	The revised brief resolves the provider-call restriction	errand-c0acb707-b52e-4ca4-9854-249e675fe1ed.brief.md	authorized
+2026-10-20T10:45:00Z	workflow	Follow the six requested commits; capture scripts precede SVGs	The reproduction scripts are the deliverable; each image is derived	assets/capture/README.md	open
+2026-10-20T10:45:00Z	workflow	Use scratch projects inside assets/capture and a private tmux server	The runner writes a relative .claude/council-cache; existing session files must remain unchanged	scripts/run-council.sh:41	open
+2026-10-20T11:29:31Z	capture	Keep USER in the explicit host environment	The native host needs it to find the saved login; no API key enters the environment	Successful Haiku captures with HOME and USER	passed
+2026-10-20T11:29:31Z	capture	Open the inline pane with ctrl+x tab then o	Automatic pane opens wait for 144 columns; the brief fixes the terminal at 110	.claude/types/claude-code.d.ts:14800	passed
+2026-10-20T11:29:31Z	capture	Use 80 rows and zoom the plain tmux pane	All requested rows must fit without modifying captured output	council-run and tmux-pane manifests	passed
+2026-10-20T11:29:31Z	capture	Isolate Bash startup files	Personal startup files prepend real CLIs and emit unrelated output	shell.sh; fixture call records	passed
+2026-10-20T11:29:31Z	converter	Position each ANSI text run with x and y	Magick overlaps nested tspan runs; browser and raster need explicit row baselines	First-frame browser and Magick checks	passed
+2026-10-20T11:29:31Z	capture	Reject a run missing the Grok answer	One prototype missed Grok despite a fixture call; direct fixture probe passed and cause remains unproven	Subsequent full capture has four successful seats and one expected Kimi failure	rejected prototype
+2026-10-20T11:29:31Z	capture	Capture the first council state after Enter	The requested first state is a sent command, not an unsent prompt	capture.py council flow	passed
+2026-10-20T11:29:31Z	converter	Share repeated fill colors through CSS classes	The sent-command capture exceeded 80 KB; class references preserve literal colors and all text	81274 bytes before, 79336 after	passed
