@@ -1,59 +1,59 @@
 
-[1m[38;2;185;28;28m✗ grok-cli error[0m
-   [2m[38;2;252;165;165mError from grok CLI: Not signed in. To authenticate without a browser, run:   grok login --device-code  Alt
-ernatively, set the XAI_API_KEY environment variable or run `grok login` on a machine with a browser. Error: N
-ot signed in. To authenticate without a browser, run:   grok login --device-code  Alternatively, set the XAI_A
-PI_KEY environment variable or run `grok login` on a machine with a browser.[0m
-
-
 [1m[38;2;185;28;28m✗ kimi-cli error[0m
    [2m[38;2;252;165;165mError from kimi CLI: Error: 429 Too Many Requests[0m
 
 
-[1m[38;2;185;28;28m✗ cursor-cli error[0m
-   [2m[38;2;252;165;165mError from cursor-agent CLI: ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent
- usage, unlimited Tab, and more.[0m
+[1m[38;2;31;41;55m[48;2;229;231;235m  OPENAI [0;3m[38;2;100;116;139m[48;2;229;231;235mgpt-6-astra[0;1m[38;2;31;41;55m[48;2;229;231;235m [0;3m[38;2;31;41;55m[48;2;229;231;235m(4.3s)[0;1m[38;2;31;41;55m[48;2;229;231;235m  [0m[48;2;229;231;235m
 
 
-[1m[38;2;255;255;255m[48;2;30;64;175m  ANTIGRAVITY [0;3m[38;2;147;197;253m[48;2;30;64;175mGemini 3.8 Flash (High)[0;1m[38;2;255;255;255m[48;2;30;64;175m [0;3m[38;2;255;255;255m[48;2;30;64;175m(17.3s)[0;1m[38;2;255;255;255m[48;2;30;64;175m  [0m[48;2;30;64;175m
-
-[49mFor a single-node demo app, [1mSQLite[0m is typically the recommended choice:
-
-[36m • [39mChoose [1mSQLite[0m by default because it requires zero infrastructure setup, runs embedded in-process, and keeps
-[36m   [39mthe database in a single portable file.
-[36m • [39mOpt for [1mPostgres[0m only if your demo explicitly highlights Postgres-exclusive features, such as [33mpgvector[39m,
-[36m   [39mspecialized extensions, or advanced concurrency controls.
-[36m • [39mSQLite minimizes operational friction, making the demo significantly faster to distribute, run, and reset
-[36m   [39mfor stakeholders.
+[36m[49m • [1m[39mUse SQLite by default[0m for a single-node demo: it requires no database server, is easy to reset or ship with
+[36m   [39msample data, and keeps setup simple.
+[36m • [1m[39mUse Postgres[0m if the demo needs Postgres-specific features, handles many concurrent writes, or should
+[36m   [39mclosely match a planned Postgres production environment.
+[36m • [39mIf none of those requirements apply, SQLite is the better tradeoff—spend the saved setup time on the demo
+[36m   [39mitself.
 
 
-[1m[38;2;31;41;55m[48;2;229;231;235m  CODEX [0;3m[38;2;100;116;139m[48;2;229;231;235mgpt-6-astra[0;1m[38;2;31;41;55m[48;2;229;231;235m [0;3m[38;2;31;41;55m[48;2;229;231;235m(72.9s)[0;1m[38;2;31;41;55m[48;2;229;231;235m  [0m[48;2;229;231;235m
+[1m[38;2;255;255;255m[48;2;30;64;175m  GEMINI [0;3m[38;2;147;197;253m[48;2;30;64;175mgemini-flash-latest[0;1m[38;2;255;255;255m[48;2;30;64;175m [0;3m[38;2;255;255;255m[48;2;30;64;175m(4.7s)[0;1m[38;2;255;255;255m[48;2;30;64;175m  [0m[48;2;30;64;175m
+
+[49mFor a single-node demo app, [1mSQLite[0m is almost always the best choice because it eliminates operational
+overhead.
+
+[36m • [1m[39mZero setup:[0m It requires no separate server process, container, or network configuration—the database is
+[36m   [39msimply a single file.
+[36m • [1m[39mPortability:[0m You can easily share, clone, seed, or reset the entire database state by copying the file.
+[36m • [1m[39mPerformance:[0m It offers near-zero latency for typical demo workloads since data is accessed directly
+[36m   [39min-process.
+
+Only choose [1mPostgres[0m if your demo must showcase Postgres-specific capabilities, such as advanced concurrency,
+the [33mpgvector[39m extension, or specific JSON operations.
 
 
-[36m[49m • [39mAlex, [1muse SQLite for a single-node demo app[0m.
-[36m • [39mIt stores data locally and avoids running a separate database service, making the demo easier to set up and
-[36m   [39mdistribute. [4m[36m]8;id=6645619;https://www.sqlite.org/whentouse.html\SQLite’s guidance[0m]8;;\ explicitly supports standalone demonstrations.
-[36m • [39mChoose Postgres if the demo’s purpose is to validate an existing Postgres production setup; otherwise,
-[36m   [39mSQLite keeps the work smaller.
+[1m[38;2;31;41;55m[48;2;229;231;235m  CODEX [0;3m[38;2;100;116;139m[48;2;229;231;235mdefault[0;1m[38;2;31;41;55m[48;2;229;231;235m [0;3m[38;2;31;41;55m[48;2;229;231;235m(9.4s)[0;1m[38;2;31;41;55m[48;2;229;231;235m  [0m[48;2;229;231;235m
 
 
-[2m[r] retry failed (grok-cli, kimi-cli, cursor-cli) · [esc/ctrl-d] close  12s[0m
+[36m[49m • [1m[39mUse SQLite[0m for a single-node demo app: setup is minimal, the database is one file, and there’s no separate
+[36m   [39mserver to manage.
+[36m • [1m[39mUse Postgres[0m if the demo needs Postgres-specific features, substantial concurrent writes, or needs to
+[36m   [39mclosely match an existing Postgres production environment.
+[36m • [39mMy default: start with SQLite and spend the saved setup time on the demo; choose Postgres when a concrete
+[36m   [39mrequirement justifies it.
 
 
+[1m[38;2;255;255;255m[48;2;30;64;175m  ANTIGRAVITY [0;3m[38;2;147;197;253m[48;2;30;64;175mGemini 3.8 Flash (High)[0;1m[38;2;255;255;255m[48;2;30;64;175m [0;3m[38;2;255;255;255m[48;2;30;64;175m(23.9s)[0;1m[38;2;255;255;255m[48;2;30;64;175m  [0m[48;2;30;64;175m
+
+[49mFor a single-node demo application, [1mSQLite[0m is almost always the best choice:
+
+[36m • [1m[39mDefault to SQLite:[0m It runs in-process with zero operational overhead, eliminating the need to manage
+[36m   [39mbackground services, credentials, or network configuration.
+[36m • [1m[39mEasy resets and distribution:[0m Because the entire database resides in a single file, you can instantly
+[36m   [39mclone, reset, or bundle demo state across machines.
+[36m • [1m[39mChoose Postgres only when necessary:[0m Reserve Postgres for demos that explicitly showcase Postgres-specific
+[36m   [39mfeatures (such as [33mpgvector[39m or advanced JSONB queries) or strictly require parity with an existing
+[36m   [39mproduction deployment.
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+[2m[r] retry failed (kimi-cli) · [esc/ctrl-d] close  12s[0m
 
 
 

@@ -2,25 +2,35 @@
   "title": "Council answers in a tmux side pane",
   "description": "Captured terminal output in real seat mode. Each state lasts 2.5 seconds.",
   "provenance": {
-    "checkout_head": "afff4c5a2f7dbeb3669e6c2f9df78290f0ffbae1",
+    "checkout_head": "5bc859bb05aaa02c487f81ce73f2a890c2b17b62",
     "seat_mode": "real",
+    "providers": [
+      "codex",
+      "antigravity",
+      "gemini",
+      "openai",
+      "kimi-cli"
+    ],
+    "api_key_names": [
+      "GEMINI_API_KEY",
+      "OPENAI_API_KEY"
+    ],
+    "api_models": {
+      "gemini": "gemini-flash-latest",
+      "openai": "gpt-6-astra"
+    },
+    "codex_home": "Temporary auth.json-only home, removed on exit",
     "question": "Should a single-node demo app use SQLite or Postgres?",
     "cli_versions": {
       "codex": "codex-cli 0.163.0",
       "agy": "1.4.3",
-      "grok": "grok 1.0.60 (01a8e1c591c0) [stable]",
-      "cursor-agent": "2026.10.14-0f9edde",
       "kimi": "fake-kimi 0.0.1"
     },
     "real_invocations": [
       "dark-agy",
       "dark-codex",
-      "dark-cursor-agent",
-      "dark-grok",
       "light-agy",
-      "light-codex",
-      "light-cursor-agent",
-      "light-grok"
+      "light-codex"
     ],
     "capture_commands": [
       "COUNCIL_CAPTURE_SEATS=real bash assets/capture/tmux-pane.sh",
@@ -31,10 +41,11 @@
       "host": null,
       "behavior": {
         "kimi": "rate-limit after 2s",
-        "other_seats": "real subscription CLIs"
+        "codex_and_agy": "real subscription CLIs",
+        "gemini_and_openai": "real APIs; no transport retries"
       }
     },
-    "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain.",
+    "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain. Trailing focus-events hints are outside the crop; raw text is retained.",
     "terminal_defaults": {
       "light": [
         "#302a24",
@@ -56,17 +67,17 @@
           "file": "tmux-pane-0-light.ansi",
           "crop": [
             0,
-            8
+            1
           ],
-          "sha256": "ceaac1d0fd39719734603936f76338c160bd083a2ff3b1bbb416b2554054cbdf"
+          "sha256": "ae17db4177b53f42ef43357c67f9d43b340ef7fd35348c6e9177de9b37cf4059"
         },
         "dark": {
           "file": "tmux-pane-0-dark.ansi",
           "crop": [
             0,
-            8
+            1
           ],
-          "sha256": "2760ed075a2bec2f294ea8d446f143fbd3479e360a121b33972cca80b558f55f"
+          "sha256": "8f590d3d54766c810e42e0bb317f885655197f32df048b65ce90c07069fe7c74"
         }
       }
     },
@@ -77,17 +88,17 @@
           "file": "tmux-pane-1-light.ansi",
           "crop": [
             0,
-            18
+            6
           ],
-          "sha256": "0c3fe424d3d5ace4a47bf5f9a342910b8d627fade38554ee4f52c778b5b8722e"
+          "sha256": "ae27296eecb6899a888f7c2f0470ebc3bf01d6702f0b90170c843c96653926ba"
         },
         "dark": {
           "file": "tmux-pane-1-dark.ansi",
           "crop": [
             0,
-            18
+            6
           ],
-          "sha256": "adede016b72ebb060ea1a0cd7debac46291f018e373f0d222247e31e7c9ded5f"
+          "sha256": "7858b6b091749c5599f0f642c93c9c0259c35c4195942f6d50def49c1fe71503"
         }
       }
     },
@@ -98,17 +109,17 @@
           "file": "tmux-pane-2-light.ansi",
           "crop": [
             0,
-            41
+            54
           ],
-          "sha256": "d724dd8171454f40101b8eeabda1d2559f76abae6979e1a002f0cb444e21520e"
+          "sha256": "67aafc3eb399740b7312ce435a52721dc1c1d0d3223dbf7bed5b8711c7aa7917"
         },
         "dark": {
           "file": "tmux-pane-2-dark.ansi",
           "crop": [
             0,
-            40
+            56
           ],
-          "sha256": "e00991c6953515783350e57d4499ae1f6bc0e0e1bc642ff2afad0ef98618ed5d"
+          "sha256": "e67faf9f61778a86be3b27dd14ca72e907f36d78a405d5ad0bafbf0dd1e210dc"
         }
       }
     }

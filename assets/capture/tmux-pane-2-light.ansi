@@ -1,57 +1,57 @@
 
-[1m[38;2;185;28;28m✗ grok-cli error[0m
-   [2m[38;2;252;165;165mError from grok CLI: Not signed in. To authenticate without a browser, run:   grok login --device-code  Alt
-ernatively, set the XAI_API_KEY environment variable or run `grok login` on a machine with a browser. Error: N
-ot signed in. To authenticate without a browser, run:   grok login --device-code  Alternatively, set the XAI_A
-PI_KEY environment variable or run `grok login` on a machine with a browser.[0m
-
-
 [1m[38;2;185;28;28m✗ kimi-cli error[0m
    [2m[38;2;252;165;165mError from kimi CLI: Error: 429 Too Many Requests[0m
 
 
-[1m[38;2;185;28;28m✗ cursor-cli error[0m
-   [2m[38;2;252;165;165mError from cursor-agent CLI: ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent
- usage, unlimited Tab, and more.[0m
+[1m[38;2;31;41;55m[48;2;229;231;235m  OPENAI [0;3m[38;2;100;116;139m[48;2;229;231;235mgpt-6-astra[0;1m[38;2;31;41;55m[48;2;229;231;235m [0;3m[38;2;31;41;55m[48;2;229;231;235m(5.4s)[0;1m[38;2;31;41;55m[48;2;229;231;235m  [0m[48;2;229;231;235m
 
 
-[1m[38;2;255;255;255m[48;2;30;64;175m  ANTIGRAVITY [0;3m[38;2;147;197;253m[48;2;30;64;175mGemini 3.8 Flash (High)[0;1m[38;2;255;255;255m[48;2;30;64;175m [0;3m[38;2;255;255;255m[48;2;30;64;175m(15.6s)[0;1m[38;2;255;255;255m[48;2;30;64;175m  [0m[48;2;30;64;175m
-
-[49mFor a single-node demo app, [1mSQLite[0m is the recommended choice due to its simplicity and zero configuration.
-
-[36m • [1m[39mZero operational overhead:[0m SQLite runs embedded in-process, eliminating the need to install, configure, or
-[36m   [39mmanage background database daemons and connection credentials.
-[36m • [1m[39mEffortless portability:[0m The entire database resides in a single file, making it trivial to reset, share,
-[36m   [39msnapshot, or distribute alongside your demo code.
-[36m • [1m[39mWhen to choose Postgres:[0m Opt for Postgres only if your demo explicitly showcases Postgres-exclusive
-[36m   [39mfeatures, such as [33mpgvector[39m, specialized extensions, or complex concurrency models.
+[36m[49m • [1m[39mUse SQLite by default[0m for a single-node demo: it needs no database service, keeps setup simple, and stores
+[36m   [39mdata in one file.
+[36m • [1m[39mChoose Postgres[0m if the demo must match a Postgres production environment, relies on Postgres-specific
+[36m   [39mfeatures, or needs substantial concurrent writes.
+[36m • [39mWith SQLite, keep the database on persistent local storage and enable WAL mode to improve read/write
+[36m   [39mconcurrency.
+[36m • [39mFor a typical demo with modest traffic, SQLite is the practical choice—don’t add Postgres unless it serves
+[36m   [39ma concrete requirement.
 
 
-[1m[38;2;31;41;55m[48;2;229;231;235m  CODEX [0;3m[38;2;100;116;139m[48;2;229;231;235mgpt-6-astra[0;1m[38;2;31;41;55m[48;2;229;231;235m [0;3m[38;2;31;41;55m[48;2;229;231;235m(39.9s)[0;1m[38;2;31;41;55m[48;2;229;231;235m  [0m[48;2;229;231;235m
+[1m[38;2;255;255;255m[48;2;30;64;175m  GEMINI [0;3m[38;2;147;197;253m[48;2;30;64;175mgemini-flash-latest[0;1m[38;2;255;255;255m[48;2;30;64;175m [0;3m[38;2;255;255;255m[48;2;30;64;175m(7.8s)[0;1m[38;2;255;255;255m[48;2;30;64;175m  [0m[48;2;30;64;175m
+
+[49mFor a single-node demo app, [1mSQLite[0m is almost always the superior choice because it eliminates infrastructure
+overhead entirely.
+
+[36m • [1m[39mChoose SQLite[0m for instant zero-configuration setup, effortless portability via a single file, and minimal
+[36m   [39mresource consumption.
+[36m • [1m[39mChoose Postgres[0m only if the core purpose of your demo requires specific Postgres features, such as
+[36m   [33mpgvector[39m, advanced JSONB operations, or specific data types.
+
+Default to SQLite so anyone evaluating your demo can run it immediately without managing database containers
+or network credentials.
 
 
-[36m[49m • [39mAlex, [1muse SQLite[0m for a single-node demo: it runs inside your app and needs no separate database server,
-[36m   [39mmaking setup and distribution simpler. [4m[36m]8;id=719619;https://www.sqlite.org/whentouse.html\SQLite guidance[0m]8;;\
-[36m • [39mChoose Postgres if the demo specifically needs to reproduce a production Postgres environment or
-[36m   [39mdemonstrate Postgres-specific functionality.
-[36m • [39mStart with a SQLite database file on persistent local storage and a seed script that makes the demo easy to
-[36m   [39mreset.
+[1m[38;2;31;41;55m[48;2;229;231;235m  CODEX [0;3m[38;2;100;116;139m[48;2;229;231;235mdefault[0;1m[38;2;31;41;55m[48;2;229;231;235m [0;3m[38;2;31;41;55m[48;2;229;231;235m(8.8s)[0;1m[38;2;31;41;55m[48;2;229;231;235m  [0m[48;2;229;231;235m
 
 
-[2m[r] retry failed (grok-cli, kimi-cli, cursor-cli) · [esc/ctrl-d] close  12s[0m
+[36m[49m • [1m[39mUse SQLite[0m for a single-node demo app: setup is minimal, the database is a file, and you avoid running a
+[36m   [39mseparate service.
+[36m • [1m[39mUse Postgres[0m if the demo needs Postgres-specific features, handles many concurrent writes, or must closely
+[36m   [39mmatch an existing Postgres production environment.
+[36m • [39mOtherwise, start with SQLite and spend the saved setup time on the demo itself.
 
 
+[1m[38;2;255;255;255m[48;2;30;64;175m  ANTIGRAVITY [0;3m[38;2;147;197;253m[48;2;30;64;175mGemini 3.8 Flash (High)[0;1m[38;2;255;255;255m[48;2;30;64;175m [0;3m[38;2;255;255;255m[48;2;30;64;175m(15.3s)[0;1m[38;2;255;255;255m[48;2;30;64;175m  [0m[48;2;30;64;175m
 
 
+[36m[49m • [1m[39mSQLite (Recommended):[0m Best for a single-node demo because it runs embedded with zero service configuration,
+[36m   [39meliminates external dependencies, and allows instant state resets by copying or deleting a single file.
+[36m • [1m[39mPostgres:[0m Choose this only if your demo explicitly requires Postgres-native features—such as [33mpgvector[39m,
+[36m   [39mspecialized extensions, or advanced concurrency controls—that cannot be emulated.
+[36m • [1m[39mVerdict:[0m Unless Postgres-specific capabilities are central to the demonstration, SQLite significantly
+[36m   [39mreduces onboarding friction and deployment complexity for reviewers.
 
 
-
-
-
-
-
-
-
+[2m[r] retry failed (kimi-cli) · [esc/ctrl-d] close  12s[0m
 
 
 
