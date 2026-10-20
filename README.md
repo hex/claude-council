@@ -155,7 +155,6 @@ every call asks you first.
 | Background jobs, export, quiet mode | [Usage guide](docs/USAGE.md#background-jobs---async) |
 | A second model reviewing your diff before Claude stops | [Stop-gate review](docs/USAGE.md#stop-gate-review-opt-in-off-by-default) |
 | A one-line "heads up" from a council seat, codex by default, while Claude works | [Heads-up side-check](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default) |
-| Hand a coding task to a Codex agent on its own branch | [Specialists](docs/USAGE.md#specialists-experimental) |
 | Every flag, variable, default and limit | [Reference](docs/REFERENCE.md) |
 | Running the scripts without Claude Code | [Direct script usage](docs/REFERENCE.md#direct-script-usage) |
 | How it works inside | [Architecture](docs/ARCHITECTURE.md) |

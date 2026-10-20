@@ -43,7 +43,7 @@ on('turn.step', async ($, e, next) => {
 })
 // stepHeadsUp: session = (await $.state.get(HEADS_UP)).value ?? FRESH_SESSION; decide; write back on a change
 // poll(): if (session.phase.kind === 'checking') await pollHeadsUp($)
-// AbovePrompt, after finished and retry, before the specialist and progress bands:
+// AbovePrompt, after finished and retry, before the progress band:
 //   const band = bandView((await $.state.get(HEADS_UP)).value?.phase)   // a render read subscribes the band
 //   if (band) return headsUpRow(ui, band, presses)
 // prompt.submit (composer | bridge): typed past while showing| bridge): typed past while showing; the one-shot tell-Claude context
@@ -74,7 +74,7 @@ Load-bearing decisions:
 - **Errors fail open, reported once.** A seat timeout or error writes `kind: failed` with the reason, which the pane logs through `logFailure`. The band never nags about infrastructure. Deadline: 60 s for the seat, counted in ticks of `sleep 1`, never `$((SECONDS+N))`.
 - **Learn more expands in place; tell Claude fills the prompt box.** Two presses, because reading more and telling Claude are different decisions. `$.prompt.submit` would start a turn the person did not ask for, and a hidden `prompt.submit` context vanished without a trace when pressed (seen live). `$.prompt.fill` puts a draft the person can read, edit and send, which is the builtin's behaviour and the promise: the main agent learns of a note only through the person.
 - **Typed past = a `prompt.submit` whose `origin.kind` is `composer` or `bridge` while a note shows.** This plugin's own submits and continuation turns do not count. Turn end alone does not either: the person may not have looked yet.
-- **Band priority: after finished and retry, before the specialist and progress bands.** A note is one row and time-sensitive; the progress bands return when it is answered. Controls carry full-strength hotkey labels, no `dimColor`.
+- **Band priority: after finished and retry, before the progress band.** A note is one row and time-sensitive; the progress bands return when it is answered. Controls carry full-strength hotkey labels, no `dimColor`.
 - **Settings: the file only.** A userConfig row would be a second switch, and `$.config.set` reloads the module.
 
 Depth: `heads-up.ts` exports the types and eleven pure functions that hide cadence, backoff, dedupe, result validation and the band's words; `pane.tsx` calls `decide`, `settle`, `parseRunResult`, `bandView`, `applyAnswer` and `learnMoreContext` and never inspects a counter. `heads-up.sh` hides the codex schema handshake, the deadline and payload measuring behind one command with four flags and an optional `--model`.

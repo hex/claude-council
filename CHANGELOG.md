@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Removed
+- The specialists feature: the `/specialists` screen, the `specialist` tool, `scripts/specialist.sh`, the six bundled template skills, the `specialists` and `specialist_round_limit` settings and `.worktreeinclude`. It never triggered in use. Each session now removes the store records it left behind.
+
 ## 2026.10.6
 
 ### Features

@@ -2,7 +2,6 @@
 // ABOUTME: Pure functions over the run's provider states
 
 import { ANSWERED_STATES, count, ENDED_STATES, type ProviderStatus } from './status'
-import { roundClock } from './specialist'
 
 type RunProgress = { providers: ProviderStatus[]; isDone: boolean }
 
@@ -17,8 +16,16 @@ export function finishNotice({ providers }: RunProgress, jobId = ''): string {
 
 const PROGRESS_CELLS = 8
 
-// The band above the prompt while a run is live, in the specialist band's
-// slots: how many providers finished (an error or a cancel included), a thin line of the
+// An m:ss clock, h:mm:ss past an hour. Args: when the run started, now.
+export function roundClock(startedMs: number, nowMs: number): string {
+  const secs = Math.max(0, Math.floor((nowMs - startedMs) / 1000))
+  const hours = Math.floor(secs / 3600)
+  const mins = Math.floor((secs % 3600) / 60)
+  const ss = String(secs % 60).padStart(2, '0')
+  return hours > 0 ? `${hours}:${String(mins).padStart(2, '0')}:${ss}` : `${mins}:${ss}`
+}
+
+// The band above the prompt while a run is live: how many providers finished (an error or a cancel included), a thin line of the
 // same share, an m:ss clock and the latest event. Both counts round down, so
 // the line never reads full while a provider is still out. `startedAtMs` is
 // when the pane picked the run up; before that there is no clock.

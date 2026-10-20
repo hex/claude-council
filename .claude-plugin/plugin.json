@@ -1,7 +1,7 @@
 {
   "name": "claude-council",
   "version": "2026.10.6",
-  "description": "Consult multiple AI coding agents (Gemini, OpenAI, Grok, Perplexity, Kimi, any model OpenRouter routes to, plus codex, antigravity, grok, kimi and cursor CLIs when installed, and a local ollama model) to get diverse perspectives on coding problems, with a streaming pane in tmux or inside Claude Code, and, once switched on, a heads-up side-check where one council seat, codex by default, rereads a long turn and shows one line above the prompt about something you may have missed. It can also hand a coding task to a Codex specialist that works on its own git branch and follows skills you pick (experimental).",
+  "description": "Consult multiple AI coding agents (Gemini, OpenAI, Grok, Perplexity, Kimi, any model OpenRouter routes to, plus codex, antigravity, grok, kimi and cursor CLIs when installed, and a local ollama model) to get diverse perspectives on coding problems, with a streaming pane in tmux or inside Claude Code, and, once switched on, a heads-up side-check where one council seat, codex by default, rereads a long turn and shows one line above the prompt about something you may have missed.",
   "author": {
     "name": "hex",
     "url": "https://github.com/hex"
@@ -31,7 +31,6 @@
     "pane",
     "tmux",
     "mod",
-    "specialists",
     "heads-up"
   ],
   "userConfig": {
@@ -59,23 +58,11 @@
       "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Let the model call the council as a tool. Every call first asks you to confirm, because the council sends the question to third-party providers.",
       "default": true
     },
-    "specialist_round_limit": {
-      "type": "number",
-      "title": "Specialist round limit (minutes)",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. A specialist round still running after this many minutes is stopped, and nothing it did is committed. Fractions count to the second. 0 means no limit.",
-      "default": 60
-    },
     "heads_up": {
       "type": "boolean",
       "title": "Heads-up side-check",
       "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. While Claude works a long turn, one council seat, codex by default, rereads the last five turns and the last eight tool results and may show one line above the prompt. Nothing asks before a send: that material leaves the machine on every check. A project's .claude/council-heads-up.json can turn it on or off for that project alone and pick the seat and cadence.",
       "default": false
-    },
-    "specialists": {
-      "type": "string",
-      "title": "Specialists",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Set up with /specialists; this field holds what it saves, as a JSON list of objects, and /config does not show it.",
-      "default": "[]"
     }
   }
 }
