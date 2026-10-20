@@ -1,0 +1,80 @@
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;241mv2.1.304[39m
+[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;241mHaiku[39m [38;5;241m5.5[39m [38;5;241m·[39m [38;5;241mClaude[39m [38;5;241mMax[39m
+[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;241m~/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/project[39m
+
+[2m▎[0m [38;5;241mDebug[39m [38;5;241mmode[39m [38;5;241menabled[39m [38;5;241m·[39m [38;5;241mlogging[39m [38;5;241mto[39m
+[2m▎[0m [38;5;241m/Users/alex.geana/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/debug-light.log[39m
+
+[38;5;241m[48;5;255m❯[39m [38;5;16m/heads-up[39m [49m
+[38;5;241m  ⎿  [39mclaude-council: Heads-up side-check: on for this project
+       by       .claude/council-heads-up.json (the /config row is off)
+       seat     codex
+       every    2 requests
+       checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0
+       presses  learn 0 · tell 0 · knew 0 · dismiss 0 · turned off 0 · typed past 0
+
+[38;5;241m[48;5;255m❯ [38;5;16mRun date, then ls, then pwd, as three separate shell commands, one per step. Then say ok.[39m
+
+[38;5;65m[49m⏺[39m [1mBash[0m(date)
+[38;5;241m  ⎿  [39mTue Oct 20 14:08:49 EEST 2026
+
+[38;5;65m⏺[39m [1mBash[0m(ls)
+[38;5;241m  ⎿  (No output)[39m
+
+[38;5;65m⏺[39m [1mBash[0m(pwd)
+[38;5;241m  ⎿  [39m/Users/alex.geana/.claude-sessions/claude-council/assets/capture/.heads-up-rzyubxsq/project
+
+[38;5;174m✶[39m [38;5;174mGesti[38;5;216mcul[38;5;174mating… [38;5;241m(6s · ↓[39m [38;5;241m407 tokens)[39m
+[38;5;241m  ⎿  Tip: Name your conversations with /rename to find them easily in /resume later[39m
+                                                                                                          [38;5;241m[-][39m
+[38;5;174m✦ [1m[39mHeads up[0m · The migration test used an empty fixture, so the backfill path never ran.
+  [38;5;105m1[39m: Learn more   [38;5;105m2[39m: Knew this already   [38;5;105m4[38;5;241m: Turn off[39m   [38;5;105m0[39m: Dismiss[38;5;248m      codex · gpt-6-astra · 5.8 KB · 1 s[39m
+
+[38;5;245m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;5;241m❯ [7m[39m [0m
+[38;5;245m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;131m⏵⏵[39m [38;5;131mbypass[39m [38;5;131mpermissions[39m [38;5;131mon[38;5;241m (shift+tab[39m [38;5;241mto[39m [38;5;241mcycle)[39m [38;5;241m·[39m [38;5;241mesc[39m [38;5;241mto[39m [38;5;241minterrupt[39m
+                                                                                                [38;5;241m21587[39m [38;5;241mtokens[39m
+        [38;5;241mtmux[39m [38;5;241mfocus-events[39m [38;5;241moff[39m [38;5;241m·[39m [38;5;241madd[39m [38;5;241m'set[39m [38;5;241m-g[39m [38;5;241mfocus-events[39m [38;5;241mon'[39m [38;5;241mto[39m [38;5;241m~/.tmux.conf[39m [38;5;241mand[39m [38;5;241mreattach[39m [38;5;241mfor[39m [38;5;241mfocus[39m [38;5;241mtracking[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
