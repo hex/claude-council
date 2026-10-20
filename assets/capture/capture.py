@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ABOUTME: Captures the checkout's council renderers in a private tmux server.
-# ABOUTME: Uses fixture seats, bounds every wait, and restores trust and plugin state.
+# ABOUTME: Selects real or fixture seats, bounds waits, and restores trust and plugin state.
 
 import argparse
 import json
@@ -23,6 +23,8 @@ KEYS = {"heads-up", "heads-up-counts", "heads-up-intro-shown", "pane_host",
         "specialist-runs", "specialists-latest", "specialists-intro-shown"}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 ROSTER = "codex,antigravity,grok-cli,kimi-cli,cursor-cli"
+QUESTION = "Should a single-node demo app use SQLite or Postgres?"
+REAL_SEATS = ("codex", "agy", "grok", "cursor-agent")
 TITLES = {
     "council-run": "Five council seats inside Claude Code",
     "heads-up": "A heads-up note and an unsent draft",
@@ -37,6 +39,11 @@ def run(*args, env=None, check=True):
 class Capture:
     def __init__(self, name):
         self.name = name
+        requested = os.environ.get("COUNCIL_CAPTURE_SEATS", "fake")
+        if requested not in ("real", "fake"):
+            raise ValueError("COUNCIL_CAPTURE_SEATS must be real or fake")
+        self.mode = "fake" if name == "heads-up" else requested
+        self.versions = {}
         self.work = Path(tempfile.mkdtemp(prefix=f".{name}-", dir=CAPTURE))
         self.project = self.work / "project"
         self.temp = self.work / "tmp"
@@ -72,10 +79,24 @@ class Capture:
             "COUNCIL_FAKE_BEHAVIOR": "heads-up-note" if self.name == "heads-up" else "slow",
             "COUNCIL_FAKE_SLEEP": "20", "COUNCIL_PROVIDERS": ROSTER,
             "COUNCIL_RETRY_WAIT": "12", "COUNCIL_JOBS_DIR": str(self.work / "jobs"),
+            "COUNCIL_CLI_TIMEOUT": "300",
+            "COUNCIL_CAPTURE_CALLS": str(self.work / "real-calls"),
             "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1",
             "CLAUDE_CODE_NO_FLICKER": "0",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         }
+        if self.mode == "real":
+            (self.work / "real-calls").mkdir()
+            directories = []
+            for binary in REAL_SEATS:
+                executable = shutil.which(binary)
+                if executable is None:
+                    raise RuntimeError(f"Real seat not installed: {binary}")
+                self.env[f"COUNCIL_CAPTURE_EXECUTABLE_{binary.replace('-', '_')}"] = executable
+                directories.append(str(Path(executable).parent))
+            self.env["PATH"] = ":".join([str(self.fake), *dict.fromkeys(directories),
+                                         "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin",
+                                         "/bin", "/usr/sbin", "/sbin"])
         existing = self.tmux("list-sessions", check=False)
         if existing.returncode == 0:
             raise RuntimeError("tmux -L svgcap already has sessions; refusing to touch them")
@@ -91,10 +112,14 @@ class Capture:
             if self.name == "heads-up":
                 script.symlink_to(self.raw / binary)
                 continue
+            if self.mode == "real" and binary in REAL_SEATS:
+                script.symlink_to(CAPTURE / "seat.py")
+                continue
             body = ['#!/bin/bash', 'set -euo pipefail',
                     'if [[ "${1:-}" == "--version" ]]; then exec "${0%/*}/../fixture-bin/${0##*/}" "$@"; fi']
             if binary == "kimi":
-                body += ['sleep 12', 'export COUNCIL_FAKE_BEHAVIOR=rate-limit']
+                body += [f"sleep {2 if self.mode == 'real' else 12}",
+                         'export COUNCIL_FAKE_BEHAVIOR=rate-limit']
             elif binary == "cursor-agent":
                 body += [f"sleep {seconds}", "export COUNCIL_FAKE_BEHAVIOR=valid"]
             else:
@@ -102,6 +127,10 @@ class Capture:
             body += ['exec "${0%/*}/../fixture-bin/${0##*/}" "$@"']
             script.write_text("\n".join(body) + "\n")
             script.chmod(0o755)
+        for binary in (*REAL_SEATS, "kimi"):
+            version = subprocess.run([str(self.fake / binary), "--version"], cwd=ROOT,
+                                     env=self.env, capture_output=True, text=True, timeout=30, check=True)
+            self.versions[binary] = version.stdout.strip()
         if self.name != "tmux-pane":
             for path in self.stores.glob("claude-council_inline-*.json"):
                 self.before_stores[path] = json.loads(path.read_text())
@@ -172,13 +201,14 @@ class Capture:
         self.theme = theme
         self.target = "capture:0.0"
         self.env["COUNCIL_THEME"] = theme
+        self.env["COUNCIL_CAPTURE_THEME"] = theme
         fg, bg = THEMES[theme]
         config = self.work / "tmux.conf"
         config.write_text(f"set -g status off\nset -g default-shell /bin/bash\nset -g default-terminal xterm-256color\nset -g window-style 'fg={fg},bg={bg}'\nset -g history-limit 1000\n")
         if self.name == "tmux-pane":
             command = ["/bin/bash", str(ROOT / "scripts/run-council.sh"),
-                       f"--providers={ROSTER}", "--no-cache", "--no-auto-context",
-                       "--", "Should a single-node demo use SQLite?"]
+                       f"--providers={ROSTER}", "--verbosity=brief", "--no-cache", "--no-auto-context",
+                       "--", QUESTION]
         else:
             for path in self.stores.glob("claude-council_inline-*.json"):
                 data = json.loads(path.read_text())
@@ -196,10 +226,10 @@ class Capture:
                        "--setting-sources", "", "--settings", str(settings),
                        "--strict-mcp-config", "--debug-file", str(self.work / f"debug-{theme}.log"),
                        "--append-system-prompt",
-                       "This is a terminal capture with fake council seats. Keep replies short. "
+                       f"This is a terminal capture in {self.mode} seat mode. Keep replies short. "
                        "Do not change files except council runtime state. Follow the requested commands. "
                        "Do not load other skills, run git, or delegate. Run the council once only. "
-                       "The FAKE responses and the Kimi error are expected fixtures. "
+                       "Kimi is a rate-limit fixture. Other seats may answer or fail. Never retry a seat. "
                        "Write a one-sentence synthesis under ## Synthesis, then Full output saved."]
         self.tmux("-f", str(config), "new-session", "-d", "-s", "capture", "-x", "110", "-y", "80",
                   "-c", str(self.project), *command)
@@ -208,11 +238,11 @@ class Capture:
     def screen(self):
         return self.tmux("capture-pane", "-t", self.target, "-p", "-e").stdout
 
-    def wait(self, phrase, seconds=150):
+    def wait(self, phrase, seconds=150, regex=False):
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             text = ANSI.sub("", self.screen())
-            if phrase in text:
+            if (re.search(phrase, text) if regex else phrase in text):
                 return
             if "Not logged in" in text:
                 raise RuntimeError("The host Claude is not logged in")
@@ -275,7 +305,7 @@ class Capture:
     def council(self):
         self.wait("❯")
         self.type(f'/claude-council:ask --providers={ROSTER} --verbosity=brief --no-auto-context --no-cache '
-                  '"Should a single-node demo use SQLite?"')
+                  f'"{QUESTION}"')
         self.save("The council command was sent", "/claude-council:ask")
         self.wait("COUNCIL")
         self.key("C-x", "Tab")
@@ -285,10 +315,9 @@ class Capture:
         self.wait("retry", seconds=90)
         self.wait("4: retry", seconds=90)
         self.save("A failed seat can be retried while others query", "╭")
-        self.wait("FAKE-GROK-RESPONSE", seconds=90)
+        self.wait(r"▾ (?:CODEX|ANTIGRAVITY|GROK-CLI|CURSOR-CLI)\b", seconds=330, regex=True)
         self.save("Answers arrive with their banners", "╭")
-        self.wait("▾ SYNTHESIS", seconds=180)
-        self.wait("4 of 5 answered", seconds=5)
+        self.wait("▾ SYNTHESIS", seconds=420)
         time.sleep(3)
         self.save("Answers fold around the synthesis", "╭")
 
@@ -305,24 +334,29 @@ class Capture:
             raise RuntimeError("The renderer did not open a side pane")
         time.sleep(2)
         self.save("Seats querying in tmux", "")
-        self.wait("FAKE-GROK-RESPONSE", seconds=90)
+        self.wait(r"(?m)^\s*(?:CODEX|ANTIGRAVITY|GROK-CLI|CURSOR-CLI)\s+\S+", seconds=330, regex=True)
         self.save("An answer lands in tmux", "")
-        self.wait("[r] retry failed", seconds=100)
+        self.wait("[r] retry failed", seconds=330)
         self.save("The retry offer", "")
 
     def finish(self):
         head = run("git", "rev-parse", "HEAD").stdout.strip()
         data = {
             "title": TITLES[self.name],
-            "description": "Real terminal captures with fixture council seats. Each state lasts 2.5 seconds.",
+            "description": f"Captured terminal output in {self.mode} seat mode. Each state lasts 2.5 seconds.",
             "provenance": {
                 "checkout_head": head,
-                "capture_commands": [f"bash assets/capture/{self.name}.sh",
+                "seat_mode": self.mode,
+                "question": None if self.name == "heads-up" else QUESTION,
+                "cli_versions": self.versions,
+                "real_invocations": sorted(p.name for p in (self.work / "real-calls").glob("*")),
+                "capture_commands": [f"COUNCIL_CAPTURE_SEATS={self.mode} bash assets/capture/{self.name}.sh",
                                      "tmux -L svgcap capture-pane -p -e"],
                 "fixture": {
                     "source": "tests/fixtures/fake-clis.bash",
                     "host": None if self.name == "tmux-pane" else "Claude Code --model haiku",
                     "behavior": "heads-up-note" if self.name == "heads-up" else
+                    {"kimi": "rate-limit after 2s", "other_seats": "real subscription CLIs"} if self.mode == "real" else
                     {"codex": "slow 45s", "agy": "slow 65s", "grok": "slow 15s",
                      "kimi": "rate-limit after 12s", "cursor-agent": "valid after 30s"},
                 },

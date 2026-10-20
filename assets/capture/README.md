@@ -10,9 +10,28 @@ bash assets/capture/banner.sh
 ```
 
 The captures need Python 3, Bash, tmux, jq, and an authenticated
-`~/.local/bin/claude`. The host runs Haiku on your account. Council seats use
+`~/.local/bin/claude`. The host runs Haiku on your account. Council seats default to
 `tests/fixtures/fake-clis.bash`. No provider API key enters their environment.
 The host keeps `HOME` and `USER` for its saved login.
+
+The committed council and tmux animations use real subscription seats. Their
+question is "Should a single-node demo app use SQLite or Postgres?" Run them
+in that mode with:
+
+```bash
+COUNCIL_CAPTURE_SEATS=real bash assets/capture/council-run.sh
+COUNCIL_CAPTURE_SEATS=real bash assets/capture/tmux-pane.sh
+```
+
+`COUNCIL_CAPTURE_SEATS=fake` is the default. In real mode, `codex`, `agy`,
+`grok`, and `cursor-agent` use their saved logins through `HOME`; Kimi stays
+the rate-limit fixture. Each real binary runs at most once per theme, apart
+from `--version` probes. A guard rejects retries. Answers and failures stay
+as the renderer displays them. Metadata records the mode, question, versions,
+and invocation markers. Heads-up always uses fake seats.
+
+Codex and Antigravity answered in the committed captures. Grok reported
+`Not signed in`; Cursor reported a usage limit. Those errors remain visible.
 
 The scripts use `tmux -L svgcap`. They refuse to start if that server already
 has a session. They never use the default tmux server. Each terminal has 110
@@ -36,10 +55,11 @@ terminal rows. The converter keeps all 110 columns. Light and dark are
 separate captures. Captured colors remain literal; tmux sets the default
 foreground and background recorded in the metadata.
 Terminal hyperlink controls become plain text, so the SVG contains no links
-to external resources. `shell.sh` keeps personal shell startup files out of
+to external resources. Identical text elements share internal SVG references
+to keep the files below 80 KB. `shell.sh` keeps personal shell startup files out of
 the capture environment.
 
-Codex, Antigravity, and Grok use the fixture's `slow` behavior. Kimi uses
+In fake mode, Codex, Antigravity, and Grok use the fixture's `slow` behavior. Kimi uses
 `rate-limit`. Cursor waits before the fixture's `valid` JSON response.
 The heads-up script uses `heads-up-note` and the E2E's three-command host
 prompt. The resulting draft stays unsent.

@@ -1,44 +1,44 @@
 
+[1m[38;2;185;28;28m✗ grok-cli error[0m
+   [2m[38;2;252;165;165mError from grok CLI: Not signed in. To authenticate without a browser, run:   grok login --device-code  Alt
+ernatively, set the XAI_API_KEY environment variable or run `grok login` on a machine with a browser. Error: N
+ot signed in. To authenticate without a browser, run:   grok login --device-code  Alternatively, set the XAI_A
+PI_KEY environment variable or run `grok login` on a machine with a browser.[0m
+
+
 [1m[38;2;185;28;28m✗ kimi-cli error[0m
    [2m[38;2;252;165;165mError from kimi CLI: Error: 429 Too Many Requests[0m
 
 
-[1m[38;2;255;255;255m[48;2;185;28;28m  GROK-CLI [0;3m[38;2;252;165;165m[48;2;185;28;28mgrok-4.7[0;1m[38;2;255;255;255m[48;2;185;28;28m [0;3m[38;2;255;255;255m[48;2;185;28;28m(17.7s)[0;1m[38;2;255;255;255m[48;2;185;28;28m  [0m[48;2;185;28;28m
-
-[49mFAKE-GROK-RESPONSE: slow answer
-
-
-[1m[38;2;255;255;255m[48;2;55;65;81m  CURSOR-CLI [0;3m[38;2;156;163;175m[48;2;55;65;81mdefault[0;1m[38;2;255;255;255m[48;2;55;65;81m [0;3m[38;2;255;255;255m[48;2;55;65;81m(32.1s)[0;1m[38;2;255;255;255m[48;2;55;65;81m  [0m[48;2;55;65;81m
-
-[49mFAKE-CURSOR-AGENT-RESPONSE: deterministic answer
+[1m[38;2;185;28;28m✗ cursor-cli error[0m
+   [2m[38;2;252;165;165mError from cursor-agent CLI: ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent
+ usage, unlimited Tab, and more.[0m
 
 
-[1m[38;2;31;41;55m[48;2;229;231;235m  CODEX [0;3m[38;2;100;116;139m[48;2;229;231;235mgpt-6-astra[0;1m[38;2;31;41;55m[48;2;229;231;235m [0;3m[38;2;31;41;55m[48;2;229;231;235m(47.1s)[0;1m[38;2;31;41;55m[48;2;229;231;235m  [0m[48;2;229;231;235m
+[1m[38;2;255;255;255m[48;2;30;64;175m  ANTIGRAVITY [0;3m[38;2;147;197;253m[48;2;30;64;175mGemini 3.8 Flash (High)[0;1m[38;2;255;255;255m[48;2;30;64;175m [0;3m[38;2;255;255;255m[48;2;30;64;175m(15.6s)[0;1m[38;2;255;255;255m[48;2;30;64;175m  [0m[48;2;30;64;175m
 
-[49mFAKE-CODEX-RESPONSE: slow answer
+[49mFor a single-node demo app, [1mSQLite[0m is the recommended choice due to its simplicity and zero configuration.
 
-
-[1m[38;2;255;255;255m[48;2;30;64;175m  ANTIGRAVITY [0;3m[38;2;147;197;253m[48;2;30;64;175mGemini 3.8 Flash (High)[0;1m[38;2;255;255;255m[48;2;30;64;175m [0;3m[38;2;255;255;255m[48;2;30;64;175m(67.5s)[0;1m[38;2;255;255;255m[48;2;30;64;175m  [0m[48;2;30;64;175m
-
-[49mFAKE-AGY-RESPONSE: slow answer
-
-
-[2m[r] retry failed (kimi-cli) · [esc/ctrl-d] close  12s[0m
-
+[36m • [1m[39mZero operational overhead:[0m SQLite runs embedded in-process, eliminating the need to install, configure, or
+[36m   [39mmanage background database daemons and connection credentials.
+[36m • [1m[39mEffortless portability:[0m The entire database resides in a single file, making it trivial to reset, share,
+[36m   [39msnapshot, or distribute alongside your demo code.
+[36m • [1m[39mWhen to choose Postgres:[0m Opt for Postgres only if your demo explicitly showcases Postgres-exclusive
+[36m   [39mfeatures, such as [33mpgvector[39m, specialized extensions, or complex concurrency models.
 
 
+[1m[38;2;31;41;55m[48;2;229;231;235m  CODEX [0;3m[38;2;100;116;139m[48;2;229;231;235mgpt-6-astra[0;1m[38;2;31;41;55m[48;2;229;231;235m [0;3m[38;2;31;41;55m[48;2;229;231;235m(39.9s)[0;1m[38;2;31;41;55m[48;2;229;231;235m  [0m[48;2;229;231;235m
 
 
+[36m[49m • [39mAlex, [1muse SQLite[0m for a single-node demo: it runs inside your app and needs no separate database server,
+[36m   [39mmaking setup and distribution simpler. [4m[36m]8;id=719619;https://www.sqlite.org/whentouse.html\SQLite guidance[0m]8;;\
+[36m • [39mChoose Postgres if the demo specifically needs to reproduce a production Postgres environment or
+[36m   [39mdemonstrate Postgres-specific functionality.
+[36m • [39mStart with a SQLite database file on persistent local storage and a seed script that makes the demo easy to
+[36m   [39mreset.
 
 
-
-
-
-
-
-
-
-
+[2m[r] retry failed (grok-cli, kimi-cli, cursor-cli) · [esc/ctrl-d] close  12s[0m
 
 
 

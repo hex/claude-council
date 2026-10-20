@@ -40,9 +40,10 @@ Without the mod the variable is never set and the scripts behave as before.
 
 ## What you get
 
-![Five fixture seats querying, answering, and folding around the synthesis inside Claude Code](../../assets/council-run.svg)
+![Real subscription answers to the SQLite-or-Postgres question with a fake Kimi failure inside Claude Code](../../assets/council-run.svg)
 
-Five fixture seats in a real Claude Code host. The status rows show cancel
+Four subscription seats and a fake Kimi failure in a real Claude Code host.
+The status rows show cancel
 buttons while seats query and a retry button for the failed seat. Answers
 fold when the synthesis arrives. The band above the prompt tracks the run.
 

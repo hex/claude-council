@@ -201,6 +201,22 @@ def render(manifest, output):
         for node in nodes:
             del node.attrib["fill"]
             node.set("class", " ".join(filter(None, (node.get("class"), name))))
+    repeated = {}
+    for parent in root.iter(f"{{{NS}}}g"):
+        for node in parent:
+            if node.tag == f"{{{NS}}}text":
+                repeated.setdefault(ET.tostring(node), []).append((parent, node))
+    definitions = element(root, "defs")
+    for markup, occurrences in repeated.items():
+        if len(occurrences) < 2 or len(markup) < 80:
+            continue
+        name = f"t{len(definitions)}"
+        for parent, node in occurrences:
+            position = list(parent).index(node)
+            parent.remove(node)
+            parent.insert(position, ET.Element(f"{{{NS}}}use", {"href": f"#{name}"}))
+        node.set("id", name)
+        definitions.append(node)
     content = ET.tostring(root, encoding="utf-8", xml_declaration=True)
     if len(content) >= 80_000:
         raise ValueError(f"{output.name} is {len(content)} bytes; limit is 80,000")
@@ -221,6 +237,8 @@ def banner(output):
         "title": title, "description": description, "columns": 110, "seconds_per_frame": 2.5,
         "layout": {"font": 13, "cell": 7.8, "line": 22, "padding": 24},
         "provenance": {
+            "seat_mode": "hand-written",
+            "cli_versions": {},
             "capture_commands": ["bash assets/capture/banner.sh"],
             "fixture": "Hand-written title card, the banner exception in the brief.",
             "crop": "None. Same 1536 by 614 proportions as the cs banner.",

@@ -1,21 +1,37 @@
 {
   "title": "Five council seats inside Claude Code",
-  "description": "Real terminal captures with fixture council seats. Each state lasts 2.5 seconds.",
+  "description": "Captured terminal output in real seat mode. Each state lasts 2.5 seconds.",
   "provenance": {
-    "checkout_head": "34bb74a2e0ae5c9d0321b754cd94a704b765ebd3",
+    "checkout_head": "afff4c5a2f7dbeb3669e6c2f9df78290f0ffbae1",
+    "seat_mode": "real",
+    "question": "Should a single-node demo app use SQLite or Postgres?",
+    "cli_versions": {
+      "codex": "codex-cli 0.163.0",
+      "agy": "1.4.2",
+      "grok": "grok 1.0.60 (01a8e1c591c0) [stable]",
+      "cursor-agent": "2026.10.14-0f9edde",
+      "kimi": "fake-kimi 0.0.1"
+    },
+    "real_invocations": [
+      "dark-agy",
+      "dark-codex",
+      "dark-cursor-agent",
+      "dark-grok",
+      "light-agy",
+      "light-codex",
+      "light-cursor-agent",
+      "light-grok"
+    ],
     "capture_commands": [
-      "bash assets/capture/council-run.sh",
+      "COUNCIL_CAPTURE_SEATS=real bash assets/capture/council-run.sh",
       "tmux -L svgcap capture-pane -p -e"
     ],
     "fixture": {
       "source": "tests/fixtures/fake-clis.bash",
       "host": "Claude Code --model haiku",
       "behavior": {
-        "codex": "slow 45s",
-        "agy": "slow 65s",
-        "grok": "slow 15s",
-        "kimi": "rate-limit after 12s",
-        "cursor-agent": "valid after 30s"
+        "kimi": "rate-limit after 2s",
+        "other_seats": "real subscription CLIs"
       }
     },
     "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain.",
@@ -58,14 +74,14 @@
           "file": "council-run-1-light.ansi",
           "crop": [
             16,
-            33
+            38
           ]
         },
         "dark": {
           "file": "council-run-1-dark.ansi",
           "crop": [
             16,
-            32
+            38
           ]
         }
       }
@@ -77,14 +93,14 @@
           "file": "council-run-2-light.ansi",
           "crop": [
             17,
-            35
+            44
           ]
         },
         "dark": {
           "file": "council-run-2-dark.ansi",
           "crop": [
             17,
-            35
+            44
           ]
         }
       }
@@ -96,14 +112,14 @@
           "file": "council-run-3-light.ansi",
           "crop": [
             17,
-            40
+            50
           ]
         },
         "dark": {
           "file": "council-run-3-dark.ansi",
           "crop": [
             17,
-            40
+            50
           ]
         }
       }
@@ -114,15 +130,15 @@
         "light": {
           "file": "council-run-4-light.ansi",
           "crop": [
-            35,
-            62
+            43,
+            70
           ]
         },
         "dark": {
           "file": "council-run-4-dark.ansi",
           "crop": [
-            31,
-            59
+            46,
+            73
           ]
         }
       }

@@ -1,21 +1,37 @@
 {
   "title": "Council answers in a tmux side pane",
-  "description": "Real terminal captures with fixture council seats. Each state lasts 2.5 seconds.",
+  "description": "Captured terminal output in real seat mode. Each state lasts 2.5 seconds.",
   "provenance": {
-    "checkout_head": "34bb74a2e0ae5c9d0321b754cd94a704b765ebd3",
+    "checkout_head": "afff4c5a2f7dbeb3669e6c2f9df78290f0ffbae1",
+    "seat_mode": "real",
+    "question": "Should a single-node demo app use SQLite or Postgres?",
+    "cli_versions": {
+      "codex": "codex-cli 0.163.0",
+      "agy": "1.4.3",
+      "grok": "grok 1.0.60 (01a8e1c591c0) [stable]",
+      "cursor-agent": "2026.10.14-0f9edde",
+      "kimi": "fake-kimi 0.0.1"
+    },
+    "real_invocations": [
+      "dark-agy",
+      "dark-codex",
+      "dark-cursor-agent",
+      "dark-grok",
+      "light-agy",
+      "light-codex",
+      "light-cursor-agent",
+      "light-grok"
+    ],
     "capture_commands": [
-      "bash assets/capture/tmux-pane.sh",
+      "COUNCIL_CAPTURE_SEATS=real bash assets/capture/tmux-pane.sh",
       "tmux -L svgcap capture-pane -p -e"
     ],
     "fixture": {
       "source": "tests/fixtures/fake-clis.bash",
       "host": null,
       "behavior": {
-        "codex": "slow 45s",
-        "agy": "slow 65s",
-        "grok": "slow 15s",
-        "kimi": "rate-limit after 12s",
-        "cursor-agent": "valid after 30s"
+        "kimi": "rate-limit after 2s",
+        "other_seats": "real subscription CLIs"
       }
     },
     "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain.",
@@ -39,14 +55,14 @@
           "file": "tmux-pane-0-light.ansi",
           "crop": [
             0,
-            1
+            8
           ]
         },
         "dark": {
           "file": "tmux-pane-0-dark.ansi",
           "crop": [
             0,
-            1
+            8
           ]
         }
       }
@@ -58,14 +74,14 @@
           "file": "tmux-pane-1-light.ansi",
           "crop": [
             0,
-            10
+            18
           ]
         },
         "dark": {
           "file": "tmux-pane-1-dark.ansi",
           "crop": [
             0,
-            10
+            18
           ]
         }
       }
@@ -77,14 +93,14 @@
           "file": "tmux-pane-2-light.ansi",
           "crop": [
             0,
-            26
+            41
           ]
         },
         "dark": {
           "file": "tmux-pane-2-dark.ansi",
           "crop": [
             0,
-            26
+            40
           ]
         }
       }

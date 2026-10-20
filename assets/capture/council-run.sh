@@ -1,5 +1,6 @@
 #!/bin/bash
 # ABOUTME: Captures a five-seat council in Claude Code and builds its SVG.
-# ABOUTME: Runs the shared capture driver with fixture providers in both themes.
+# ABOUTME: Runs the shared capture driver in fake or explicitly selected real mode.
 set -euo pipefail
+export COUNCIL_CAPTURE_SEATS="${COUNCIL_CAPTURE_SEATS:-fake}"
 python3 "$(dirname "$0")/capture.py" council-run

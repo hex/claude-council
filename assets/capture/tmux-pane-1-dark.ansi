@@ -1,21 +1,21 @@
 
+[1m[38;2;185;28;28m✗ grok-cli error[0m
+   [2m[38;2;252;165;165mError from grok CLI: Not signed in. To authenticate without a browser, run:   grok login --device-code  Alt
+ernatively, set the XAI_API_KEY environment variable or run `grok login` on a machine with a browser. Error: N
+ot signed in. To authenticate without a browser, run:   grok login --device-code  Alternatively, set the XAI_A
+PI_KEY environment variable or run `grok login` on a machine with a browser.[0m
+
+
 [1m[38;2;185;28;28m✗ kimi-cli error[0m
    [2m[38;2;252;165;165mError from kimi CLI: Error: 429 Too Many Requests[0m
 
 
-[1m[38;2;255;255;255m[48;2;185;28;28m  GROK-CLI [0;3m[38;2;252;165;165m[48;2;185;28;28mgrok-4.7[0;1m[38;2;255;255;255m[48;2;185;28;28m [0;3m[38;2;255;255;255m[48;2;185;28;28m(15.3s)[0;1m[38;2;255;255;255m[48;2;185;28;28m  [0m[48;2;185;28;28m
-
-[49mFAKE-GROK-RESPONSE: slow answer
-
-   [1m[38;2;100;116;139m⠋[0m   [2mcouncil is waiting on[0m   [1m[38;2;100;116;139mcodex[0;2m, [0;1m[38;2;59;130;246mantigravity[0;2m, [0;1m[38;2;113;113;122mcursor-cli[0m
+[1m[38;2;185;28;28m✗ cursor-cli error[0m
+   [2m[38;2;252;165;165mError from cursor-agent CLI: ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent
+ usage, unlimited Tab, and more.[0m
 
 
-
-
-
-
-
-
+[1m[38;2;255;255;255m[48;2;30;64;175m  ANTIGRAVITY [0;3m[38;2;147;197;253m[48;2;30;64;175mGemini 3.8 Flash (High)[0;1m[38;2;255;255;255m[48;2;30;64;175m [0;3m[38;2;255;255;255m[48;2;30;64;175m(17.3s)[0;1m[38;2;255;255;255m[48;2;30;64;175m  [0m[48;2;30;64;175m
 
 
 

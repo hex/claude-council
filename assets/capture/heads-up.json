@@ -23,7 +23,12 @@
         "#191919"
       ]
     },
-    "palette": "RGB and indexed ANSI colors are preserved; default colors are set in tmux.conf."
+    "palette": "RGB and indexed ANSI colors are preserved; default colors are set in tmux.conf.",
+    "seat_mode": "fake",
+    "cli_versions": {
+      "codex": "fake-codex 0.0.1"
+    },
+    "version_source": "Fixture --version, unchanged since the recorded capture checkout"
   },
   "frames": [
     {
