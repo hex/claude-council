@@ -82,10 +82,16 @@ those records without making model calls:
 python3 assets/capture/render.py assets/capture/council-run.json assets/council-run.svg
 ```
 
-Check the XML, shell syntax, and README links:
+Check the XML, every shell script, README links, and home-path removal:
 
 ```bash
-xmllint --noout assets/*.svg
-for script in assets/capture/*.sh; do bash -n "$script"; done
-python3 assets/capture/check-links.py README.md
+set -o pipefail
+xmllint --noout assets/*.svg &&
+  for f in assets/capture/*.sh; do bash -n "$f"; done &&
+  python3 assets/capture/check-links.py README.md &&
+  ! grep -rl '/''Users/' assets/
 ```
+
+The adjacent quoted strings form one grep pattern. Splitting it keeps this
+README from matching its own scan. Remove the capture's scratch directory
+after inspecting it; runtime logs remain there until that cleanup.

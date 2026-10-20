@@ -1,0 +1,119 @@
+{
+  "chrome_version": "Google Chrome 155.0.8059.85",
+  "svg_sha256": {
+    "council-run.svg": "174dab77b62c23d6ab6f45511251d2ef5d0c761297156b0b80a75a51469e7af7",
+    "banner.svg": "0328bf27780e341b5765ab5014c5cb9329e308783569b7a44e5fb94071ef7c77",
+    "tmux-pane.svg": "9056f3798b39dca688c549cf980ee1957290c23657859a479d2cf55c70b3762e",
+    "heads-up.svg": "df8d30e768b0a70d0abd04ad92ab000897ca626801dad4a2ee19cf474f8c271b"
+  },
+  "static_previews": [
+    {
+      "file": "council-run-0-dark.png",
+      "sha256": "1efc78e3b7fae2357d2de01d3ef8a079f8464e2fa522ce24220583cb6cc0064f"
+    },
+    {
+      "file": "council-run-0-light.png",
+      "sha256": "c064075ce2450ed68bf45473c46c98ac6382c6ee9c777b2871d77be0389f6f2b"
+    },
+    {
+      "file": "council-run-1-dark.png",
+      "sha256": "eb3b20e71a3dcfdb984c95832ccd0884137746457dadde8e423e79ea2b1de078"
+    },
+    {
+      "file": "council-run-1-light.png",
+      "sha256": "c50d1a679ae6b3d1c2027d4f12c83e552b19e47c5578bc8ad62bc0ea0c577465"
+    },
+    {
+      "file": "council-run-2-dark.png",
+      "sha256": "f954a52e64a00b49d5839d62ccf7f68ca5f85864b2d60cc3520c8aaed5c56d0b"
+    },
+    {
+      "file": "council-run-2-light.png",
+      "sha256": "c340159a00aecf75affb7bb767276e8b6ad126638c4139b136663e32570316b8"
+    },
+    {
+      "file": "council-run-3-dark.png",
+      "sha256": "c0926ff7167ddd667e611673063ee616376de0e1a45623a812acacaa3e7ccf55"
+    },
+    {
+      "file": "council-run-3-light.png",
+      "sha256": "e4dc0316ec277fc9f01acee39b22fc129898fcfa16808fed5d58d951f0f0a9bc"
+    },
+    {
+      "file": "council-run-4-dark.png",
+      "sha256": "584acf68943c870598ee949d03f110ab74a56329bf05ddce545c2aa61413793f"
+    },
+    {
+      "file": "council-run-4-light.png",
+      "sha256": "46983fb318e9332fa771149b12394a9a3a527fa6a41abe2a6f40d9219560b614"
+    },
+    {
+      "file": "heads-up-0-dark.png",
+      "sha256": "945cf25d8d4ac8ba457d30feb8ab029eb730fd6618dbd42304f923b2560e7a8b"
+    },
+    {
+      "file": "heads-up-0-light.png",
+      "sha256": "2de54293d45ea09a9443b1ee52f907ccd25318bebfc904985ae9074f529aff88"
+    },
+    {
+      "file": "heads-up-1-dark.png",
+      "sha256": "bea7782fbe5cf8a33e064c668b53ddd834a0f05473e22bc56176f07116012695"
+    },
+    {
+      "file": "heads-up-1-light.png",
+      "sha256": "88bcf1cebafa31e27eac54cb850c513cef40255bc7433d7bfbb5c78065a34345"
+    },
+    {
+      "file": "heads-up-2-dark.png",
+      "sha256": "db1f718efdf43326490fdc4e5466b09c66bbdf0ced850d16d257d69449c9b182"
+    },
+    {
+      "file": "heads-up-2-light.png",
+      "sha256": "9d9ded6b8ac5979692860860948e5928ebf0893b043aa2725e819f9f667ab293"
+    },
+    {
+      "file": "heads-up-3-dark.png",
+      "sha256": "5aef69dd7df06ee203aa8a2ddb4b32e4cf31ea5ee03841ab2baf620f40a80689"
+    },
+    {
+      "file": "heads-up-3-light.png",
+      "sha256": "a089a791808cc70d581a619e74214a26f880ed8d2b853586b82fb881b443b763"
+    },
+    {
+      "file": "tmux-pane-0-dark.png",
+      "sha256": "8d23a6c7933730d06977fee72dd6eb78aafaa1daed0d6554e471d3e43ffec49d"
+    },
+    {
+      "file": "tmux-pane-0-light.png",
+      "sha256": "3a20ab9e502807ca9837d3741056f667ae51ec897cbcd693093a439704cb4daf"
+    },
+    {
+      "file": "tmux-pane-1-dark.png",
+      "sha256": "1c88e952c54201da932975eab1f9a2de6bc5247c94123fc298afcfb36e29533e"
+    },
+    {
+      "file": "tmux-pane-1-light.png",
+      "sha256": "bb73cccf4fb09b2516b3fda63874954fef7b1bfb34207e95ad0f375c583a1421"
+    },
+    {
+      "file": "tmux-pane-2-dark.png",
+      "sha256": "a2dcfa06562da12515ad8f56bea1cfed6042e89c714cf4909c61295ffcdc0fa3"
+    },
+    {
+      "file": "tmux-pane-2-light.png",
+      "sha256": "825a7c863353c8ddda9137735d12dbc62118b3bce3dab626f285c0f453eb1ce6"
+    },
+    {
+      "file": "banner-0-dark.png",
+      "sha256": "fc8b6e824ab8ef6746125204255f4280c22c37f16b24e3dd9cfd045de183f6bc"
+    },
+    {
+      "file": "banner-0-light.png",
+      "sha256": "0a066db2c803d2bf5e7906c4624c56bea573224d860c182ae2da9c69d4694420"
+    }
+  ],
+  "compression_pixel_difference": {
+    "light": 0,
+    "dark": 0
+  }
+}
