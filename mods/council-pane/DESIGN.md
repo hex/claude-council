@@ -6,8 +6,8 @@ How the mod looks, and why. Every colour lives in `hooks/theme.ts`, and no other
 
 - The council speaks inside Claude Code, so it borrows Claude's orange and the engine's own theme instead of bringing a palette of its own.
 - Colour carries meaning, and each meaning has one colour. Text or a glyph always says the same thing, so no state depends on colour alone.
-- Text a person reads meets 4.5:1 on a light and on a dark theme, with two exceptions: `info` is 4.4:1 on light, and the engine has no blue that does better; and the form's help uses `hint` at 2.2:1 by choice, so it recedes behind the fields. Glyphs and lines meet 3:1.
-- A screen fits the terminal. A pane taller than the terminal hands the keyboard back to the prompt, so text stays short. Descriptions and help still wrap and never cut off: a text a person needs to read is shown whole.
+- Text a person reads meets 4.5:1 on a light and on a dark theme, with two exceptions: `info` is 4.4:1 on light, and the engine has no blue that does better; and the heads-up note's seat line uses `hint` at 2.2:1 by choice, so it recedes behind the choices. Glyphs and lines meet 3:1.
+- A screen fits the terminal. A pane taller than the terminal hands the keyboard back to the prompt, so text stays short. A text a person needs to read wraps and is shown whole.
 
 ## Colour
 
@@ -15,42 +15,31 @@ Most colours are engine theme keys. The engine resolves each one for the theme t
 
 | Token | Theme key | Light | Dark | Used for |
 |---|---|---|---|---|
-| `accent` | `claude` | 3.2 | 5.3 | Frames, rules, the progress bar, the `$` and `✎` marks. Never body text |
-| `success` | `success` | 5.3 | 6.8 | Done, ended, a complete provider |
-| `danger` | `error` | 6.7 | 6.1 | Failed, errors, a refused field |
-| `warning` | `warning` | 4.7 | 10.2 | Running, live, querying, unsaved changes |
-| `info` | `suggestion` | 4.4 | 8.9 | A cached provider, effort medium |
-| `muted` | `inactive` | 5.7 | 5.9 | Secondary text that must stay readable, such as a branch or a worktree path; a seat the reader cancelled |
-| `line` | `subtle` | 2.2 | 2.1 | Table bars and rules: decoration only |
-| `hint` | `subtle` | 2.2 | 2.1 | The form's help lines: a deliberate exception to 4.5:1, chosen so help recedes behind the fields |
-| `model` | `planMode` | 6.8 | 4.8 | Model names |
-| `peak` | `merged` | 6.0 | 6.1 | The top of a scale (effort ultra) |
-| `zebra` | `userMessageBackground` | | | Every other table row |
-| `selected` | `selectionBg` | | | The row you are editing, and the row under the pointer |
+| `accent` | `claude` | 3.2 | 5.3 | The progress bar and the heads-up mark. Never body text |
+| `success` | `success` | 5.3 | 6.8 | A complete provider, a finished run |
+| `danger` | `error` | 6.7 | 6.1 | Failed, errors |
+| `warning` | `warning` | 4.7 | 10.2 | Live, querying, retrying |
+| `info` | `suggestion` | 4.4 | 8.9 | A cached provider |
+| `muted` | `inactive` | 5.7 | 5.9 | Secondary text that must stay readable; a seat the reader cancelled |
+| `hint` | `subtle` | 2.2 | 2.1 | The heads-up note's seat line: a deliberate exception to 4.5:1, chosen so it recedes behind the choices |
 
-Plain `dimColor` serves secondary text that is fine to fade: help rows, `when:` lines, counts and labels.
+Plain `dimColor` serves secondary text that is fine to fade: counts, times, model names and hints.
 
 ### Fixed colours, and why
 
-- **Fills under white letters** (`FILL`): chips, the table header and status labels. A theme key would turn light on a dark theme and lose the white letters, so these stay fixed, each dark enough for white on both.
+- **Fills under white letters** (`FILL`): chips. A theme key would turn light on a dark theme and lose the white letters, so these stay fixed, each dark enough for white on both.
   - `chip` `rgb(180,85,50)`, 4.9:1: a deeper Claude orange, because white on the orange itself is 3.1:1.
   - `chipMark` `rgb(150,68,40)`, 6.7:1, the `✦` cell at the chip's start.
-  - `header` `rgb(88,88,88)`, 7.1:1.
-  - `saved` `rgb(46,120,72)` 5.4:1, `error` `rgb(178,58,52)` 5.9:1, `note` `rgb(150,100,20)` 5.1:1.
 - **Data colours** tell things apart without meaning anything, and a theme has too few hues for that.
   - Vendor colours come from the council's config and fill each provider's banner.
 - **Shimmer** (`SHIMMER`): the warm letters that pass over a running chip, 3.9:1 and 4.4:1 on the chip fill. They move, and the label stays readable in white between passes.
 
-### Effort
-
-Effort grows warmer as it rises, and the two highest are bold as well: low `muted`, medium `info`, high `warning`, xhigh `danger`, max `danger` bold, ultra `peak` bold. `default` is dim. An effort Codex adds later draws as plain text.
-
 ## Type
 
-- Bold uppercase labels name a thing: chips (`SPECIALISTS (2)`, `EDIT sec`, `STEPS`, `SYNTHESIS`) and table headers.
-- Bold marks an identity: a specialist's or provider's name, the program in a command.
-- Dim marks metadata: counts, labels, help, times.
-- Italic is Codex's thinking, and nothing else.
+- Bold uppercase labels name a thing: chips (`COUNCIL`, `SYNTHESIS`) and banners.
+- Bold marks an identity: a provider's name, the heads-up tag.
+- Dim marks metadata: counts, labels, hints, times.
+- Italic is a banner's subtitle, and nothing else.
 
 ## Glyphs
 
@@ -58,28 +47,16 @@ Each glyph has one meaning.
 
 | Glyph | Meaning |
 |---|---|
-| `●` | A specialist that is on, a provider, or live when coloured `warning` |
+| `●` | A provider, or live when coloured `warning` |
 | `✓` | Done |
 | `✗` | Failed |
-| `○` | Set aside by the person: a specialist switched off, a seat cancelled |
-| `⋯` | Running |
-| `▶` | The row you are editing |
-| `▾` `▸` | A fold, open and closed: the templates table, a council pane section |
-| `↳` | A continuation of the row above |
-| `✎` | A file edit |
-| `$` | A command |
+| `○` | Set aside by the person: a seat cancelled |
+| `▾` `▸` | A fold, open and closed: a council pane section |
 | `✦` | The council's mark |
 | `≡` | The synthesis |
-| `│` `─` `┼` | Table bars and rules |
+| `━` `─` | The progress bar, filled and empty |
 
 ## Components
 
-- **Chip**: a bold uppercase label on the `chip` fill in `onFill` letters, one space of padding each side. It names the frame below it. A running chip shimmers.
-- **Frame**: a rounded border in `accent` with one column of padding, under its chip.
-- **Table**: a `header` fill with white bold labels, `line` bars between columns, a `line` rule between rows, `zebra` on every other row, `selected` on the row you are editing or the one under the pointer. Each column is as wide as its widest cell; only the last one gives way on a narrow pane, cut with `…`. One line per row: the details live in the form. A broken entry's second line, under the second column, shows what was stored.
-- **Templates table**: on the empty screen only, under `+ Add specialist`: the table's header fill and zebra with two columns, `TEMPLATE` and `USE WHEN`; the name is a plain Button, the use-when dim and wrapped so it reads whole. No bars or rules, since they would stop at a wrapped row's first line; the shading tells the rows apart. Once specialists exist it folds behind a dim plain `Templates (N) ▸` button beside Add, `▾` when open.
-- **Switched-off row**: keeps its place in the list, its text `muted` italic, a hollow `○` where an on row has `●`, and a word saying so (`off ·`), never colour alone. The chip counts them (`SPECIALISTS (3 · 1 off)`).
-- **Status label**: `SAVED`, `ERROR` or `NOTE` on its fill, then the message in plain text.
-- **Form**: each field under its label, the roster's own column name (`NAME`, `MODEL`, `EFFORT`, `USE WHEN`, then `SKILLS`) in `muted` bold, with anything about it on the right (the use-when counter, `optional`). Each value sits on a `zebra` well, the only sign of where to type; help is `hint` italic under it, wrapped and never cut; a blank line between fields. Buttons: `Save` and the dim `Discard` together, then apart from them the specialist's `Disable`/`Enable`, and the dim `Remove` last, so a Tab too many from Save never lands on it. No frame, and nothing beside a text field: Claude Code sizes a focused field to the whole pane, so anything beside it cuts the text being typed, and given the whole width the field wraps a long value onto the lines below. Accent rules above and below mark the form.
-- **Enter hint**: the bare `⏎` (an empty `submitLabel`), leaving the field more room.
-- **Band**: the one line above the prompt while a council run or a specialist round is live. A specialist round's: chip, name, model, time, latest step, `o · open pane`. A council run's: chip, `N of M` finished, a fill bar, the clock, the latest event, `c · cancel all` while a seat is querying, `o · open pane`. A specialist round's band wins when both are live.
+- **Chip**: a bold uppercase label on the `chip` fill in `onFill` letters, one space of padding each side. A running chip shimmers.
+- **Band**: the one line above the prompt while a council run is live: chip, `N of M` finished, a fill bar, the clock, the latest event, `c · cancel all` while a seat is querying, `o · open pane`. The finished notice, the retry offer and a heads-up note take the line before it.

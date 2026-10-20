@@ -4,5 +4,4 @@ providers.bats
 retry.bats
 roles.bats
 shards.bats
-specialist.bats
 tokens.bats

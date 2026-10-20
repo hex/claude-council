@@ -14,20 +14,13 @@ import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLi
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
-import {
-  dialogOutcome, finishQuestion, introNotice, followUpRefusal, LIST_FIELD, freshList, parseSpecialist, parseSpecialistReport, specialistEntries, roundResult, runStamp, specialistCall,
-  specialistDescription, specialistPrompt, specialistRoster, specialistSchema,
-  commitSubject, latestStep, lostResult, readRuns, roundLiveness, roundProcessIdentity, roundProcessPresence, specialistSteps, specialistWake, startedReply, roundClock, roundStatus, workingLine, landsAtEnd, quietNote,
-  type RunRecord, type Specialist, type Step,
-} from './specialist'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
 import { markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
-import { missingSkills, skillBody, skillIndex, skillsOpening, type Skill } from './skills'
-import { blankDraft, dropEntry, fieldsOf, savedName, flipEntry, putEntry, SUBMIT_HINT, saveIndex, staleMessage, type Draft, checkSpecialist, HEADERS, PAD, ruleLine, SEPARATOR, SWATCH_WIDTH, isDirty, parseCatalog, restoreSetup, setupView, draftAt, withModel, type Fields, type Target, type SetupState, type Status } from './setup'
+import { parseCatalog } from './catalog'
 
 const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
@@ -35,34 +28,18 @@ const RUN_TIMEOUT_MS = 600_000
 const POLL_MS = 500
 // Ten frames a second: the spinner's pace in the tmux pane.
 const FRAME_MS = 100
-// A second of frames for a just-opened pane to become scrollable.
-const PANE_FOLLOW_FRAMES = 10
 // The worker records its result seconds after .done; a worker killed outright
 // leaves its record at running, so the wait for it ends.
 const WAKE_WAIT_MS = 120_000
 // How often a run still going is asked whether its process is alive.
 const PID_CHECK_MS = 5_000
-const SPECIALIST_TOOL = 'specialist'
-const SPECIALIST_PANE = 'specialist'
-const RUNS_KEY = 'specialist-runs'
-const SETUP_PANE = 'specialist-setup'
-// The setup screen's draft is one session's own: another session editing at
-// the same time must not restore it over its own after a reload.
-const SETUP_KEY_PREFIX = 'specialist-setup:'
-// The list as the last write in any session left it (see freshList).
-const LATEST_KEY = 'specialists-latest'
-// Set once the specialists notice has shown, or was not needed.
-const INTRO_KEY = 'specialists-intro-shown'
-const SETUP_COMMAND = 'specialists'
+// The store keys a specialists feature once kept; its records are removed at
+// session start until none is left, then this list can go.
+const SPECIALIST_STORE_KEYS = ['specialist-runs', 'specialists-latest', 'specialists-intro-shown']
 // Every colour comes from theme.ts; DESIGN.md says which one serves what.
 // A section header's mark: open shows its text, closed only the header.
 const OPEN_MARK = '\u25be'
 const CLOSED_MARK = '\u25b8'
-const STATUS_FILL: Record<Status['kind'], string> = { saved: FILL.saved, error: FILL.error, note: FILL.note }
-const STATUS_LABEL: Record<Status['kind'], string> = { saved: ' SAVED ', error: ' ERROR ', note: ' NOTE ' }
-// The settings field holding every specialist, as $.config names it; hidden
-// from the /config menu, since /specialists edits it.
-const LIST_KEY = `claude-council.${LIST_FIELD}`
 // The /config row that turns the heads-up on for every project, as $.config names it.
 const HEADS_UP_ROW_KEY = 'claude-council.heads_up'
 // The heads-up runner forks and returns its pid; anything slower is a fault.
@@ -76,8 +53,6 @@ const headsUp = atom(HEADS_UP, FRESH_SESSION)
 
 type PaneState = {
   root: string
-  // Every installed skill's name, as the setup screen last read the folders.
-  skillNames?: string[]
   runDir?: string
   view?: RunView
   drawn: string
@@ -102,8 +77,6 @@ type PaneState = {
   headsUpFailure?: FinishNotice
   // The note whose Turn off was pressed once; the second press turns the check off for this project.
   headsUpTurnOffArmed: string
-  // When the followed specialist round's process was last checked.
-  specialistCheckedAtMs: number
   pendingWake?: { prompt: string; jobFile: string; untilMs: number }
   retry?: { offer: RetryOffer; seenAtMs: number }
   retryShown?: RetrySection
@@ -122,32 +95,6 @@ type PaneState = {
   // Each answer as rewritten for the pane's width (wide tables as records),
   // for the width it was rewritten at: a resize starts it over.
   tableFit: { columns: number; byText: Map<string, string> }
-  specialists: Specialist[]
-  // The specialist round this session is waiting on; the band's subject.
-  // outputLength and outputAtMs: how much of events.jsonl the last tick saw and
-  // when it last grew, for the band's no-output note; -1 until the first tick.
-  specialist?: { record: RunRecord; startedMs: number; stateDir: string; outputLength: number; outputAtMs: number }
-  // What the last specialist round did, step by step; the pane's subject. It
-  // outlives the round so the pane can still be read after it ends.
-  specialistLog?: { record: RunRecord; steps: Step[]; isLive: boolean }
-  // Runs whose end is being written up now, so one tick does not repeat another's.
-  finishing: Set<string>
-  identityFailures: Set<string>
-  specialistFrame: number
-  // Frames left to retry following a just-opened pane: it becomes scrollable
-  // only once drawn, milliseconds after $.ui.open settles.
-  paneFollowFrames: number
-  // The setup screen's draft and catalog, mirrored from $.store so a reload redraws it.
-  setup?: SetupState
-  // Where this session keeps setup in the shared store; set at session.start.
-  setupKey?: string
-  // Bumped after each Enter in a setup field: the engine empties a submitted
-  // Input, and a field under a new key draws its value again. The engine keeps
-  // that emptied text across a reload of this module, so each load starts the
-  // epoch at its own clock reading rather than at a number an earlier load used.
-  inputEpoch: number
-  // The shared copy of the specialists list as last read (see latestList).
-  latest?: string
 }
 
 // The engine refuses $.fs passed as a value, so the snapshot reader gets the
@@ -166,212 +113,6 @@ async function readCatalog($: EngineInterface) {
   const run = await $.process.run(['codex', 'debug', 'models'], { timeoutMs: 15_000 })
     .catch((err: unknown) => ({ exitCode: 127, stdout: '', stderr: String(err) }))
   return parseCatalog(run)
-}
-
-async function keepSetup($: EngineInterface, state: PaneState, setup: SetupState | undefined): Promise<void> {
-  if (!state.setupKey) throw new Error('the setup screen was used before session.start named its store key')
-  state.setup = setup
-  if (setup) await $.store.set(state.setupKey, setup)
-  else await $.store.delete(state.setupKey)
-  $.ui.invalidate('ui.render')
-}
-
-const currentSetup = (state: PaneState): SetupState => state.setup ?? { catalog: { loading: true } }
-const modelsOf = (setup: SetupState) => ('models' in setup.catalog ? setup.catalog.models : [])
-
-// Asks Codex for its models and fills them in; a new draft that opened before
-// they arrived takes the first listed model.
-// Where a specialist's skills are found, in order; a name in an earlier folder
-// shadows the same one later, so the user's own copy wins over a template's.
-// A folder that is not there is normal; one that cannot be listed is an error.
-async function findSkills($: EngineInterface): Promise<Map<string, Skill>> {
-  const home = await $.env.get('HOME')
-  const roots = [...(home ? [`${home}/.claude/skills`, `${home}/.codex/skills`, `${home}/.agents/skills`] : []), `${$.plugin.root}/mods/council-pane/specialists`]
-  const folders = await Promise.all(roots.map(async dir => {
-    if (!(await $.fs.exists(dir))) return { dir, names: [] }
-    // A linked skill folder lists as `other`, so only plain files are skipped.
-    const entries = (await $.fs.list(dir)).filter(entry => entry.kind !== 'file')
-    const found = await Promise.all(entries.map(async entry => ((await $.fs.exists(`${dir}/${entry.name}/SKILL.md`)) ? entry.name : undefined)))
-    return { dir, names: found.filter((name): name is string => name !== undefined) }
-  }))
-  return skillIndex(folders)
-}
-
-async function loadCatalog($: EngineInterface, state: PaneState): Promise<void> {
-  await keepSetup($, state, { ...currentSetup(state), catalog: { loading: true } })
-  state.skillNames = [...(await findSkills($)).keys()]
-  const catalog = await readCatalog($)
-  const setup = currentSetup(state)
-  const first = 'models' in catalog ? catalog.models.find(m => m.listed)?.slug : undefined
-  const draft = setup.draft && !setup.draft.model && first ? { ...setup.draft, model: first } : setup.draft
-  await keepSetup($, state, { ...setup, catalog, draft })
-}
-
-// Returns why the screen did not open, or undefined once it is open. It opens
-// at once and the catalog fills in after. A prefill comes from Claude's {setup}
-// call and starts a new row at the end of the list.
-async function openSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>, prefill?: Partial<Fields>): Promise<string | undefined> {
-  // Only a draft with changes survives to the next open; an untouched one would
-  // reopen the form for nothing.
-  const kept = state.setup?.draft && isDirty(state.setup.draft) ? state.setup.draft : undefined
-  const { entries } = await latestList($, state, options)
-  let draft = kept
-  let status: Status | undefined
-  if (prefill) {
-    draft = blankDraft(entries.length, [], prefill)
-  } else if (kept) {
-    status = { kind: 'note', text: 'Your unsaved draft is back.' }
-  }
-  await keepSetup($, state, { catalog: { loading: true }, draft, status })
-  try { await $.ui.open({ id: SETUP_PANE, title: 'Specialists', focus: true, closeOnEscape: true }) } catch (err) { return String(err) }
-  await loadCatalog($, state)
-  return undefined
-}
-
-// Runs one press of the setup screen; a failure shows under the form instead
-// of vanishing with the press, and the log keeps it if even that fails.
-async function setupAction($: EngineInterface, state: PaneState, work: () => Promise<void>): Promise<void> {
-  try {
-    await work()
-  } catch (error) {
-    await keepSetup($, state, { ...currentSetup(state), status: { kind: 'error', text: String(error) } })
-      .catch(() => $.ui.log(`specialists: ${String(error)}`))
-  }
-}
-
-// Field edits read the draft at press time, so two quick edits both land.
-async function editSetup($: EngineInterface, state: PaneState, patch: Partial<Fields>): Promise<void> {
-  const setup = state.setup
-  if (setup?.draft) await keepSetup($, state, { ...setup, draft: { ...setup.draft, ...patch }, status: undefined, confirm: undefined })
-}
-
-// Enter in a setup field keeps what was typed and moves on to the next control.
-// An Input's key carries the epoch, so a next Input is named by its field and
-// gets the epoch this submit moves to.
-async function submitField($: EngineInterface, state: PaneState, patch: Partial<Fields>, next: { control: string } | { input: keyof Fields }): Promise<void> {
-  await editSetup($, state, patch)
-  state.inputEpoch += 1
-  $.ui.invalidate('ui.render')
-  const key = 'control' in next ? next.control : `${next.input}.${state.inputEpoch}`
-  await $.ui.focus({ requestId: SETUP_PANE, key })
-}
-
-async function pickModel($: EngineInterface, state: PaneState, slug: string): Promise<void> {
-  const setup = state.setup
-  if (!setup?.draft) return
-  const picked = withModel(setup.draft, slug, modelsOf(setup))
-  await keepSetup($, state, { ...setup, draft: picked.draft, status: picked.message ? { kind: 'note', text: picked.message } : undefined })
-}
-
-// Opening another row, or a new one, over unsaved edits asks first.
-async function openRow($: EngineInterface, state: PaneState, options: Record<string, unknown>, target: Target, force = false): Promise<void> {
-  const setup = currentSetup(state)
-  if (!force && setup.draft && setup.draft.index !== target && isDirty(setup.draft)) {
-    await keepSetup($, state, { ...setup, confirm: { kind: 'switch', target } })
-    return
-  }
-  const entries = (await latestList($, state, options)).entries
-  const draft = draftAt(target, entries, modelsOf(setup))
-  await keepSetup($, state, { ...setup, draft, confirm: undefined, status: undefined })
-}
-
-// The write reloads this module and the reload redraws from the store, so the
-// store is cleared first; a write that fails puts the draft back with the reason.
-// The shared copy is written first, since the settings write reloads this
-// module; a settings write that fails puts the copy back as it was.
-// after: what the screen shows once written; by default the roster alone.
-async function writeEntries($: EngineInterface, state: PaneState, setup: SetupState, entries: unknown[], done: string, after?: SetupState): Promise<void> {
-  await keepSetup($, state, after ?? { catalog: setup.catalog, status: { kind: 'saved', text: done } })
-  const value = JSON.stringify(entries)
-  const before = await $.store.get(LATEST_KEY)
-  await $.store.set(LATEST_KEY, value)
-  let written: { deny?: string }
-  try {
-    written = await $.config.set({ key: LIST_KEY, value })
-  } catch (error) {
-    written = { deny: String(error) }
-  }
-  if (!written.deny) return
-  await (typeof before === 'string' ? $.store.set(LATEST_KEY, before) : $.store.delete(LATEST_KEY))
-  await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: written.deny } })
-}
-
-// Also keeps the copy for the screen, which draws without awaiting: it shows
-// what the last open or press read.
-async function latestList($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<{ entries: unknown[]; problem?: string }> {
-  const stored = await $.store.get(LATEST_KEY)
-  state.latest = typeof stored === 'string' ? stored : undefined
-  return freshList(options, stored)
-}
-
-// A stored list that does not read would be overwritten by any write, so
-// Save and Remove refuse until it is fixed by hand.
-async function refuseUnreadable($: EngineInterface, state: PaneState, problem: string | undefined): Promise<boolean> {
-  if (!problem) return false
-  await keepSetup($, state, { ...currentSetup(state), confirm: undefined, status: { kind: 'error', text: `Nothing written: ${problem}. Fix it with /config first.` } })
-  return true
-}
-
-// Another session may have changed the entry this draft opened on; writing
-// over it would lose that change, so the draft stays and nothing is written.
-async function refuseChanged($: EngineInterface, state: PaneState, draft: Draft, entries: unknown[]): Promise<boolean> {
-  if (draft.baseline === '' || !staleMessage(draft, entries)) return false
-  const name = draft.name || `specialist ${draft.index + 1}`
-  await keepSetup($, state, { ...currentSetup(state), confirm: undefined, status: { kind: 'error', text: `Nothing written: ${name} changed in another session since you opened it. Discard changes to see it.` } })
-  return true
-}
-
-async function saveSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
-  const setup = state.setup
-  if (!setup?.draft) return
-  if ('loading' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'note', text: 'Models are still loading; Save again in a moment.' } }); return }
-  if ('error' in setup.catalog) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: `Cannot check the model: ${setup.catalog.error}` } }); return }
-  const { entries, problem } = await latestList($, state, options)
-  if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
-  const index = saveIndex(setup.draft, entries)
-  state.skillNames = [...(await findSkills($)).keys()]
-  const checked = checkSpecialist(setup.draft, index, { models: setup.catalog.models, entries, skills: state.skillNames })
-  if ('error' in checked) { await keepSetup($, state, { ...setup, status: { kind: 'error', text: checked.error } }); return }
-  await writeEntries($, state, setup, putEntry(entries, index, checked.entry), `Saved ${setup.draft.name}.`)
-}
-
-// Switches the stored entry on or off at once. The form stays open on the
-// person's draft, unsaved edits included, now based on the switched entry.
-async function toggleSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
-  const setup = state.setup
-  if (!setup?.draft) return
-  const { entries, problem } = await latestList($, state, options)
-  if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
-  const flipped = flipEntry(entries, setup.draft.index)
-  if ('error' in flipped) { await keepSetup($, state, { ...setup, confirm: undefined, status: { kind: 'error', text: flipped.error } }); return }
-  const entry = parseSpecialist(flipped.entries[setup.draft.index])
-  if ('error' in entry) throw new Error(`a switched specialist no longer reads: ${entry.error}`)
-  const done = entry.enabled === false ? `${entry.name} is off: Claude will not offer or start it.` : `${entry.name} is on again.`
-  const draft = { ...setup.draft, baseline: JSON.stringify(flipped.entries[setup.draft.index]) }
-  await writeEntries($, state, setup, flipped.entries, done, { ...setup, draft, confirm: undefined, status: { kind: 'saved', text: done } })
-}
-
-// The confirm row's yes: remove, or drop the unsaved draft and open the target.
-async function confirmSetup($: EngineInterface, state: PaneState, options: Record<string, unknown>): Promise<void> {
-  const setup = state.setup
-  const confirm = setup?.confirm
-  if (!setup?.draft || !confirm) return
-  if (confirm.kind === 'switch') { await openRow($, state, options, confirm.target, true); return }
-  const { entries, problem } = await latestList($, state, options)
-  if (await refuseUnreadable($, state, problem) || await refuseChanged($, state, setup.draft, entries)) return
-  const name = savedName(entries, setup.draft.index) ?? `specialist ${setup.draft.index + 1}`
-  await writeEntries($, state, setup, dropEntry(entries, setup.draft.index), `Removed ${name}.`)
-}
-
-// The store flag is shared by every session, so the notice shows once per install.
-// The codex check runs only for someone who could still get the notice.
-async function introduceSpecialists($: EngineInterface, specialists: number): Promise<void> {
-  const shown = (await $.store.get(INTRO_KEY)) === true
-  const codexReady = shown || specialists > 0 ? false
-    : (await $.process.run(['codex', 'login', 'status']).catch(() => undefined))?.exitCode === 0
-  const notice = introNotice({ shown, specialists, codexReady })
-  if (notice.log) $.ui.log(notice.log)
-  if (notice.markShown) await $.store.set(INTRO_KEY, true)
 }
 
 // The engine's own dialogs: scope, seat, cadence, then the seat's model and,
@@ -444,38 +185,6 @@ async function introduceHeadsUp($: EngineInterface, state: PaneState, settings: 
     $.ui.invalidate('ui.render')
   }
   if (intro.markShown) await $.store.set(HEADS_UP_INTRO_KEY, true)
-}
-
-async function foldTemplates($: EngineInterface, state: PaneState): Promise<void> {
-  const { templatesOpen, ...setup } = currentSetup(state)
-  await keepSetup($, state, templatesOpen ? setup : { ...setup, templatesOpen: true })
-}
-
-async function askSetup($: EngineInterface, state: PaneState, confirm: SetupState['confirm']): Promise<void> {
-  await keepSetup($, state, { ...currentSetup(state), confirm })
-}
-
-// Drops the draft; the screen stays open on the roster.
-async function discardSetup($: EngineInterface, state: PaneState): Promise<void> {
-  await keepSetup($, state, { catalog: currentSetup(state).catalog })
-}
-
-// A list set by hand (`/config claude-council.specialists=...`) gets the same checks as a
-// Save, entry by entry; the first problem is the refusal.
-async function handEditDenial($: EngineInterface, value: unknown): Promise<string | undefined> {
-  const { entries, problem } = specialistEntries({ [LIST_FIELD]: value })
-  if (problem) return problem
-  if (entries.length === 0) return undefined
-  const catalog = await readCatalog($)
-  if ('error' in catalog) return `cannot check the models: ${catalog.error}`
-  const skills = [...(await findSkills($)).keys()]
-  for (const [index, entry] of entries.entries()) {
-    const parsed = parseSpecialist(entry)
-    if ('error' in parsed) return `specialist ${index + 1}: ${parsed.error}`
-    const checked = checkSpecialist(fieldsOf(parsed), index, { models: catalog.models, entries, skills })
-    if ('error' in checked) return `specialist ${index + 1}: ${checked.error}`
-  }
-  return undefined
 }
 
 // Submits the wake prompt once the job's record says completed. A job that
@@ -631,9 +340,9 @@ async function aimRun($: EngineInterface, state: PaneState, settings: PaneOption
 
 // A background failure is logged once per distinct message, never dropped.
 // Each kind keeps its own last message, so one's success never re-arms the other's.
-type FailureKind = 'specialist' | 'heads-up'
+type FailureKind = 'heads-up'
 
-async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>, kind: FailureKind = 'specialist'): Promise<void> {
+async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>, kind: FailureKind): Promise<void> {
   try {
     await work()
     state.lastFailure[kind] = ''
@@ -921,192 +630,7 @@ function headsUpRow(
   )
 }
 
-function specialistRun($: EngineInterface, args: string[], init?: { stdin?: string }) {
-  return $.process.run(['bash', `${$.plugin.root}/scripts/specialist.sh`, ...args], init)
-}
-
-function keyValues(text: string): Record<string, string> {
-  return Object.fromEntries(text.split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]))
-}
-
-const stateDirOf = (record: RunRecord) => `${record.worktree.replace(/\/[^/]+$/, '')}/.state/${record.id}`
-
-// Unreadable run records already reported, so a poll does not repeat them.
-const reportedUnreadable = new Set<string>()
-
-async function loadRuns($: EngineInterface): Promise<Record<string, RunRecord>> {
-  const { runs, unreadable } = readRuns(await $.store.get(RUNS_KEY))
-  for (const id of unreadable.filter(id => !reportedUnreadable.has(id))) {
-    reportedUnreadable.add(id)
-    $.ui.log(`specialist run record ${id} in the plugin store does not read; it is skipped`)
-  }
-  return runs
-}
-
-// Every session shares the store, so a write re-reads it first rather than
-// overwriting the others' records with a stale copy. Records that do not read
-// are kept as they are, for a person to look at.
-async function saveRun($: EngineInterface, record: RunRecord): Promise<void> {
-  const stored = await $.store.get(RUNS_KEY)
-  const runs = stored !== null && typeof stored === 'object' && !Array.isArray(stored) ? { ...stored } : {}
-  await $.store.set(RUNS_KEY, { ...runs, [record.id]: record })
-}
-
-async function roundState($: EngineInterface, state: PaneState, record: RunRecord): Promise<'running' | 'ended' | 'lost'> {
-  const stateDir = stateDirOf(record)
-  const exitPath = `${stateDir}/exit`
-  const exitText = await readText(files($), exitPath)
-  if (exitText.trim() !== '') return 'ended'
-  const pid = (await readText(files($), `${stateDir}/pid`)).trim()
-  let presence: 'present' | 'absent' | 'unknown' = 'unknown'
-  let recordedIdentity: string | undefined
-  let observedIdentity: string | undefined
-  let failure = ''
-  if (!/^\d+$/.test(pid)) failure = `invalid round pid ${JSON.stringify(pid)}`
-  else {
-    try {
-      const startPath = `${stateDir}/start`
-      if (await $.fs.exists(startPath)) recordedIdentity = await $.fs.read(startPath)
-      const alive = await $.process.run(['kill', '-0', pid], { env: { LC_ALL: 'C' } })
-      presence = roundProcessPresence(alive.exitCode, alive.stderr)
-      if (presence === 'unknown') failure = `kill -0 exited ${alive.exitCode}: ${alive.stderr.trim()}`
-      if (presence === 'present' && recordedIdentity !== undefined) {
-        const observed = await specialistRun($, ['identity', pid])
-        if (observed.exitCode === 0) observedIdentity = observed.stdout
-        else failure = `identity exited ${observed.exitCode}: ${observed.stderr.trim()}`
-      }
-    } catch (error) {
-      presence = 'unknown'
-      failure = `identity check failed: ${String(error)}`
-    }
-  }
-  const identity = roundProcessIdentity(recordedIdentity, observedIdentity, presence)
-  if (identity === 'unknown') {
-    const reason = failure || (recordedIdentity?.trim() === '' ? 'recorded start time is empty' : 'observed start time is empty or unparseable')
-    const message = `specialist round ${record.id} pid ${pid}: ${reason}`
-    const key = `${record.id}:${pid}`
-    if (!state.identityFailures.has(key)) {
-      $.ui.log(message)
-      state.identityFailures.add(key)
-    }
-  }
-  return roundLiveness(await readText(files($), exitPath), identity, await $.fs.exists(stateDir))
-}
-
-// Closes a round that ended: commits it, keeps its result on the record for
-// {run, result: true}, and wakes the model to fetch it.
-async function finishRound($: EngineInterface, state: PaneState, record: RunRecord, how: 'ended' | 'lost'): Promise<void> {
-  if (state.finishing.has(record.id)) return
-  state.finishing.add(record.id)
-  try {
-    // Another session may have closed it already: stop following it here too.
-    const stored = (await loadRuns($))[record.id]
-    if (stored?.state !== 'running') {
-      if (state.specialist?.record.id === record.id) state.specialist = undefined
-      if (state.specialistLog?.record.id === record.id) state.specialistLog = { ...state.specialistLog, record: stored ?? record, isLive: false }
-      $.ui.invalidate('ui.render')
-      return
-    }
-    const stateDir = stateDirOf(record)
-    // Every session following the round sees it end; only one closes it.
-    const claim = await specialistRun($, ['claim', stateDir])
-    if (claim.exitCode !== 0) throw new Error(`specialist claim for ${record.id} exited ${claim.exitCode}: ${claim.stderr.trim()}`)
-    if (keyValues(claim.stdout).claimed !== 'yes') {
-      if (state.specialist?.record.id === record.id) state.specialist = undefined
-      if (state.specialistLog?.record.id === record.id) state.specialistLog = { ...state.specialistLog, isLive: false }
-      $.ui.invalidate('ui.render')
-      return
-    }
-    const events = await readText(files($), `${stateDir}/events.jsonl`)
-    const report = async () => {
-      const text = (await specialistRun($, ['report', record.worktree, record.roundBase, record.base])).stdout
-      return parseSpecialistReport(text)
-    }
-    let thread = record.thread
-    let outcome: { result: string; isError: boolean }
-    if (how === 'lost') {
-      outcome = lostResult(record, (await report()).status)
-    } else {
-      const exitCode = Number((await readText(files($), `${stateDir}/exit`)).trim())
-      const ended = (await readText(files($), `${stateDir}/reason`)).trim()
-      const reason = ended === 'timeout' || ended === 'stopped' ? ended : ''
-      thread = (await readText(files($), `${stateDir}/thread`)).trim() || record.thread
-      const commit = exitCode === 0 ? await specialistRun($, ['commit', record.worktree, record.subject]) : undefined
-      const didCommit = commit !== undefined && keyValues(commit.stdout).committed === 'yes'
-      const committed = didCommit ? (await specialistRun($, ['head', record.worktree])).stdout.trim().slice(0, 7) : ''
-      const commitError = commit && commit.exitCode !== 0 ? commit.stderr.trim() || `commit exited ${commit.exitCode}` : ''
-      const section = await report()
-      outcome = roundResult({
-        record, exitCode, commit: committed, commitError, reason,
-        lastMessage: (await readText(files($), `${stateDir}/last-message.md`)).trim(),
-        roundStat: section.round, totalStat: section.total, status: section.status,
-        stderrTail: (await readText(files($), `${stateDir}/stderr.txt`)).split('\n').slice(-15).join('\n').trim(),
-      })
-    }
-    const done: RunRecord = { ...record, thread, state: 'idle', last: outcome }
-    await saveRun($, done)
-    if (state.specialist?.record.id === record.id) state.specialist = undefined
-    state.specialistLog = { record: done, steps: specialistSteps(events, record.worktree), isLive: false }
-    $.ui.invalidate('ui.render')
-    await $.prompt.submit({ text: specialistWake(done) })
-  } finally {
-    state.finishing.delete(record.id)
-  }
-}
-
-// Once a second while a round runs: its steps for the band and the pane, and
-// its end.
-async function followSpecialist($: EngineInterface, state: PaneState): Promise<void> {
-  const working = state.specialist
-  if (!working) return
-  state.nowMs = await $.clock.now()
-  const events = await readText(files($), `${working.stateDir}/events.jsonl`)
-  const steps = specialistSteps(events, working.record.worktree)
-  if (state.specialist !== working) return
-  if (events.length !== working.outputLength) {
-    working.outputLength = events.length
-    working.outputAtMs = state.nowMs
-  }
-  state.specialistLog = { record: working.record, steps, isLive: true }
-  $.ui.invalidate('ui.render')
-  // The exit file is read every tick; the process check costs two execs, so
-  // it runs at the council's pid cadence.
-  const hasExit = (await readText(files($), `${working.stateDir}/exit`)).trim() !== ''
-  if (!hasExit && state.nowMs - state.specialistCheckedAtMs < PID_CHECK_MS) return
-  state.specialistCheckedAtMs = state.nowMs
-  const now = await roundState($, state, working.record)
-  if (now !== 'running') await finishRound($, state, working.record, now)
-}
-
-// A round survives the session that started it: at start, follow one still
-// running and close one that ended meanwhile.
-// Scrolls the specialist pane to its end, which the engine keeps up with as
-// steps arrive. A refusal is reported: to the transcript where the pane
-// should have followed, to the debug log where a closed pane is expected.
-async function followPaneEnd($: EngineInterface, when: string, to: 'transcript' | 'debug'): Promise<boolean> {
-  const moved = await $.ui.scroll({ in: SPECIALIST_PANE, to: 'end' })
-  if (moved.deny) $.ui.log(`specialist pane did not follow (${when}): ${moved.deny}`, { to })
-  return !moved.deny
-}
-
-// One try per frame after the pane opens; the last refusal is the one reported.
-async function followOpenedPane($: EngineInterface, state: PaneState): Promise<void> {
-  state.paneFollowFrames -= 1
-  const isLast = state.paneFollowFrames === 0
-  const moved = await followPaneEnd($, 'pane opened', isLast ? 'transcript' : 'debug')
-  if (moved) state.paneFollowFrames = 0
-}
-
-async function recoverRounds($: EngineInterface, state: PaneState): Promise<void> {
-  for (const record of Object.values(await loadRuns($))) {
-    if (record.state !== 'running') continue
-    const now = await roundState($, state, record)
-    if (now === 'running') state.specialist = { record, startedMs: record.startedMs, stateDir: stateDirOf(record), outputLength: -1, outputAtMs: record.startedMs }
-    else await finishRound($, state, record, now)
-  }
-}
-
-// The COUNCIL and SPECIALIST chip: a darker segment with a star, then the
+// The COUNCIL chip: a darker segment with a star, then the
 // label, white on solid colour. Coloured cells draw alike in every terminal,
 // where end-cap glyphs do not. Given a frame, a highlight moves across the
 // label's letters.
@@ -1186,52 +710,16 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: { specialist: '', 'heads-up': '' }, headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', specialistCheckedAtMs: 0, frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() }, specialists: [], finishing: new Set(), identityFailures: new Set(), specialistFrame: 0, paneFollowFrames: 0, inputEpoch: 0 }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: { 'heads-up': '' }, headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() } }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
-    await $.command.register({ name: SETUP_COMMAND, description: 'Add, edit or remove specialists', immediate: true })
     await $.command.register({ name: HEADS_UP_COMMAND, description: 'Heads-up side-check: set it up in a few questions, switch it on for this project naming the seat, or off, or show its state and counts', argumentHint: '[setup | on [seat] | off | status]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
-    // An entry that does not parse is reported, never dropped quietly.
-    const roster = specialistRoster(options)
-    for (const problem of roster.problems) $.ui.log(problem)
-    state.specialists = roster.specialists
-    state.inputEpoch = await $.clock.now()
-    // A Save reloads this module; the screen's draft comes back from the store.
-    // This session's list is the newest at load; the shared copy starts from it.
-    if (typeof options[LIST_FIELD] === 'string') {
-      await $.store.set(LATEST_KEY, options[LIST_FIELD])
-      state.latest = options[LIST_FIELD]
-    }
-    state.setupKey = `${SETUP_KEY_PREFIX}${await $.session.id()}`
-    state.setup = restoreSetup(await $.store.get(state.setupKey), specialistEntries(options).entries)
-    // A write made while the models were loading reloads this module before
-    // they arrive; ask again, or Save would wait for them forever.
-    if (state.setup && 'loading' in state.setup.catalog) void logFailure($, state, () => loadCatalog($, state))
-    // An open setup screen was drawn by the reloaded module before the store
-    // was read; draw it again with it.
-    $.ui.invalidate('ui.render')
-    // Registered with no specialists too, so a user can ask Claude to set the first one up.
-    // A run outlives its specialist's removal: it can still be followed, fetched and finished.
-    const hasRuns = Object.values(await loadRuns($)).some(record => record.state !== 'finished')
-    await $.tool.register({ name: SPECIALIST_TOOL, description: specialistDescription(roster.specialists, hasRuns), inputSchema: specialistSchema(roster.specialists, hasRuns) })
-    void logFailure($, state, () => introduceSpecialists($, roster.specialists.length))
     void logFailure($, state, () => introduceHeadsUp($, state, settings), 'heads-up')
     // A reload drops the heads-up timer; a check still in flight needs it back.
     if ((await read($, headsUp)).phase.kind === 'checking') watchHeadsUp($, state)
-    if (roster.specialists.length > 0 || hasRuns) {
-      // The band's clock moves only while a round runs.
-      $.clock.every(1000, () => { void logFailure($, state, () => followSpecialist($, state)) })
-      // The chip's shimmer moves only while a round runs.
-      $.clock.every(FRAME_MS, () => {
-        if (!state.specialist) return
-        state.specialistFrame += 1
-        if (state.paneFollowFrames > 0) void followOpenedPane($, state)
-        $.ui.invalidate('ui.render')
-      })
-      await logFailure($, state, () => recoverRounds($, state))
-    }
+    for (const key of SPECIALIST_STORE_KEYS) await $.store.delete(key)
     return next(e)
   })
 
@@ -1278,8 +766,6 @@ export const register: Register = (on, options) => {
   // The settings row says ask while an answer is remembered; its label says which.
   on('config.describe', async ($, e, next) => {
     const row = await next(e)
-    // /specialists edits the list; the menu would only show its JSON.
-    if (e.key === LIST_KEY) return { ...row, isHidden: true }
     if (!e.key.endsWith('.pane_host')) return row
     return { ...row, label: hostRowLabel(row.label, settings.host, hostFrom(await $.store.get(HOST_STORE_KEY))) }
   })
@@ -1310,150 +796,6 @@ export const register: Register = (on, options) => {
     const saved = run.stdout.trim().split('\n').pop() ?? ''
     if (run.exitCode !== 0 || !saved) return { result: run.stderr || 'council run failed', isError: true }
     return { result: await $.fs.read(saved) }
-  })
-
-  // Every start, follow-up and finish is confirmed in a dialog: a specialist
-  // writes code with its own model, and a finish merges or deletes its branch.
-  on('tool.call', { tool: /^mcp__claude-council__specialist$/ }, async ($, e) => {
-    const call = specialistCall(e as unknown as Record<string, unknown>, state.specialists)
-    if ('deny' in call) return { deny: call.deny }
-    // Claude proposes, the user saves: the screen opens prefilled and nothing is written here.
-    if (call.kind === 'setup') {
-      // A prefill never replaces the person's unsaved edits: the screen opens
-      // on them, and Claude hears why its proposal is not there.
-      const kept = state.setup?.draft
-      if (kept && isDirty(kept)) {
-        const refused = await openSetup($, state, options)
-        if (refused) return { deny: `the setup screen did not open: ${refused}` }
-        return { deny: `the setup screen is open on unsaved changes to ${kept.name || 'a new specialist'}; ask the user to save or discard them, then call {setup} again` }
-      }
-      const refused = await openSetup($, state, options, call.fields)
-      return refused ? { deny: `the setup screen did not open: ${refused}` } : { result: 'Opened the setup screen; nothing is saved until the user presses Save.' }
-    }
-    const sh = (args: string[], init?: { stdin?: string }) => specialistRun($, args, init)
-    const kv = keyValues
-    // One round at a time across every session: they all share the store. A
-    // round that ended with nobody following it is closed first.
-    for (const r of Object.values(await loadRuns($))) {
-      if (r.state !== 'running') continue
-      const now = await roundState($, state, r)
-      if (now !== 'running') await finishRound($, state, r, now)
-    }
-    const runs = await loadRuns($)
-    const live = Object.values(runs).find(r => r.state === 'running')
-    const ask = async (question: string, go: string, stop: string) => {
-      try { return await $.ui.ask(question, { header: 'Specialist', options: [go, stop] }) } catch { return undefined }
-    }
-
-    // Starts a round and returns at once; followSpecialist closes it.
-    // The store says running only once the round's pid is on disk, so no
-    // session reads a round that has not launched yet as lost or ended. A
-    // round that fails to launch leaves the record as it was.
-    const round = async (record: RunRecord, prompt: string, thread: string, subject: string, isDirty = false) => {
-      const roundBase = (await sh(['head', record.worktree])).stdout.trim()
-      const running: RunRecord = { ...record, rounds: record.rounds + 1, state: 'running', startedMs: await $.clock.now(), roundBase, subject }
-      const stateDir = stateDirOf(running)
-      const limit = String(settings.roundLimitSeconds)
-      const launched = await sh(['codex', record.worktree, stateDir, record.model, record.effort ?? '', limit, ...(thread ? [thread] : [])], { stdin: prompt })
-      if (launched.exitCode !== 0) {
-        await saveRun($, record)
-        return { result: `Run ${record.id}: the round did not start: ${launched.stderr.trim()}`, isError: true as const }
-      }
-      await saveRun($, running)
-      state.specialist = { record: running, startedMs: running.startedMs, stateDir, outputLength: -1, outputAtMs: running.startedMs }
-      state.specialistLog = { record: running, steps: [], isLive: true }
-      $.ui.invalidate('ui.render')
-      // An open pane follows the new round; a closed one refuses, and follows
-      // once opened from the band.
-      await followPaneEnd($, 'round start', 'debug')
-      return { result: startedReply(running, isDirty) }
-    }
-
-    if (call.kind === 'start') {
-      if (live) return { deny: `${live.specialist} is still working on run ${live.id}` }
-      const login = await $.process.run(['codex', 'login', 'status']).catch(() => undefined)
-      if (!login || login.exitCode !== 0) return { deny: 'codex is not installed or not logged in; run `codex login`' }
-      const cwd = await $.session.cwd()
-      const top = await $.process.run(['git', '-C', cwd, 'rev-parse', '--short=7', 'HEAD'])
-      if (top.exitCode !== 0) return { deny: `${cwd} is not inside a git repository with a commit` }
-      const dirty = (await $.process.run(['git', '-C', cwd, 'status', '--porcelain'])).stdout.trim() !== ''
-      const s = call.specialist
-      // Every skill is read before the worktree exists, so a missing one costs nothing.
-      const index = await findSkills($)
-      const missing = missingSkills(s.skills ?? [], index)
-      if (missing.length > 0) return { deny: `${s.name} follows skills that are not installed: ${missing.join(', ')}; fix it in /specialists` }
-      const chosen = (s.skills ?? []).flatMap(name => index.get(name) ?? [])
-      const loaded = await Promise.all(chosen.map(async skill => ({ ...skill, body: skillBody(await $.fs.read(`${skill.dir}/SKILL.md`)) })))
-      const opening = skillsOpening(loaded)
-      const ts = runStamp(new Date(await $.clock.now()))
-      const started = await sh(['start', cwd, s.name, ts])
-      if (started.exitCode !== 0) return { result: started.stderr.trim() || 'could not create the worktree', isError: true }
-      const at = kv(started.stdout)
-      const record: RunRecord = {
-        id: `${s.name}-${ts}`, specialist: s.name, model: s.model, ...(s.effort ? { effort: s.effort } : {}), skills: s.skills ?? [],
-        repo: at.repo ?? '', worktree: at.worktree ?? '', branch: at.branch ?? '', base: at.base ?? '', thread: '', rounds: 0, state: 'idle', startedMs: 0, roundBase: '', subject: '',
-      }
-      return await round(record, specialistPrompt(opening, call.task), '', commitSubject(s.name, call.task), dirty)
-    }
-
-    const record = Object.hasOwn(runs, call.run) ? runs[call.run] : undefined
-    if (call.kind === 'result') {
-      if (!record) return { deny: `no run ${call.run}` }
-      if (record.state === 'running') return { deny: `${record.specialist} is still working on run ${record.id}; a prompt arrives when the round ends` }
-      if (!record.last) return { deny: `run ${record.id} has no finished round yet` }
-      return record.last.isError ? { result: record.last.result, isError: true as const } : { result: record.last.result }
-    }
-    if (call.kind === 'followUp') {
-      const exists = record ? await $.fs.exists(record.worktree) : false
-      const refusal = followUpRefusal(record, call.run, exists)
-      if (refusal || !record) return { deny: refusal ?? `no run ${call.run}` }
-      if (live) return { deny: `${live.specialist} is still working on run ${live.id}` }
-      return await round(record, call.message, record.thread, `specialist ${record.specialist}: round ${record.rounds + 1}`)
-    }
-
-    if (call.kind === 'stop') {
-      if (!record || record.state !== 'running') return { deny: `run ${call.run} has no round running` }
-      // The round the user is asked about, by its pid and start time: a
-      // follow-up may start another in the same state dir while the dialog is open.
-      const roundPid = (await readText(files($), `${stateDirOf(record)}/pid`)).trim()
-      const roundStart = (await readText(files($), `${stateDirOf(record)}/start`)).trim()
-      const question = `Stop ${record.specialist}'s round ${record.rounds} on run ${record.id}? Its edits so far stay uncommitted in the worktree.`
-      const outcome = dialogOutcome(await ask(question, 'Stop it', 'Let it run'), 'Stop it', 'Let it run', `let run ${record.id} keep running`)
-      if ('deny' in outcome) return { deny: outcome.deny }
-      if ('reply' in outcome) return { result: outcome.reply }
-      const stopped = await sh(['stop', stateDirOf(record), roundPid, roundStart])
-      if (stopped.exitCode !== 0) return { result: `Run ${record.id} not stopped: ${stopped.stderr.trim()}`, isError: true }
-      return { result: `Stopped the round on run ${record.id}; a prompt arrives with its result once the round has closed.` }
-    }
-
-    if (!record || record.state === 'finished') return { deny: `no open run ${call.run}` }
-    if (record.state === 'running') return { deny: `${record.specialist} is still working on run ${record.id}` }
-    const counted = await sh(['counts', record.repo, record.branch, record.base])
-    // A branch deleted by hand has nothing to merge; discard still closes the run.
-    if (counted.exitCode !== 0 && call.finish === 'merge') return { result: `Run ${record.id} not finished: ${counted.stderr.trim()}`, isError: true }
-    const counts = kv(counted.stdout)
-    const target = counts.target || 'a detached HEAD'
-    const go = call.finish === 'merge' ? 'Merge' : 'Discard'
-    const question = finishQuestion(record, call.finish, Number(counts.commits ?? 0), Number(counts.files ?? 0), target)
-    const outcome = dialogOutcome(await ask(question, go, 'Keep it'), go, 'Keep it', `kept run ${record.id}`)
-    if ('deny' in outcome) return { deny: outcome.deny }
-    if ('reply' in outcome) return { result: outcome.reply }
-    const current = (await loadRuns($))[record.id]
-    if (current?.state !== 'idle') return { deny: `run ${record.id} changed while the dialog was open` }
-    const finished = await sh(['finish', current.repo, current.worktree, current.branch, call.finish])
-    if (finished.exitCode === 0) {
-      await saveRun($, { ...current, state: 'finished' })
-      return { result: `Run ${current.id}: ${call.finish === 'merge' ? `merged into ${target}` : 'discarded'}; worktree and branch removed.` }
-    }
-    const lines = finished.stdout.trim()
-    const why = finished.exitCode === 3 ? `merge conflicts, merge aborted; worktree and branch kept:\n${lines}`
-      : finished.exitCode === 4 ? `your uncommitted changes touch the branch's files; commit or stash them first:\n${lines}`
-      : finished.exitCode === 5 ? 'the repository is on a detached HEAD; check out a branch to merge into'
-      : finished.exitCode === 6 ? `git refused the merge:\n${finished.stderr.trim()}`
-      : finished.exitCode === 8 ? `the branch changes files git runs as hooks, which would run on this machine as the merge commits; review them and merge by hand if they are safe:\n${lines}`
-      : finished.exitCode === 7 ? `the worktree holds changes no round committed (a round failed or its commit was refused); commit them in ${current.worktree} or ask for another round, or discard the run:\n${lines}`
-      : finished.stderr.trim() || 'finish failed'
-    return { result: `Run ${current.id} not finished: ${why}`, isError: true }
   })
 
   on('command.run', { command: HEADS_UP_COMMAND }, async ($, e) => {
@@ -1546,32 +888,6 @@ export const register: Register = (on, options) => {
     // answer. Reading the session here subscribes the band to its changes.
     const band = bandView((await read($, headsUp)).phase)
     if (band) return headsUpRow($.ui.resolve(e), band, headsUpPresses($, state, band.id), state.headsUpTurnOffArmed === band.id)
-    const working = state.specialist
-    if (working) {
-      const ui = $.ui.resolve(e)
-      const clock = roundClock(working.startedMs, state.nowMs)
-      const quiet = quietNote(working.outputAtMs, state.nowMs)
-      return (
-        <ui.Box key="specialist" flexDirection="row" marginTop={1}>
-          {/* Only the step gives way when the band is narrow, as beside an open pane. */}
-          {chip(ui, 'chip', 'SPECIALIST', state.specialistFrame)}
-          <ui.Box flexShrink={0}>
-            <ui.Text>
-              <ui.Text bold>{`  ${working.record.specialist}`}</ui.Text>
-              <ui.Text color={COLOR.model}>{`  ${working.record.model}`}</ui.Text>
-              <ui.Text bold color={roundStatus(true, undefined, clock).color}>{`  \u25cf ${clock}`}</ui.Text>
-              {quiet && <ui.Text color={COLOR.hint}>{`  ${quiet}`}</ui.Text>}
-            </ui.Text>
-          </ui.Box>
-          <ui.Box flexGrow={1} flexShrink={1}>
-            <ui.Text dimColor wrap="truncate-end">{`  ${latestStep(state.specialistLog?.steps ?? [])}  `}</ui.Text>
-          </ui.Box>
-          <ui.Box flexShrink={0}>
-            <ui.Button key="specialist:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: SPECIALIST_PANE, title: `Specialist ${working.record.specialist}` }).then(() => { state.paneFollowFrames = PANE_FOLLOW_FRAMES }) }} />
-          </ui.Box>
-        </ui.Box>
-      )
-    }
     const view = state.view
     const progress = view ? progressBand(view, state.runStartedMs, state.nowMs) : undefined
     if (!view || !progress) return next(e)
@@ -1582,13 +898,13 @@ export const register: Register = (on, options) => {
     const cancelAll = () => { if (state.view) for (const name of seatsToCancel(state.view)) cancelSeat($, state, name) }
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
-        {/* The specialist band's slots; only the event gives way when narrow. */}
+        {/* Only the event gives way when narrow. */}
         {chip(ui, 'chip', 'COUNCIL', state.frame)}
         <ui.Box flexShrink={0}>
           <ui.Text>
             <ui.Text bold>{`  ${progress.count}`}</ui.Text>
             <ui.Text color={COLOR.accent}>{`  ${progress.bar}`}</ui.Text>
-            {progress.clock ? <ui.Text bold color={roundStatus(true, undefined, progress.clock).color}>{`  \u25cf ${progress.clock}`}</ui.Text> : null}
+            {progress.clock ? <ui.Text bold color={COLOR.warning}>{`  \u25cf ${progress.clock}`}</ui.Text> : null}
           </ui.Text>
         </ui.Box>
         <ui.Box flexGrow={1} flexShrink={1}>
@@ -1604,320 +920,6 @@ export const register: Register = (on, options) => {
           <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
         </ui.Box>
       </ui.Box>
-    )
-  })
-
-  // The setup screen's own writes skip this hook (the engine does not run a
-  // plugin's hooks for its own $.config.set); a list set by hand lands here.
-  on('config.set', { key: LIST_KEY }, async ($, e, next) => {
-    const denial = await handEditDenial($, e.value)
-    if (denial) return { deny: denial }
-    const written = await next(e)
-    if (!('deny' in written) || !written.deny) await $.store.set(LATEST_KEY, e.value)
-    return written
-  })
-
-  on('command.run', { command: SETUP_COMMAND }, async ($) => {
-    const refused = await openSetup($, state, options)
-    return { text: refused ? `The setup screen did not open: ${refused}` : 'Specialists: esc closes the screen.' }
-  })
-
-  // Closing the screen keeps a draft only when it holds changes; an untouched
-  // one would reopen the form for nothing.
-  // A session's draft goes with it; the next session starts on the roster.
-  on('session.end', async ($, e, next) => {
-    if (state.setupKey) await $.store.delete(state.setupKey)
-    return next(e)
-  })
-
-  on('ui.close', { id: SETUP_PANE }, async ($, e, next) => {
-    const draft = state.setup?.draft
-    if (e.origin.kind === 'person' && !(draft && isDirty(draft))) await keepSetup($, state, undefined)
-    return next(e)
-  })
-
-  on('ui.render', { component: 'Pane' }, ($, e, next) => {
-    if (e.requestId !== SETUP_PANE) return next(e)
-    const ui = $.ui.resolve(e)
-    if (!('Input' in ui)) return <ui.Text key="setup-mobile">Specialists are set up in the terminal or desktop app.</ui.Text>
-    const { Box, Text, Input, Select, Button } = ui
-    const setup = currentSetup(state)
-    const stored = freshList(options, state.latest)
-    const view = setupView(setup, stored.entries, stored.problem, state.skillNames)
-    const draft = setup.draft
-    const editor = view.editor
-    const templates = view.templates
-    const width = Math.max(30, e.props.bodyColumns - 2)
-    const press = (work: () => Promise<void>) => () => { void setupAction($, state, work) }
-    const edit = (patch: Partial<Fields>) => { void setupAction($, state, () => editSetup($, state, patch)) }
-    // Help sits under its field in the light hint grey and wraps, so it always reads whole.
-    // A table cell keeps its width; only the last column gives way.
-    const cell = (key: string, cellWidth: number, content: RenderChildren) => <Box key={key} width={cellWidth} flexShrink={0}>{content}</Box>
-    // A dim bar between two columns.
-    const separator = (key: string) => (
-      <Box key={key} width={SEPARATOR.length} flexShrink={0}><Text key="text" color={COLOR.line}>{SEPARATOR}</Text></Box>
-    )
-    // A switched-off row is grey and italic throughout; the name is a Button,
-    // which takes neither.
-    const offText = (text: string) => <Text key="text" color={COLOR.muted} italic wrap="truncate-end">{text}</Text>
-    // A broken row's second line, under the model column, shows what was stored.
-    const under = (key: string, text: string) => (
-      <Box key={key} flexDirection="row">
-        {cell('indent', SWATCH_WIDTH + view.columns.name + PAD + SEPARATOR.length, <Text key="text">{''}</Text>)}
-        <Box key="body" flexShrink={1}><Text key="text" dimColor wrap="truncate-end">{text}</Text></Box>
-      </Box>
-    )
-    const help = (key: string, text: string) => (
-      <Text key={key} color={COLOR.hint} italic wrap="wrap">{text}</Text>
-    )
-    // Each field: its label in the roster's column name, anything about it on
-    // the right, and the value on a tinted well that says where to type
-    // without a frame beside the field.
-    const label = (key: string, text: string, aside?: string, isFirst = false) => (
-      <Box key={key} flexDirection="row" marginTop={isFirst ? 0 : 1}>
-        <Text key="label" bold color={COLOR.muted}>{text}</Text>
-        <Box key="space" flexGrow={1} />
-        {aside ? <Text key="aside" dimColor>{aside}</Text> : null}
-      </Box>
-    )
-    const well = (key: string, field: RenderChildren) => <Box key={key} backgroundColor={COLOR.zebra}>{field}</Box>
-    return (
-      <Box key="setup" flexDirection="column" width={e.props.bodyColumns}>
-        {/* The roster: a table in one frame, one line per specialist, every
-            other row shaded; the form below holds the rest. */}
-        <Text key="roster-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${view.header} `}</Text>
-        <Box key="roster" flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={width}>
-          {view.empty ? <Text key="empty" dimColor wrap="wrap">{view.empty}</Text> : null}
-          {view.problem ? <Text key="problem" color={COLOR.danger} wrap="wrap">{`The stored list cannot be read: ${view.problem}. Save and Remove are off until it is fixed with /config.`}</Text> : null}
-          {view.roster.length > 0 ? (
-            <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
-              {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
-              {cell('name', view.columns.name + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.name}</Text>)}
-              {separator('sep-1')}
-              {cell('model', view.columns.model + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.model}</Text>)}
-              {separator('sep-2')}
-              {cell('effort', view.columns.effort + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.effort}</Text>)}
-              {separator('sep-3')}
-              <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color={COLOR.onFill} wrap="truncate-end">{HEADERS.when}</Text></Box>
-            </Box>
-          ) : null}
-          {view.roster.map((entry, at) => [
-            at > 0 ? <Text key={`rule:${entry.index}`} color={COLOR.line} wrap="truncate">{ruleLine(view.columns, width - 4)}</Text> : null,
-            <Box key={`entry:${entry.index}`} flexDirection="column" hover={{ backgroundColor: COLOR.selected }}
-              {...(entry.editing ? { backgroundColor: COLOR.selected } : entry.zebra ? { backgroundColor: COLOR.zebra } : {})}>
-              <Box key="line" flexDirection="row">
-                {cell('swatch', SWATCH_WIDTH, <Text key="text" {...(entry.kind === 'ok' && entry.off ? { color: COLOR.muted } : {})}>{entry.editing ? '▶' : entry.kind === 'ok' && entry.off ? '○' : '●'}</Text>)}
-                {cell('name', view.columns.name + PAD, <Button key={`row:${entry.index}`} plain label={entry.name} onPress={press(() => openRow($, state, options, entry.index))} />)}
-                {separator('sep-1')}
-                {entry.kind === 'ok' ? cell('model', view.columns.model + PAD, entry.off
-                  ? offText(entry.model)
-                  : <Text key="text">{entry.model}</Text>) : null}
-                {entry.kind === 'ok' ? separator('sep-2') : null}
-                {entry.kind === 'ok' ? cell('effort', view.columns.effort + PAD, entry.off
-                  ? offText(entry.effort)
-                  : entry.effortStyle
-                    ? <Text key="text" color={entry.effortStyle.color} bold={entry.effortStyle.bold === true}>{entry.effort}</Text>
-                    : <Text key="text" dimColor>{entry.effort}</Text>) : null}
-                {entry.kind === 'ok' ? separator('sep-3') : null}
-                <Box key="rest" flexGrow={1} flexShrink={1}>
-                  {entry.kind === 'ok'
-                    ? entry.off
-                      ? offText(`off · ${entry.when}`)
-                      : <Text key="text" wrap="truncate-end">{entry.when}</Text>
-                    : <Text key="text" color={COLOR.danger} wrap="truncate-end">{entry.problem}</Text>}
-                </Box>
-              </Box>
-              {entry.kind === 'broken' ? under('stored', entry.stored) : null}
-            </Box>,
-          ])}
-          <Box key="add-row" flexDirection="row" marginTop={view.roster.length > 0 || view.empty ? 1 : 0}>
-            <Button key="add" label="+ Add specialist" onPress={press(() => openRow($, state, options, 'new'))} />
-            {templates?.fold ? <Text key="gap">{'   '}</Text> : null}
-            {templates?.fold ? <Button key="templates-fold" plain dimColor label={templates.fold.label} onPress={press(() => foldTemplates($, state))} /> : null}
-          </Box>
-          {/* The templates draw as the roster does, so picking one reads as
-              picking a row; the name opens it as a new draft. The use-when wraps so it
-              reads whole, so the rows go without bars and rules, which would stop
-              at a wrapped row's first line; the shading tells them apart. They sit
-              under Add, as ways to add one. */}
-          {templates && (!templates.fold || templates.fold.open) ? (
-            <Box key="templates" flexDirection="column" marginTop={1}>
-              <Box key="head" flexDirection="row" backgroundColor={FILL.header}>
-                {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
-                {cell('name', templates.nameWidth + PAD, <Text key="text" bold color={COLOR.onFill}>{HEADERS.template}</Text>)}
-                {cell('gap', SEPARATOR.length, <Text key="text">{''}</Text>)}
-                <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" bold color={COLOR.onFill} wrap="truncate-end">{HEADERS.when}</Text></Box>
-              </Box>
-              {templates.rows.map(row => [
-                <Box key={`template:${row.name}`} flexDirection="row" hover={{ backgroundColor: COLOR.selected }} {...(row.zebra ? { backgroundColor: COLOR.zebra } : {})}>
-                  {cell('swatch', SWATCH_WIDTH, <Text key="text">{''}</Text>)}
-                  {cell('name', templates.nameWidth + PAD, <Button key="use" plain label={row.name} onPress={press(() => openRow($, state, options, { template: row.name }))} />)}
-                  {cell('gap', SEPARATOR.length, <Text key="text">{''}</Text>)}
-                  <Box key="when" flexGrow={1} flexShrink={1}><Text key="text" dimColor wrap="wrap">{row.when}</Text></Box>
-                </Box>,
-              ])}
-            </Box>
-          ) : null}
-        </Box>
-        {editor && draft ? (
-          <Box key="editor-wrap" flexDirection="column" marginTop={1}>
-            <Box key="editor-head" flexDirection="row">
-              <Text key="editor-chip" bold color={COLOR.onFill} backgroundColor={FILL.chip}>{` ${editor.title} `}</Text>
-              {editor.unsaved ? <Text key="unsaved" color={COLOR.warning}>{'  unsaved changes'}</Text> : null}
-            </Box>
-            {/* No frame and each text field under its own label: Claude Code sizes a
-                focused field to the whole pane, so anything beside it cuts the text. */}
-            <Text key="editor-top" color={COLOR.accent} wrap="truncate">{'\u2500'.repeat(e.props.bodyColumns)}</Text>
-            <Box key="editor" flexDirection="column">
-              {label('name-label', HEADERS.name, undefined, true)}
-              {well('who-well', <Input key={`name.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="lowercase, e.g. sec" value={draft.name} autoFocus onInput={(v: string) => edit({ name: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { name: v }, { control: 'model' })) }} />)}
-              {label('model-label', HEADERS.model)}
-              {well('model-well', <Select key="model" value={draft.model || editor.modelOptions[0]?.value} options={editor.modelOptions}
-                onSelect={(v: string) => { void setupAction($, state, () => pickModel($, state, v)) }} />)}
-              {editor.models === 'loading' ? help('models-loading', 'loading models from Codex') : null}
-              {editor.models === 'failed' ? (
-                <Box key="models-failed" flexDirection="row">
-                  <Text key="failed" color={COLOR.danger}>{'could not load models  '}</Text>
-                  <Button key="retry" label="Retry" onPress={press(() => loadCatalog($, state))} />
-                </Box>
-              ) : null}
-              {label('effort-label', HEADERS.effort)}
-              {well('effort-well', <Select key="effort" value={draft.effort || 'default'} options={editor.effortOptions} onSelect={(v: string) => edit({ effort: v === 'default' ? '' : v })} />)}
-              {editor.effortHelp ? help('effort-help', editor.effortHelp) : null}
-              {label('when-label', HEADERS.when, editor.whenCount)}
-              {well('call-when-well', <Input key={`when.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="tasks Claude should offer it for" value={draft.when} onInput={(v: string) => edit({ when: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { when: v }, { input: 'skills' })) }} />)}
-              {help('when-help', editor.whenHelp)}
-              {label('skills-label', 'SKILLS', 'optional')}
-              {well('skills-well', <Input key={`skills.${state.inputEpoch}`} submitLabel={SUBMIT_HINT} placeholder="optional, e.g. test-audit, web-perf" value={draft.skills} onInput={(v: string) => edit({ skills: v })} onSubmit={(v: string) => { void setupAction($, state, () => submitField($, state, { skills: v }, { control: 'save' })) }} />)}
-              {editor.skillsMissing ? <Text key="skills-missing" color={COLOR.danger} wrap="wrap">{editor.skillsMissing}</Text> : null}
-              {help('skills-help', editor.skillsHelp)}
-              <Box key="actions" flexDirection="row" marginTop={1}>
-                {/* The form's own pair first; the specialist's on/off apart from it;
-                    Remove last, so a Tab too many never lands on it from Save. */}
-                <Button key="save" label="Save" onPress={press(() => saveSetup($, state, options))} />
-                <Text key="gap-1">{'  '}</Text>
-                <Button key="discard" dimColor label={editor.discardLabel} onPress={press(() => discardSetup($, state))} />
-                {editor.toggle ? <Text key="gap-toggle">{'      '}</Text> : null}
-                {editor.toggle ? <Button key="toggle" label={editor.toggle} onPress={press(() => toggleSetup($, state, options))} /> : null}
-                {editor.removable ? <Text key="gap-2">{'  '}</Text> : null}
-                {editor.removable ? <Button key="remove" dimColor label="Remove" onPress={press(() => askSetup($, state, { kind: 'remove' }))} /> : null}
-              </Box>
-            </Box>
-            <Text key="editor-bottom" color={COLOR.accent} wrap="truncate">{'\u2500'.repeat(e.props.bodyColumns)}</Text>
-          </Box>
-        ) : null}
-        {view.confirm ? (
-          <Box key="confirm" flexDirection="column" marginTop={1}>
-            <Text key="question" bold wrap="wrap">{view.confirm.text}</Text>
-            <Box key="answers" flexDirection="row">
-              <Button key="confirm-yes" label={view.confirm.yes} onPress={press(() => confirmSetup($, state, options))} />
-              <Text key="gap">{'  '}</Text>
-              <Button key="confirm-no" label={view.confirm.no} onPress={press(() => askSetup($, state, undefined))} />
-            </Box>
-          </Box>
-        ) : null}
-        {view.status ? (
-          <Box key="status" flexDirection="row" marginTop={1}>
-            <Text key="label" bold color={COLOR.onFill} backgroundColor={STATUS_FILL[view.status.kind]}>{STATUS_LABEL[view.status.kind]}</Text>
-            <Text key="text" wrap="wrap">{` ${view.status.text}`}</Text>
-          </Box>
-        ) : null}
-        <Text key="keys" dimColor wrap="truncate-end">{'Tab next · Shift+Tab back · ↓ opens a list, Enter picks · Esc closes, draft kept'}</Text>
-      </Box>
-    )
-  })
-
-  // Scrolling back down to the last rows follows new steps again; scrolling up
-  // stops it, as the engine's own `end` does.
-  on('ui.scroll', { requestId: SPECIALIST_PANE }, async ($, e, next) => {
-    const moved = await next(e)
-    if (!moved.deny && landsAtEnd(e)) await followPaneEnd($, 'scrolled to the bottom', 'transcript')
-    return moved
-  })
-
-  on('ui.render', { component: 'Pane' }, ($, e, next) => {
-    const log = state.specialistLog
-    if (e.requestId !== SPECIALIST_PANE || !log) return next(e)
-    const ui = $.ui.resolve(e)
-    const { Box, Markdown, Text } = ui
-    const columns = e.props.bodyColumns
-    const { record } = log
-    const mark = (step: Step) => (step.state === 'running' ? ['\u22ef', COLOR.warning] : step.state === 'failed' ? ['\u2717', COLOR.danger] : ['\u2713', COLOR.success])
-    const status = roundStatus(log.isLive, record.last, roundClock(record.startedMs, state.nowMs))
-    const cardWidth = Math.max(20, columns - 2)
-    return (
-      <Box key="specialist" flexDirection="column">
-        {/* A card, like a sidebar entry: who, how it stands, then where it works. */}
-        <Box flexDirection="column" borderStyle="round" borderColor={COLOR.accent} paddingX={1} width={cardWidth}>
-          {/* Each group is its own element, so a narrow pane wraps between
-              groups, never inside one. */}
-          <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
-            {chip(ui, 'chip', 'SPECIALIST', log.isLive ? state.specialistFrame : undefined)}
-            <Text bold>{record.specialist}</Text>
-            <Text bold color={status.color}>{`${status.glyph} ${status.text}`}</Text>
-            <Text dimColor>{`round ${record.rounds}`}</Text>
-            <Text color={COLOR.model}>{record.model}</Text>
-          </Box>
-          {/* A line exactly as wide as the card wraps to an empty second line
-              without truncate. */}
-          <Text color={COLOR.accent} dimColor wrap="truncate">{'\u2500'.repeat(cardWidth - 4)}</Text>
-          {/* The worktree is cut from the left: its last part names the run. */}
-          <Box flexDirection="row">
-            <Text dimColor>{'branch    '}</Text>
-            <Box flexShrink={1}><Text color={COLOR.muted} wrap="truncate-start">{record.branch}</Text></Box>
-          </Box>
-          <Box flexDirection="row">
-            <Text dimColor>{'worktree  '}</Text>
-            <Box flexShrink={1}><Text color={COLOR.muted} wrap="truncate-start">{record.worktree.replace(/^\/(Users|home)\/[^/]+/, '~')}</Text></Box>
-          </Box>
-        </Box>
-        <Text>
-          <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{' STEPS '}</Text>
-          <Text dimColor>{`  ${log.steps.filter(step => step.kind === 'run' || step.kind === 'edit').length}`}</Text>
-        </Text>
-        {log.steps.map((step, index) => {
-          const key = `step-${index}`
-          // Codex writes markdown; a paragraph break sets its words off from the commands.
-          if (step.kind === 'say') {
-            return (
-              <Box key={key} flexDirection="row" marginTop={1} marginBottom={1}>
-                <Text dimColor>{'\u25cf '}</Text>
-                <Box flexDirection="column" flexShrink={1}>
-                  {markdownBlocks(step.text).map((block, part) => <Markdown key={`${key}-${part}`} text={block} />)}
-                </Box>
-              </Box>
-            )
-          }
-          if (step.kind === 'think') return <Text key={key} dimColor italic>{`  ${step.text}`}</Text>
-          const [glyph, color] = mark(step)
-          const isDone = step.state === 'done'
-          if (step.kind === 'edit') {
-            return (
-              <Text key={key}>
-                <Text color={color}>{`${glyph} `}</Text>
-                <Text color={COLOR.accent}>{'\u270e '}</Text>
-                <Text bold={!isDone}>{step.text}</Text>
-              </Text>
-            )
-          }
-          const line = step.text.replace(/\s*\n\s*/g, ' ')
-          const program = line.split(' ')[0] ?? ''
-          return (
-            <Text key={key} wrap="truncate-end">
-              <Text color={color}>{`${glyph} `}</Text>
-              <Text color={COLOR.accent}>{'$ '}</Text>
-              <Text bold color={step.state === 'failed' ? COLOR.danger : undefined}>{program}</Text>
-              <Text dimColor={isDone} color={step.state === 'failed' ? COLOR.danger : undefined}>{line.slice(program.length)}</Text>
-            </Text>
-          )
-        })}
-        {/* A message already ends in a blank line; margins do not collapse. */}
-        {log.isLive && (
-          <Box marginTop={log.steps.at(-1)?.kind === 'say' ? 0 : 1}>
-            <Text dimColor>{workingLine(state.specialistFrame, record.startedMs, state.nowMs)}</Text>
-          </Box>
-        )}
-      </Box>
     )
   })
 

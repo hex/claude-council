@@ -462,48 +462,6 @@ Seat names pass provider_allowlisted (lib/providers.sh), the one
 list, derived from providers/<name>.sh; the stop gate uses it too.
 ```
 
-### Specialists (`scripts/specialist.sh`, `mods/council-pane/hooks/specialist.ts`, `.worktreeinclude`)
-
-```
-The council-pane mod owns the specialist tool: pane.tsx runs
-specialist.sh with argument arrays ($.process.run) and reads its
-key=value output; specialist.ts holds the pure rules (rows, call
-shapes, dialog text, prompts, report parsing). Subcommands:
-  start <dir> <name> <ts>       worktree + branch from HEAD, state dir
-  commit <worktree> <message>   one commit per round; committed=no if clean
-  head <worktree>               the round base
-  claim <state>                 atomic mkdir so one session closes a round
-  report <worktree> <round-base> <run-base>   diff --stat, round and total
-  counts <repo> <branch> <run-base>           commits, files, merge target
-  finish <repo> <worktree> <branch> merge|discard
-  codex <worktree> <state> <model> <effort|''> <limit-seconds> [thread]
-  stop <state> <round-pid> <start>  ends the running round if it is that round
-  identity <pid>                a live process's start time (ps, else procfs)
-Per run, beside the repository:
-  worktree  ../<repo>.specialists/<name>-<ts>
-  branch    specialist/<name>/<ts>
-  state     ../<repo>.specialists/.state/<name>-<ts>
-start copies the paths listed in the repository's .worktreeinclude
-(relative, no .., no symlinks, and each one ignored by git, or the
-round's commit would carry it) into the new worktree, so gitignored
-local files reach it. codex runs the round detached under codex exec
-(or exec resume <thread>) with --output-schema
-scripts/specialist-report.schema.json, the round report's contract:
-summary, tests[] (command, result, detail) and open_questions. A
-watchdog ends a round still running at its limit (0 = none), and
-stop ends one on request; each writes a reason file (timeout or
-stopped) before signalling Codex and everything under it, and the
-round writes its exit only once that tree is gone; the exit is then
-143 whatever Codex returned, since Codex exits 0 on SIGTERM. The
-state dir holds prompt.txt, events.jsonl, last-message.md and the
-pids; the exit file is written last and marks the round over. finish
-merge exits 3 on a conflict (aborted), 4 on uncommitted edits to the
-branch's files, 5 on a detached HEAD, 6 when git refuses to start,
-7 while the worktree holds changes no round committed, 8 when the
-branch changes files inside an in-tree hooks directory. commit refuses
-a round that wrote into that directory.
-```
-
 ### Stop Gate (`hooks/hooks.json`, `scripts/stop-review-gate.sh`)
 
 ```
@@ -668,13 +626,12 @@ claude-council/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/
 │   └── council-pane/            # Experimental Claude Code mod: the pane drawn inside Claude Code
-│       ├── README.md            # Settings, watch-dir files, limits, the council tool, specialists, the heads-up
+│       ├── README.md            # Settings, watch-dir files, limits, the council tool, the heads-up
 │       ├── DESIGN.md            # Colour and layout rules; every colour lives in hooks/theme.ts
 │       ├── HEADS-UP.md          # The heads-up side-check's design and its implementation record
 │       ├── types/index.d.ts     # The $.state contract plugin.json names under "types"
 │       ├── tsconfig.json        # Type check against the locally generated plugin types
 │       ├── hooks/               # pane.tsx wires the engine; the other modules are pure
-│       ├── specialists/         # Six template skills, <name>/SKILL.md each, plus LICENSE-openclaw (MIT)
 │       └── tests/               # bun tests for the pure modules
 ├── prompts/
 │   ├── role-injection.md        # {{VAR}} template for role-wrapped prompts
@@ -695,8 +652,6 @@ claude-council/
 │   ├── session-transcript.sh    # Conversation id to transcript path, refusing ambiguity
 │   ├── transcript-digest.sh     # Session JSONL to a markdown digest for /advise and the side-check
 │   ├── validate-analysis.sh     # Executable mirror of the agent-analysis schema (test suite)
-│   ├── specialist.sh            # Git side of specialists: worktree per run, one commit per round, merge or discard
-│   ├── specialist-report.schema.json  # Round report contract, passed to codex exec as --output-schema
 │   ├── release.sh               # Version bump and tagging
 │   ├── dev/
 │   │   └── demo-pane.sh         # Visual test harness for the streaming pane
@@ -756,10 +711,6 @@ claude-council/
 │   │   ├── heads-up-e2e.sh      # The heads-up side-check in a real Claude Code, driven through tmux, with the fake codex as the seat
 │   │   ├── heads-up-e2e.expected.txt
 │   │   ├── heads-up-codex-e2e.sh  # One real check against the logged-in codex on a session you name; sends that session off the machine
-│   │   ├── specialist-e2e.sh    # specialist.sh against the real codex: start, round, network follow-up, merge
-│   │   ├── specialist-e2e.expected.txt
-│   │   ├── specialist-setup-e2e.sh  # The /specialists screen in a real Claude Code, driven through tmux
-│   │   └── specialist-setup-e2e.expected.txt
 │   ├── fixtures/
 │   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/cursor-agent/claude/copilot/ollama binaries on PATH
 │   │   └── status-fakes.bash    # Recording curl + jq for the check-status tests
@@ -788,7 +739,6 @@ claude-council/
 │   ├── router-seats.bats        # OPENROUTER_MODELS -> openrouter-1..N, one script, many seats
 │   ├── session-transcript.bats  # Session id to transcript path
 │   ├── shards.bats              # Every bats file is named in a Windows shard list
-│   ├── specialist.bats          # specialist.sh against real throwaway repositories; the Codex round with a fake codex
 │   ├── stop-gate.bats
 │   ├── theme.bats
 │   ├── tmpdir.bats              # Temp files honour TMPDIR
@@ -799,7 +749,6 @@ claude-council/
 ├── .gitattributes
 ├── .gitignore
 ├── .shellcheckrc               # Points shellcheck at the sourced libs
-├── .worktreeinclude            # Gitignored paths copied into each specialist worktree; here .claude/types
 ├── CHANGELOG.md
 ├── LICENSE
 ├── README.md
@@ -856,7 +805,7 @@ claude-council/
 | `COUNCIL_DEBUG` | - | Enable debug output |
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
 | `COUNCIL_MOD_PANE_DIR` | - | An existing directory a run writes its watch dir into, opening no tmux pane. Only the council-pane mod sets it; `COUNCIL_NO_PANE` still wins |
-| `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `specialist_round_limit`, `heads_up`, `specialists` | ask, on, off, on, 60, off, `[]` | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each |
+| `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `heads_up` | ask, on, off, on, off | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each |
 | `COUNCIL_HEADS_UP_SEAT_SECONDS` | 60 | The heads-up seat's deadline per check (s) |
 | `COUNCIL_HEADS_UP_TURNS` | 5 | Turns of the session transcript the heads-up digest covers |
 | `COUNCIL_HEADS_UP_RESULTS` | 8 | Tool results inside those turns the heads-up digest carries, 2000 characters each |

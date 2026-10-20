@@ -9,6 +9,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ### Features
 - Council pane: a seat that failed while other seats are still out shows a `retry` button where its `cancel` was, with the same digit; it re-queries that seat with the query it failed, once, and the row reads `retrying` until the seat is querying again. Once the last seat ends the band's retry offer takes over, and a seat retried from its row is not offered again.
 
+### Removed
+- The specialists feature: the `/specialists` screen, the `specialist` tool, `scripts/specialist.sh`, the six bundled template skills, the `specialists` and `specialist_round_limit` settings and `.worktreeinclude`. It never triggered in use. Each session now removes the store records it left behind.
+
 ## 2026.10.6
 
 ### Features
