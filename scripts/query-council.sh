@@ -806,9 +806,9 @@ seat_cancelled() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/canc
 spend_cancel() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/cancel/$1"; }
 # The retry/ folder is the same protocol for a seat's error row. The run says
 # which seats a press can re-query by writing their names in retriable/: a
-# name is there while the seat is parked in await_seats, and goes when the
-# seat is relaunched or the loop returns, so the pane offers the button only
-# while a press can be honoured.
+# name is there while the seat is parked in await_seats and another seat is
+# still live, and goes when the seat is relaunched or the loop returns, so
+# the pane offers the button only while a press can be honoured.
 seat_retry_pressed() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/retry/$1" ]]; }
 spend_retry() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/retry/$1"; }
 offer_row_retry() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || { mkdir -p "${COUNCIL_PANE_DIR}/retriable" && : > "${COUNCIL_PANE_DIR}/retriable/$1"; }; }
@@ -920,7 +920,7 @@ await_seats() {
             elif ! kill -0 "$pid" 2>/dev/null; then
                 wait "$pid" 2>/dev/null || true
                 spend_cancel "$provider"
-                if seat_errored "$provider"; then seats[i]="${provider}=-"; offer_row_retry "$provider"; else spend_retry "$provider"; seats[i]=""; fi
+                if seat_errored "$provider"; then seats[i]="${provider}=-"; else spend_retry "$provider"; seats[i]=""; fi
             elif seat_cancelled "$provider"; then
                 if [[ -e "${TEMP_DIR}/${provider}.json" ]]; then
                     spend_cancel "$provider"
@@ -933,10 +933,13 @@ await_seats() {
                 live=1
             fi
         done
-        if ! (( live )); then
-            for seat in "${seats[@]}"; do [[ "${seat#*=}" == "-" ]] && withdraw_row_retry "${seat%%=*}"; done
-            return 0
-        fi
+        # A parked seat is offered only once the tick knows another seat is
+        # still live, so the pane never sees an offer nothing could honour.
+        for seat in "${seats[@]}"; do
+            [[ "${seat#*=}" == "-" ]] || continue
+            if (( live )); then offer_row_retry "${seat%%=*}"; else withdraw_row_retry "${seat%%=*}"; fi
+        done
+        (( live )) || return 0
         sleep 0.2
     done
 }

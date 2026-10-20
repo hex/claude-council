@@ -599,9 +599,12 @@ await_nth_state() {
 @test "row retry: a stale marker is spent when the band re-queries the seat, so a second failure is not run a third time" {
     setup_pane
     write_broken_stub grok
-    # The press lands once the only seat has errored: too late for the row,
-    # the band's relaunch spends it.
-    retry_from_pane grok &
+    # The press lands once the only seat has errored: the run never offered
+    # the row, and the band's relaunch spends the marker.
+    (
+        await_nth_state grok error 1 || exit
+        mkdir -p "$PANE/retry"; touch "$PANE/retry/grok"
+    ) &
     play_pane retry &
     COUNCIL_RETRY_WAIT=5 run_council_with_pane --providers=grok "q"
     [ "$status" -eq 0 ]
