@@ -1,0 +1,131 @@
+{
+  "title": "Five council seats inside Claude Code",
+  "description": "Real terminal captures with fixture council seats. Each state lasts 2.5 seconds.",
+  "provenance": {
+    "checkout_head": "34bb74a2e0ae5c9d0321b754cd94a704b765ebd3",
+    "capture_commands": [
+      "bash assets/capture/council-run.sh",
+      "tmux -L svgcap capture-pane -p -e"
+    ],
+    "fixture": {
+      "source": "tests/fixtures/fake-clis.bash",
+      "host": "Claude Code --model haiku",
+      "behavior": {
+        "codex": "slow 45s",
+        "agy": "slow 65s",
+        "grok": "slow 15s",
+        "kimi": "rate-limit after 12s",
+        "cursor-agent": "valid after 30s"
+      }
+    },
+    "crop": "Each capture records a half-open range of original terminal rows; all 110 columns remain.",
+    "terminal_defaults": {
+      "light": [
+        "#302a24",
+        "#fbf6e9"
+      ],
+      "dark": [
+        "#eeeeee",
+        "#191919"
+      ]
+    },
+    "palette": "RGB and indexed ANSI colors are preserved; default colors are set in tmux.conf."
+  },
+  "frames": [
+    {
+      "label": "The council command was sent",
+      "captures": {
+        "light": {
+          "file": "council-run-0-light.ansi",
+          "crop": [
+            7,
+            17
+          ]
+        },
+        "dark": {
+          "file": "council-run-0-dark.ansi",
+          "crop": [
+            7,
+            17
+          ]
+        }
+      }
+    },
+    {
+      "label": "Seats querying",
+      "captures": {
+        "light": {
+          "file": "council-run-1-light.ansi",
+          "crop": [
+            16,
+            33
+          ]
+        },
+        "dark": {
+          "file": "council-run-1-dark.ansi",
+          "crop": [
+            16,
+            32
+          ]
+        }
+      }
+    },
+    {
+      "label": "A failed seat can be retried while others query",
+      "captures": {
+        "light": {
+          "file": "council-run-2-light.ansi",
+          "crop": [
+            17,
+            35
+          ]
+        },
+        "dark": {
+          "file": "council-run-2-dark.ansi",
+          "crop": [
+            17,
+            35
+          ]
+        }
+      }
+    },
+    {
+      "label": "Answers arrive with their banners",
+      "captures": {
+        "light": {
+          "file": "council-run-3-light.ansi",
+          "crop": [
+            17,
+            40
+          ]
+        },
+        "dark": {
+          "file": "council-run-3-dark.ansi",
+          "crop": [
+            17,
+            40
+          ]
+        }
+      }
+    },
+    {
+      "label": "Answers fold around the synthesis",
+      "captures": {
+        "light": {
+          "file": "council-run-4-light.ansi",
+          "crop": [
+            35,
+            62
+          ]
+        },
+        "dark": {
+          "file": "council-run-4-dark.ansi",
+          "crop": [
+            31,
+            59
+          ]
+        }
+      }
+    }
+  ]
+}
