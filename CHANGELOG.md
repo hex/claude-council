@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Docs
+- The README follows the hex house style: a banner, install first, a 60-second first run, a features table, and animated SVGs traced from real captures (a council run in the pane inside Claude Code with a failing seat's retry row, the heads-up note, the tmux side pane) in place of the three screenshots. `assets/capture/` holds the harness that rebuilds them.
+
 ## 2026.10.7
 
 ### Features
