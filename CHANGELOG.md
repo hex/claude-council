@@ -4,13 +4,17 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.10.7
 
 ### Features
-- Council pane: a seat that failed while other seats are still out shows a `retry` button where its `cancel` was, with the same digit; it re-queries that seat with the query it failed, once, and the row reads `retrying` until the seat is querying again. Once the last seat ends the band's retry offer takes over, and a seat retried from its row is not offered again.
+- Council pane: a seat that failed while other seats are still out shows a `retry` button where its `cancel` was, with the same digit. It re-queries that seat with the query it failed, once; the row reads `retrying` until the run relaunches it. Once the last seat ends the band's retry offer takes over, and a seat retried from its row is not offered again. The run names the seats such a press can re-query in the watch dir's `retriable/` folder, so the button shows only while a press can be honoured.
 
 ### Removed
 - The specialists feature: the `/specialists` screen, the `specialist` tool, `scripts/specialist.sh`, the six bundled template skills, the `specialists` and `specialist_round_limit` settings and `.worktreeinclude`. It never triggered in use. Each session now removes the store records it left behind.
+
+### Other
+- Codex's model catalog reader, which the heads-up setup still needs, lives in its own module and no longer keeps the per-effort help text nothing reads.
+- A status row carries one button, cancel or retry; the pane's failure logger has one kind.
 
 ## 2026.10.6
 
