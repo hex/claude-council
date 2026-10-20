@@ -9,6 +9,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -22,9 +23,14 @@ TMUX = shutil.which("tmux")
 KEYS = {"heads-up", "heads-up-counts", "heads-up-intro-shown", "pane_host",
         "specialist-runs", "specialists-latest", "specialists-intro-shown"}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
-ROSTER = "codex,antigravity,grok-cli,kimi-cli,cursor-cli"
+ROSTERS = {
+    "real": "codex,antigravity,gemini,openai,kimi-cli",
+    "fake": "codex,antigravity,grok-cli,kimi-cli,cursor-cli",
+}
 QUESTION = "Should a single-node demo app use SQLite or Postgres?"
-REAL_SEATS = ("codex", "agy", "grok", "cursor-agent")
+REAL_SEATS = ("codex", "agy")
+API_KEYS = ("GEMINI_API_KEY", "OPENAI_API_KEY")
+FIXTURE_DELAYS = {"codex": 45, "agy": 65, "grok": 15, "kimi": 0, "cursor-agent": 30}
 TITLES = {
     "council-run": "Five council seats inside Claude Code",
     "heads-up": "A heads-up note and an unsent draft",
@@ -47,12 +53,15 @@ class Capture:
         if requested not in ("real", "fake"):
             raise ValueError("COUNCIL_CAPTURE_SEATS must be real or fake")
         self.mode = "fake" if name == "heads-up" else requested
+        self.roster = ROSTERS[self.mode]
         self.versions = {}
+        self.api_models = {}
         self.work = Path(tempfile.mkdtemp(prefix=f".{name}-", dir=CAPTURE))
         self.project = self.work / "project"
         self.temp = self.work / "tmp"
         self.fake = self.work / "fakebin"
         self.raw = self.work / "fixture-bin"
+        self.codex_home = self.work / "codex-home"
         self.frames = []
         self.theme = "light"
         self.target = "capture:0.0"
@@ -68,6 +77,13 @@ class Capture:
         return run(TMUX, "-L", "svgcap", *args, env=self.env, check=check)
 
     def __enter__(self):
+        try:
+            return self.prepare()
+        except BaseException:
+            self.__exit__(*sys.exc_info())
+            raise
+
+    def prepare(self):
         if not TMUX:
             raise RuntimeError("tmux is required")
         for path in (self.project / ".claude", self.temp, self.fake, self.raw, self.work / "fake-state"):
@@ -81,36 +97,56 @@ class Capture:
             "CLAUDE_CODE_SHELL": str(self.fake / "bash"),
             "COUNCIL_FAKE_STATE_DIR": str(self.work / "fake-state"),
             "COUNCIL_FAKE_BEHAVIOR": "heads-up-note" if self.name == "heads-up" else "slow",
-            "COUNCIL_FAKE_SLEEP": "20", "COUNCIL_PROVIDERS": ROSTER,
+            "COUNCIL_FAKE_SLEEP": "20", "COUNCIL_PROVIDERS": self.roster,
             "COUNCIL_RETRY_WAIT": "12", "COUNCIL_JOBS_DIR": str(self.work / "jobs"),
             "COUNCIL_CLI_TIMEOUT": "300",
+            "COUNCIL_MAX_RETRIES": "0",
             "COUNCIL_CAPTURE_CALLS": str(self.work / "real-calls"),
             "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1",
             "CLAUDE_CODE_NO_FLICKER": "0",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         }
         if self.mode == "real":
+            for key in API_KEYS:
+                if not os.environ.get(key):
+                    raise RuntimeError(f"{key} must be set for real captures")
+                self.env[key] = os.environ[key]
             (self.work / "real-calls").mkdir()
-            directories = []
             for binary in REAL_SEATS:
                 executable = shutil.which(binary)
                 if executable is None:
                     raise RuntimeError(f"Real seat not installed: {binary}")
                 self.env[f"COUNCIL_CAPTURE_EXECUTABLE_{binary.replace('-', '_')}"] = executable
-                directories.append(str(Path(executable).parent))
-            self.env["PATH"] = ":".join([str(self.fake), *dict.fromkeys(directories),
-                                         "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin",
-                                         "/bin", "/usr/sbin", "/sbin"])
+            node = shutil.which("node")
+            if node is None:
+                raise RuntimeError("node is required for real Codex")
+            (self.fake / "node").symlink_to(node)
+            for binary in ("grok", "cursor-agent"):
+                if shutil.which(binary, path=self.env["PATH"]):
+                    raise RuntimeError(f"{binary} must not be on the real capture PATH")
+            self.codex_home.mkdir(mode=0o700)
+            auth = self.codex_home / "auth.json"
+            auth.touch(mode=0o600)
+            shutil.copyfile(Path.home() / ".codex/auth.json", auth)
+            self.env["CODEX_HOME"] = str(self.codex_home)
+            for provider in ("gemini", "openai"):
+                model = run("/bin/bash", "-c", 'source "$1"; get_model "$2"', "capture-model",
+                            str(ROOT / "scripts/lib/providers.sh"), provider, env=self.env).stdout.strip()
+                self.env[f"{provider.upper()}_MODEL"] = model
+                self.api_models[provider] = model
         existing = self.tmux("list-sessions", check=False)
         if existing.returncode == 0:
             raise RuntimeError("tmux -L svgcap already has sessions; refusing to touch them")
         if "no server running" not in existing.stderr and "error connecting" not in existing.stderr:
             raise RuntimeError(f"Cannot check svgcap server: {existing.stderr}")
-        installer = 'source "$1"; for bin in codex agy grok kimi cursor-agent; do write_fake_cli "$bin"; done'
+        binaries = (*REAL_SEATS, "kimi") if self.mode == "real" else tuple(FIXTURE_DELAYS)
+        installer = 'source "$1"; shift; for bin in "$@"; do write_fake_cli "$bin"; done'
         run("/bin/bash", "-c", installer, "capture-fixtures", str(ROOT / "tests/fixtures/fake-clis.bash"),
+            *binaries,
             env={**self.env, "FAKE_BIN_DIR": str(self.raw)})
         (self.fake / "bash").symlink_to(CAPTURE / "shell.sh")
-        for binary, seconds in (("codex", 45), ("agy", 65), ("grok", 15), ("kimi", 0), ("cursor-agent", 30)):
+        for binary in binaries:
+            seconds = FIXTURE_DELAYS[binary]
             # Positional arguments keep paths out of shell source.
             script = self.fake / binary
             if self.name == "heads-up":
@@ -131,10 +167,14 @@ class Capture:
             body += ['exec "${0%/*}/../fixture-bin/${0##*/}" "$@"']
             script.write_text("\n".join(body) + "\n")
             script.chmod(0o755)
-        for binary in (*REAL_SEATS, "kimi"):
+        for binary in binaries:
             version = subprocess.run([str(self.fake / binary), "--version"], cwd=ROOT,
                                      env=self.env, capture_output=True, text=True, timeout=30, check=True)
             self.versions[binary] = version.stdout.strip()
+        # Codex creates runtime helpers even for --version.
+        runtime = self.codex_home / "tmp"
+        if runtime.exists():
+            shutil.rmtree(runtime)
         if self.name != "tmux-pane":
             for path in self.stores.glob("claude-council_inline-*.json"):
                 self.before_stores[path] = json.loads(path.read_text())
@@ -150,6 +190,8 @@ class Capture:
         try:
             self.stop()
         finally:
+            if self.codex_home.exists():
+                shutil.rmtree(self.codex_home)
             if self.seeded:
                 for path in self.stores.glob("claude-council_inline-*.json"):
                     data = json.loads(path.read_text())
@@ -211,7 +253,7 @@ class Capture:
         config.write_text(f"set -g status off\nset -g default-shell /bin/bash\nset -g default-terminal xterm-256color\nset -g window-style 'fg={fg},bg={bg}'\nset -g history-limit 1000\n")
         if self.name == "tmux-pane":
             command = ["/bin/bash", str(ROOT / "scripts/run-council.sh"),
-                       f"--providers={ROSTER}", "--verbosity=brief", "--no-cache", "--no-auto-context",
+                       f"--providers={self.roster}", "--verbosity=brief", "--no-cache", "--no-auto-context",
                        "--", QUESTION]
         else:
             for path in self.stores.glob("claude-council_inline-*.json"):
@@ -233,6 +275,7 @@ class Capture:
                        f"This is a terminal capture in {self.mode} seat mode. Keep replies short. "
                        "Do not change files except council runtime state. Follow the requested commands. "
                        "Do not load other skills, run git, or delegate. Run the council once only. "
+                       "Do not inspect or print environment variables or authentication files. "
                        "Kimi is a rate-limit fixture. Other seats may answer or fail. Never retry a seat. "
                        "Write a one-sentence synthesis under ## Synthesis, then Full output saved."]
         self.tmux("-f", str(config), "new-session", "-d", "-s", "capture", "-x", "110", "-y", "80",
@@ -311,7 +354,7 @@ class Capture:
 
     def council(self):
         self.wait("❯")
-        self.type(f'/claude-council:ask --providers={ROSTER} --verbosity=brief --no-auto-context --no-cache '
+        self.type(f'/claude-council:ask --providers={self.roster} --verbosity=brief --no-auto-context --no-cache '
                   f'"{QUESTION}"')
         self.save("The council command was sent", "/claude-council:ask")
         self.wait("COUNCIL")
@@ -320,9 +363,10 @@ class Capture:
         self.wait("codex        ")
         self.save("Seats querying", "╭")
         self.wait("retry", seconds=90)
-        self.wait("4: retry", seconds=90)
+        kimi_key = self.roster.split(",").index("kimi-cli") + 1
+        self.wait(f"{kimi_key}: retry", seconds=90)
         self.save("A failed seat can be retried while others query", "╭")
-        self.wait(r"▾ (?:CODEX|ANTIGRAVITY|GROK-CLI|CURSOR-CLI)\b", seconds=330, regex=True)
+        self.wait(r"▾ (?:CODEX|ANTIGRAVITY|GEMINI|OPENAI|GROK-CLI|CURSOR-CLI)\b", seconds=330, regex=True)
         self.save("Answers arrive with their banners", "╭")
         self.wait("▾ SYNTHESIS", seconds=420)
         time.sleep(3)
@@ -341,7 +385,7 @@ class Capture:
             raise RuntimeError("The renderer did not open a side pane")
         time.sleep(2)
         self.save("Seats querying in tmux", "")
-        self.wait(r"(?m)^\s*(?:CODEX|ANTIGRAVITY|GROK-CLI|CURSOR-CLI)\s+\S+", seconds=330, regex=True)
+        self.wait(r"(?m)^\s*(?:CODEX|ANTIGRAVITY|GEMINI|OPENAI|GROK-CLI|CURSOR-CLI)\s+\S+", seconds=330, regex=True)
         self.save("An answer lands in tmux", "")
         self.wait("[r] retry failed", seconds=330)
         self.save("The retry offer", "")
@@ -354,6 +398,10 @@ class Capture:
             "provenance": {
                 "checkout_head": head,
                 "seat_mode": self.mode,
+                "providers": self.roster.split(","),
+                "api_key_names": list(API_KEYS) if self.mode == "real" else [],
+                "api_models": self.api_models,
+                "codex_home": "Temporary auth.json-only home, removed on exit" if self.mode == "real" else None,
                 "question": None if self.name == "heads-up" else QUESTION,
                 "cli_versions": self.versions,
                 "real_invocations": sorted(p.name for p in (self.work / "real-calls").glob("*")),
@@ -363,7 +411,8 @@ class Capture:
                     "source": "tests/fixtures/fake-clis.bash",
                     "host": None if self.name == "tmux-pane" else "Claude Code --model haiku",
                     "behavior": "heads-up-note" if self.name == "heads-up" else
-                    {"kimi": "rate-limit after 2s", "other_seats": "real subscription CLIs"} if self.mode == "real" else
+                    {"kimi": "rate-limit after 2s", "codex_and_agy": "real subscription CLIs",
+                     "gemini_and_openai": "real APIs; no transport retries"} if self.mode == "real" else
                     {"codex": "slow 45s", "agy": "slow 65s", "grok": "slow 15s",
                      "kimi": "rate-limit after 12s", "cursor-agent": "valid after 30s"},
                 },
@@ -377,6 +426,10 @@ class Capture:
         }
         manifest = self.work / "manifest.json"
         write_capture(manifest, json.dumps(data, indent=2) + "\n")
+        if self.mode == "real" and self.name == "council-run":
+            for item in self.frames[-1]["captures"].values():
+                if "4 of 5 answered" not in ANSI.sub("", (self.work / item["file"]).read_text()):
+                    raise RuntimeError(f"Hero requires four answers; captured frames are in {self.work}")
         render(manifest, ROOT / f"assets/{self.name}.svg")
         for frame in self.frames:
             for item in frame["captures"].values():

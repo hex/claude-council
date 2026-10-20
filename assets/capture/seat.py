@@ -9,6 +9,8 @@ from pathlib import Path
 
 binary = Path(sys.argv[0]).name
 executable = os.environ[f"COUNCIL_CAPTURE_EXECUTABLE_{binary.replace('-', '_')}"]
+for key in ("OPENAI_API_KEY", "GEMINI_API_KEY"):
+    os.environ.pop(key, None)
 if sys.argv[1:] != ["--version"]:
     marker = Path(os.environ["COUNCIL_CAPTURE_CALLS"]) / f"{os.environ['COUNCIL_CAPTURE_THEME']}-{binary}"
     try:

@@ -11,10 +11,10 @@ bash assets/capture/banner.sh
 
 The captures need Python 3, Bash, tmux, jq, and an authenticated
 `~/.local/bin/claude`. The host runs Haiku on your account. Council seats default to
-`tests/fixtures/fake-clis.bash`. No provider API key enters their environment.
+`tests/fixtures/fake-clis.bash`. Fake mode passes no provider API keys.
 The host keeps `HOME` and `USER` for its saved login.
 
-The committed council and tmux animations use real subscription seats. Their
+Real council and tmux captures use subscription and API seats. Their
 question is "Should a single-node demo app use SQLite or Postgres?" Run them
 in that mode with:
 
@@ -23,15 +23,29 @@ COUNCIL_CAPTURE_SEATS=real bash assets/capture/council-run.sh
 COUNCIL_CAPTURE_SEATS=real bash assets/capture/tmux-pane.sh
 ```
 
-`COUNCIL_CAPTURE_SEATS=fake` is the default. In real mode, `codex`, `agy`,
-`grok`, and `cursor-agent` use their saved logins through `HOME`; Kimi stays
-the rate-limit fixture. Each real binary runs at most once per theme, apart
-from `--version` probes. A guard rejects retries. Answers and failures stay
-as the renderer displays them. Metadata records the mode, question, versions,
-and invocation markers. Heads-up always uses fake seats.
+Export `GEMINI_API_KEY` and `OPENAI_API_KEY` before running real captures.
+The scripts read those two keys from their environment. They do not retrieve
+secrets or write key values into capture files or logs. The plugin's existing
+API transport uses mode-600 temporary curl configuration files and removes
+them on exit.
 
-Codex and Antigravity answered in the committed captures. Grok reported
-`Not signed in`; Cursor reported a usage limit. Those errors remain visible.
+`COUNCIL_CAPTURE_SEATS=fake` is the default. Real mode pins
+`codex,antigravity,gemini,openai,kimi-cli`. Codex and Antigravity use subscription
+logins; their launchers remove both API keys before executing them.
+Gemini and OpenAI use the API keys. Kimi stays the rate-limit fixture.
+Grok and Cursor are absent from the real capture `PATH`.
+
+Codex gets a temporary `CODEX_HOME`, seeded only with a mode-600 copy of
+`~/.codex/auth.json`. No personal instructions, configuration, or hooks enter
+that home. The version probe runs under it before the capture. Cleanup removes
+the home on success, capture failure, or setup failure.
+
+Each real binary runs at most once per theme, apart from `--version` probes.
+A guard rejects retries. API requests use the checkout's default models as
+explicit overrides, with transport retries disabled, so model fallback cannot
+issue another request. Answers and failures stay as the renderer displays
+them. Metadata records the roster, mode, question, versions, API models, and
+invocation markers. Heads-up always uses fake seats.
 
 The scripts use `tmux -L svgcap`. They refuse to start if that server already
 has a session. They never use the default tmux server. Each terminal has 110
