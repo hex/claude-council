@@ -297,17 +297,18 @@ other.
 
 The same loop looks for `retry/<provider>`, which the mod pane writes when
 the `retry` button on a seat's error row is pressed. A seat that ended in an
-error of its own (not cancelled) keeps its place in the loop with no job, so
-a later press can still re-query it this round; the launch is the one
-`launch_seat` the round and the band's retry use, so the seat gets exactly
-the query it failed, with its role. One row retry per seat (`RETRIED`): a
-seat that fails again is not offered by its row or by the band. The marker
-is spent when the re-queried seat ends, not at relaunch, so the pane cannot
-draw a second button in the moment before the seat logs itself `querying`
-again; the pane counts a seat's `querying` lines to know it had its retry.
-The loop only runs while some seat is live, so a press that lands once the
-last seat has ended is not honoured: the band's offer covers that case, and
-its relaunch spends any stale marker.
+error of its own keeps its place in the loop with no job, and the run names
+it in `retriable/`, so the pane offers the button only while a press can be
+honoured; the name goes at the relaunch, and every parked seat's name goes
+when the loop returns. The launch is the one `launch_seat` the round and the
+band's retry use, so the seat gets exactly the query it failed, with its
+role, and it spends any marker from before. `launch_seat` records every
+launch (`LAUNCHES`): a seat launched twice has had its one retry, from its
+row or from the band, so it is neither parked again nor offered by the band.
+The pane draws a pressed seat as `retrying` while its name is in both
+folders, and a plain error row again once the run withdrew the offer. The
+loop only runs while some seat is live, so a press that lands once the last
+seat has ended is not honoured: the band's offer covers that case.
 
 ### Retry Logic (`scripts/lib/retry.sh`)
 

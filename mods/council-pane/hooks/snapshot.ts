@@ -37,14 +37,17 @@ export async function readView(fs: Files, runDir: string): Promise<RunView> {
   const isDone = await fs.exists(`${runDir}/.done`)
   const status = await readText(fs, `${runDir}/status`)
   const latest = lastEvent(status)
+  // The three marker folders depend on nothing else, so they are read together.
+  const [cancels, retries, retriable] = await Promise.all(['cancel', 'retry', 'retriable'].map(folder => fileNames(fs, `${runDir}/${folder}`)))
   return {
     providers: parseStatus(status),
     responses: await readFolder(fs, `${runDir}/responses`, '.md'),
     errors: await readFolder(fs, `${runDir}/errors`, '.txt'),
     // The seats the pane pressed for cancel; a marker stays until the run logs the seat as cancelled.
-    cancels: await fileNames(fs, `${runDir}/cancel`),
-    // The seats pressed for retry on their error row; a marker stays until the re-queried seat ends.
-    retries: await fileNames(fs, `${runDir}/retry`),
+    cancels: cancels ?? [],
+    // The seats pressed for retry on their error row, and the seats the run says such a press can re-query.
+    retries: retries ?? [],
+    retriable: retriable ?? [],
     colors: parseColors(await readText(fs, `${runDir}/colors`)),
     isDone,
     ...(latest ? { latest } : {}),

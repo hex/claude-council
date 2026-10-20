@@ -86,6 +86,8 @@ test('progressBand rounds down, so the line is never full while a provider is ou
   expect(progressBand({ providers: nine, isDone: false }, 0, 79_000)).toEqual({ count: '3 of 9', bar: '\u2501\u2501\u2500\u2500\u2500\u2500\u2500\u2500', clock: '1:19' })
   const oneOut = nine.map((p, i) => ({ ...p, state: i < 8 ? 'complete' : 'querying' }))
   expect(progressBand({ providers: oneOut, isDone: false }, 0, 0)?.bar).toBe('\u2501'.repeat(7) + '\u2500')
+  // Past an hour the clock gains an hours field.
+  expect(progressBand({ providers: nine, isDone: false }, 0, 3_661_000)?.clock).toBe('1:01:01')
 })
 
 test('progressBand starts empty and leaves the clock out until a run is picked up', () => {

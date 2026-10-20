@@ -74,7 +74,7 @@ Load-bearing decisions:
 - **Errors fail open, reported once.** A seat timeout or error writes `kind: failed` with the reason, which the pane logs through `logFailure`. The band never nags about infrastructure. Deadline: 60 s for the seat, counted in ticks of `sleep 1`, never `$((SECONDS+N))`.
 - **Learn more expands in place; tell Claude fills the prompt box.** Two presses, because reading more and telling Claude are different decisions. `$.prompt.submit` would start a turn the person did not ask for, and a hidden `prompt.submit` context vanished without a trace when pressed (seen live). `$.prompt.fill` puts a draft the person can read, edit and send, which is the builtin's behaviour and the promise: the main agent learns of a note only through the person.
 - **Typed past = a `prompt.submit` whose `origin.kind` is `composer` or `bridge` while a note shows.** This plugin's own submits and continuation turns do not count. Turn end alone does not either: the person may not have looked yet.
-- **Band priority: after finished and retry, before the progress band.** A note is one row and time-sensitive; the progress bands return when it is answered. Controls carry full-strength hotkey labels, no `dimColor`.
+- **Band priority: after finished and retry, before the progress band.** A note is one row and time-sensitive; the progress band returns when it is answered. Controls carry full-strength hotkey labels, no `dimColor`.
 - **Settings: the file only.** A userConfig row would be a second switch, and `$.config.set` reloads the module.
 
 Depth: `heads-up.ts` exports the types and eleven pure functions that hide cadence, backoff, dedupe, result validation and the band's words; `pane.tsx` calls `decide`, `settle`, `parseRunResult`, `bandView`, `applyAnswer` and `learnMoreContext` and never inspects a counter. `heads-up.sh` hides the codex schema handshake, the deadline and payload measuring behind one command with four flags and an optional `--model`.
@@ -86,7 +86,6 @@ Base: candidate 1 (opus), judged 16/18 by a fable cross-judge and by my own read
 ## Tradeoffs accepted
 
 - We accept transcript-on-disk freshness (one unanswered `tool_use` at most) in exchange for one privacy filter instead of two.
-- We accept a direct codex call that repeats about 15 lines of `specialist.sh` in exchange for leaving `providers/codex.sh` unchanged. A third caller unifies them.
 - We accept that a seat's failure shows only in the log in exchange for never interrupting a turn with an error.
 - We accept last-writer-wins on the store's counters across concurrent sessions (lists are union-merged) in exchange for no per-session store keys; a lost backoff increment is harmless.
 - We accept no per-check consent prompt (ruling); the meta line shows bytes and seat every time, and a NONE check logs them.

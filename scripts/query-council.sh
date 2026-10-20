@@ -786,10 +786,9 @@ COUNCIL_START_MS=$(now_ms)
 CANCELLED_MSG="cancelled from the pane"
 # Seats the pane cancelled this run; round 2 leaves them out.
 CANCELLED=()
-# Seats re-queried from their error row this run: one row retry per seat, and
-# the end-of-round offer leaves them out, as a seat the band retried is not
-# offered again either.
-RETRIED=()
+# Every round-1 launch this run, one entry per launch: a seat listed twice has
+# had its one retry, from its row or from the band, and is not offered another.
+LAUNCHES=()
 
 # Whether the first argument names one of the rest. Args: name list...
 seat_in() {
@@ -805,20 +804,31 @@ seat_in() {
 # no folder and nothing to spend.
 seat_cancelled() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/cancel/$1" ]]; }
 spend_cancel() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/cancel/$1"; }
-# The retry/ folder is the same protocol for a seat's error row: the marker
-# stays until the re-queried seat ends, so the pane cannot offer a second
-# press in the moment before the seat logs itself querying again.
+# The retry/ folder is the same protocol for a seat's error row. The run says
+# which seats a press can re-query by writing their names in retriable/: a
+# name is there while the seat is parked in await_seats, and goes when the
+# seat is relaunched or the loop returns, so the pane offers the button only
+# while a press can be honoured.
 seat_retry_pressed() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/retry/$1" ]]; }
 spend_retry() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/retry/$1"; }
+offer_row_retry() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || { mkdir -p "${COUNCIL_PANE_DIR}/retriable" && : > "${COUNCIL_PANE_DIR}/retriable/$1"; }; }
+withdraw_row_retry() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/retriable/$1"; }
 
-# Whether a seat's round-1 slot ended in an error of its own: one the pane
-# did not cancel, and one not already re-queried from its row. Args: provider
+# Whether a seat has been launched twice this run, which is its one retry spent.
+seat_retried() {
+    local provider="$1" seat n=0
+    for seat in ${LAUNCHES[@]+"${LAUNCHES[@]}"}; do [[ "$seat" == "$provider" ]] && n=$(( n + 1 )); done
+    (( n >= 2 ))
+}
+
+# Whether a seat's round-1 slot ended in an error with its retry still to
+# spend. A cancelled seat never reaches this: cancel_seat empties its place
+# in the loop as it writes the slot. Args: provider
 seat_errored() {
     local provider="$1"
     local slot="${TEMP_DIR}/${provider}.json"
     [[ -f "$slot" ]] || return 1
-    seat_in "$provider" ${CANCELLED[@]+"${CANCELLED[@]}"} && return 1
-    seat_in "$provider" ${RETRIED[@]+"${RETRIED[@]}"} && return 1
+    seat_retried "$provider" && return 1
     [[ "$(jq -r '.status' "$slot" 2>/dev/null)" == "error" ]]
 }
 
@@ -865,6 +875,8 @@ launch_seat() {
     rm -f "${TEMP_DIR}/${provider}.json"
     spend_cancel "$provider"
     spend_retry "$provider"
+    withdraw_row_retry "$provider"
+    LAUNCHES+=("$provider")
     query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" "$provider_role" &
     LAUNCHED="${provider}=$!"
 }
@@ -879,8 +891,9 @@ launch_seat() {
 # streaming the answer to the pane and the cache), and the reader cancelled
 # a wait that was already over; a slot caught mid-write is one such. A retry
 # is honoured only while the loop still runs, which is while some seat is
-# live: once the last seat ends the band's offer takes over, and a marker
-# that lands after that stays, and goes with the watch dir.
+# live: once the last seat ends the band's offer takes over, every parked
+# seat's retriable/ name is withdrawn, and a marker that lands after that
+# stays, and goes with the watch dir.
 # Args: provider=pid...
 await_seats() {
     local -a seats=("$@")
@@ -899,7 +912,6 @@ await_seats() {
                 # A seat that ended in its own error keeps its place, with no
                 # job, so a row press can still re-query it this round.
                 if seat_retry_pressed "$provider"; then
-                    RETRIED+=("$provider")
                     echo -e "🔁 Retrying $(format_providers "$provider") from its row..." >&2
                     launch_seat "$provider"
                     seats[i]="$LAUNCHED"
@@ -908,7 +920,7 @@ await_seats() {
             elif ! kill -0 "$pid" 2>/dev/null; then
                 wait "$pid" 2>/dev/null || true
                 spend_cancel "$provider"
-                if seat_errored "$provider"; then seats[i]="${provider}=-"; else spend_retry "$provider"; seats[i]=""; fi
+                if seat_errored "$provider"; then seats[i]="${provider}=-"; offer_row_retry "$provider"; else spend_retry "$provider"; seats[i]=""; fi
             elif seat_cancelled "$provider"; then
                 if [[ -e "${TEMP_DIR}/${provider}.json" ]]; then
                     spend_cancel "$provider"
@@ -921,7 +933,10 @@ await_seats() {
                 live=1
             fi
         done
-        (( live )) || return 0
+        if ! (( live )); then
+            for seat in "${seats[@]}"; do [[ "${seat#*=}" == "-" ]] && withdraw_row_retry "${seat%%=*}"; done
+            return 0
+        fi
         sleep 0.2
     done
 }
@@ -987,7 +1002,7 @@ collect_round1() {
                 ERRORS+=("$provider: $error_msg")
                 # A seat the reader cancelled, or already retried from its
                 # row, is not offered back for retry.
-                seat_in "$provider" ${CANCELLED[@]+"${CANCELLED[@]}"} ${RETRIED[@]+"${RETRIED[@]}"} || FAILED+=("$provider")
+                seat_in "$provider" ${CANCELLED[@]+"${CANCELLED[@]}"} || seat_retried "$provider" || FAILED+=("$provider")
             elif [[ "$cached" == "true" ]]; then
                 echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${CYAN}cached${RESET}" >&2
             else

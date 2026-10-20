@@ -17,7 +17,7 @@ export function finishNotice({ providers }: RunProgress, jobId = ''): string {
 const PROGRESS_CELLS = 8
 
 // An m:ss clock, h:mm:ss past an hour. Args: when the run started, now.
-export function roundClock(startedMs: number, nowMs: number): string {
+function runClock(startedMs: number, nowMs: number): string {
   const secs = Math.max(0, Math.floor((nowMs - startedMs) / 1000))
   const hours = Math.floor(secs / 3600)
   const mins = Math.floor((secs % 3600) / 60)
@@ -40,7 +40,7 @@ export function progressBand(
   return {
     count: `${finished} of ${providers.length}`,
     bar: '\u2501'.repeat(filled) + '\u2500'.repeat(PROGRESS_CELLS - filled),
-    ...(startedAtMs === undefined ? {} : { clock: roundClock(startedAtMs, nowMs) }),
+    ...(startedAtMs === undefined ? {} : { clock: runClock(startedAtMs, nowMs) }),
     ...(latest ? { event: latest } : {}),
   }
 }

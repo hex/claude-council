@@ -32,7 +32,8 @@ When the variable is set, `run-council.sh` writes its watch directory there and 
 | `retry-offer` | the run | seconds the offer stays open, then the failed providers |
 | `.retry` / `.retry-declined` | the pane | the answer to the offer |
 | `cancel/<name>` | the pane | cancel that seat. The run removes it once the seat is logged `cancelled`, or at once if the seat's answer was already written or the seat had already ended; a marker that lands after the run stopped waiting on its seats stays, and goes with the watch dir |
-| `retry/<name>` | the pane | re-query that seat from its error row. Honoured while the run is still waiting on other seats, once per seat; the run removes it once the re-queried seat ends. A marker that lands after the run stopped waiting stays, and the band's offer takes over |
+| `retriable/<name>` | the run | that seat failed and a row press can re-query it: written while the run still waits on other seats, removed at the relaunch or when the run stops waiting. The pane shows the row's `retry` only for a name listed here |
+| `retry/<name>` | the pane | re-query that seat from its error row. The run removes it at the relaunch; one that lands after the run stopped waiting stays, and the band's offer takes over |
 | `.done` | the run | the run has finished |
 
 Without the mod the variable is never set and the scripts behave as before.

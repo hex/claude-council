@@ -13,11 +13,6 @@ test('the catalog lists each model with whether Codex lists it and the efforts i
   expect(catalog.models.length).toBe(9)
   expect(catalog.models[0]).toEqual({
     slug: 'gpt-6-sol', listed: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'], defaultEffort: 'medium',
-    effortHelp: {
-      low: 'Fast responses with lighter reasoning', medium: 'Balances speed and reasoning depth for everyday tasks',
-      high: 'Greater reasoning depth for complex problems', xhigh: 'Extra high reasoning depth for complex problems',
-      max: 'Maximum reasoning depth for the hardest problems', ultra: 'Maximum reasoning with automatic task delegation',
-    },
   })
   expect(catalog.models.find(m => m.slug === 'gpt-reserve')?.listed).toBe(false)
   expect(catalog.models.find(m => m.slug === 'gpt-5.5')?.defaultEffort).toBe('xhigh')

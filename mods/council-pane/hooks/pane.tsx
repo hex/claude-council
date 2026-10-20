@@ -67,8 +67,8 @@ type PaneState = {
   isPollingHeadsUp: boolean
   // The last config problem logged, so a broken file is reported once.
   headsUpProblem: string
-  // The last background failure logged, per kind (see logFailure).
-  lastFailure: Record<FailureKind, string>
+  // The last heads-up failure logged (see logFailure).
+  lastFailure: string
   // The intro tail on the prompt hint; '' once typed past, turned on, or never due.
   headsUpTip: string
   // The last check that found nothing, on the prompt hint until a keystroke or the next check.
@@ -338,18 +338,15 @@ async function aimRun($: EngineInterface, state: PaneState, settings: PaneOption
   await $.env.set('COUNCIL_MOD_PANE_DIR', host === 'mod' ? state.root : undefined)
 }
 
-// A background failure is logged once per distinct message, never dropped.
-// Each kind keeps its own last message, so one's success never re-arms the other's.
-type FailureKind = 'heads-up'
-
-async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>, kind: FailureKind): Promise<void> {
+// A heads-up background failure is logged once per distinct message, never dropped.
+async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>): Promise<void> {
   try {
     await work()
-    state.lastFailure[kind] = ''
+    state.lastFailure = ''
   } catch (error) {
-    const message = `${kind}: ${String(error)}`
-    if (message !== state.lastFailure[kind]) $.ui.log(message)
-    state.lastFailure[kind] = message
+    const message = `heads-up: ${String(error)}`
+    if (message !== state.lastFailure) $.ui.log(message)
+    state.lastFailure = message
   }
 }
 
@@ -476,7 +473,7 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
 // notice is left to expire.
 function watchHeadsUp($: EngineInterface, state: PaneState): void {
   if (state.headsUpTimer) return
-  state.headsUpTimer = $.clock.every(POLL_MS, () => { void logFailure($, state, () => headsUpTick($, state), 'heads-up') })
+  state.headsUpTimer = $.clock.every(POLL_MS, () => { void logFailure($, state, () => headsUpTick($, state)) })
 }
 
 async function headsUpTick($: EngineInterface, state: PaneState): Promise<void> {
@@ -564,7 +561,7 @@ async function personSubmitted($: EngineInterface): Promise<void> {
 function headsUpPresses($: EngineInterface, state: PaneState, noteId: string): Record<Exclude<Answer, 'typed-past'>, () => void> {
   const press = (answer: Exclude<Answer, 'typed-past'>) => () => {
     state.headsUpTurnOffArmed = ''
-    void logFailure($, state, () => pressHeadsUp($, answer), 'heads-up')
+    void logFailure($, state, () => pressHeadsUp($, answer))
   }
   const turnOff = () => {
     if (state.headsUpTurnOffArmed === noteId) return press('turn-off')()
@@ -647,20 +644,10 @@ function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label
   )
 }
 
-// What the offer's buttons do: the run waits on these two file names.
-// Cancel a seat: the marker query-council.sh polls for while the seat is
-// out. The next poll reads it back and draws the row as cancelling until the
-// run's log line lands.
-function cancelSeat($: EngineInterface, state: PaneState, name: string): void {
-  pressSeat($, state, 'cancel', name)
-}
-
-// Retry a seat from its error row: the marker the run's seat loop polls for
-// while other seats are still out. It stays until the re-queried seat ends.
-function retrySeat($: EngineInterface, state: PaneState, name: string): void {
-  pressSeat($, state, 'retry', name)
-}
-
+// A row's press is a marker query-council.sh polls for while it waits on its
+// seats: cancel/<seat> ends a seat that is out, and the row reads cancelling
+// until the run logs it; retry/<seat> re-queries a seat the run offers in
+// retriable/, and the row reads retrying until the run relaunches it.
 function pressSeat($: EngineInterface, state: PaneState, press: 'cancel' | 'retry', name: string): void {
   const runDir = state.runDir
   if (!runDir) return
@@ -710,16 +697,17 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: { 'heads-up': '' }, headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() } }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: '', headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() } }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     await $.command.register({ name: HEADS_UP_COMMAND, description: 'Heads-up side-check: set it up in a few questions, switch it on for this project naming the seat, or off, or show its state and counts', argumentHint: '[setup | on [seat] | off | status]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
-    void logFailure($, state, () => introduceHeadsUp($, state, settings), 'heads-up')
+    void logFailure($, state, () => introduceHeadsUp($, state, settings))
     // A reload drops the heads-up timer; a check still in flight needs it back.
     if ((await read($, headsUp)).phase.kind === 'checking') watchHeadsUp($, state)
-    for (const key of SPECIALIST_STORE_KEYS) await $.store.delete(key)
+    // Nothing after depends on these, so the request is not held up for them.
+    void Promise.all(SPECIALIST_STORE_KEYS.map(key => $.store.delete(key))).catch((err: unknown) => $.ui.log(`store cleanup: ${String(err)}`))
     return next(e)
   })
 
@@ -746,7 +734,7 @@ export const register: Register = (on, options) => {
     const response = next(e)
     if (e.agentId === undefined) {
       const step = { turnId: e.turnId, index: e.index }
-      void logFailure($, state, () => stepHeadsUp($, state, settings, step), 'heads-up')
+      void logFailure($, state, () => stepHeadsUp($, state, settings, step))
     }
     return yield* response
   })
@@ -754,7 +742,7 @@ export const register: Register = (on, options) => {
   // Only the person's own prompt types past a note; a plugin's submit or a
   // notification does not.
   on('prompt.submit', async ($, e, next) => {
-    if (e.origin.kind === 'composer' || e.origin.kind === 'bridge') await logFailure($, state, () => personSubmitted($), 'heads-up')
+    if (e.origin.kind === 'composer' || e.origin.kind === 'bridge') await logFailure($, state, () => personSubmitted($))
     return next(e)
   })
 
@@ -884,7 +872,7 @@ export const register: Register = (on, options) => {
         </ui.Box>
       )
     }
-    // A note is one row and time-sensitive: the progress bands wait for its
+    // A note is one row and time-sensitive: the progress band waits for its
     // answer. Reading the session here subscribes the band to its changes.
     const band = bandView((await read($, headsUp)).phase)
     if (band) return headsUpRow($.ui.resolve(e), band, headsUpPresses($, state, band.id), state.headsUpTurnOffArmed === band.id)
@@ -895,7 +883,7 @@ export const register: Register = (on, options) => {
     // One marker per seat; the run cancels them one by one, as it would rows
     // pressed in turn. A press reads the seats again, since one may have
     // answered since the band was drawn.
-    const cancelAll = () => { if (state.view) for (const name of seatsToCancel(state.view)) cancelSeat($, state, name) }
+    const cancelAll = () => { if (state.view) for (const name of seatsToCancel(state.view)) pressSeat($, state, 'cancel', name) }
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
         {/* Only the event gives way when narrow. */}
@@ -958,10 +946,9 @@ export const register: Register = (on, options) => {
         case 'note':
           return <Text key={key} dimColor>{section.text}</Text>
         case 'status': {
-          const cancel = section.cancel
-          const retry = section.retry
+          const action = section.action
           // The model takes the slack and gives way when narrow, so every
-          // row's cancel or retry sits at the pane's right edge.
+          // row's button sits at the pane's right edge.
           return (
             <Box key={key} flexDirection="row" width={columns}>
               <Box flexShrink={0}>
@@ -975,16 +962,10 @@ export const register: Register = (on, options) => {
               <Box flexGrow={1} flexShrink={1}>
                 <Text dimColor wrap="truncate-end">{section.model}</Text>
               </Box>
-              {cancel && (
+              {action && (
                 <Box flexDirection="row" flexShrink={0}>
                   <Text>{'  '}</Text>
-                  <Button key={`cancel:${cancel.seat}`} plain label="cancel" {...(cancel.hotkey ? { hotkey: cancel.hotkey } : {})} onPress={() => cancelSeat($, state, cancel.seat)} />
-                </Box>
-              )}
-              {retry && (
-                <Box flexDirection="row" flexShrink={0}>
-                  <Text>{'  '}</Text>
-                  <Button key={`retry:${retry.seat}`} plain label="retry" {...(retry.hotkey ? { hotkey: retry.hotkey } : {})} onPress={() => retrySeat($, state, retry.seat)} />
+                  <Button key={`${action.press}:${action.seat}`} plain label={action.press} {...(action.hotkey ? { hotkey: action.hotkey } : {})} onPress={() => pressSeat($, state, action.press, action.seat)} />
                 </Box>
               )}
             </Box>

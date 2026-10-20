@@ -402,8 +402,9 @@ display_pane_open() {
         [[ "${COUNCIL_NO_PANE:-}" == "1" ]] && return 1
         watch_dir=$(mktemp -d "$COUNCIL_MOD_PANE_DIR/run.XXXXXX") || return 1
         # cancel/ is where the mod drops a seat's name to cancel it, and
-        # retry/ a seat's name to re-query it from its error row.
-        mkdir -p "$watch_dir/responses" "$watch_dir/cancel" "$watch_dir/retry"
+        # retry/ a seat's name to re-query it from its error row; retriable/
+        # is where the run names the seats such a press can re-query.
+        mkdir -p "$watch_dir/responses" "$watch_dir/cancel" "$watch_dir/retry" "$watch_dir/retriable"
         # .done comes from an EXIT trap, which a SIGKILL skips; the pid lets
         # the mod tell a run that died from one still working. $$ is the
         # script's own pid even inside the $(...) this runs in.

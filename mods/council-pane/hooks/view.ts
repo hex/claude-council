@@ -9,8 +9,10 @@ export type RunView = {
   errors: Record<string, string>
   // Seats pressed for cancel in the pane, from the watch dir's cancel folder.
   cancels?: string[]
-  // Seats pressed for retry on their error row, from the watch dir's retry folder.
+  // Seats pressed for retry on their error row, from the watch dir's retry
+  // folder, and the seats the run offers for it, from its retriable folder.
   retries?: string[]
+  retriable?: string[]
   colors: Record<string, string>
   isDone: boolean
   // The status log's last event in words, for the band.
@@ -28,10 +30,10 @@ export function unseenRun(entries: readonly DirEntry[], shown: ReadonlySet<strin
 
 export type Section =
   | { kind: 'note'; text: string }
-  // retry: on an error row while another seat still queries, the same.
-  // cancel: on a querying row while the run is live, the button's seat (the
+  // action: the row's one button, cancel on a querying row while the run is
+  // live or retry on an error row the run offers for it, with its seat (the
   // name unpadded) and, for the first ten rows, its digit.
-  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; cancel?: { seat: string; hotkey?: string }; retry?: { seat: string; hotkey?: string } }
+  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; action?: { press: 'cancel' | 'retry'; seat: string; hotkey?: string } }
   | { kind: 'summary'; text: string }
   // fold: what the jump opens, the fold of the section it lands on.
   | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string; fold?: string }[] }
@@ -103,21 +105,21 @@ function statusRows(
     stateColor: STATE_COLORS[provider.state] ?? COLOR.muted,
     time: shownTime(provider).padStart(times),
     model: provider.model ?? '',
-    ...(cancellable.includes(provider.name) ? { cancel: { seat: provider.name, ...digit(index) } } : {}),
-    ...(retriable.includes(provider.name) ? { retry: { seat: provider.name, ...digit(index) } } : {}),
+    ...(cancellable.includes(provider.name) ? { action: { press: 'cancel' as const, seat: provider.name, ...digit(index) } }
+      : retriable.includes(provider.name) ? { action: { press: 'retry' as const, seat: provider.name, ...digit(index) } } : {}),
   }))
-  if (rows.some(row => row.kind === 'status' && (row.cancel || row.retry))) rows.push({ kind: 'note', text: CANCEL_HINT })
+  if (rows.some(row => row.kind === 'status' && row.action)) rows.push({ kind: 'note', text: CANCEL_HINT })
   return rows
 }
 
 const digit = (index: number) => (index < 10 ? { hotkey: String((index + 1) % 10) } : {})
 
-// The seats whose error row can be retried: the run's loop over its seats
-// honours a press only while some seat is still out, and a seat gets one
-// retry, so one queried twice has had it. A pressed seat waits on the run.
-export function seatsToRetry({ providers, retries = [], isDone }: Pick<RunView, 'providers' | 'retries' | 'isDone'>): string[] {
-  if (isDone || !providers.some(({ state }) => state === 'querying')) return []
-  return providers.filter(({ name, state, attempts }) => state === 'error' && (attempts ?? 1) < 2 && !retries.includes(name)).map(({ name }) => name)
+// The seats whose error row can be retried: the ones the run offers, in the
+// log's order, less any already pressed. The run offers a seat while its
+// loop can still honour a press, and withdraws it at the relaunch.
+export function seatsToRetry({ providers, retries = [], retriable = [], isDone }: Pick<RunView, 'providers' | 'retries' | 'retriable' | 'isDone'>): string[] {
+  if (isDone) return []
+  return providers.filter(({ name }) => retriable.includes(name) && !retries.includes(name)).map(({ name }) => name)
 }
 
 // What the band's cancel all presses: every seat a live run still has
@@ -172,7 +174,7 @@ export function queryingSince(since: Record<string, number>, providers: Provider
 }
 
 export function paneSections(
-  { providers, responses, errors, cancels = [], retries = [], colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
+  { providers, responses, errors, cancels = [], retries = [], retriable = [], colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
   { collapsesWhenDone = true, frame = 0, nowMs = 0, fitText = (text: string) => text, closed = new Set<string>() }: { collapsesWhenDone?: boolean; frame?: number; nowMs?: number; fitText?: (text: string) => string; closed?: ReadonlySet<string> } = {},
 ): Section[] {
   if (providers.length === 0) {
@@ -182,13 +184,13 @@ export function paneSections(
   // watch dir, is cancelling: the run removes the marker once it logs the seat.
   const shown = providers.map(provider =>
     provider.state === 'querying' && cancels.includes(provider.name) ? { ...provider, state: 'cancelling' }
-    : provider.state === 'error' && retries.includes(provider.name) && !isDone ? { ...provider, state: 'retrying' }
+    : retriable.includes(provider.name) && retries.includes(provider.name) && !isDone ? { ...provider, state: 'retrying' }
     : provider,
   )
   const vendor = (name: string) => `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`
   const glyph = (state: string) => {
     if (state === 'error') return '\u2717'
-    if (state === 'retrying') return '\u280b'
+    if (state === 'retrying') return spinner(0)
     if (state === 'cancelled' || state === 'cancelling') return '\u25cb'
     return state === 'querying' ? spinner(frame) : '\u25cf'
   }
@@ -202,7 +204,7 @@ export function paneSections(
     if (responses[name] !== undefined) return fold('banner', jumpKey(name))
     return errors[name] !== undefined ? fold('error', jumpKey(name)) : undefined
   }
-  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection, foldOf) : statusRows(shown, vendor, glyph, elapsed, seatsToCancel({ providers, cancels, isDone }), seatsToRetry({ providers, retries, isDone }))
+  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection, foldOf) : statusRows(shown, vendor, glyph, elapsed, seatsToCancel({ providers, cancels, isDone }), seatsToRetry({ providers, retries, retriable, isDone }))
   for (const { name, state, ms, model } of providers) {
     const response = responses[name]
     const error = errors[name]

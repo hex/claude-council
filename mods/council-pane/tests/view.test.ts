@@ -28,8 +28,8 @@ test('paneSections gives a coloured status row per provider, then a banner and b
   })
   expect(sections).toEqual([
     { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'success', time: '4.2s', model: 'gemini-3-pro' },
-    { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'warning', time: '    ', model: '', cancel: { seat: 'openai', hotkey: '2' } },
-    { kind: 'status', glyph: '\u2717', glyphColor: 'error', name: 'grok  ', state: 'error   ', stateColor: 'error', time: '0.9s', model: '', retry: { seat: 'grok', hotkey: '3' } },
+    { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'warning', time: '    ', model: '', action: { press: 'cancel', seat: 'openai', hotkey: '2' } },
+    { kind: 'status', glyph: '\u2717', glyphColor: 'error', name: 'grok  ', state: 'error   ', stateColor: 'error', time: '0.9s', model: '' },
     { kind: 'note', text: 'click cancel or retry on a row, or ctrl+x tab then its digit' },
     { kind: 'toggleAll', closes: true, folds: ['banner:jump:gemini', 'error:jump:grok'] },
     { kind: 'banner', key: 'jump:gemini', fold: 'banner:jump:gemini', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)', open: true },
@@ -49,59 +49,59 @@ test('a querying row carries its digit as the cancel key while the run is live, 
     isDone: false,
   }
   const live = paneSections(view)
-  expect(live.map(section => section.kind === 'status' ? section.cancel?.hotkey : undefined)).toEqual([undefined, '2', '3'])
+  expect(live.map(section => section.kind === 'status' ? section.action?.hotkey : undefined)).toEqual([undefined, '2', '3'])
   // The hint names the keys the way the retry row does, once per run.
   expect(live.at(-1)).toEqual({ kind: 'note', text: 'click cancel or retry on a row, or ctrl+x tab then its digit' })
   // A seat whose marker is in the watch dir draws as cancelling, with no key,
   // until the run's log says cancelled.
   const pending = paneSections({ ...view, cancels: ['grok-cli'] })
   expect(pending[1]).toMatchObject({ kind: 'status', state: 'cancelling', stateColor: 'inactive', glyph: '\u25cb' })
-  expect(pending[1]).not.toHaveProperty('cancel')
+  expect(pending[1]).not.toHaveProperty('action')
   // A marker for a seat that is past querying changes nothing.
   expect(paneSections({ ...view, cancels: ['gemini'] })[0]).toMatchObject({ state: 'complete' })
   const done = paneSections({ ...view, isDone: true }, { collapsesWhenDone: false })
-  expect(done.map(section => section.kind === 'status' && 'cancel' in section)).toEqual([false, false, false])
+  expect(done.map(section => section.kind === 'status' && 'action' in section)).toEqual([false, false, false])
   expect(done.at(-1)?.kind).toBe('status')
 })
 
-test('an error row carries retry with its digit while another seat still queries, once per seat, and never once the round is over', () => {
+test('an error row the run offers for retry carries the button with its digit; one the run withdrew, or a done run, has none', () => {
   const view = {
     providers: [
       { name: 'gemini', state: 'querying' },
       { name: 'grok-cli', state: 'error', ms: 900 },
-      { name: 'kimi', state: 'error', ms: 300, attempts: 2 },
+      { name: 'kimi', state: 'error', ms: 300 },
     ],
     responses: {}, errors: { 'grok-cli': 'HTTP 429', kimi: 'HTTP 500' }, colors: {},
+    retriable: ['grok-cli'],
     isDone: false,
   }
   const live = paneSections(view)
-  expect(live[1]).toMatchObject({ kind: 'status', state: 'error   ', retry: { seat: 'grok-cli', hotkey: '2' } })
-  // A seat already queried twice has had its one retry.
-  expect(live[2]).not.toHaveProperty('retry')
+  expect(live[1]).toMatchObject({ kind: 'status', state: 'error   ', action: { press: 'retry', seat: 'grok-cli', hotkey: '2' } })
+  // The run has not offered kimi: it has had its retry, or was never parked.
+  expect(live[2]).not.toHaveProperty('action')
   expect(live[3]).toEqual({ kind: 'note', text: 'click cancel or retry on a row, or ctrl+x tab then its digit' })
-  // A pressed seat draws as retrying, with no key, until the run logs it querying again.
+  // A pressed seat draws as retrying, with no key, until the run relaunches it and withdraws the offer.
   const pressed = paneSections({ ...view, retries: ['grok-cli'] })
   expect(pressed[1]).toMatchObject({ kind: 'status', state: 'retrying', stateColor: 'warning', glyph: '\u280b' })
-  expect(pressed[1]).not.toHaveProperty('retry')
-  // With no seat left querying the runner is past the round: the band offers instead.
-  const over = paneSections({ ...view, providers: [{ name: 'gemini', state: 'complete', ms: 100 }, ...view.providers.slice(1)] })
-  const retries = (sections: ReturnType<typeof paneSections>) => sections.filter(section => section.kind === 'status').map(section => 'retry' in section)
-  expect(retries(over)).toEqual([false, false, false])
-  expect(over[3]?.kind).not.toBe('note')
+  expect(pressed[1]).not.toHaveProperty('action')
+  // A press whose offer the run withdrew is a plain error row again.
+  expect(paneSections({ ...view, retries: ['grok-cli'], retriable: [] })[1]).toMatchObject({ state: 'error   ' })
+  const actions = (sections: ReturnType<typeof paneSections>) => sections.filter(section => section.kind === 'status').map(section => 'action' in section)
+  expect(actions(paneSections({ ...view, retriable: [] }))).toEqual([true, false, false])
   const done = paneSections({ ...view, isDone: true }, { collapsesWhenDone: false })
-  expect(retries(done)).toEqual([false, false, false])
+  expect(actions(done)).toEqual([false, false, false])
 })
 
 test('every querying row can be cancelled by click; the first ten carry a digit, the tenth 0', () => {
   const providers = Array.from({ length: 10 }, (_, index) => ({ name: `seat-${index + 1}`, state: 'querying' }))
   const rows = paneSections({ providers, responses: {}, errors: {}, colors: {}, isDone: false }).filter(section => section.kind === 'status')
   // The seat's name travels unpadded, since the row's is padded to the column.
-  expect(rows.map(row => (row.kind === 'status' ? row.cancel?.seat : undefined))).toEqual(providers.map(provider => provider.name))
-  expect(rows.map(row => (row.kind === 'status' ? row.cancel?.hotkey : undefined))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
+  expect(rows.map(row => (row.kind === 'status' ? row.action?.seat : undefined))).toEqual(providers.map(provider => provider.name))
+  expect(rows.map(row => (row.kind === 'status' ? row.action?.hotkey : undefined))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
   // An eleventh row has a button and no key.
   const eleven = paneSections({ providers: [...providers, { name: 'seat-11', state: 'querying' }], responses: {}, errors: {}, colors: {}, isDone: false }).filter(section => section.kind === 'status')
-  expect(eleven.at(-1)).toMatchObject({ cancel: { seat: 'seat-11' } })
-  expect(eleven.at(-1)).not.toHaveProperty('cancel.hotkey')
+  expect(eleven.at(-1)).toMatchObject({ action: { press: 'cancel', seat: 'seat-11' } })
+  expect(eleven.at(-1)).not.toHaveProperty('action.hotkey')
 })
 
 test('cancel all takes every seat still querying, in order, skipping one already pressed', () => {

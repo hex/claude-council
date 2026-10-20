@@ -61,12 +61,15 @@ test('the names in the cancel folder are the seats pressed for cancel', async ()
   expect((await readView(runEndingAfter(1000), RUN)).cancels).toEqual([])
 })
 
-test('the names in the retry folder are the seats pressed for retry', async () => {
+test('the retry folder names the seats pressed for retry, and retriable the seats the run offers for it', async () => {
   const fs = {
-    exists: async (path: string) => path === `${RUN}/retry` || path === `${RUN}/status`,
-    read: async (path: string) => (path === `${RUN}/status` ? 'grok\terror\t\t\n' : ''),
-    list: async (dir: string) => (dir === `${RUN}/retry` ? [{ kind: 'file', name: 'grok' }, { kind: 'file', name: '.tmp' }] : []),
+    exists: async (path: string) => path === `${RUN}/retry` || path === `${RUN}/retriable` || path === `${RUN}/status`,
+    read: async (path: string) => (path === `${RUN}/status` ? 'grok\terror\t\t\nkimi\terror\t\t\n' : ''),
+    list: async (dir: string) => (dir === `${RUN}/retry` ? [{ kind: 'file', name: 'grok' }, { kind: 'file', name: '.tmp' }] : dir === `${RUN}/retriable` ? [{ kind: 'file', name: 'grok' }, { kind: 'file', name: 'kimi' }] : []),
   }
-  expect((await readView(fs, RUN)).retries).toEqual(['grok'])
+  const view = await readView(fs, RUN)
+  expect(view.retries).toEqual(['grok'])
+  expect(view.retriable).toEqual(['grok', 'kimi'])
   expect((await readView(runEndingAfter(1000), RUN)).retries).toEqual([])
+  expect((await readView(runEndingAfter(1000), RUN)).retriable).toEqual([])
 })

@@ -1,9 +1,8 @@
 // ABOUTME: Reads Codex's model catalog from `codex debug models`: each model, whether Codex lists it, its efforts
 // ABOUTME: A failed run or output that is not a catalog is an error, never an empty list
 
-// effortHelp is Codex's own one-line description of each effort; defaultEffort
-// is what the model uses when nothing sets one.
-export type CatalogModel = { slug: string; listed: boolean; efforts: string[]; effortHelp: Record<string, string>; defaultEffort: string }
+// defaultEffort is what the model uses when nothing sets one.
+export type CatalogModel = { slug: string; listed: boolean; efforts: string[]; defaultEffort: string }
 export type Catalog = { models: CatalogModel[] } | { error: string }
 
 const CATALOG = 'codex debug models'
@@ -19,15 +18,9 @@ export function parseCatalog(run: { exitCode: number; stdout: string; stderr: st
     if (typeof entry.slug !== 'string' || entry.slug === '') return { error: `${CATALOG}: a model has no slug` }
     const levels = entry.supported_reasoning_levels
     if (!Array.isArray(levels)) return { error: `${CATALOG}: model '${entry.slug}' has no supported_reasoning_levels` }
-    const efforts: string[] = []
-    const effortHelp: Record<string, string> = {}
-    for (const level of levels as { effort?: unknown; description?: unknown }[]) {
-      if (typeof level.effort !== 'string') continue
-      efforts.push(level.effort)
-      if (typeof level.description === 'string') effortHelp[level.effort] = level.description
-    }
+    const efforts = (levels as { effort?: unknown }[]).map(level => level.effort).filter((effort): effort is string => typeof effort === 'string')
     const defaultEffort = typeof entry.default_reasoning_level === 'string' ? entry.default_reasoning_level : ''
-    models.push({ slug: entry.slug, listed: entry.visibility === 'list', efforts, effortHelp, defaultEffort })
+    models.push({ slug: entry.slug, listed: entry.visibility === 'list', efforts, defaultEffort })
   }
   return { models }
 }

@@ -4,8 +4,8 @@
 // Engine theme keys. Each resolves per theme, so text in them keeps its
 // contrast on a light and a dark terminal (DESIGN.md has the measurements).
 export const COLOR = {
-  // Claude's orange: frames, rules and marks. Under 4.5:1 on a light theme, so
-  // never body text.
+  // Claude's orange: the progress bar and the heads-up mark. Under 4.5:1 on a
+  // light theme, so never body text.
   accent: 'claude',
   success: 'success',
   danger: 'error',
