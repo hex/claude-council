@@ -786,6 +786,10 @@ COUNCIL_START_MS=$(now_ms)
 CANCELLED_MSG="cancelled from the pane"
 # Seats the pane cancelled this run; round 2 leaves them out.
 CANCELLED=()
+# Seats re-queried from their error row this run: one row retry per seat, and
+# the end-of-round offer leaves them out, as a seat the band retried is not
+# offered again either.
+RETRIED=()
 
 # Whether the first argument names one of the rest. Args: name list...
 seat_in() {
@@ -801,6 +805,22 @@ seat_in() {
 # no folder and nothing to spend.
 seat_cancelled() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/cancel/$1" ]]; }
 spend_cancel() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/cancel/$1"; }
+# The retry/ folder is the same protocol for a seat's error row: the marker
+# stays until the re-queried seat ends, so the pane cannot offer a second
+# press in the moment before the seat logs itself querying again.
+seat_retry_pressed() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/retry/$1" ]]; }
+spend_retry() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/retry/$1"; }
+
+# Whether a seat's round-1 slot ended in an error of its own: one the pane
+# did not cancel, and one not already re-queried from its row. Args: provider
+seat_errored() {
+    local provider="$1"
+    local slot="${TEMP_DIR}/${provider}.json"
+    [[ -f "$slot" ]] || return 1
+    seat_in "$provider" ${CANCELLED[@]+"${CANCELLED[@]}"} && return 1
+    seat_in "$provider" ${RETRIED[@]+"${RETRIED[@]}"} && return 1
+    [[ "$(jq -r '.status' "$slot" 2>/dev/null)" == "error" ]]
+}
 
 # End a seat the pane cancelled: its whole process tree goes (the CLI, its
 # children, and the subshell that would otherwise try the API sibling next),
@@ -833,14 +853,34 @@ cancel_seat() {
     echo -e "$(provider_color "$provider")${provider}${RESET}: ${DIM}${CANCELLED_MSG}${RESET}" >&2
 }
 
+# Start one round-1 seat as a background job and name it provider=pid in
+# LAUNCHED: the job must be this shell's child, which a $(...) would not
+# give, so nothing is printed. Shared by the round, the band's retry and a row's retry, so a
+# retried seat gets exactly the query it failed. A marker from before this
+# launch (a press that landed once the seat was over) is spent: the seat
+# starts afresh. Args: provider
+launch_seat() {
+    local provider="$1" provider_role=""
+    [[ -z "$ROLE_ASSIGNMENTS" ]] || provider_role=$(get_provider_role "$provider" "$ROLE_ASSIGNMENTS")
+    rm -f "${TEMP_DIR}/${provider}.json"
+    spend_cancel "$provider"
+    spend_retry "$provider"
+    query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" "$provider_role" &
+    LAUNCHED="${provider}=$!"
+}
+
 # Wait for the round-1 seats launched as background jobs, ending any the pane
-# cancels meanwhile. Polled in 0.2 s ticks rather than waited on: bash 3.2
-# has no wait -n, and a blocking wait could not notice the marker. Without a
-# pane nothing can cancel, so the seats are simply waited on. A press that
-# finds the seat's slot already on disk is spent, whatever the slot says:
-# the seat has finished its work (the job lives on a moment after that write,
+# cancels meanwhile and re-querying any the pane presses retry on from its
+# error row. Polled in 0.2 s ticks rather than waited on: bash 3.2 has no
+# wait -n, and a blocking wait could not notice a marker. Without a pane
+# nothing can press, so the seats are simply waited on. A cancel that finds
+# the seat's slot already on disk is spent, whatever the slot says: the seat
+# has finished its work (the job lives on a moment after that write,
 # streaming the answer to the pane and the cache), and the reader cancelled
-# a wait that was already over; a slot caught mid-write is one such.
+# a wait that was already over; a slot caught mid-write is one such. A retry
+# is honoured only while the loop still runs, which is while some seat is
+# live: once the last seat ends the band's offer takes over, and a marker
+# that lands after that stays, and goes with the watch dir.
 # Args: provider=pid...
 await_seats() {
     local -a seats=("$@")
@@ -855,10 +895,20 @@ await_seats() {
             [[ -n "${seats[$i]}" ]] || continue
             provider="${seats[$i]%%=*}"
             pid="${seats[$i]#*=}"
-            if ! kill -0 "$pid" 2>/dev/null; then
+            if [[ "$pid" == "-" ]]; then
+                # A seat that ended in its own error keeps its place, with no
+                # job, so a row press can still re-query it this round.
+                if seat_retry_pressed "$provider"; then
+                    RETRIED+=("$provider")
+                    echo -e "🔁 Retrying $(format_providers "$provider") from its row..." >&2
+                    launch_seat "$provider"
+                    seats[i]="$LAUNCHED"
+                    live=1
+                fi
+            elif ! kill -0 "$pid" 2>/dev/null; then
                 wait "$pid" 2>/dev/null || true
                 spend_cancel "$provider"
-                seats[i]=""
+                if seat_errored "$provider"; then seats[i]="${provider}=-"; else spend_retry "$provider"; seats[i]=""; fi
             elif seat_cancelled "$provider"; then
                 if [[ -e "${TEMP_DIR}/${provider}.json" ]]; then
                     spend_cancel "$provider"
@@ -880,21 +930,9 @@ await_seats() {
 # all of them. Shared by the first pass and the retry, so a retried provider
 # gets exactly the query it failed. Args: provider...
 query_round1() {
-    local provider provider_role
+    local provider
     local seats=()
-    for provider in "$@"; do
-        # Get role for this provider (empty if no roles assigned)
-        provider_role=""
-        if [[ -n "$ROLE_ASSIGNMENTS" ]]; then
-            provider_role=$(get_provider_role "$provider" "$ROLE_ASSIGNMENTS")
-        fi
-        # A marker from before this round (a press that landed once the last
-        # round had collected) is spent: the seat starts this one afresh.
-        rm -f "${TEMP_DIR}/${provider}.json"
-        spend_cancel "$provider"
-        query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" "$provider_role" &
-        seats+=("${provider}=$!")
-    done
+    for provider in "$@"; do launch_seat "$provider"; seats+=("$LAUNCHED"); done
     await_seats "${seats[@]}"
 }
 
@@ -947,8 +985,9 @@ collect_round1() {
                 error_msg=$(echo "$result" | jq -r '.error')
                 echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET} - ${DIM}${error_msg}${RESET}" >&2
                 ERRORS+=("$provider: $error_msg")
-                # A seat the reader cancelled is not offered back for retry.
-                seat_in "$provider" ${CANCELLED[@]+"${CANCELLED[@]}"} || FAILED+=("$provider")
+                # A seat the reader cancelled, or already retried from its
+                # row, is not offered back for retry.
+                seat_in "$provider" ${CANCELLED[@]+"${CANCELLED[@]}"} ${RETRIED[@]+"${RETRIED[@]}"} || FAILED+=("$provider")
             elif [[ "$cached" == "true" ]]; then
                 echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${CYAN}cached${RESET}" >&2
             else

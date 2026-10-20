@@ -521,6 +521,151 @@ pane_states() {
     awk -F'\t' -v p="$1" '$1 == p { print $2 }' "$PANE/status" | paste -sd, -
 }
 
+# Wait for the pane's status log to show a seat in a state, or the run to end.
+await_state() {
+    local name="$1" state="$2" ticks=150
+    while (( ticks-- > 0 )); do
+        [[ -f "$PANE/run-over" ]] && return 1
+        grep -q "^${name}	${state}	" "$PANE/status" 2>/dev/null && return 0
+        sleep 0.1
+    done
+    return 1
+}
+
+# Stand in for the mod pane pressing retry on a seat's error row: once the
+# status log shows the seat errored, drop the marker the pane writes.
+retry_from_pane() {
+    local name="$1"
+    await_state "$name" error || return 1
+    mkdir -p "$PANE/retry"
+    touch "$PANE/retry/${name}"
+}
+
+@test "row retry: a marker while another seat still runs re-queries that seat with the query it failed" {
+    setup_pane
+    write_slow_stub gemini 4
+    write_flaky_stub grok
+    retry_from_pane grok &
+    COUNCIL_RETRY_WAIT=5 run_council_with_pane --providers=gemini,grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'success'
+    assert_json_eq "$output" '.round1.grok.response' 'ANSWER-FROM-grok'
+    assert_json_eq "$output" '.round1.gemini.status' 'success'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 2 ]
+    [ "$(pane_states grok)" = "querying,error,querying,complete" ]
+    # The marker is spent, and with every seat answered the band offers nothing.
+    [ ! -f "$PANE/retry/grok" ]
+    [ ! -f "$PANE/offer-seen" ]
+    [[ "$stderr" != *"Errors:"* ]]
+}
+
+@test "row retry: a marker after the last seat ended is not honoured; the band offers instead" {
+    setup_pane
+    write_flaky_stub grok
+    # Pressed once the seat has errored and, it being the only seat, the round is over.
+    retry_from_pane grok &
+    play_pane ignore &
+    COUNCIL_RETRY_WAIT=1 run_council_with_pane --providers=grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
+    [ "$(cat "$PANE/offer-seen")" = $'1\ngrok' ]
+    [ "$(pane_states grok)" = "querying,error" ]
+    # The marker stays: nothing spent it, and it goes with the watch dir.
+    [ -f "$PANE/retry/grok" ]
+}
+
+# A stub that fails every call, logging each like the others.
+write_broken_stub() {
+    local name="$1"
+    cat > "$STUB_DIR/${name}.sh" <<EOF
+#!/bin/bash
+echo "${name}" >> "${CALLS_LOG}"
+echo "Error from ${name}: always" >&2
+exit 1
+EOF
+    chmod +x "$STUB_DIR/${name}.sh"
+}
+
+# Wait for the pane's status log to show a seat in a state for the Nth time.
+await_nth_state() {
+    local name="$1" state="$2" nth="$3" ticks=150
+    while (( ticks-- > 0 )); do
+        [[ -f "$PANE/run-over" ]] && return 1
+        [[ "$(grep -c "^${name}	${state}	" "$PANE/status" 2>/dev/null)" -ge "$nth" ]] && return 0
+        sleep 0.1
+    done
+    return 1
+}
+
+@test "row retry: a stale marker is spent when the band re-queries the seat, so a second failure is not run a third time" {
+    setup_pane
+    write_broken_stub grok
+    # The press lands once the only seat has errored: too late for the row,
+    # the band's relaunch spends it.
+    retry_from_pane grok &
+    play_pane retry &
+    COUNCIL_RETRY_WAIT=5 run_council_with_pane --providers=grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 2 ]
+    [ "$(pane_states grok)" = "querying,error,querying,error" ]
+    [ ! -f "$PANE/retry/grok" ]
+}
+
+@test "row retry: one press per seat; a seat that failed its row retry is not offered by the band either" {
+    setup_pane
+    write_slow_stub gemini 5
+    write_broken_stub grok
+    (
+        retry_from_pane grok || exit
+        await_nth_state grok error 2 || exit
+        # The marker is gone with the second failure; a second press is ignored.
+        [[ ! -f "$PANE/retry/grok" ]] && touch "$PANE/retry/grok"
+    ) &
+    COUNCIL_RETRY_WAIT=2 run_council_with_pane --providers=gemini,grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    assert_json_eq "$output" '.round1.gemini.status' 'success'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 2 ]
+    [ "$(pane_states grok)" = "querying,error,querying,error" ]
+    [ ! -f "$PANE/offer-seen" ]
+}
+
+@test "row retry: a cancelled seat ignores a retry marker" {
+    setup_pane
+    write_slow_stub gemini 4
+    write_slow_stub grok 30
+    (
+        cancel_from_pane grok || exit
+        await_state grok cancelled || exit
+        mkdir -p "$PANE/retry"; touch "$PANE/retry/grok"
+    ) &
+    COUNCIL_RETRY_WAIT=1 run_council_with_pane --providers=gemini,grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.error' 'cancelled from the pane'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
+    [ "$(pane_states grok)" = "querying,cancelled" ]
+    [ ! -f "$PANE/offer-seen" ]
+}
+
+@test "row retry: without a pane the run touches no retry path" {
+    local spy="${BATS_TEST_TMPDIR}/spy"
+    mkdir -p "$spy"
+    cat > "$spy/rm" <<EOF
+#!/bin/bash
+printf '%s\n' "\$@" >> "${BATS_TEST_TMPDIR}/rm-argv"
+exec /bin/rm "\$@"
+EOF
+    chmod +x "$spy/rm"
+    write_flaky_stub grok
+    PATH="$spy:$PATH" run_council --no-cache --providers=grok "q"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.grok.status' 'error'
+    [ "$(grep -c '^grok$' "$CALLS_LOG")" -eq 1 ]
+    run ! grep -q '^/retry/' "${BATS_TEST_TMPDIR}/rm-argv"
+}
+
 @test "cancel: a marker from the pane ends that seat and the run goes on without it" {
     setup_pane
     write_stub gemini
