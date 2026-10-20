@@ -604,6 +604,11 @@ claude-council/
 ├── agents/
 │   └── council-advisor.md       # Proactive suggestions
 ├── assets/
+│   ├── banner.svg               # Plugin name and description
+│   ├── council-run.svg          # Captured run inside Claude Code
+│   ├── heads-up.svg             # Captured note and unsent draft
+│   ├── tmux-pane.svg            # Captured streaming tmux pane
+│   ├── capture/                 # Capture scripts, converter, raw frames, provenance
 │   └── icon.png                 # 512x512 listing icon, named by plugin.json's icon
 ├── commands/
 │   ├── advise.md                # /advise — put this conversation to the council
@@ -615,11 +620,7 @@ claude-council/
 ├── docs/
 │   ├── ARCHITECTURE.md          # This file
 │   ├── REFERENCE.md             # Every flag, provider, variable, default and limit
-│   ├── USAGE.md                 # Each workflow, with examples
-│   └── images/
-│       ├── council-pane.png                   # REFERENCE: a five-provider run in the tmux pane
-│       ├── council-pane-claude-code.png       # README hero: a finished twelve-seat run in the Claude Code pane
-│       └── council-pane-claude-code-live.png  # mod README: the same pane mid-run, with cancel buttons and the band
+│   └── USAGE.md                 # Each workflow, with examples
 ├── evals/                       # `claude plugin eval` cases: prompt.md + graders/ per case
 │   ├── .gitignore               # Keeps eval run output (results/) out of the repo
 │   └── _shared/                 # Grader text the cases link to, file by file

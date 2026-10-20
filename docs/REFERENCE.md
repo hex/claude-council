@@ -2,6 +2,105 @@
 
 Every flag, provider, variable and default. The [README](../README.md) covers install and the first run; [USAGE.md](USAGE.md) covers the workflows.
 
+## What gets sent and saved
+
+Read this before the first question about your code.
+
+- Your question goes to every selected provider. A command-line seat sends it
+  to that tool's vendor; an API seat sends it to the vendor's API. OpenRouter sends it
+  to OpenRouter and the upstream serving the model. Ollama keeps it on the
+  machine when you use a local model.
+- Relevant files go with it. The council picks up to five files that match
+  your question, about 10,000 tokens, and lists them before sending.
+  `--no-auto-context` turns that off. `--file=` replaces the selection with
+  your own file. `--image=` goes only to providers that can read it.
+- The council saves the full prompt, attached files, and every answer in
+  plaintext under `.claude/council-cache/`. The directory has its own
+  `.gitignore` to keep those files out of normal commits. It never saves
+  image bytes there.
+- Each provider receives its own vendor's variables. Other vendors' keys and
+  unrelated shell secrets do not reach it. The
+  [environment allowlist](#provider-environment) also covers process and
+  transport variables.
+- `/claude-council:advise` sends part of the conversation. It previews the
+  size, turn count, and opening lines, and asks before sending.
+- The heads-up side-check sends context mid-turn without asking once you
+  enable it. The "Heads-up side-check" row in `/config` or the project's
+  `.claude/council-heads-up.json` provides that consent. It sends the last
+  five turns and the last eight tool results, capped at 2,000 characters per
+  result, to one seat, codex by default. A Bash result can contain a secret.
+  The note shows the byte count and destination. Switch the row off or set
+  `"enabled": false` in the project file to stop it. See the
+  [heads-up guide](USAGE.md#heads-up-side-check-opt-in-off-by-default).
+
+## Reading the synthesis
+
+Providers answer independently. Claude then names where they agree, where
+they split, and what to do. Agreement is not verification: the providers
+share a description of a system they cannot inspect. When they all agree,
+the synthesis names the premise that could change the answer.
+
+For example:
+
+```text
+## Synthesis
+All five recommend SQLite. Read that as agreement about the reasoning, not
+as verification: every provider got the same description of a system none
+of them can inspect. The answer assumes this stays single-node. That is the
+one premise that would flip it, and the one nobody here could check.
+```
+
+## Command examples
+
+```text
+/claude-council:ask "How should I structure authentication in this Express app?"
+/claude-council:ask --providers=gemini,codex "What's the best approach for caching here?"
+/claude-council:ask --file=src/auth.ts "What's wrong with this implementation?"
+/claude-council:ask --image=shot.png "Why does this dialog render off-center?"
+/claude-council:ask --roles=balanced "Review this implementation"
+/claude-council:ask --debate "How should I structure the database schema?"
+/claude-council:ask --quiet "Should I use Redis or Memcached?"
+/claude-council:ask --output=docs/decision.md "Should we use REST or GraphQL?"
+/claude-council:ask --async "Compare migration strategies for this schema"
+/claude-council:result <job-id>
+/claude-council:advise "are we solving the right problem here?"
+/claude-council:status
+```
+
+Naming a provider in plain words works too: "check with grok" runs the council
+with that provider alone. [Flags](#flags) lists every flag.
+[USAGE.md](USAGE.md) explains each workflow.
+
+## Choosing providers
+
+Discovery includes providers with a configured key or a command-line tool on `PATH`,
+including `ollama`. A local Ollama server must run to answer.
+`/claude-council:status` shows what it found.
+
+Command-line seats take precedence over their API siblings: `codex` replaces `openai`,
+`antigravity` replaces `gemini`, `grok-cli` replaces `grok`, and `kimi-cli`
+replaces `kimi`. If a command-line seat fails and its API key exists, the API answers in its
+place. The answer's header records the fallback.
+
+Pin a standing roster when discovery finds too many:
+
+```bash
+export COUNCIL_PROVIDERS="codex,antigravity"
+```
+
+`--providers=` overrides it for one call. See [roster rules](#pinning-a-standing-provider-roster).
+
+OpenRouter can seat any model it routes, Claude by default.
+`OPENROUTER_MODELS="a/b,c/d"` gives each entry its own seat, `openrouter-1`
+and `openrouter-2`.
+
+`claude-cli` uses Claude Code on your subscription without your `CLAUDE.md`,
+settings, or plugins. `copilot-cli` uses GitHub Copilot's command-line tool on your
+Copilot plan without your `AGENTS.md` or tools. Both join only when named.
+
+See [API keys](#api-keys), [subscription providers](#cli-providers-subscription-auth-no-api-key),
+[model defaults](#model-selection), and [fallback rules](#model-fallback).
+
 ## Requirements
 
 - `curl` and `jq` for API calls
@@ -391,10 +490,10 @@ export COUNCIL_HEADS_UP_RESULTS=8         # tool results in the digest, 2,000 ch
 
 When run inside tmux, council opens a streaming side pane that shows live provider status (`querying`, `complete`, `fallback`, `cached`, `error`, `cancelled` with timing) and renders each response as it lands. Rendering prefers [Rich](https://github.com/Textualize/rich) when a Rich-capable Python is available (`python3` with a modern `rich` installed, or [`uv`](https://docs.astral.sh/uv/), which fetches it on demand): word-wrapped prose, tables fitted to the pane width, syntax-highlighted code, clickable links — styled with your terminal's own palette (cyan headings, yellow code, vendor-colored banners). Without one, a built-in dependency-free perl markdown renderer takes over with the same visual language, so nothing needs to be installed. Press **Esc** or **Ctrl-D** to close the pane.
 
-![Five providers answering in the streaming tmux pane, with the synthesis alongside](images/council-pane.png)
+![Five fixture seats querying, answering, and offering a retry in the tmux pane](../assets/tmux-pane.svg)
 
-Five providers answering in the tmux pane on the right, each banner naming the
-model and its time, with the synthesis in the chat on the left.
+Five fixture seats in the tmux pane, zoomed to 110 columns for the capture.
+Each answer's banner names the model and elapsed time.
 
 A provider that fails shows its error text under a `✗ <provider> error` heading. A CLI seat whose API sibling answered shows an amber `↪ <provider> fell back` notice with the reason (the CLI's error text, or that the image went to a vision model), then the answer; it does not count as failed for the retry offer. When any provider has failed, the pane then offers `[r] retry failed (<providers>) · [esc/ctrl-d] close` with a countdown: **r** re-queries only the failed providers inside the same run, so a recovered answer reaches the synthesis, the saved transcript and the cache like any other; **Esc** closes the pane and the run carries on with what it has. The offer stays open for `COUNCIL_RETRY_WAIT` seconds (default 45; `0` disables it) and is made once per run. The run waits while the offer is open, so a retry extends the council's wall time by another provider round. `--async` jobs default to `0`: nobody is committed to answering a detached run's pane, so it never waits.
 

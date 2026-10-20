@@ -1,0 +1,276 @@
+{
+  "normal": {
+    "reduced": false,
+    "states": [
+      [
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        }
+      ],
+      [
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        }
+      ],
+      [
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        }
+      ],
+      [
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        }
+      ],
+      [
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "1",
+          "display": "inline"
+        }
+      ],
+      [
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "inline"
+        }
+      ]
+    ]
+  },
+  "reduced_motion": {
+    "reduced": true,
+    "states": [
+      [
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        }
+      ],
+      [
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "1",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        }
+      ],
+      [
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "1",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        }
+      ],
+      [
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "1",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        }
+      ],
+      [
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "1",
+          "display": "none"
+        }
+      ],
+      [
+        {
+          "opacity": "1",
+          "display": "inline"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        },
+        {
+          "opacity": "0",
+          "display": "none"
+        }
+      ]
+    ]
+  }
+}
