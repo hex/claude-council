@@ -173,18 +173,22 @@ refuse_on_jq_error() {
     fi
 }
 
-# A user line is a human turn only when origin says so. Tool results arrive as
+# A user line is a prompt only when origin says so. Tool results arrive as
 # type "user" too and outnumber real turns roughly 34 to 1, so all four clauses
 # carry weight: drop meta lines, drop anything holding a toolUseResult, and
-# require the positive human marker rather than inferring one from absence.
+# require a positive marker rather than inferring one from absence. A person
+# typing is origin.kind "human"; a mod submitting on their behalf in their own
+# session (cs opening a rotated conversation) is "plugin" with the mod's name.
 # Without the isMeta clause, cross-session peer messages enter the digest as
 # fabricated human turns — they carry another Claude's prose in message.content.
-# cs opens a rotated conversation with a fixed line that Claude Code records as
-# typed. Only that exact template is dropped, so a person quoting it stays.
-HUMAN_FILTER='.type == "user"
+PROMPT_FILTER='.type == "user"
     and (.isMeta != true)
     and (has("toolUseResult") | not)
-    and (.origin.kind == "human")
+    and (.origin.kind == "human" or (.origin.kind == "plugin" and (.origin.name | type) == "string"))'
+# cs opens a rotated conversation with a fixed line. It anchors the window like
+# any prompt, but only that exact template is left out of the digest, so a
+# person quoting it stays.
+HUMAN_FILTER="($PROMPT_FILTER)"'
     and ((.message.content | type == "string"
           and test("^Continue from the pending rotation handoff: read \\.cs/handoffs/[^ ]+ first\\.$")) | not)'
 
@@ -244,7 +248,8 @@ EXTRACT="
                 body: ([.toolUseResult.answers | to_entries[]
                         | \"Answered \\\"\\(.key)\\\": \\(.value)\"] | join(\"\n\")) }
           elif ($HUMAN_FILTER) then
-              { role: \"Human\", id: (.uuid // \"-\"), body: .message.content }
+              { role: (if .origin.kind == \"human\" then \"Human\" else \"Human (via \\(.origin.name | gsub(\"[\\u0001\\r\\n]\"; \" \")))\" end),
+                id: (.uuid // \"-\"), body: .message.content }
           else
               $TOOL_RESULT_EXTRACT
           end
@@ -298,7 +303,7 @@ case "$TURNS" in
         # tail reads its whole input, so jq is never killed by an early-exiting
         # consumer the way `| head -1` would kill it on a large transcript.
         human_lines=$(head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" \
-            | jq -R -r "$RECORDS | select($HUMAN_FILTER) | input_line_number" 2>"$JQ_ERR" \
+            | jq -R -r "$RECORDS | select($PROMPT_FILTER) | input_line_number" 2>"$JQ_ERR" \
             | tr -d '\r' | tail -n "$n")
         refuse_on_jq_error
         if [[ -n "$human_lines" ]]; then

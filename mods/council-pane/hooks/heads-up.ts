@@ -413,10 +413,13 @@ export type SeatOutcome = {
 export type RunResult =
   | { kind: 'note'; note: Note; seats: readonly SeatOutcome[] }
   | { kind: 'none'; payloadBytes: number; seats: readonly SeatOutcome[] }
+  /** The runner found nobody to warn (a transcript holding no prompt) and asked no seat. */
+  | { kind: 'skipped'; detail: string }
   | { kind: 'failed'; payloadBytes: number; seats: readonly SeatOutcome[] }
 
 /**
- * Wire shape: {kind, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, seats:[{seat,outcome,ms,detail?}]}.
+ * Wire shape: {kind, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?, seats:[{seat,outcome,ms,detail?}]}.
+ * A skipped check carries only its detail: no seat ran and nothing left the machine.
  * A text that does not parse to it is `failed` naming the text, so a runner
  * change can never read as "no note". A headline is cut to HEADLINE_CHARS, one line.
  */
@@ -435,6 +438,7 @@ export function parseRunResult(checkId: string, text: string): RunResult {
   const seats = raw.seats.map(seatOutcome)
   if (!seats.every((seat): seat is SeatOutcome => seat !== undefined)) return unread
   if (raw.kind === 'none') return { kind: 'none', payloadBytes: raw.bytes, seats }
+  if (raw.kind === 'skipped') return typeof raw.detail === 'string' && raw.detail !== '' ? { kind: 'skipped', detail: raw.detail } : unread
   if (raw.kind === 'failed') {
     // A failure before any seat ran (no transcript, an empty digest) names its
     // reason at the top level; it is read as the runner's own outcome.
@@ -555,6 +559,7 @@ export function checkLine(r: RunResult): string {
     const ms = r.seats.reduce((total, seat) => total + seat.elapsedMs, 0)
     return `heads-up: ${r.seats.map(seat => seat.seat).join(', ')} · none · ${kilobytes(r.payloadBytes)} · ${seconds(ms)}`
   }
+  if (r.kind === 'skipped') return `heads-up: skipped · ${r.detail}`
   const reasons = r.seats.map(seat => `${seat.seat} ${seat.outcome} after ${seconds(seat.elapsedMs)}${seat.detail ? `: ${seat.detail}` : ''}`)
   return `heads-up: failed · ${kilobytes(r.payloadBytes)} · ${reasons.join('; ')}`
 }
