@@ -6,6 +6,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Fixed
+- The heads-up check failed with `digest: no human turn in the last 5` at every cadence point of a conversation cs had just opened (a rotation or resume), until the person typed: the digest windowed on typed prompts alone and cs submits its opening prompts as a plugin. A prompt a mod submits in the person's own session now anchors the window and reads `Human (via cs)`; a transcript with no prompt at all (a teammate pane, an SDK-driven session) is a skipped check, logged once with no red band.
+
 ### Docs
 - The README follows the hex house style: a banner, install first, a 60-second first run, a features table, and animated SVGs traced from real captures (a council run in the pane inside Claude Code with a failing seat's retry row, the heads-up note, the tmux side pane) in place of the three screenshots. `assets/capture/` holds the harness that rebuilds them.
 

@@ -297,7 +297,8 @@ with your framing.
 
 Every run resolves this session's transcript, digests it, and shows the byte
 size, the turn count and the opening lines before asking whether to send. The
-digest carries human turns, assistant replies, and each AskUserQuestion exchange
+digest carries human turns (typed, or submitted by a mod such as cs in your own
+session, shown as `Human (via cs)`), assistant replies, and each AskUserQuestion exchange
 as the question, its options, and the pick; it excludes every other tool result
 and tool input, thinking blocks, hook output, and messages from other sessions.
 The script skips a damaged record inside the transcript, counts it, and writes
