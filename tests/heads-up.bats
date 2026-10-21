@@ -290,7 +290,7 @@ result() {
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
-@test "heads-up: a transcript holding no prompt is kind skipped, saying so, and asks no seat" {
+@test "heads-up: a transcript with nothing to review is kind skipped, saying so, and asks no seat" {
     # A teammate pane or an SDK-driven session: nobody typed, nothing to warn.
     jq -nc '{type:"assistant", message:{id:"msg_1", content:[{type:"text", text:"working"}]}}' > "$TRANSCRIPT"
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note
@@ -298,7 +298,7 @@ result() {
     [ "$status" -eq 0 ]
     wait_done
     [ "$(result .kind)" = "skipped" ]
-    [ "$(result .detail)" = "digest: the transcript holds no prompt" ]
+    [ "$(result .detail)" = "digest: nothing in the window to review" ]
     [ "$(result .bytes)" = "0" ]
     [ "$(result '.seats | length')" = "0" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]

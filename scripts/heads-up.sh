@@ -113,11 +113,12 @@ build_digest() {
         FAILURE="digest: $(error_excerpt "${RUN_DIR}/digest.err")"
         return 1
     fi
-    # A window matching no prompt emits nothing. Nobody typed and no mod spoke
-    # for them (a teammate pane, an SDK-driven session), so there is nobody to
-    # warn: the check is skipped, not failed.
+    # An empty digest: the window matched no prompt (a teammate pane, an
+    # SDK-driven session: nobody to warn) or holds nothing shown yet (a
+    # conversation cs just opened, before Claude's first reply). Either way
+    # there is nothing to review: the check is skipped, not failed.
     if [[ ! -s "${RUN_DIR}/digest.md" ]]; then
-        FAILURE="digest: the transcript holds no prompt" KIND=skipped
+        FAILURE="digest: nothing in the window to review" KIND=skipped
         return 1
     fi
     avoid=$(cat "$AVOID_FILE")

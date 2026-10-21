@@ -132,10 +132,10 @@ test('none and failed results keep the payload size and the seat with its reason
 })
 
 test('a check the runner skipped keeps its reason and asks for no band', () => {
-  const text = JSON.stringify({ kind: 'skipped', bytes: 0, detail: 'digest: the transcript holds no prompt', seats: [] })
-  expect(parseRunResult('c1', text)).toEqual({ kind: 'skipped', detail: 'digest: the transcript holds no prompt' })
+  const text = JSON.stringify({ kind: 'skipped', bytes: 0, detail: 'digest: nothing in the window to review', seats: [] })
+  expect(parseRunResult('c1', text)).toEqual({ kind: 'skipped', detail: 'digest: nothing in the window to review' })
   expect(parseRunResult('c1', JSON.stringify({ kind: 'skipped', bytes: 0, seats: [] })).kind).toBe('failed')
-  expect(checkLine({ kind: 'skipped', detail: 'digest: the transcript holds no prompt' })).toBe('heads-up: skipped · digest: the transcript holds no prompt')
+  expect(checkLine({ kind: 'skipped', detail: 'digest: nothing in the window to review' })).toBe('heads-up: skipped · digest: nothing in the window to review')
 })
 
 test('a failure before any seat ran keeps the runner reason', () => {
@@ -190,7 +190,7 @@ test('a repeat, a none or a failure settles back to idle with the turn left free
   expect(settle(checking, { ...EMPTY_MEMORY, known: ['backfill never ran'] }, { kind: 'note', note, seats: [] })).toEqual(idle)
   expect(settle(checking, EMPTY_MEMORY, { kind: 'none', payloadBytes: 1, seats: [] })).toEqual(idle)
   expect(settle(checking, EMPTY_MEMORY, { kind: 'failed', payloadBytes: 1, seats: [] })).toEqual(idle)
-  expect(settle(checking, EMPTY_MEMORY, { kind: 'skipped', detail: 'digest: the transcript holds no prompt' })).toEqual(idle)
+  expect(settle(checking, EMPTY_MEMORY, { kind: 'skipped', detail: 'digest: nothing in the window to review' })).toEqual(idle)
 })
 
 test('a result with no check in flight changes nothing', () => {

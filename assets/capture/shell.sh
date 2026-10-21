@@ -10,4 +10,5 @@ for arg in "$@"; do
         *) args+=("$arg") ;;
     esac
 done
-exec /bin/bash --noprofile --norc "${args[@]}"
+# bash 3.2 under set -u rejects "${args[@]}" when the array is empty.
+exec /bin/bash --noprofile --norc ${args[@]+"${args[@]}"}
