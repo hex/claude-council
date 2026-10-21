@@ -458,12 +458,12 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
   watchHeadsUp($, state)
   try {
     await launchHeadsUp($, config, runDir, avoidFile)
-    await count($, 'checks')
   } catch (error) {
     await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))
     // A check that never started is a failed check to the person: red above the prompt, counted, and logged by the caller.
     state.headsUpFailure = { text: `heads-up: failed · ${String(error)}`, untilMs: now + FINISH_NOTICE_MS, isFailure: true }
     $.ui.invalidate('ui.render')
+    await count($, 'checks')
     await count($, 'failed')
     throw error
   }
@@ -526,7 +526,11 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
     state.headsUpSkipped = line
   }
   const drawn = settled.phase.kind === 'showing' && settled.phase.note.id === checkId
-  if (result.kind !== 'skipped') await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
+  // A check is counted with its outcome, so checks always equals none + notes + repeats + failed; a skip is neither.
+  if (result.kind !== 'skipped') {
+    await count($, 'checks')
+    await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
+  }
   await $.process.run(['rm', '-rf', runDir])
 }
 
