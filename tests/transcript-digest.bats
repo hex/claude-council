@@ -272,6 +272,20 @@ plugin_prompt() {
     [[ "$output" != *"rotation handoff"* ]]
 }
 
+@test "digest: a prompt another mod submitted is not the person's turn" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    # A Slack bot's prompt carries other people's messages; the digest leaves
+    # the machine, so only cs speaks for the person.
+    {
+        plugin_prompt "Reply to the thread: SLACK-THREAD-TEXT" slack-agent
+        assistant_text "replied in the thread" "m1"
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --turns last:5 "$t"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
 @test "digest: content cannot forge a speaker heading" {
     local t="${BATS_TEST_TMPDIR}/session.jsonl"
     # Assistant text quotes files and command output verbatim, so a line-initial

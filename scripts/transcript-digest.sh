@@ -177,14 +177,16 @@ refuse_on_jq_error() {
 # type "user" too and outnumber real turns roughly 34 to 1, so all four clauses
 # carry weight: drop meta lines, drop anything holding a toolUseResult, and
 # require a positive marker rather than inferring one from absence. A person
-# typing is origin.kind "human"; a mod submitting on their behalf in their own
-# session (cs opening a rotated conversation) is "plugin" with the mod's name.
+# typing is origin.kind "human". cs opens a rotated conversation with prompts
+# it submits as a plugin, and nobody types until that work is done, so those
+# two mods count as the person; any other mod's prompt (a Slack bot relaying
+# other people's messages) does not, as the digest is what leaves the machine.
 # Without the isMeta clause, cross-session peer messages enter the digest as
 # fabricated human turns — they carry another Claude's prose in message.content.
 PROMPT_FILTER='.type == "user"
     and (.isMeta != true)
     and (has("toolUseResult") | not)
-    and (.origin.kind == "human" or (.origin.kind == "plugin" and (.origin.name | type) == "string"))'
+    and (.origin.kind == "human" or (.origin.kind == "plugin" and (.origin.name == "cs" or .origin.name == "cs-rotate")))'
 # cs opens a rotated conversation with a fixed line. It anchors the window like
 # any prompt, but only that exact template is left out of the digest, so a
 # person quoting it stays.
