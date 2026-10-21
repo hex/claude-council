@@ -131,6 +131,13 @@ test('none and failed results keep the payload size and the seat with its reason
   expect(parseRunResult('c1', JSON.stringify(failed))).toEqual({ kind: 'failed', payloadBytes: 900, seats: [{ seat: 'gemini', outcome: 'error', elapsedMs: 1200, detail: 'exit 1: quota' }] })
 })
 
+test('a check the runner skipped keeps its reason and asks for no band', () => {
+  const text = JSON.stringify({ kind: 'skipped', bytes: 0, detail: 'digest: the transcript holds no prompt', seats: [] })
+  expect(parseRunResult('c1', text)).toEqual({ kind: 'skipped', detail: 'digest: the transcript holds no prompt' })
+  expect(parseRunResult('c1', JSON.stringify({ kind: 'skipped', bytes: 0, seats: [] })).kind).toBe('failed')
+  expect(checkLine({ kind: 'skipped', detail: 'digest: the transcript holds no prompt' })).toBe('heads-up: skipped · digest: the transcript holds no prompt')
+})
+
 test('a failure before any seat ran keeps the runner reason', () => {
   const text = JSON.stringify({ kind: 'failed', bytes: 0, detail: 'session-transcript.sh: no transcript for abc', seats: [] })
   expect(parseRunResult('c1', text)).toEqual({ kind: 'failed', payloadBytes: 0, seats: [{ seat: 'runner', outcome: 'error', elapsedMs: 0, detail: 'session-transcript.sh: no transcript for abc' }] })
@@ -183,6 +190,7 @@ test('a repeat, a none or a failure settles back to idle with the turn left free
   expect(settle(checking, { ...EMPTY_MEMORY, known: ['backfill never ran'] }, { kind: 'note', note, seats: [] })).toEqual(idle)
   expect(settle(checking, EMPTY_MEMORY, { kind: 'none', payloadBytes: 1, seats: [] })).toEqual(idle)
   expect(settle(checking, EMPTY_MEMORY, { kind: 'failed', payloadBytes: 1, seats: [] })).toEqual(idle)
+  expect(settle(checking, EMPTY_MEMORY, { kind: 'skipped', detail: 'digest: the transcript holds no prompt' })).toEqual(idle)
 })
 
 test('a result with no check in flight changes nothing', () => {
@@ -220,8 +228,8 @@ test('every finished check logs one line with its seat, payload and time', () =>
   expect(checkLine({ kind: 'note', note, seats: [] })).toBe('heads-up: codex · note · 12.4 KB · 27 s')
   expect(checkLine({ kind: 'none', payloadBytes: 12698, seats: [{ seat: 'codex', outcome: 'none', elapsedMs: 27400 }] })).toBe('heads-up: codex · none · 12.4 KB · 27 s')
   expect(checkLine({ kind: 'failed', payloadBytes: 900, seats: [{ seat: 'codex', outcome: 'timeout', elapsedMs: 60000 }] })).toBe('heads-up: failed · 0.9 KB · codex timeout after 60 s')
-  expect(checkLine({ kind: 'failed', payloadBytes: 0, seats: [{ seat: 'runner', outcome: 'error', elapsedMs: 0, detail: 'digest: no human turn in the last 5' }, { seat: 'gemini', outcome: 'error', elapsedMs: 1200, detail: 'exit 1: quota' }] }))
-    .toBe('heads-up: failed · 0.0 KB · runner error after 0 s: digest: no human turn in the last 5; gemini error after 1 s: exit 1: quota')
+  expect(checkLine({ kind: 'failed', payloadBytes: 0, seats: [{ seat: 'runner', outcome: 'error', elapsedMs: 0, detail: 'transcript: no transcript for abc' }, { seat: 'gemini', outcome: 'error', elapsedMs: 1200, detail: 'exit 1: quota' }] }))
+    .toBe('heads-up: failed · 0.0 KB · runner error after 0 s: transcript: no transcript for abc; gemini error after 1 s: exit 1: quota')
 })
 
 test('the tell-Claude draft quotes the note for the person to send, naming the seat', () => {
