@@ -8,7 +8,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ### Fixed
 - The heads-up check failed with `digest: no human turn in the last 5` at every cadence point of a conversation cs had just opened (a rotation or resume) until the person typed: the digest windowed on typed prompts alone, and cs submits its opening prompts as a plugin. A prompt cs submits in the person's own session now anchors the window (a command echo, so not shown); other mods' prompts still do not count; a window with nothing to review (a teammate pane, an SDK-driven session, a conversation cs just opened) is a skipped check, logged once with no red band and no seat asked.
-- `/heads-up status` reports checks as its outcomes added up (none, notes, repeats, failed), so a skipped check no longer inflates the total.
+- `/heads-up status` reports checks as its outcomes added up (none, notes, repeats, failed), so a skipped check no longer inflates the total. An older store's saved checks total is ignored, so the number falls to the outcomes recorded so far; the counts guide a decision, they are not billing.
 
 ### Docs
 - The README follows the hex house style: a banner, install first, a 60-second first run, a features table, and animated SVGs traced from real captures (a council run in the pane with a failing seat's retry row, the heads-up note, the tmux side pane) in place of the three screenshots. `assets/capture/` holds the harness that rebuilds them.
