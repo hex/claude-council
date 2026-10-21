@@ -3,6 +3,7 @@
 # ABOUTME: Includes inline images, reference links, and HTML href and src attributes.
 
 import argparse
+import functools
 import html
 from html.parser import HTMLParser
 from pathlib import Path
@@ -43,6 +44,7 @@ def prose(path):
     return "\n".join(lines)
 
 
+@functools.lru_cache(maxsize=None)
 def anchors(path):
     text = prose(path)
     parser = Links()
@@ -73,8 +75,6 @@ def check(path):
         key = (ref or label).casefold()
         if key not in references:
             errors.append(f"undefined reference [{ref or label}]")
-        else:
-            urls.append(references[key])
     urls += list(references.values())
     for url in urls:
         parts = urlsplit(html.unescape(url))

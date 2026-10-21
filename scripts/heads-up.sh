@@ -99,7 +99,8 @@ error_excerpt() {
 }
 
 # Resolves the transcript and builds digest.md and prompt.md. On failure sets
-# FAILURE to the reason and returns 1; the worker then writes kind failed.
+# FAILURE to the reason and KIND to failed or skipped, and returns 1; the
+# worker then writes that kind.
 build_digest() {
     local transcript avoid
     if ! transcript=$(bash "${SCRIPT_DIR}/session-transcript.sh" "$SESSION_ID" 2> "${RUN_DIR}/transcript.err"); then
@@ -116,8 +117,7 @@ build_digest() {
     # for them (a teammate pane, an SDK-driven session), so there is nobody to
     # warn: the check is skipped, not failed.
     if [[ ! -s "${RUN_DIR}/digest.md" ]]; then
-        FAILURE="digest: the transcript holds no prompt"
-        SKIPPED=1
+        FAILURE="digest: the transcript holds no prompt" KIND=skipped
         return 1
     fi
     avoid=$(cat "$AVOID_FILE")
@@ -281,9 +281,9 @@ worker_exit() {
 worker() {
     trap 'worker_exit $?' EXIT
     source "${SCRIPT_DIR}/lib/deadline.sh"
-    FAILURE="" BYTES=0 SKIPPED=0
+    FAILURE="" BYTES=0 KIND=failed
     if ! build_digest; then
-        if (( SKIPPED )); then write_result skipped; else write_result failed; fi
+        write_result "$KIND"
         return 0
     fi
     local start ms

@@ -77,7 +77,6 @@ export function parseConfig(text: string | undefined, rowOn: boolean): HeadsUpCo
  * once can lose one; the numbers guide a decision, they are not billing.
  */
 export type Counts = {
-  readonly checks: number
   readonly none: number
   readonly notes: number
   /** A seat's note on a topic already seen or known: nothing drawn. */
@@ -90,21 +89,21 @@ export type Counts = {
   readonly turnOff: number
   readonly typedPast: number
 }
-export const COUNT_KEYS = ['checks', 'none', 'notes', 'repeats', 'failed', 'learn', 'tell', 'knew', 'dismiss', 'turnOff', 'typedPast'] as const
-export const EMPTY_COUNTS: Counts = { checks: 0, none: 0, notes: 0, repeats: 0, failed: 0, learn: 0, tell: 0, knew: 0, dismiss: 0, turnOff: 0, typedPast: 0 }
+export const COUNT_KEYS = ['none', 'notes', 'repeats', 'failed', 'learn', 'tell', 'knew', 'dismiss', 'turnOff', 'typedPast'] as const
+export const EMPTY_COUNTS: Counts = { none: 0, notes: 0, repeats: 0, failed: 0, learn: 0, tell: 0, knew: 0, dismiss: 0, turnOff: 0, typedPast: 0 }
 
 export function parseCounts(raw: unknown): Counts {
   if (!isRecord(raw)) return EMPTY_COUNTS
   return Object.fromEntries(COUNT_KEYS.map(key => [key, countOr0(raw[key])])) as Record<keyof Counts, number>
 }
 
-export function bumped(c: Counts, key: keyof Counts): Counts {
-  return { ...c, [key]: c[key] + 1 }
+export function bumped(c: Counts, ...keys: (keyof Counts)[]): Counts {
+  return keys.reduce((counts, key) => ({ ...counts, [key]: counts[key] + 1 }), c)
 }
 
-/** "checks 12 · none 8 · notes 2 · repeats 1 · failed 1" */
+/** "checks 12 · none 8 · notes 2 · repeats 1 · failed 1": checks is the outcomes added up, so it cannot drift from them. */
 export function countsLine(c: Counts): string {
-  return `checks ${c.checks} · none ${c.none} · notes ${c.notes} · repeats ${c.repeats} · failed ${c.failed}`
+  return `checks ${c.none + c.notes + c.repeats + c.failed} · none ${c.none} · notes ${c.notes} · repeats ${c.repeats} · failed ${c.failed}`
 }
 
 /** "learn 2 · tell 1 · knew 0 · dismiss 1 · turned off 0 · typed past 3" */
@@ -438,11 +437,12 @@ export function parseRunResult(checkId: string, text: string): RunResult {
   const seats = raw.seats.map(seatOutcome)
   if (!seats.every((seat): seat is SeatOutcome => seat !== undefined)) return unread
   if (raw.kind === 'none') return { kind: 'none', payloadBytes: raw.bytes, seats }
-  if (raw.kind === 'skipped') return typeof raw.detail === 'string' && raw.detail !== '' ? { kind: 'skipped', detail: raw.detail } : unread
+  // A failure or skip before any seat ran names its reason at the top level.
+  const detail = typeof raw.detail === 'string' && raw.detail !== '' ? raw.detail : undefined
+  if (raw.kind === 'skipped') return detail === undefined ? unread : { kind: 'skipped', detail }
   if (raw.kind === 'failed') {
-    // A failure before any seat ran (no transcript, an empty digest) names its
-    // reason at the top level; it is read as the runner's own outcome.
-    const runner: SeatOutcome[] = typeof raw.detail === 'string' && raw.detail !== '' ? [{ seat: 'runner', outcome: 'error', elapsedMs: 0, detail: raw.detail }] : []
+    // A failure before any seat ran (no transcript) is read as the runner's own outcome.
+    const runner: SeatOutcome[] = detail === undefined ? [] : [{ seat: 'runner', outcome: 'error', elapsedMs: 0, detail }]
     return { kind: 'failed', payloadBytes: raw.bytes, seats: [...runner, ...seats] }
   }
   if (raw.kind !== 'note') return unread

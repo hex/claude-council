@@ -162,23 +162,24 @@ screen > "$OUT/4-answered.txt"
 echo "5. /heads-up status counts the checks, the one drawn note and the two presses"
 # Claude's answer to the draft may run tools and launch a check of its own,
 # which finds the same topic again: a repeat, nothing drawn. Every launched
-# check settles before the counts are read.
+# check settles before the counts are read: a check's run dir lives from its
+# launch until the pane settles it, and the counts are written at that settle.
 checks_settled() {
+    [ -z "$(find "${TMPDIR:-/tmp}"/council-mod.*/heads-up -mindepth 1 -maxdepth 1 -type d -newer "$OUT" 2>/dev/null)" ] || return 1
     counts > "$OUT/counts.json"
-    [ "$(jq '.checks == (.none + .notes + .repeats + .failed)' "$OUT/counts.json")" = true ]
 }
 wait_until 90 "a check never settled: the last counts read are in $OUT/counts.json" checks_settled
 C="$(cat "$OUT/counts.json")"
-[ "$(printf '%s' "$C" | jq '.notes == 1 and .learn == 1 and .tell == 1 and .knew == 0 and .dismiss == 0 and .typedPast == 0 and .none == 0 and .failed == 0 and .checks == 1 + .repeats')" = true ] || fail "counts are $C"
+[ "$(printf '%s' "$C" | jq '.notes == 1 and .learn == 1 and .tell == 1 and .knew == 0 and .dismiss == 0 and .typedPast == 0 and .none == 0 and .failed == 0')" = true ] || fail "counts are $C"
 # The engine redraws the whole screen, so earlier status lines are gone from
 # the capture; the new one is told apart by its counts, which the earlier two
 # showed as zero.
 # The engine may leave a suggested prompt in the box; clear it first.
 key C-u
 tmux send-keys -t "$SESSION" -l '/heads-up status'; key Enter
-wait_for "checks   $(printf '%s' "$C" | jq -r '"checks \(.checks) · none \(.none) · notes \(.notes) · repeats \(.repeats) · failed \(.failed)"')"
+wait_for "checks   $(printf '%s' "$C" | jq -r '"checks \(.none + .notes + .repeats + .failed) · none \(.none) · notes \(.notes) · repeats \(.repeats) · failed \(.failed)"')"
 wait_for "presses  $(printf '%s' "$C" | jq -r '"learn \(.learn) · tell \(.tell) · knew \(.knew) · dismiss \(.dismiss) · turned off \(.turnOff) · typed past \(.typedPast)"')"
-echo "   counts: $(printf '%s' "$C" | jq -c 'del(.repeats, .checks)') and every check settled"
+echo "   counts: $(printf '%s' "$C" | jq -c 'del(.repeats)') and every check settled"
 
 echo "6. /exit leaves no claude behind"
 tmux send-keys -t "$SESSION" -l '/exit'; key Enter

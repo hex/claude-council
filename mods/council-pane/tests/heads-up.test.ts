@@ -245,17 +245,18 @@ test('kilobytes reads to one decimal', () => {
 
 test('stored counts read field by field as zero; any other key is dropped', () => {
   expect(parseCounts(undefined)).toEqual(EMPTY_COUNTS)
-  expect(parseCounts({ checks: 3, none: 2, notes: 1, learn: -1, tell: 'x', extra: 9 })).toEqual({ ...EMPTY_COUNTS, checks: 3, none: 2, notes: 1 })
+  expect(parseCounts({ checks: 3, none: 2, notes: 1, learn: -1, tell: 'x', extra: 9 })).toEqual({ ...EMPTY_COUNTS, none: 2, notes: 1 })
 })
 
 test('a bump adds one to its count and leaves the rest', () => {
-  expect(bumped(EMPTY_COUNTS, 'checks')).toEqual({ ...EMPTY_COUNTS, checks: 1 })
+  expect(bumped(EMPTY_COUNTS, 'none')).toEqual({ ...EMPTY_COUNTS, none: 1 })
+  expect(bumped(EMPTY_COUNTS, 'none', 'learn')).toEqual({ ...EMPTY_COUNTS, none: 1, learn: 1 })
   expect(bumped(bumped(EMPTY_COUNTS, 'typedPast'), 'typedPast').typedPast).toBe(2)
 })
 
 test('the counts line names every count in a fixed order', () => {
   expect(countsLine(EMPTY_COUNTS)).toBe('checks 0 · none 0 · notes 0 · repeats 0 · failed 0')
-  const full = { checks: 12, none: 8, notes: 2, repeats: 1, failed: 1, learn: 2, tell: 1, knew: 0, dismiss: 1, turnOff: 1, typedPast: 3 }
+  const full = { none: 8, notes: 2, repeats: 1, failed: 1, learn: 2, tell: 1, knew: 0, dismiss: 1, turnOff: 1, typedPast: 3 }
   expect(countsLine(full)).toBe('checks 12 · none 8 · notes 2 · repeats 1 · failed 1')
   expect(pressesLine(full)).toBe('learn 2 · tell 1 · knew 0 · dismiss 1 · turned off 1 · typed past 3')
 })
@@ -301,7 +302,7 @@ test('a pick belongs to its seat: naming another seat drops it, naming the same 
 })
 
 test('status names the effective state and which switch set it, then the counts, one aligned row per fact', () => {
-  const counts = { ...EMPTY_COUNTS, checks: 4, none: 3, notes: 1, learn: 1 }
+  const counts = { ...EMPTY_COUNTS, none: 3, notes: 1, learn: 1 }
   expect(statusText({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts)).toBe(
     'Heads-up side-check: on for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is off)\n'

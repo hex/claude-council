@@ -177,20 +177,21 @@ refuse_on_jq_error() {
 # type "user" too and outnumber real turns roughly 34 to 1, so all four clauses
 # carry weight: drop meta lines, drop anything holding a toolUseResult, and
 # require a positive marker rather than inferring one from absence. A person
-# typing is origin.kind "human". cs opens a rotated conversation with prompts
-# it submits as a plugin, and nobody types until that work is done, so those
-# two mods count as the person; any other mod's prompt (a Slack bot relaying
-# other people's messages) does not, as the digest is what leaves the machine.
+# typing is origin.kind "human". cs opens a rotated conversation with command
+# echoes it submits as a plugin, and nobody types until that work is done, so
+# those two mods' prompts anchor the window too; they carry no prose, so only
+# typed turns are shown. Any other mod's prompt (a Slack bot relaying other
+# people's messages) neither anchors nor shows: the digest leaves the machine.
 # Without the isMeta clause, cross-session peer messages enter the digest as
 # fabricated human turns — they carry another Claude's prose in message.content.
 PROMPT_FILTER='.type == "user"
     and (.isMeta != true)
     and (has("toolUseResult") | not)
-    and (.origin.kind == "human" or (.origin.kind == "plugin" and (.origin.name == "cs" or .origin.name == "cs-rotate")))'
-# cs opens a rotated conversation with a fixed line. It anchors the window like
-# any prompt, but only that exact template is left out of the digest, so a
-# person quoting it stays.
+    and (.origin.kind == "human" or (.origin.kind == "plugin" and IN(.origin.name; "cs", "cs-rotate")))'
+# cs opens a rotated conversation with a fixed line that Claude Code records as
+# typed. Only that exact template is dropped, so a person quoting it stays.
 HUMAN_FILTER="($PROMPT_FILTER)"'
+    and (.origin.kind == "human")
     and ((.message.content | type == "string"
           and test("^Continue from the pending rotation handoff: read \\.cs/handoffs/[^ ]+ first\\.$")) | not)'
 
@@ -250,8 +251,7 @@ EXTRACT="
                 body: ([.toolUseResult.answers | to_entries[]
                         | \"Answered \\\"\\(.key)\\\": \\(.value)\"] | join(\"\n\")) }
           elif ($HUMAN_FILTER) then
-              { role: (if .origin.kind == \"human\" then \"Human\" else \"Human (via \\(.origin.name | gsub(\"[\\u0001\\r\\n]\"; \" \")))\" end),
-                id: (.uuid // \"-\"), body: .message.content }
+              { role: \"Human\", id: (.uuid // \"-\"), body: .message.content }
           else
               $TOOL_RESULT_EXTRACT
           end
@@ -266,6 +266,7 @@ EXTRACT="
                       | join(\"\n\"))
                 end)
     | select(.body | length > 0)
+    | .role |= gsub(\"[\\u0001\\r\\n]\"; \" \")
     | .body |= gsub(\"\\u0001\"; \"\")
     | .body |= gsub(\"(?<p>^|\n)#\"; \"\\(.p)\\\\#\")
     | \"\u0001\" + .role + \"\u0001\" + .id + \"\n\" + .body
@@ -304,12 +305,12 @@ case "$TURNS" in
         WINDOWED=1
         # tail reads its whole input, so jq is never killed by an early-exiting
         # consumer the way `| head -1` would kill it on a large transcript.
-        human_lines=$(head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" \
+        prompt_lines=$(head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" \
             | jq -R -r "$RECORDS | select($PROMPT_FILTER) | input_line_number" 2>"$JQ_ERR" \
             | tr -d '\r' | tail -n "$n")
         refuse_on_jq_error
-        if [[ -n "$human_lines" ]]; then
-            START_LINE="${human_lines%%$'\n'*}"
+        if [[ -n "$prompt_lines" ]]; then
+            START_LINE="${prompt_lines%%$'\n'*}"
         fi
         ;;
     *)
@@ -360,8 +361,7 @@ emit_malformed_note() {
 # order. Joining on a tool_use seen in the window is what keeps a result of
 # earlier work out, and what gives the heading its tool name. AskUserQuestion is
 # left out of the join: ANSWER_FILTER already renders the pick, and its
-# envelope would otherwise take a slot from a real result. The name becomes a
-# heading, so a line break or the block sentinel inside it is flattened.
+# envelope would otherwise take a slot from a real result.
 choose_tool_results() {
     head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | tail -n "+${1:-1}" \
         | jq -R -n -c --argjson k "$TOOL_RESULTS" "
@@ -369,7 +369,7 @@ choose_tool_results() {
             | ([\$records[] | select(.type == \"assistant\")
                 | .message.content | arrays | .[]
                 | select(.type == \"tool_use\" and .name != \"AskUserQuestion\")
-                | {key: .id, value: (.name | gsub(\"[\\u0001\\r\\n]\"; \" \"))}]
+                | {key: .id, value: .name}]
                | from_entries) as \$names
             | [\$records[] | select($TOOL_RESULT_ROW)
                 | .message.content | arrays | .[]

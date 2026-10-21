@@ -7,6 +7,7 @@ import {
   bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
   seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEAT_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
   type Answer, type BandView, type Memory, type RunResult,
+  EMPTY_MEMORY,
 } from './heads-up'
 import type { Note, Session } from '../types'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
@@ -340,15 +341,20 @@ async function aimRun($: EngineInterface, state: PaneState, settings: PaneOption
   await $.env.set('COUNCIL_MOD_PANE_DIR', host === 'mod' ? state.root : undefined)
 }
 
+// Logs a line once per distinct text: a condition that persists across polls or
+// steps is told once, and told again when it changes or returns after clearing.
+function logOnChange($: EngineInterface, state: PaneState, key: 'lastFailure' | 'lastError' | 'headsUpProblem' | 'headsUpSkipped', line: string): void {
+  if (line !== '' && line !== state[key]) $.ui.log(line)
+  state[key] = line
+}
+
 // A heads-up background failure is logged once per distinct message, never dropped.
 async function logFailure($: EngineInterface, state: PaneState, work: () => Promise<void>): Promise<void> {
   try {
     await work()
     state.lastFailure = ''
   } catch (error) {
-    const message = `heads-up: ${String(error)}`
-    if (message !== state.lastFailure) $.ui.log(message)
-    state.lastFailure = message
+    logOnChange($, state, 'lastFailure', `heads-up: ${String(error)}`)
   }
 }
 
@@ -360,9 +366,7 @@ async function pollOnce($: EngineInterface, state: PaneState, settings: PaneOpti
     state.lastError = ''
   } catch (error) {
     // The poll repeats twice a second: a failure that persists is logged once.
-    const message = String(error)
-    if (message !== state.lastError) $.ui.log(message)
-    state.lastError = message
+    logOnChange($, state, 'lastError', String(error))
   } finally {
     state.isPolling = false
   }
@@ -384,8 +388,8 @@ async function recordAnswer($: EngineInterface, topic: string, answer: Answer): 
 }
 
 // Read, add one, write: a count, never a lock (see Counts).
-async function count($: EngineInterface, key: keyof Counts): Promise<void> {
-  await $.store.set(COUNTS_KEY, bumped(parseCounts(await $.store.get(COUNTS_KEY)), key))
+async function count($: EngineInterface, ...keys: (keyof Counts)[]): Promise<void> {
+  await $.store.set(COUNTS_KEY, bumped(parseCounts(await $.store.get(COUNTS_KEY)), ...keys))
 }
 
 // The runner's own allowlist (a providers/<seat>.sh exists) decides what a
@@ -406,9 +410,7 @@ async function headsUpFile($: EngineInterface): Promise<{ path: string; text: st
 
 async function readHeadsUpConfig($: EngineInterface, state: PaneState, settings: PaneOptions) {
   const config = parseConfig((await headsUpFile($)).text, settings.headsUp)
-  const problem = config.enabled ? '' : config.problem ?? ''
-  if (problem && problem !== state.headsUpProblem) $.ui.log(problem)
-  state.headsUpProblem = problem
+  logOnChange($, state, 'headsUpProblem', config.enabled ? '' : config.problem ?? '')
   return config
 }
 
@@ -460,10 +462,9 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
     await launchHeadsUp($, config, runDir, avoidFile)
   } catch (error) {
     await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))
-    // A check that never started is a failed check to the person: red above the prompt, counted, and logged by the caller.
+    // A check that never started is a failed check to the person: red above the prompt, counted as one, and logged by the caller.
     state.headsUpFailure = { text: `heads-up: failed · ${String(error)}`, untilMs: now + FINISH_NOTICE_MS, isFailure: true }
     $.ui.invalidate('ui.render')
-    await count($, 'checks')
     await count($, 'failed')
     throw error
   }
@@ -508,7 +509,8 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
   else if (!(await $.fs.exists(runDir))) result = lost(`its run dir ${runDir} is gone`)
   else if (await runHasDied($, state, runDir, now, 'headsUpCheckedAtMs')) result = lost('heads-up.sh stopped without writing a result')
   else return
-  const memory = await loadMemory($)
+  // settle reads memory only to spot a repeated note.
+  const memory = result.kind === 'note' ? await loadMemory($) : EMPTY_MEMORY
   const settled = await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(s, memory, result) : s))
   if (result.kind === 'failed') {
     $.ui.log(checkLine(result))
@@ -519,18 +521,10 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
     state.headsUpReceipt = receiptLine(result)
     $.ui.invalidate('ui.render')
   }
-  // Nobody to warn is not a fault: one log line per reason, no band, not counted.
-  if (result.kind === 'skipped') {
-    const line = checkLine(result)
-    if (line !== state.headsUpSkipped) $.ui.log(line)
-    state.headsUpSkipped = line
-  }
+  // Nobody to warn is not a fault: one log line per reason, no band, no outcome counted.
+  logOnChange($, state, 'headsUpSkipped', result.kind === 'skipped' ? checkLine(result) : '')
   const drawn = settled.phase.kind === 'showing' && settled.phase.note.id === checkId
-  // A check is counted with its outcome, so checks always equals none + notes + repeats + failed; a skip is neither.
-  if (result.kind !== 'skipped') {
-    await count($, 'checks')
-    await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
-  }
+  if (result.kind !== 'skipped') await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
   await $.process.run(['rm', '-rf', runDir])
 }
 

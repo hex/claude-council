@@ -307,7 +307,7 @@ result() {
 @test "heads-up: a conversation a mod opened for the person is checked like a typed one" {
     {
         jq -nc '{type:"user", isMeta:false, origin:{kind:"plugin", name:"cs"},
-                 message:{content:"Continue from the pending rotation handoff: read .cs/handoffs/x.md first."}}'
+                 message:{content:"<command-name>/clear</command-name>"}}'
         jq -nc '{type:"assistant", message:{id:"msg_1", content:[{type:"text", text:"migrating the orders table"}]}}'
     } > "$TRANSCRIPT"
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note

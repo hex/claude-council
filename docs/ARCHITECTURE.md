@@ -453,8 +453,8 @@ step's index in its turn, backoff, one note per turn); pane.tsx forks
 heads-up.sh --run-dir --session --seat --avoid-file [--model], which
 returns its worker's pid at once. The worker: session-transcript.sh ->
 transcript-digest.sh --tool-results (window: the last N prompts,
-typed or submitted by cs/cs-rotate, the latter shown as
-"Human (via cs)"; a transcript with none is kind skipped: nobody
+typed or submitted by cs/cs-rotate, only typed ones shown; a
+transcript with none is kind skipped: nobody
 to warn, no seat asked, nothing leaves the machine) ->
 prompts/heads-up.md ->
 the one seat (codex: codex exec --output-schema, gated on
@@ -463,8 +463,8 @@ NOTE:, TAG:, TOPIC:, TITLE: and POINT: lines) -> result.json
 {kind: note|none|skipped|failed, ...} (temp name, mv) -> .done.
 The pane polls .done, settles $.state (claude-council.headsUp),
 draws the band; a skipped check is logged once per reason, draws
-nothing and is not counted; checks is bumped beside each outcome,
-so checks = none + notes + repeats + failed. Seen/known topics
+nothing and counts no outcome; the checks shown by /heads-up status
+are the outcomes added up, never stored. Seen/known topics
 live in $.store under heads-up.
 Seat names pass provider_allowlisted (lib/providers.sh), the one
 list, derived from providers/<name>.sh; the stop gate uses it too.

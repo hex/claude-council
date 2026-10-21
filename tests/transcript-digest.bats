@@ -254,22 +254,23 @@ plugin_prompt() {
         '{type:"user", isMeta:false, origin:{kind:"plugin", name:$name}, message:{content:$text}}'
 }
 
-@test "digest: a prompt a mod submitted for the person anchors the window and is shown as theirs" {
+@test "digest: a prompt cs submitted for the person anchors the window and is not shown" {
     local t="${BATS_TEST_TMPDIR}/session.jsonl"
-    # cs opens a rotated conversation this way; the person types nothing until
-    # the work it started is done, so a window on typed turns alone saw nothing.
+    # cs opens a rotated conversation with a /clear it submits as a plugin; the
+    # person types nothing until the work it started is done, so a window on
+    # typed turns alone saw nothing. The echo carries no prose, so it stays out.
     {
+        assistant_text "SECRET-EARLY-CONTENT" "m0"
         plugin_prompt "<command-name>/clear</command-name>" cs
-        plugin_prompt "Continue from the pending rotation handoff: read .cs/handoffs/2026-10-21-x.md first." cs
         assistant_text "resuming the migration from the handoff" "m1"
     } > "$t"
 
-    run "$HOST_BASH" "$SCRIPT" --turns last:5 "$t"
+    run "$HOST_BASH" "$SCRIPT" --turns last:1 "$t"
     [ "$status" -eq 0 ]
-    [[ "$output" == *$'## Human (via cs)\n\n<command-name>/clear</command-name>'* ]]
     [[ "$output" == *"resuming the migration from the handoff"* ]]
-    # The handoff line anchors the window but is still not shown.
-    [[ "$output" != *"rotation handoff"* ]]
+    [[ "$output" != *"SECRET-EARLY-CONTENT"* ]]
+    [[ "$output" != *"command-name"* ]]
+    [ "$(printf '%s\n' "$output" | grep -c '^## Human')" -eq 0 ]
 }
 
 @test "digest: a prompt another mod submitted is not the person's turn" {
