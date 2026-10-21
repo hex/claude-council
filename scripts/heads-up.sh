@@ -11,9 +11,9 @@
 #   DIR/pid                           before the fork returns
 #   DIR/digest.md, DIR/prompt.md      what left the machine; kept until the mod removes the dir
 #   DIR/seat.{out,err,events}         the seat's raw output
-#   DIR/result.json                   {kind:note|none|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
+#   DIR/result.json                   {kind:note|none|skipped|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
 #                                      seats:[{seat,outcome,ms,detail?}]}; seats holds the seat's outcome, none
-#                                      when the run failed before asking it; written to a temp name and moved
+#                                      when the run skipped or failed before asking it; written to a temp name and moved
 #   DIR/.done                         last; the mod trusts result.json only after it
 # Env (COUNCIL_* so provider_env_scrub keeps them):
 #   COUNCIL_HEADS_UP_SEAT_SECONDS   the seat's deadline, default 60
@@ -112,8 +112,12 @@ build_digest() {
         FAILURE="digest: $(error_excerpt "${RUN_DIR}/digest.err")"
         return 1
     fi
+    # A window matching no prompt emits nothing. Nobody typed and no mod spoke
+    # for them (a teammate pane, an SDK-driven session), so there is nobody to
+    # warn: the check is skipped, not failed.
     if [[ ! -s "${RUN_DIR}/digest.md" ]]; then
-        FAILURE="digest: no human turn in the last ${TURNS}"
+        FAILURE="digest: the transcript holds no prompt"
+        SKIPPED=1
         return 1
     fi
     avoid=$(cat "$AVOID_FILE")
@@ -277,9 +281,9 @@ worker_exit() {
 worker() {
     trap 'worker_exit $?' EXIT
     source "${SCRIPT_DIR}/lib/deadline.sh"
-    FAILURE="" BYTES=0
+    FAILURE="" BYTES=0 SKIPPED=0
     if ! build_digest; then
-        write_result failed
+        if (( SKIPPED )); then write_result skipped; else write_result failed; fi
         return 0
     fi
     local start ms

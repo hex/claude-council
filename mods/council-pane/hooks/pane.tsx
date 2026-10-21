@@ -73,6 +73,8 @@ type PaneState = {
   headsUpTip: string
   // The last check that found nothing, on the prompt hint until a keystroke or the next check.
   headsUpReceipt: string
+  // The last skipped check logged; the same reason on the next cadence point is not logged again.
+  headsUpSkipped: string
   // The last check that failed, drawn in red above the prompt for a while; the transcript keeps the reason.
   headsUpFailure?: FinishNotice
   // The note whose Turn off was pressed once; the second press turns the check off for this project.
@@ -456,12 +458,12 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
   watchHeadsUp($, state)
   try {
     await launchHeadsUp($, config, runDir, avoidFile)
-    await count($, 'checks')
   } catch (error) {
     await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))
     // A check that never started is a failed check to the person: red above the prompt, counted, and logged by the caller.
     state.headsUpFailure = { text: `heads-up: failed · ${String(error)}`, untilMs: now + FINISH_NOTICE_MS, isFailure: true }
     $.ui.invalidate('ui.render')
+    await count($, 'checks')
     await count($, 'failed')
     throw error
   }
@@ -517,8 +519,18 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
     state.headsUpReceipt = receiptLine(result)
     $.ui.invalidate('ui.render')
   }
+  // Nobody to warn is not a fault: one log line per reason, no band, not counted.
+  if (result.kind === 'skipped') {
+    const line = checkLine(result)
+    if (line !== state.headsUpSkipped) $.ui.log(line)
+    state.headsUpSkipped = line
+  }
   const drawn = settled.phase.kind === 'showing' && settled.phase.note.id === checkId
-  await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
+  // A check is counted with its outcome, so checks always equals none + notes + repeats + failed; a skip is neither.
+  if (result.kind !== 'skipped') {
+    await count($, 'checks')
+    await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
+  }
   await $.process.run(['rm', '-rf', runDir])
 }
 
@@ -697,7 +709,7 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: '', headsUpTip: '', headsUpReceipt: '', headsUpTurnOffArmed: '', frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() } }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: '', headsUpTip: '', headsUpReceipt: '', headsUpSkipped: '', headsUpTurnOffArmed: '', frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() } }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })

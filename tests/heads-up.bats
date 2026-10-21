@@ -290,6 +290,33 @@ result() {
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
+@test "heads-up: a transcript holding no prompt is kind skipped, saying so, and asks no seat" {
+    # A teammate pane or an SDK-driven session: nobody typed, nothing to warn.
+    jq -nc '{type:"assistant", message:{id:"msg_1", content:[{type:"text", text:"working"}]}}' > "$TRANSCRIPT"
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    start_runner codex
+    [ "$status" -eq 0 ]
+    wait_done
+    [ "$(result .kind)" = "skipped" ]
+    [ "$(result .detail)" = "digest: the transcript holds no prompt" ]
+    [ "$(result .bytes)" = "0" ]
+    [ "$(result '.seats | length')" = "0" ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "heads-up: a conversation a mod opened for the person is checked like a typed one" {
+    {
+        jq -nc '{type:"user", isMeta:false, origin:{kind:"plugin", name:"cs"},
+                 message:{content:"Continue from the pending rotation handoff: read .cs/handoffs/x.md first."}}'
+        jq -nc '{type:"assistant", message:{id:"msg_1", content:[{type:"text", text:"migrating the orders table"}]}}'
+    } > "$TRANSCRIPT"
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [[ "$(cat "$RUN_DIR/digest.md")" == *"migrating the orders table"* ]]
+}
+
 @test "heads-up: a malformed deadline is refused before the fork" {
     export COUNCIL_HEADS_UP_SEAT_SECONDS=60s
     start_runner codex

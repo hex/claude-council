@@ -48,7 +48,8 @@ Use a plain temporary name. The file path is interpolated into the prompt the
 providers receive, so a name carrying the session or directory tells them things
 the digest itself does not.
 
-The digest carries human turns, assistant replies, and the questions the
+The digest carries human turns (typed, or submitted by cs in the
+person's own session), assistant replies, and the questions the
 assistant put to the user through AskUserQuestion together with what they
 picked, since those are decisions and the reason to ask for a review. It
 excludes every other tool result and tool input, thinking blocks, hook output,

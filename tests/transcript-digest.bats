@@ -247,6 +247,45 @@ compact_summary() {
     [[ "$output" != *"SECRET-EARLY-CONTENT"* ]]
 }
 
+# A prompt a mod submitted in the person's own session, as cs records the /clear
+# and the continuation that open a rotated conversation: origin.kind "plugin".
+plugin_prompt() {
+    jq -nc --arg text "$1" --arg name "$2" \
+        '{type:"user", isMeta:false, origin:{kind:"plugin", name:$name}, message:{content:$text}}'
+}
+
+@test "digest: a prompt a mod submitted for the person anchors the window and is shown as theirs" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    # cs opens a rotated conversation this way; the person types nothing until
+    # the work it started is done, so a window on typed turns alone saw nothing.
+    {
+        plugin_prompt "<command-name>/clear</command-name>" cs
+        plugin_prompt "Continue from the pending rotation handoff: read .cs/handoffs/2026-10-21-x.md first." cs
+        assistant_text "resuming the migration from the handoff" "m1"
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --turns last:5 "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'## Human (via cs)\n\n<command-name>/clear</command-name>'* ]]
+    [[ "$output" == *"resuming the migration from the handoff"* ]]
+    # The handoff line anchors the window but is still not shown.
+    [[ "$output" != *"rotation handoff"* ]]
+}
+
+@test "digest: a prompt another mod submitted is not the person's turn" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    # A Slack bot's prompt carries other people's messages; the digest leaves
+    # the machine, so only cs speaks for the person.
+    {
+        plugin_prompt "Reply to the thread: SLACK-THREAD-TEXT" slack-agent
+        assistant_text "replied in the thread" "m1"
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --turns last:5 "$t"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
 @test "digest: content cannot forge a speaker heading" {
     local t="${BATS_TEST_TMPDIR}/session.jsonl"
     # Assistant text quotes files and command output verbatim, so a line-initial
