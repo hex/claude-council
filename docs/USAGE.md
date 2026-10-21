@@ -423,7 +423,7 @@ and never sent anywhere: checks run, with how many found nothing, drew a note,
 repeated a topic already seen, or failed; and the presses, learn, tell, knew,
 dismiss, turned off and typed past. A check that found nothing leaves a dim receipt on the
 hint under the prompt, `heads-up: gemini read 8.3 KB in 11 s, nothing to flag`,
-until you type or the next check; only a failed check writes a transcript row. The first session on a machine where the check is off
+until you type or the next check; only a failed check writes a transcript row, and a check skipped because the transcript holds no prompt of yours (a teammate pane, a scripted session) writes one line once. The first session on a machine where the check is off
 adds a dim tip to the hint under the empty prompt, `Tip: /heads-up on lets
 another model watch long turns and flag what Claude missed`, until you type; a
 flag in the plugin store keeps it from coming back.
