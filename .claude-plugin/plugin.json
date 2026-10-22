@@ -37,31 +37,31 @@
     "pane_host": {
       "type": "string",
       "title": "Pane opens in",
-      "description": "One of: ask, claude-code, tmux. Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. claude-code draws the pane inside Claude Code; tmux leaves it to the tmux pane; ask puts the question once inside tmux and remembers the answer.",
+      "description": "Where the council pane opens. claude-code draws it inside Claude Code; tmux leaves it to a tmux pane; ask asks once, the first time a run starts inside tmux, and remembers the answer (/council-pane ask forgets it). Outside tmux the pane opens here either way. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
       "default": "ask"
     },
     "collapse_when_done": {
       "type": "boolean",
       "title": "Collapse status when done",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Replace the provider list with a one-line summary once a run finishes.",
+      "description": "Fold the per-provider status list into one line once a run finishes. Off keeps the full list on screen. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
       "default": true
     },
     "wake_on_async_done": {
       "type": "boolean",
       "title": "Wake on async finish",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Submit a prompt when a background council run completes. Starts a model turn, which costs tokens.",
+      "description": "When a background council run (--async) finishes, submit a prompt so Claude fetches the result by itself. That starts a model turn and costs tokens; a failed run wakes nobody. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
       "default": false
     },
     "council_tool": {
       "type": "boolean",
       "title": "Council as a tool",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Let the model call the council as a tool. Every call first asks you to confirm, because the council sends the question to third-party providers.",
+      "description": "Let Claude call the council as a tool, not only through /claude-council:ask. Every call shows you the question and the providers and asks before anything is sent. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
       "default": true
     },
     "heads_up": {
       "type": "boolean",
       "title": "Heads-up side-check",
-      "description": "Experimental: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. While Claude works a long turn, one council seat, codex by default, rereads the last five turns and the last eight tool results and may show one line above the prompt. Nothing asks before a send: that material leaves the machine on every check. A project's .claude/council-heads-up.json can turn it on or off for that project alone and pick the seat and cadence.",
+      "description": "Turn the heads-up side-check on in every project: while Claude works a long turn, one council seat, codex by default, rereads the last five turns, the last eight tool results and the text Claude wrote with Write or Edit, and may show one line above the prompt. Nothing asks before a send; that material leaves the machine on every check. A project's .claude/council-heads-up.json overrides this for that project and picks the seat and cadence. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
       "default": false
     }
   }

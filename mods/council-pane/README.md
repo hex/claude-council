@@ -61,7 +61,7 @@ fold when the synthesis arrives. The band above the prompt tracks the run.
 
 ## Settings
 
-They show up in `/config`. Changing one reloads the mod.
+They show up in `/config`, which lists each row by its title alone; the table below says what each one does. Changing one reloads the mod.
 
 | Setting | Default | What it does |
 |---|---|---|

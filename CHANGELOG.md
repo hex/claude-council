@@ -7,6 +7,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Changed
+- The five `/config` rows describe their effect first (what the pane host, collapse, wake, tool and heads-up switches do, and what each costs or sends), with the function-hooks caveat last; the mod README notes that `/config` lists each row by title alone and points to its settings table.
 - The heads-up side-check sends the text Claude wrote. A Write or Edit result is a one-line acknowledgement, so the digest's slot for it carries the Write's content or the Edit's inserted text, under a `Tool result · Write · <file path>` heading and the same 2,000-character cap. Code Claude wrote used to reach the seat only if a later Read showed it. This widens what the side-check sends: the seat gets the files Claude writes, up to the cap. No other tool input goes, and a failed Write or Edit keeps its result.
 
 ## 2026.10.9
