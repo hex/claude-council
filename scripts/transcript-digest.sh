@@ -164,10 +164,10 @@ fi
 # A full template, not -t with a bare prefix: GNU mktemp demands the X's and
 # BSD accepts either, so this is the one form both platforms run.
 JQ_ERR=$(mktemp "${TMPDIR:-/tmp}/council-digest-err.XXXXXX")
+trap 'rm -f -- "$JQ_ERR" "${KEEP_FILE:-}"' EXIT
 # The tool results chosen for emission reach jq through this file, not argv: a
 # Write's text is a whole file, and one past ARG_MAX (32K on MSYS) fails the run.
 KEEP_FILE=$(mktemp "${TMPDIR:-/tmp}/council-digest-keep.XXXXXX")
-trap 'rm -f -- "$JQ_ERR" "$KEEP_FILE"' EXIT
 refuse_on_jq_error() {
     if [[ -s "$JQ_ERR" ]]; then
         cat -- "$JQ_ERR" >&2

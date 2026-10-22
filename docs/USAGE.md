@@ -434,7 +434,8 @@ Privacy: unlike `/claude-council:advise`, nothing asks before a send. Each
 check digests the last five turns of this session's transcript plus the last
 eight tool results inside them, cut to 2,000 characters each, and sends that
 to the one seat. A Write or an Edit sends the text it wrote and the file path
-in place of its result, under the same cap. No other tool input goes.
+in place of its result, under the same cap; one that failed, or an Edit that
+only deleted, sends its result instead. No other tool input goes.
 Tool results can carry what a command
 printed, a secret included; messages from other sessions, hook output and
 thinking never go. Each check logs or shows the bytes sent and the seat that
