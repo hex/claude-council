@@ -533,7 +533,7 @@ export type BandView = {
   readonly headline: string
   /** "codex · gpt-6.1-sol · 12.4 KB · 27 s"; the model is left out when the runner named none. */
   readonly meta: string
-  /** Non-null once expanded: the bold title and the bullets, the last one the action; the band then offers tell Claude and close instead of the three choices. */
+  /** Non-null once expanded: the bold title and the bullets, the last one the action; the band then offers Understood, Tell Claude and Close instead of the three choices. */
   readonly more: { readonly title: string; readonly points: readonly string[] } | null
   /** The note's id, so the shell knows whether its armed Turn off belongs to this note. */
   readonly id: string
@@ -567,11 +567,17 @@ export function checkLine(r: RunResult): string {
 /**
  * The draft tell Claude puts in the prompt box, for the person to send or
  * edit: the main agent learns of a note only through the person's own prompt.
+ * The headline opens, the title and bullets follow as a list, and the close
+ * asks for a check before any action: a Heads up is a claim to verify, a
+ * You should know is a fact to weigh against the plan.
  */
 export function tellClaudeDraft(n: Note): string {
-  const raised = `A side check by ${n.seat} (not you) raised this: ${n.headline}`
-  const more = [n.title === '' ? '' : `${n.title}:`, ...n.points].filter(part => part !== '').join(' ')
-  return `${more === '' ? raised : `${raised} ${more}`} What do you make of it?`
+  const raised = `A side check by ${n.seat} (not you) flagged this: ${n.headline}`
+  const more = [n.title, ...n.points.map(point => `- ${point}`)].filter(part => part !== '').join('\n')
+  const close = n.tag === 'Heads up'
+    ? 'Treat this as a claim, not a conclusion. Before continuing: verify it against the evidence, report what you find, and only then act on the last bullet.'
+    : 'Take this into account before continuing and say whether it changes your plan.'
+  return [raised, more, close].filter(part => part !== '').join('\n\n')
 }
 
 /** "12.4 KB" style, one decimal. */

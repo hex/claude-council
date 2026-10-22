@@ -391,15 +391,18 @@ The note sits above the prompt:
 
 ```
 ✦ Heads up · The migration test passed against the empty fixture DB, so the backfill path never ran.
-  1: Learn more   2: Knew this already   4: Turn off   0: Dismiss      codex · gpt-6.1-sol · 12.4 KB · 27 s
+  1: Learn more   2: Knew this already   3: Turn off   0: Dismiss      codex · gpt-6.1-sol · 12.4 KB · 27 s
 ```
 
-`4` is dim and takes two presses, as the builtin's Disable does: the first
+`3` is dim and takes two presses, as the builtin's Disable does: the first
 reads `Press again to turn off`, the second writes `"enabled": false` to the
 project file, what `/heads-up off` does. `1` opens the note as the builtin draws it, a bold title and three to six
-bullets with the action last, and offers `1: Tell Claude` and `0: Close`; tell
-Claude puts a draft quoting the note in your prompt box, and you send or edit it.
-`2` and `0` record the topic so no seat raises it again. Typing a prompt while a
+bullets with the action last, and offers `1: Understood`, `2: Tell Claude`,
+`3: Turn off` and `0: Close`; tell Claude puts a draft quoting the note in your
+prompt box (the headline, the title and bullets as a list, and a close asking
+Claude to verify the claim and report before acting on it), and you send or
+edit it. `Knew this already`, `Understood` and the closes record the topic so no
+seat raises it again. Typing a prompt while a
 note shows counts as typing past it, and that many later checks are skipped.
 Claude never sees a note you did not tell it about.
 

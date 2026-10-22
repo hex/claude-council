@@ -588,7 +588,7 @@ function headsUpRow(
   turnOffArmed: boolean,
 ) {
   const { more } = band
-  const turnOff = <ui.Button key="heads-up:turn-off" hotkey="4" label={turnOffArmed ? 'Press again to turn off' : 'Turn off'} plain dimColor onPress={press['turn-off']} />
+  const turnOff = <ui.Button key="heads-up:turn-off" hotkey="3" label={turnOffArmed ? 'Press again to turn off' : 'Turn off'} plain dimColor onPress={press['turn-off']} />
   return (
     <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
       <ui.Box flexDirection="row">
@@ -616,10 +616,12 @@ function headsUpRow(
                     <ui.Button key="heads-up:dismiss" hotkey="0" label="Dismiss" plain role="dismiss" onPress={press.dismiss} />,
                   ]
                 : [
-                    <ui.Button key="heads-up:tell" hotkey="1" label="Tell Claude" plain onPress={press.tell} />,
+                    <ui.Button key="heads-up:understood" hotkey="1" label="Understood" plain onPress={press.knew} />,
                     <ui.Text key="gap-1">{'   '}</ui.Text>,
-                    turnOff,
+                    <ui.Button key="heads-up:tell" hotkey="2" label="Tell Claude" plain onPress={press.tell} />,
                     <ui.Text key="gap-2">{'   '}</ui.Text>,
+                    turnOff,
+                    <ui.Text key="gap-3">{'   '}</ui.Text>,
                     <ui.Button key="heads-up:close" hotkey="0" label="Close" plain role="dismiss" onPress={press.dismiss} />,
                   ]}
             </ui.Box>

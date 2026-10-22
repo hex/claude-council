@@ -232,9 +232,14 @@ test('every finished check logs one line with its seat, payload and time', () =>
     .toBe('heads-up: failed · 0.0 KB · runner error after 0 s: transcript: no transcript for abc; gemini error after 1 s: exit 1: quota')
 })
 
-test('the tell-Claude draft quotes the note for the person to send, naming the seat', () => {
-  expect(tellClaudeDraft(note)).toBe('A side check by codex (not you) raised this: The test ran on an empty DB. The backfill path was skipped: The fixture had no rows, so the backfill loop never ran. Seed one row and rerun the migration test. What do you make of it?')
-  expect(tellClaudeDraft({ ...note, title: '', points: [] })).toBe('A side check by codex (not you) raised this: The test ran on an empty DB. What do you make of it?')
+test('the tell-Claude draft quotes the note as a list and asks for a check before action, naming the seat', () => {
+  expect(tellClaudeDraft(note)).toBe([
+    'A side check by codex (not you) flagged this: The test ran on an empty DB.',
+    'The backfill path was skipped\n- The fixture had no rows, so the backfill loop never ran.\n- Seed one row and rerun the migration test.',
+    'Treat this as a claim, not a conclusion. Before continuing: verify it against the evidence, report what you find, and only then act on the last bullet.',
+  ].join('\n\n'))
+  expect(tellClaudeDraft({ ...note, title: '', points: [] })).toBe('A side check by codex (not you) flagged this: The test ran on an empty DB.\n\nTreat this as a claim, not a conclusion. Before continuing: verify it against the evidence, report what you find, and only then act on the last bullet.')
+  expect(tellClaudeDraft({ ...note, tag: 'You should know', title: '', points: ['Quote the value.'] })).toBe('A side check by codex (not you) flagged this: The test ran on an empty DB.\n\n- Quote the value.\n\nTake this into account before continuing and say whether it changes your plan.')
 })
 
 test('kilobytes reads to one decimal', () => {
