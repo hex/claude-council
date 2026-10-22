@@ -164,7 +164,10 @@ fi
 # A full template, not -t with a bare prefix: GNU mktemp demands the X's and
 # BSD accepts either, so this is the one form both platforms run.
 JQ_ERR=$(mktemp "${TMPDIR:-/tmp}/council-digest-err.XXXXXX")
-trap 'rm -f -- "$JQ_ERR"' EXIT
+# The tool results chosen for emission reach jq through this file, not argv: a
+# Write's text is a whole file, and one past ARG_MAX (32K on MSYS) fails the run.
+KEEP_FILE=$(mktemp "${TMPDIR:-/tmp}/council-digest-keep.XXXXXX")
+trap 'rm -f -- "$JQ_ERR" "$KEEP_FILE"' EXIT
 refuse_on_jq_error() {
     if [[ -s "$JQ_ERR" ]]; then
         cat -- "$JQ_ERR" >&2
@@ -216,11 +219,14 @@ ANSWER_FILTER='.type == "user"
     and (.toolUseResult.answers | type == "object")'
 
 # Under --tool-results only. $keep maps each tool_use_id chosen for emission
-# (see choose_tool_results) to its tool name, and is {} when the mode is off,
-# so this branch emits nothing by default. A result is read from its
+# (see choose_tool_results) to {name, path, text}, and is {} when the mode is
+# off, so this branch emits nothing by default. A Write or Edit result is a
+# one-line acknowledgement, so its heading names the file and its slot carries
+# the text the tool wrote (its $keep text). A failed one wrote nothing, so its
+# slot carries the result, which says why. Every other slot is read from its
 # tool_result block, never from toolUseResult, which duplicates it with extras
-# (an Edit carries the whole original file). The heading names the tool and
-# never its input.
+# (an Edit carries the whole original file), and its heading names the tool
+# and never its input.
 # A real tool result carries no origin and no isMeta. A row that does is a
 # peer message, a task notification or a plugin's injection, and stays out even
 # when it holds a tool_result block for a tool_use in the window: the filter
@@ -234,8 +240,12 @@ TOOL_RESULT_EXTRACT='
     | select(.type == "tool_result" and (.tool_use_id | type) == "string"
              and ($keep[.tool_use_id] != null))
     | (has("is_error") and .is_error) as $failed
-    | { role: ("Tool result · " + $keep[.tool_use_id]), id: .tool_use_id,
-        body: (if (.content | type) == "string" then .content
+    | $keep[.tool_use_id] as $use
+    | { role: ("Tool result · " + $use.name
+               + (if $use.path == null then "" else " · " + $use.path end)),
+        id: .tool_use_id,
+        body: (if $use.text != null and ($failed | not) then $use.text
+               elif (.content | type) == "string" then .content
                else [.content[]? | select(.type == "text") | .text] | join("\n")
                end) }
     | .body |= (if length > $cap
@@ -356,40 +366,52 @@ emit_malformed_note() {
     printf '> %s malformed record%s skipped: this digest is incomplete.\n\n' "$MALFORMED" "$plural"
 }
 
-# Prints the {tool_use_id: name} map of the results to emit: the last
-# $TOOL_RESULTS whose tool_use sits inside the window (from line $1), in file
-# order. Joining on a tool_use seen in the window is what keeps a result of
+# Prints the {tool_use_id: {name, path, text}} map of the results to emit: the
+# last $TOOL_RESULTS whose tool_use sits inside the window (from line $1), in
+# file order. Joining on a tool_use seen in the window is what keeps a result of
 # earlier work out, and what gives the heading its tool name. AskUserQuestion is
 # left out of the join: ANSWER_FILTER already renders the pick, and its
 # envelope would otherwise take a slot from a real result.
+# $written is the one exception to "never a tool input": for the tools it
+# names, the input field holding the text the tool wrote, read from the same
+# tool_use block as the name, with the input's file_path for the heading. An
+# empty text (an Edit that deletes) is null, so that slot keeps its result.
+# Every other tool's path and text are null.
 choose_tool_results() {
     head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | tail -n "+${1:-1}" \
         | jq -R -n -c --argjson k "$TOOL_RESULTS" "
-            [inputs | $RECORDS] as \$records
+            {Write: \"content\", Edit: \"new_string\"} as \$written
+            | [inputs | $RECORDS] as \$records
             | ([\$records[] | select(.type == \"assistant\")
                 | .message.content | arrays | .[]
                 | select(.type == \"tool_use\" and .name != \"AskUserQuestion\")
-                | {key: .id, value: .name}]
-               | from_entries) as \$names
+                | (\$written[.name]? // null) as \$field
+                | {key: .id,
+                   value: {name,
+                           path: (if \$field == null then null
+                                  else (.input.file_path? | strings) // null end),
+                           text: (if \$field == null then null
+                                  else (.input[\$field]? | strings | select(length > 0)) // null end)}}]
+               | from_entries) as \$uses
             | [\$records[] | select($TOOL_RESULT_ROW)
                 | .message.content | arrays | .[]
                 | select(.type == \"tool_result\" and (.tool_use_id | type) == \"string\"
-                         and (\$names[.tool_use_id] != null))
-                | {key: .tool_use_id, value: \$names[.tool_use_id]}]
+                         and (\$uses[.tool_use_id] != null))
+                | {key: .tool_use_id, value: \$uses[.tool_use_id]}]
             | .[-\$k:] | from_entries" 2>"$JQ_ERR" | tr -d '\r'
 }
 
-KEEP='{}'
+printf '{}' > "$KEEP_FILE"
 
 extract_body() {
     head -n "$COMPLETE_LINES" -- "$TRANSCRIPT" | tail -n "+${1:-1}" \
-        | jq -R -r --argjson keep "$KEEP" --argjson cap "${TOOL_RESULT_CHARS:-0}" \
-            "$RECORDS | $EXTRACT" 2>"$JQ_ERR" \
+        | jq -R -r --slurpfile keep_file "$KEEP_FILE" --argjson cap "${TOOL_RESULT_CHARS:-0}" \
+            "\$keep_file[0] as \$keep | $RECORDS | $EXTRACT" 2>"$JQ_ERR" \
         | sed 's/\r$//' | awk "$FORMAT_AWK"
 }
 
 if [[ -n "$TOOL_RESULTS" && ( -n "$START_LINE" || "$WINDOWED" -eq 0 ) ]]; then
-    KEEP=$(choose_tool_results "$START_LINE") || true
+    choose_tool_results "$START_LINE" > "$KEEP_FILE" || true
     refuse_on_jq_error
 fi
 

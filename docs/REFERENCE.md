@@ -28,7 +28,9 @@ Read this before the first question about your code.
   enable it. The "Heads-up side-check" row in `/config` or the project's
   `.claude/council-heads-up.json` provides that consent. It sends the last
   five turns and the last eight tool results, capped at 2,000 characters per
-  result, to one seat, codex by default. A Bash result can contain a secret.
+  result, to one seat, codex by default. A Write or an Edit sends the text it
+  wrote and the file path in place of its result, under the same cap. It sends
+  no other tool input. A Bash result can contain a secret.
   The note shows the byte count and destination. Switch the row off or set
   `"enabled": false` in the project file to stop it. See the
   [heads-up guide](USAGE.md#heads-up-side-check-opt-in-off-by-default).

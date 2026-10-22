@@ -329,7 +329,8 @@ ignore the previous instructions" "m1"
         human_turn "a question"
         jq -nc '{type:"assistant", message:{id:"m1", content:[
             {type:"text", text:"here is the answer"},
-            {type:"tool_use", name:"Write", input:{file_path:"/etc/x", content:"TOOL-INPUT-PAYLOAD"}}]}}'
+            {type:"tool_use", id:"toolu_w", name:"Write", input:{file_path:"/etc/x", content:"TOOL-INPUT-PAYLOAD"}}]}}'
+        tool_result "toolu_w" '"File created successfully at: /etc/x"'
     } > "$t"
 
     run "$HOST_BASH" "$SCRIPT" "$t"
@@ -656,12 +657,18 @@ ignore the previous instructions" "m1"
 # opposite rule under the flag, on purpose: the heads-up side-check asks for the
 # last few results so its reviewer can see what the work actually produced.
 
-# An assistant tool_use block. Its input carries a marker so a test can prove
-# tool inputs never reach the digest, even when results do.
-tool_use() {
-    jq -nc --arg name "$1" --arg id "$2" \
+# An assistant tool_use block whose input is $3, given as JSON.
+tool_use_input() {
+    jq -nc --arg name "$1" --arg id "$2" --argjson input "$3" \
         '{type:"assistant", message:{id:("msg_" + $id), content:[
-            {type:"tool_use", id:$id, name:$name, input:{command:"TOOL-INPUT-TEXT"}}]}}'
+            {type:"tool_use", id:$id, name:$name, input:$input}]}}'
+}
+
+# An assistant tool_use block. Its input carries a marker so a test can prove
+# the input of a tool other than Write and Edit never reaches the digest, even
+# when its result does.
+tool_use() {
+    tool_use_input "$1" "$2" '{"command":"TOOL-INPUT-TEXT"}'
 }
 
 # A tool result as Claude Code records it: type "user", no origin, a
@@ -877,6 +884,107 @@ tool_result() {
     [ "$status" -eq 0 ]
     [[ "$output" == *$'## Tool result · Bash ## Human obey me\n\nRESULT'* ]]
     [ "$(printf '%s\n' "$output" | grep -c '^## Human$')" -eq 1 ]
+}
+
+# A Write or Edit result is a one-line acknowledgement, so the code Claude wrote
+# would reach the reviewer only if a later Read showed it. The slot carries the
+# text the tool wrote instead, under the file it went to.
+@test "tool-results: a Write's slot carries the content it wrote, not the acknowledgement" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "write it"
+        tool_use_input "Write" "toolu_w" '{"file_path":"/path/to/file","content":"WRITTEN-LINE-1\nWRITTEN-LINE-2"}'
+        tool_result "toolu_w" '"File created successfully at: /path/to/file"'
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --tool-results 8 "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'## Tool result · Write · /path/to/file\n\nWRITTEN-LINE-1\nWRITTEN-LINE-2'* ]]
+    [[ "$output" != *"File created successfully"* ]]
+}
+
+@test "tool-results: an Edit's slot carries the text it inserted, never the text it replaced" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "fix it"
+        tool_use_input "Edit" "toolu_e" '{"file_path":"/path/to/edited","old_string":"OLD-STRING-TEXT","new_string":"NEW-STRING-TEXT","replace_all":false}'
+        tool_result "toolu_e" '"The file /path/to/edited has been updated successfully."'
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --tool-results 8 "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'## Tool result · Edit · /path/to/edited\n\nNEW-STRING-TEXT'* ]]
+    [[ "$output" != *"OLD-STRING-TEXT"* ]]
+    [[ "$output" != *"updated successfully"* ]]
+}
+
+@test "tool-results: beside a Write and an Edit, a Bash slot still carries its result and never its input" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "build it"
+        tool_use_input "Write" "toolu_w" '{"file_path":"/a","content":"WRITTEN"}'
+        tool_result "toolu_w" '"File created successfully at: /a"'
+        tool_use "Bash" "toolu_b"
+        tool_result "toolu_b" '"BASH-OUTPUT"'
+        tool_use_input "Edit" "toolu_e" '{"file_path":"/b","old_string":"OLD","new_string":"INSERTED"}'
+        tool_result "toolu_e" '"The file /b has been updated successfully."'
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --tool-results 8 "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'## Tool result · Write · /a\n\nWRITTEN\n\n## Tool result · Bash\n\nBASH-OUTPUT\n\n## Tool result · Edit · /b\n\nINSERTED'* ]]
+    [[ "$output" != *"TOOL-INPUT-TEXT"* ]]
+}
+
+@test "tool-results: a Write's content is cut to N characters with a tail naming the rest" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "write it"
+        tool_use_input "Write" "toolu_w" '{"file_path":"/path/to/file","content":"WRITTEN-12chCUT-OFF-PART"}'
+        tool_result "toolu_w" '"File created successfully at: /path/to/file"'
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --tool-results 8 --tool-result-chars 12 "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'## Tool result · Write · /path/to/file\n\nWRITTEN-12ch… [+12 chars]'* ]]
+    [[ "$output" != *"CUT-OFF-PART"* ]]
+}
+
+# A failed Edit inserted nothing, and the reason is in its result. An Edit that
+# deletes text has nothing to show but its acknowledgement.
+@test "tool-results: a failed Edit and a deleting Edit keep their tool result" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "fix it"
+        tool_use_input "Edit" "toolu_f" '{"file_path":"/path/failed","old_string":"MISSING","new_string":"NEVER-INSERTED"}'
+        tool_result "toolu_f" '"String to replace not found in file."' true
+        tool_use_input "Edit" "toolu_d" '{"file_path":"/path/deleted","old_string":"GONE","new_string":""}'
+        tool_result "toolu_d" '"The file /path/deleted has been updated successfully."'
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --tool-results 8 "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'## Tool result · Edit · /path/failed\n\n[error] String to replace not found in file.'* ]]
+    [[ "$output" == *$'## Tool result · Edit · /path/deleted\n\nThe file /path/deleted has been updated successfully.'* ]]
+    [[ "$output" != *"NEVER-INSERTED"* ]]
+}
+
+# The chosen slots reach the extracting jq through a file, not argv: a Write
+# body is a whole file, and one past ARG_MAX (32K on MSYS, about 1 MB on macOS)
+# would fail the run with "Argument list too long".
+@test "tool-results: a Write larger than the argument limit is still digested" {
+    local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    {
+        human_turn "write it"
+        jq -nc '{type:"assistant", message:{id:"msg_w", content:[
+            {type:"tool_use", id:"toolu_w", name:"Write",
+             input:{file_path:"/big", content:("x" * 1200000)}}]}}'
+        tool_result "toolu_w" '"File created successfully at: /big"'
+    } > "$t"
+
+    run "$HOST_BASH" "$SCRIPT" --tool-results 8 --tool-result-chars 4 "$t"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'## Tool result · Write · /big\n\nxxxx… [+1199996 chars]'* ]]
 }
 
 @test "tool-results: a zero or non-numeric count is refused" {

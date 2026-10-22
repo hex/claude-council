@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Changed
+- The heads-up side-check sends the text Claude wrote. A Write or Edit result is a one-line acknowledgement, so the digest's slot for it carries the Write's content or the Edit's inserted text, under a `Tool result · Write · <file path>` heading and the same 2,000-character cap. Code Claude wrote used to reach the seat only if a later Read showed it. This widens what the side-check sends: the seat gets the files Claude writes, up to the cap. No other tool input goes, and a failed Write or Edit keeps its result.
+
 ## 2026.10.9
 
 ### Features

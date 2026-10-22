@@ -78,7 +78,8 @@ and limit. [Architecture](docs/ARCHITECTURE.md) covers the implementation.
 
 Opt in through the "Heads-up side-check" row in `/config` or the project's
 `.claude/council-heads-up.json`. One seat, codex by default, checks recent
-turns and tool results while Claude works. The note shows what went where.
+turns and tool results while Claude works. For a Write or an Edit, it gets the
+text Claude wrote. The note shows what went where.
 Learn more expands it; Tell Claude puts a draft in the prompt without sending
 it. Read the [data limits and off switch](docs/REFERENCE.md#what-gets-sent-and-saved)
 and the [heads-up guide](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default).

@@ -433,7 +433,9 @@ flag in the plugin store keeps it from coming back.
 Privacy: unlike `/claude-council:advise`, nothing asks before a send. Each
 check digests the last five turns of this session's transcript plus the last
 eight tool results inside them, cut to 2,000 characters each, and sends that
-to the one seat. Tool results can carry what a command
+to the one seat. A Write or an Edit sends the text it wrote and the file path
+in place of its result, under the same cap. No other tool input goes.
+Tool results can carry what a command
 printed, a secret included; messages from other sessions, hook output and
 thinking never go. Each check logs or shows the bytes sent and the seat that
 answered. The seat rules under Stop-gate review above apply: `ollama` keeps it
