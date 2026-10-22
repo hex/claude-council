@@ -970,21 +970,26 @@ tool_result() {
 }
 
 # The chosen slots reach the extracting jq through a file, not argv: a Write
-# body is a whole file, and one past ARG_MAX (32K on MSYS, about 1 MB on macOS)
-# would fail the run with "Argument list too long".
-@test "tool-results: a Write larger than the argument limit is still digested" {
+# body is a whole file, and one past ARG_MAX (32K on MSYS) would fail the run
+# with "Argument list too long". The recording jq proves the text never sits
+# on jq's command line, on every platform, without needing a payload that
+# large.
+@test "tool-results: a Write's text reaches jq through a file, never its argv" {
     local t="${BATS_TEST_TMPDIR}/session.jsonl"
+    local mark="WRITE-ARGV-LEAK-MARK"
     {
         human_turn "write it"
-        jq -nc '{type:"assistant", message:{id:"msg_w", content:[
+        jq -nc --arg mark "$mark" '{type:"assistant", message:{id:"msg_w", content:[
             {type:"tool_use", id:"toolu_w", name:"Write",
-             input:{file_path:"/big", content:("x" * 1200000)}}]}}'
+             input:{file_path:"/big", content:($mark + ("x" * 40000))}}]}}'
         tool_result "toolu_w" '"File created successfully at: /big"'
     } > "$t"
+    install_recording_jq
 
-    run "$HOST_BASH" "$SCRIPT" --tool-results 8 --tool-result-chars 4 "$t"
+    run env PATH="${JQ_BIN}:$PATH" "$HOST_BASH" "$SCRIPT" --tool-results 8 --tool-result-chars 24 "$t"
     [ "$status" -eq 0 ]
-    [[ "$output" == *$'## Tool result · Write · /big\n\nxxxx… [+1199996 chars]'* ]]
+    [[ "$output" == *$'## Tool result · Write · /big\n\nWRITE-ARGV-LEAK-MARKxxxx… [+39996 chars]'* ]]
+    ! grep -qF "$mark" "$JQ_ARGV_FILE"
 }
 
 @test "tool-results: a zero or non-numeric count is refused" {

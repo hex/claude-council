@@ -237,10 +237,10 @@ TOOL_RESULT_ROW='.type == "user" and (.isMeta != true) and (.origin.kind == null
 TOOL_RESULT_EXTRACT='
     select('"$TOOL_RESULT_ROW"')
     | .message.content | arrays | .[]
-    | select(.type == "tool_result" and (.tool_use_id | type) == "string"
-             and ($keep[.tool_use_id] != null))
-    | (has("is_error") and .is_error) as $failed
+    | select(.type == "tool_result" and (.tool_use_id | type) == "string")
     | $keep[.tool_use_id] as $use
+    | select($use != null)
+    | (has("is_error") and .is_error) as $failed
     | { role: ("Tool result · " + $use.name
                + (if $use.path == null then "" else " · " + $use.path end)),
         id: .tool_use_id,
@@ -387,11 +387,9 @@ choose_tool_results() {
                 | select(.type == \"tool_use\" and .name != \"AskUserQuestion\")
                 | (\$written[.name]? // null) as \$field
                 | {key: .id,
-                   value: {name,
-                           path: (if \$field == null then null
-                                  else (.input.file_path? | strings) // null end),
-                           text: (if \$field == null then null
-                                  else (.input[\$field]? | strings | select(length > 0)) // null end)}}]
+                   value: ({name} + (if \$field == null then {path: null, text: null}
+                                    else {path: ((.input.file_path? | strings) // null),
+                                          text: ((.input[\$field]? | strings | select(. != \"\")) // null)} end))}]
                | from_entries) as \$uses
             | [\$records[] | select($TOOL_RESULT_ROW)
                 | .message.content | arrays | .[]
