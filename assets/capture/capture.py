@@ -345,11 +345,11 @@ class Capture:
         self.save("The note and its four choices", "✦ Heads up")
         time.sleep(2)
         self.key("1")
-        self.wait("1: Tell Claude")
+        self.wait("2: Tell Claude")
         self.save("Learn more opens the note", "The backfill path never ran")
         time.sleep(2)
-        self.key("1")
-        self.wait("What do you make of it?")
+        self.key("2")
+        self.wait("only then act on the last bullet.")
         self.save("Tell Claude leaves an unsent draft", "❯")
 
     def council(self):
