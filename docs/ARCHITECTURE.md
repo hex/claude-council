@@ -452,7 +452,8 @@ turn.step of the main loop. heads-up.ts decides (cadence from the
 step's index in its turn, backoff, one note per turn); pane.tsx forks
 heads-up.sh --run-dir --session --seat --avoid-file [--model], which
 returns its worker's pid at once. The worker: session-transcript.sh ->
-transcript-digest.sh --tool-results (window: the last N prompts,
+transcript-digest.sh --tool-results (a Write or Edit slot carries
+the text it wrote under a heading naming the file; window: the last N prompts,
 typed or submitted by cs/cs-rotate, only typed ones shown; a
 transcript with none is kind skipped: nobody
 to warn, no seat asked, nothing leaves the machine) ->
@@ -817,7 +818,7 @@ claude-council/
 | `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `heads_up` | ask, on, off, on, off | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each |
 | `COUNCIL_HEADS_UP_SEAT_SECONDS` | 60 | The heads-up seat's deadline per check (s) |
 | `COUNCIL_HEADS_UP_TURNS` | 5 | Prompts (typed, or submitted by cs/cs-rotate) the heads-up digest window covers, from the Nth-last to the end |
-| `COUNCIL_HEADS_UP_RESULTS` | 8 | Tool results inside that window the heads-up digest carries, 2000 characters each |
+| `COUNCIL_HEADS_UP_RESULTS` | 8 | Tool results inside that window the heads-up digest carries, 2000 characters each; a Write or Edit slot carries the text it wrote |
 | `COUNCIL_RENDERER` | auto | `perl` forces the built-in perl renderer; otherwise the pane prefers Rich when a Rich-capable Python exists (python3 with a modern rich, else `uv run --no-project --with rich`), with perl as the fallback |
 | `COUNCIL_RICH_PROBE_TIMEOUT` | 10 | Seconds before the pane-open uv probe for Rich is abandoned (guards against a cold uv cache on a dead network stalling pane opening) |
 | `COUNCIL_THEME` | auto-detected | Force pane render palette (emphasis + muted text): `light` / `dark` (else OSC 11 query; `COLORFGBG` only asserts `light`, never `dark` since it goes stale; otherwise attribute-only emphasis that inherits the foreground, and muted text keeps faint/bright-black) |
