@@ -41,8 +41,6 @@ const SPECIALIST_STORE_KEYS = ['specialist-runs', 'specialists-latest', 'special
 // A section header's mark: open shows its text, closed only the header.
 const OPEN_MARK = '\u25be'
 const CLOSED_MARK = '\u25b8'
-// The /config row that turns the heads-up on for every project, as $.config names it.
-const HEADS_UP_ROW_KEY = 'claude-council.heads_up'
 // The heads-up runner forks and returns its pid; anything slower is a fault.
 const HEADS_UP_LAUNCH_MS = 10_000
 
@@ -122,31 +120,37 @@ async function readCatalog($: EngineInterface) {
 // for codex, its effort. The file is
 // written first; "every project" then sets the /config row, which reloads
 // this module, so the status that follows may not print.
-async function setupHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<string | undefined> {
+// The setup dialog's outcome: a reply to print, or the file written and
+// whether the /config row for every project still has to be switched on. The
+// hook makes that settings call itself: the directory reads a config.set only
+// when it sits in the hook with its own engine and a fixed key.
+type SetupOutcome = { readonly text: string } | { readonly turnRowOn: boolean }
+
+async function setupHeadsUp($: EngineInterface, state: PaneState, settings: PaneOptions): Promise<SetupOutcome> {
   const ask = (question: string, options: string[]) => $.ui.ask(question, { header: 'Heads-up', options }).catch(() => undefined)
-  const closed = 'Setup closed; nothing changed.'
+  const closed = { text: 'Setup closed; nothing changed.' }
   const scope = await ask(SCOPE_QUESTION, [SCOPE.project, SCOPE.all, SCOPE.off])
   if (scope === undefined) return closed
   const file = await headsUpFile($)
   if (scope === SCOPE.off) {
     await $.fs.write(file.path, withEnabled(file.text, false))
-    return headsUpStatus($, settings.headsUp)
+    return { turnRowOn: false }
   }
-  if (scope !== SCOPE.project && scope !== SCOPE.all) return `Setup closed: ${JSON.stringify(scope)} is not one of the choices; nothing changed.`
+  if (scope !== SCOPE.project && scope !== SCOPE.all) return { text: `Setup closed: ${JSON.stringify(scope)} is not one of the choices; nothing changed.` }
   // The council's own discovery, so the seats offered are the seats a council run would seat.
   const discovered = await $.process.run(['bash', '-c', 'export PROVIDERS_DIR="$1/scripts/providers"; source "$1/scripts/lib/keys.sh"; resolve_grok_key; source "$1/scripts/lib/providers.sh"; discover_providers', '_', $.plugin.root])
-  if (discovered.exitCode !== 0) return `Setup closed: seat discovery exited ${discovered.exitCode}: ${discovered.stderr.trim()}; nothing changed.`
+  if (discovered.exitCode !== 0) return { text: `Setup closed: seat discovery exited ${discovered.exitCode}: ${discovered.stderr.trim()}; nothing changed.` }
   const seatAnswer = await ask(SEAT_QUESTION, seatOptions(seatsFromDiscovery(discovered.stdout)))
   if (seatAnswer === undefined) return closed
   const everyAnswer = await ask(EVERY_QUESTION, [...EVERY_LABELS])
   if (everyAnswer === undefined) return closed
   const chosen = seatFromAnswer(seatAnswer)
-  if ('why' in chosen) return `Setup closed: ${chosen.why}; nothing changed.`
+  if ('why' in chosen) return { text: `Setup closed: ${chosen.why}; nothing changed.` }
   const { seat } = chosen
   const unknown = await notASeat($, seat)
-  if (unknown !== undefined) return `Setup closed: ${unknown}; nothing changed.`
+  if (unknown !== undefined) return { text: `Setup closed: ${unknown}; nothing changed.` }
   const every = everyFromAnswer(everyAnswer)
-  if ('why' in every) return `Setup closed: ${every.why}; nothing changed.`
+  if ('why' in every) return { text: `Setup closed: ${every.why}; nothing changed.` }
   // The seat's model; codex also takes an effort, from its own catalog.
   const current = (await $.process.run(['bash', '-c', 'source "$1/scripts/lib/providers.sh" && get_model "$2"', '_', $.plugin.root, seat]).catch(() => ({ stdout: '' }))).stdout.trim()
   const catalog = seat === 'codex' ? await readCatalog($) : undefined
@@ -160,18 +164,14 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
     const effortAnswer = await ask(EFFORT_QUESTION, effortOptions(entry?.efforts ?? [], entry?.defaultEffort ?? ''))
     if (effortAnswer === undefined) return closed
     const effort = effortFromAnswer(effortAnswer)
-    if ('why' in effort) return `Setup closed: ${effort.why}; nothing changed.`
+    if ('why' in effort) return { text: `Setup closed: ${effort.why}; nothing changed.` }
     if (effort.effort !== undefined) pick = { ...pick, effort: effort.effort }
   }
   // "Keep <current>" with no effort is no pick at all: the file's own model
   // stays, and withEnabled drops it only when the seat changed.
   await $.fs.write(file.path, withEnabled(file.text, scope === SCOPE.project ? true : undefined, seat, every.every, Object.keys(pick).length === 0 ? undefined : pick))
   state.headsUpTip = ''
-  if (scope === SCOPE.all && !settings.headsUp) {
-    const written = await $.config.set({ key: HEADS_UP_ROW_KEY, value: true })
-    if (written.deny) return `The file is written, but the /config row was refused: ${written.deny}`
-  }
-  return headsUpStatus($, scope === SCOPE.all || settings.headsUp)
+  return { turnRowOn: scope === SCOPE.all && !settings.headsUp }
 }
 
 // What /heads-up status prints, from the project file as it stands.
@@ -799,7 +799,12 @@ export const register: Register = (on, options) => {
     if (command.action === 'unknown') return { text: `${command.why}. Usage: /${HEADS_UP_COMMAND} [on [seat] | off | setup | status]; one seat, a provider name such as codex, gemini or grok-cli.` }
     if (command.action === 'setup') {
       const outcome = await setupHeadsUp($, state, settings)
-      if (outcome !== undefined) return { text: outcome }
+      if ('text' in outcome) return outcome
+      if (outcome.turnRowOn) {
+        const written = await $.config.set({ key: 'claude-council.heads_up', value: true })
+        if (written.deny) return { text: `The file is written, but the /config row was refused: ${written.deny}` }
+        return { text: await headsUpStatus($, true) }
+      }
     } else if (command.action !== 'status') {
       const unknown = command.action === 'on' && command.seat !== undefined ? await notASeat($, command.seat) : undefined
       if (unknown !== undefined) return { text: `${unknown}; nothing changed.` }
