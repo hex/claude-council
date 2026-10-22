@@ -589,6 +589,18 @@ function headsUpRow(
 ) {
   const { more } = band
   const turnOff = <ui.Button key="heads-up:turn-off" hotkey="3" label={turnOffArmed ? 'Press again to turn off' : 'Turn off'} plain dimColor onPress={press['turn-off']} />
+  // Collapsed: Learn more, Knew this already, Dismiss. Expanded: Understood (the same answer as Knew this already), Tell Claude, Close.
+  const [first, second, last] = more === null
+    ? [
+        <ui.Button key="heads-up:learn" hotkey="1" label="Learn more" plain onPress={press.learn} />,
+        <ui.Button key="heads-up:knew" hotkey="2" label="Knew this already" plain onPress={press.knew} />,
+        <ui.Button key="heads-up:dismiss" hotkey="0" label="Dismiss" plain role="dismiss" onPress={press.dismiss} />,
+      ]
+    : [
+        <ui.Button key="heads-up:understood" hotkey="1" label="Understood" plain onPress={press.knew} />,
+        <ui.Button key="heads-up:tell" hotkey="2" label="Tell Claude" plain onPress={press.tell} />,
+        <ui.Button key="heads-up:close" hotkey="0" label="Close" plain role="dismiss" onPress={press.dismiss} />,
+      ]
   return (
     <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
       <ui.Box flexDirection="row">
@@ -605,25 +617,13 @@ function headsUpRow(
           )}
           <ui.Box flexDirection="row">
             <ui.Box flexShrink={0} flexDirection="row">
-              {more === null
-                ? [
-                    <ui.Button key="heads-up:learn" hotkey="1" label="Learn more" plain onPress={press.learn} />,
-                    <ui.Text key="gap-1">{'   '}</ui.Text>,
-                    <ui.Button key="heads-up:knew" hotkey="2" label="Knew this already" plain onPress={press.knew} />,
-                    <ui.Text key="gap-2">{'   '}</ui.Text>,
-                    turnOff,
-                    <ui.Text key="gap-3">{'   '}</ui.Text>,
-                    <ui.Button key="heads-up:dismiss" hotkey="0" label="Dismiss" plain role="dismiss" onPress={press.dismiss} />,
-                  ]
-                : [
-                    <ui.Button key="heads-up:understood" hotkey="1" label="Understood" plain onPress={press.knew} />,
-                    <ui.Text key="gap-1">{'   '}</ui.Text>,
-                    <ui.Button key="heads-up:tell" hotkey="2" label="Tell Claude" plain onPress={press.tell} />,
-                    <ui.Text key="gap-2">{'   '}</ui.Text>,
-                    turnOff,
-                    <ui.Text key="gap-3">{'   '}</ui.Text>,
-                    <ui.Button key="heads-up:close" hotkey="0" label="Close" plain role="dismiss" onPress={press.dismiss} />,
-                  ]}
+              {first}
+              <ui.Text>{'   '}</ui.Text>
+              {second}
+              <ui.Text>{'   '}</ui.Text>
+              {turnOff}
+              <ui.Text>{'   '}</ui.Text>
+              {last}
             </ui.Box>
             <ui.Box flexShrink={1}>
               <ui.Text color={COLOR.hint} wrap="truncate-end">{`      ${band.meta}`}</ui.Text>
