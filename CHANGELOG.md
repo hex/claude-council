@@ -4,10 +4,15 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.10.9
 
-### Changed
-- The expanded heads-up note offers `1: Understood` (marks the topic known as `Knew this already` does, counted apart from it) before `2: Tell Claude`, and `Turn off` is `3` on both rows, not `4`. The tell-Claude draft lays the note out as a headline, the title and bullets as a list, and a close that asks Claude to verify the claim and report before acting on its last bullet (for a `You should know`, to weigh it against the plan), in place of a one-paragraph quote ending in "What do you make of it?".
+### Features
+- The expanded heads-up note offers `1: Understood` before `2: Tell Claude`. Understood marks the topic known, as Knew this already does, but is counted apart from it in `/heads-up` (a note you already knew was redundant, one you took in was useful). `Turn off` is `3` on both rows, not `4`.
+- The Tell Claude draft lays the note out as a headline, the title and bullets as a list, and a close that asks Claude to verify the claim and report before acting on its last bullet (for a `You should know`, to weigh it against the plan), in place of a one-paragraph quote ending in "What do you make of it?".
+
+### Docs
+- The README heads-up animation is recaptured with the new band and draft; the capture harness waits on the Tell Claude label rather than its hotkey slot.
+- The 2026.10.8 changelog entry notes the checks total drop for stores from before that release.
 
 ## 2026.10.8
 
