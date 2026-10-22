@@ -58,11 +58,12 @@ test('merging keeps both sessions topics once, newest last, capped at 50, and ou
   expect(merged.seen[49]).toBe('new')
 })
 
-test('a press resets the backoff and records the topic; knew also marks it known', () => {
+test('a press resets the backoff and records the topic; knew and understood also mark it known', () => {
   const backedOff: Memory = { seen: [], known: [], typedPastInARow: 2, looksToSkip: 1 }
   expect(applyAnswer(backedOff, 'Fixture DB empty', 'dismiss')).toEqual({ seen: ['Fixture DB empty'], known: [], typedPastInARow: 0, looksToSkip: 0 })
   expect(applyAnswer(backedOff, 'Fixture DB empty', 'learn')).toEqual({ seen: ['Fixture DB empty'], known: [], typedPastInARow: 0, looksToSkip: 0 })
   expect(applyAnswer(backedOff, 'Fixture DB empty', 'knew')).toEqual({ seen: ['Fixture DB empty'], known: ['Fixture DB empty'], typedPastInARow: 0, looksToSkip: 0 })
+  expect(applyAnswer(backedOff, 'Fixture DB empty', 'understood')).toEqual({ seen: ['Fixture DB empty'], known: ['Fixture DB empty'], typedPastInARow: 0, looksToSkip: 0 })
   expect(applyAnswer(backedOff, 'Fixture DB empty', 'turn-off')).toEqual({ seen: ['Fixture DB empty'], known: [], typedPastInARow: 0, looksToSkip: 0 })
 })
 
@@ -205,11 +206,12 @@ test('typing past a shown note takes it down; with none shown nothing changes', 
   expect(typedPast(checking)).toBe(checking)
 })
 
-test('learn expands the note; tell, knew and dismiss close it', () => {
+test('learn expands the note; tell, knew, understood and dismiss close it', () => {
   const showing: Session = { ...FRESH_SESSION, phase: { kind: 'showing', note, expanded: false } }
   expect(pressed(showing, 'learn')).toEqual({ ...showing, phase: { kind: 'showing', note, expanded: true } })
   expect(pressed({ ...showing, phase: { kind: 'showing', note, expanded: true } }, 'tell')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(showing, 'knew')).toEqual({ ...showing, phase: { kind: 'idle' } })
+  expect(pressed(showing, 'understood')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(showing, 'turn-off')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(showing, 'dismiss')).toEqual({ ...showing, phase: { kind: 'idle' } })
   expect(pressed(checking, 'dismiss')).toBe(checking)
@@ -238,7 +240,7 @@ test('the tell-Claude draft quotes the note as a list and asks for a check befor
     'The backfill path was skipped\n- The fixture had no rows, so the backfill loop never ran.\n- Seed one row and rerun the migration test.',
     'Treat this as a claim, not a conclusion. Before continuing: verify it against the evidence, report what you find, and only then act on the last bullet.',
   ].join('\n\n'))
-  expect(tellClaudeDraft({ ...note, title: '', points: [] })).toBe('A side check by codex (not you) flagged this: The test ran on an empty DB.\n\nTreat this as a claim, not a conclusion. Before continuing: verify it against the evidence, report what you find, and only then act on the last bullet.')
+  expect(tellClaudeDraft({ ...note, title: '', points: [] })).toBe('A side check by codex (not you) flagged this: The test ran on an empty DB.\n\nTreat this as a claim, not a conclusion. Before continuing: verify it against the evidence, report what you find, and only then act on it.')
   expect(tellClaudeDraft({ ...note, tag: 'You should know', title: '', points: ['Quote the value.'] })).toBe('A side check by codex (not you) flagged this: The test ran on an empty DB.\n\n- Quote the value.\n\nTake this into account before continuing and say whether it changes your plan.')
 })
 
@@ -261,9 +263,9 @@ test('a bump adds one to its count and leaves the rest', () => {
 
 test('the counts line names every count in a fixed order', () => {
   expect(countsLine(EMPTY_COUNTS)).toBe('checks 0 · none 0 · notes 0 · repeats 0 · failed 0')
-  const full = { none: 8, notes: 2, repeats: 1, failed: 1, learn: 2, tell: 1, knew: 0, dismiss: 1, turnOff: 1, typedPast: 3 }
+  const full = { none: 8, notes: 2, repeats: 1, failed: 1, learn: 2, tell: 1, knew: 0, understood: 1, dismiss: 1, turnOff: 1, typedPast: 3 }
   expect(countsLine(full)).toBe('checks 12 · none 8 · notes 2 · repeats 1 · failed 1')
-  expect(pressesLine(full)).toBe('learn 2 · tell 1 · knew 0 · dismiss 1 · turned off 1 · typed past 3')
+  expect(pressesLine(full)).toBe('learn 2 · tell 1 · knew 0 · understood 1 · dismiss 1 · turned off 1 · typed past 3')
 })
 
 test('the heads-up command reads on with an optional seat, off and status, and refuses anything else', () => {
@@ -314,31 +316,31 @@ test('status names the effective state and which switch set it, then the counts,
     + '  seat     codex\n'
     + '  every    3 requests\n'
     + '  checks   checks 4 · none 3 · notes 1 · repeats 0 · failed 0\n'
-    + '  presses  learn 1 · tell 0 · knew 0 · dismiss 0 · turned off 0 · typed past 0')
+    + '  presses  learn 1 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(statusText({ enabled: true, seat: 'codex', every: 3, model: { model: 'gpt-6.1-sol', effort: 'high' } }, true, undefined, EMPTY_COUNTS)).toBe(
     'Heads-up side-check: on for every project\n'
     + '  by       the /config row (no .claude/council-heads-up.json here)\n'
     + '  seat     codex (gpt-6.1-sol, high)\n'
     + '  every    3 requests\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0\n'
-    + '  presses  learn 0 · tell 0 · knew 0 · dismiss 0 · turned off 0 · typed past 0')
+    + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(statusText({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS)).toBe(
     'Heads-up side-check: off for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is on)\n'
     + '  turn on  /heads-up on [seat] turns it on here\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0\n'
-    + '  presses  learn 0 · tell 0 · knew 0 · dismiss 0 · turned off 0 · typed past 0')
+    + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(statusText({ enabled: false }, false, undefined, EMPTY_COUNTS)).toBe(
     'Heads-up side-check: off\n'
     + '  by       the /config row is off, no .claude/council-heads-up.json here\n'
     + '  turn on  /heads-up on [seat] for this project, the /config row "Heads-up side-check" for every project\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0\n'
-    + '  presses  learn 0 · tell 0 · knew 0 · dismiss 0 · turned off 0 · typed past 0')
+    + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(statusText({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' }, true, '{', EMPTY_COUNTS)).toBe(
     'Heads-up side-check: off\n'
     + '  problem  .claude/council-heads-up.json is not valid JSON; heads-up is off\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0\n'
-    + '  presses  learn 0 · tell 0 · knew 0 · dismiss 0 · turned off 0 · typed past 0')
+    + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
 })
 
 test('the one-time intro is a tail on the prompt hint, once per install, only while the check is off', () => {

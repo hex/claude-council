@@ -423,7 +423,7 @@ status`) says whether the
 check is on here and which switch set it, one aligned row per fact, then the counts kept on this machine
 and never sent anywhere: checks run, with how many found nothing, drew a note,
 repeated a topic already seen, or failed; and the presses, learn, tell, knew,
-dismiss, turned off and typed past. A check that found nothing leaves a dim receipt on the
+understood, dismiss, turned off and typed past. A check that found nothing leaves a dim receipt on the
 hint under the prompt, `heads-up: gemini read 8.3 KB in 11 s, nothing to flag`,
 until you type or the next check; only a failed check writes a transcript row, and a check skipped because the window holds nothing of yours to review (a teammate pane, a scripted session, a conversation cs just opened) writes one line once. The first session on a machine where the check is off
 adds a dim tip to the hint under the empty prompt, `Tip: /heads-up on lets

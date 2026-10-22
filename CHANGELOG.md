@@ -7,7 +7,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Changed
-- The expanded heads-up note offers `1: Understood` (the same answer as `Knew this already`: the topic joins the known list) before `2: Tell Claude`, and `Turn off` is `3` on both rows, not `4`. The tell-Claude draft lays the note out as a headline, the title and bullets as a list, and a close that asks Claude to verify the claim and report before acting on its last bullet (for a `You should know`, to weigh it against the plan), in place of a one-paragraph quote ending in "What do you make of it?".
+- The expanded heads-up note offers `1: Understood` (marks the topic known as `Knew this already` does, counted apart from it) before `2: Tell Claude`, and `Turn off` is `3` on both rows, not `4`. The tell-Claude draft lays the note out as a headline, the title and bullets as a list, and a close that asks Claude to verify the claim and report before acting on its last bullet (for a `You should know`, to weigh it against the plan), in place of a one-paragraph quote ending in "What do you make of it?".
 
 ## 2026.10.8
 

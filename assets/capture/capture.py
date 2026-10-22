@@ -345,7 +345,7 @@ class Capture:
         self.save("The note and its four choices", "✦ Heads up")
         time.sleep(2)
         self.key("1")
-        self.wait("2: Tell Claude")
+        self.wait(r"\d: Tell Claude", regex=True)
         self.save("Learn more opens the note", "The backfill path never ran")
         time.sleep(2)
         self.key("2")

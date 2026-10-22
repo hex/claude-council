@@ -85,12 +85,13 @@ export type Counts = {
   readonly learn: number
   readonly tell: number
   readonly knew: number
+  readonly understood: number
   readonly dismiss: number
   readonly turnOff: number
   readonly typedPast: number
 }
-export const COUNT_KEYS = ['none', 'notes', 'repeats', 'failed', 'learn', 'tell', 'knew', 'dismiss', 'turnOff', 'typedPast'] as const
-export const EMPTY_COUNTS: Counts = { none: 0, notes: 0, repeats: 0, failed: 0, learn: 0, tell: 0, knew: 0, dismiss: 0, turnOff: 0, typedPast: 0 }
+export const COUNT_KEYS = ['none', 'notes', 'repeats', 'failed', 'learn', 'tell', 'knew', 'understood', 'dismiss', 'turnOff', 'typedPast'] as const
+export const EMPTY_COUNTS: Counts = { none: 0, notes: 0, repeats: 0, failed: 0, learn: 0, tell: 0, knew: 0, understood: 0, dismiss: 0, turnOff: 0, typedPast: 0 }
 
 export function parseCounts(raw: unknown): Counts {
   if (!isRecord(raw)) return EMPTY_COUNTS
@@ -106,9 +107,9 @@ export function countsLine(c: Counts): string {
   return `checks ${c.none + c.notes + c.repeats + c.failed} · none ${c.none} · notes ${c.notes} · repeats ${c.repeats} · failed ${c.failed}`
 }
 
-/** "learn 2 · tell 1 · knew 0 · dismiss 1 · turned off 0 · typed past 3" */
+/** "learn 2 · tell 1 · knew 0 · understood 1 · dismiss 1 · turned off 0 · typed past 3" */
 export function pressesLine(c: Counts): string {
-  return `learn ${c.learn} · tell ${c.tell} · knew ${c.knew} · dismiss ${c.dismiss} · turned off ${c.turnOff} · typed past ${c.typedPast}`
+  return `learn ${c.learn} · tell ${c.tell} · knew ${c.knew} · understood ${c.understood} · dismiss ${c.dismiss} · turned off ${c.turnOff} · typed past ${c.typedPast}`
 }
 
 export type HeadsUpCommand =
@@ -346,11 +347,11 @@ export function mergeMemory(stored: Memory, ours: Memory): Memory {
   return { ...ours, seen: newestUnique([...stored.seen, ...ours.seen]), known: newestUnique([...stored.known, ...ours.known]) }
 }
 
-export type Answer = 'learn' | 'tell' | 'knew' | 'dismiss' | 'turn-off' | 'typed-past'
+export type Answer = 'learn' | 'tell' | 'knew' | 'understood' | 'dismiss' | 'turn-off' | 'typed-past'
 
 /**
  * The builtin's transitions:
- * - any press: typedPastInARow = 0, looksToSkip = 0; the topic joins seen (and known on 'knew')
+ * - any press: typedPastInARow = 0, looksToSkip = 0; the topic joins seen (and known on 'knew' or 'understood')
  * - typed-past: typedPastInARow += 1, looksToSkip = typedPastInARow; the topic joins seen
  * 'learn' and 'tell' are one note's two presses; the lists take the topic once.
  * 'turn-off' (the second press of the band's Turn off) is a dismiss here; the shell writes the file off.
@@ -359,7 +360,7 @@ export type Answer = 'learn' | 'tell' | 'knew' | 'dismiss' | 'turn-off' | 'typed
 export function applyAnswer(m: Memory, topic: string, a: Answer): Memory {
   const seen = withTopic(m.seen, topic)
   if (a === 'typed-past') return { ...m, seen, typedPastInARow: m.typedPastInARow + 1, looksToSkip: m.typedPastInARow + 1 }
-  return { seen, known: a === 'knew' ? withTopic(m.known, topic) : m.known, typedPastInARow: 0, looksToSkip: 0 }
+  return { seen, known: a === 'knew' || a === 'understood' ? withTopic(m.known, topic) : m.known, typedPastInARow: 0, looksToSkip: 0 }
 }
 
 /** The runner's `avoid.txt`: seen and known, one per line, for the prompt's AVOID slot. */
@@ -516,7 +517,7 @@ export function typedPast(s: Session): Session {
 }
 
 /**
- * A press. learn: the band expands and stays; tell, knew, dismiss and a close
+ * A press. learn: the band expands and stays; tell, knew, understood, dismiss and a close
  * from the expanded band: idle. The shell puts tell's draft in the prompt box.
  */
 export function pressed(s: Session, a: Exclude<Answer, 'typed-past'>): Session {
@@ -575,7 +576,7 @@ export function tellClaudeDraft(n: Note): string {
   const raised = `A side check by ${n.seat} (not you) flagged this: ${n.headline}`
   const more = [n.title, ...n.points.map(point => `- ${point}`)].filter(part => part !== '').join('\n')
   const close = n.tag === 'Heads up'
-    ? 'Treat this as a claim, not a conclusion. Before continuing: verify it against the evidence, report what you find, and only then act on the last bullet.'
+    ? `Treat this as a claim, not a conclusion. Before continuing: verify it against the evidence, report what you find, and only then act on ${n.points.length === 0 ? 'it' : 'the last bullet'}.`
     : 'Take this into account before continuing and say whether it changes your plan.'
   return [raised, more, close].filter(part => part !== '').join('\n\n')
 }

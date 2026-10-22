@@ -574,7 +574,7 @@ function headsUpPresses($: EngineInterface, state: PaneState, noteId: string): R
     state.headsUpTurnOffArmed = noteId
     $.ui.invalidate('ui.render')
   }
-  return { learn: press('learn'), tell: press('tell'), knew: press('knew'), dismiss: press('dismiss'), 'turn-off': turnOff }
+  return { learn: press('learn'), tell: press('tell'), knew: press('knew'), understood: press('understood'), dismiss: press('dismiss'), 'turn-off': turnOff }
 }
 
 // The note, in the shape of Claude Code's own heads-up: the mark in the
@@ -589,7 +589,7 @@ function headsUpRow(
 ) {
   const { more } = band
   const turnOff = <ui.Button key="heads-up:turn-off" hotkey="3" label={turnOffArmed ? 'Press again to turn off' : 'Turn off'} plain dimColor onPress={press['turn-off']} />
-  // Collapsed: Learn more, Knew this already, Dismiss. Expanded: Understood (the same answer as Knew this already), Tell Claude, Close.
+  // Collapsed: Learn more, Knew this already, Dismiss. Expanded: Understood, Tell Claude, Close.
   const [first, second, last] = more === null
     ? [
         <ui.Button key="heads-up:learn" hotkey="1" label="Learn more" plain onPress={press.learn} />,
@@ -597,7 +597,7 @@ function headsUpRow(
         <ui.Button key="heads-up:dismiss" hotkey="0" label="Dismiss" plain role="dismiss" onPress={press.dismiss} />,
       ]
     : [
-        <ui.Button key="heads-up:understood" hotkey="1" label="Understood" plain onPress={press.knew} />,
+        <ui.Button key="heads-up:understood" hotkey="1" label="Understood" plain onPress={press.understood} />,
         <ui.Button key="heads-up:tell" hotkey="2" label="Tell Claude" plain onPress={press.tell} />,
         <ui.Button key="heads-up:close" hotkey="0" label="Close" plain role="dismiss" onPress={press.dismiss} />,
       ]
