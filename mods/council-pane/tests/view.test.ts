@@ -233,6 +233,9 @@ test('the footer offers only what applies now: fold or expand two or more sectio
 
 test('the seat folds are what closes when the synthesis lands, the synthesis itself not', () => {
   expect(seatFolds(paneSections(answered))).toEqual(['seat:jump:gemini', 'seat:jump:grok-cli', 'seat:jump:kimi'])
+  // A seat still out when the synthesis lands has nothing to fold, so its answer arrives open.
+  const stillOut = { ...answered, providers: [...answered.providers, { name: 'codex', state: 'querying' }] }
+  expect(seatFolds(paneSections(stillOut))).toEqual(['seat:jump:gemini', 'seat:jump:grok-cli', 'seat:jump:kimi'])
 })
 
 test('each seat appears once, live or finished', () => {

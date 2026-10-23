@@ -284,7 +284,7 @@ retry nor the API-sibling fallback can start, and KILL five seconds later for
 whatever trapped or ignored it; the slot becomes an error reading `cancelled
 from the pane` (its role kept), the seat's error file is removed, a
 `cancelled` status line is logged, and only then is the marker removed, so
-the pane draws the seat as cancelling (a grey `○`) meanwhile. A press that finds the
+the pane draws the seat as cancelling (a bare grey track) meanwhile. A press that finds the
 seat's slot already on disk, whatever it says, is spent: the seat's work is
 done. Round 1 removes its seats' markers before launching, so a press that
 landed after the round collected is spent too. A cancelled seat is not

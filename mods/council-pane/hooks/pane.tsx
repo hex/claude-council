@@ -2,11 +2,11 @@
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren, Timer } from 'claude-code'
-import { tagMark, toastLine,
+import {
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, onCadence, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
   bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, headsUpStatus, statusText, withEnabled, type Counts, type HeadsUpStatus,
   seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEAT_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
-  type Answer, type BandView, type Memory, type RunResult,
+  tagMark, toastLine, type Answer, type BandView, type Memory, type RunResult,
   EMPTY_MEMORY,
 } from './heads-up'
 import type { Note, Session } from '../types'
@@ -741,8 +741,9 @@ export const register: Register = (on, options) => {
   // The synthesis is written into the reply after the run ends; nothing on disk
   // holds it, so it is lifted from the main loop's final message.
   on('turn.complete', async ($, e, next) => {
-    const result = await next(e)
+    // Cleared first, so a later hook that throws cannot leave it set.
     if (e.agentId === undefined) state.turnInFlight = false
+    const result = await next(e)
     const view = state.view
     const synthesis = e.agentId === undefined && view && !state.synthesis ? extractSynthesis(e.answer) : undefined
     if (view && synthesis) {
@@ -1066,9 +1067,9 @@ export const register: Register = (on, options) => {
         case 'body':
           // The text arrives fitted to the pane's width and within its budget.
           // A fallback's reason already took the blank line above it. A blank
-          // line follows when another section does.
+          // line follows when another section does; the footer brings its own.
           return (
-            <Box key={key} flexDirection="column" marginTop={sections[index - 1]?.kind === 'reason' ? 0 : 1} marginBottom={index + 1 < sections.length ? 1 : 0}>
+            <Box key={key} flexDirection="column" marginTop={sections[index - 1]?.kind === 'reason' ? 0 : 1} marginBottom={sections[index + 1] !== undefined && sections[index + 1]?.kind !== 'footer' ? 1 : 0}>
               {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}

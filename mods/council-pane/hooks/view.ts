@@ -251,10 +251,11 @@ function footer(folds: string[], closed: ReadonlySet<string>, cancelAll: boolean
   }
 }
 
-// The seats' folds, which close once the synthesis lands so it reads near
-// the top; the synthesis stays open.
+// The open seats' folds, which close once the synthesis lands so it reads
+// near the top; the synthesis stays open, and a seat with nothing to show yet
+// stays foldable-open, so its answer arrives open.
 export function seatFolds(sections: Section[]): string[] {
-  return sections.flatMap(section => (section.kind === 'seat' ? [section.fold] : []))
+  return sections.flatMap(section => (section.kind === 'seat' && section.open ? [section.fold] : []))
 }
 
 // Claude Code refuses a Pane render carrying more than 100000 characters of

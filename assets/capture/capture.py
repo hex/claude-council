@@ -319,7 +319,9 @@ class Capture:
         stop = len(lines)
         # Claude Code's own usage notices name the account's limits and reset
         # time; the crop ends above them so they never reach a README image.
-        notice = next((i for i in range(start, stop) if "session limit" in lines[i] or "usage limit" in lines[i]), None)
+        # A pane line starts with its border, so a seat's own quota error is never taken for one.
+        notice = next((i for i in range(start, stop) if not lines[i].lstrip().startswith("│")
+                       and ("session limit" in lines[i] or "usage limit" in lines[i])), None)
         if notice is not None:
             stop = notice
         while stop > start and not lines[stop - 1].strip():
