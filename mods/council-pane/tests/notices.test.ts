@@ -21,13 +21,13 @@ test('a seat answered by its API sibling counts as answered everywhere, not as a
   const withFallback = [...providers, { name: 'grok-cli', state: 'fallback', ms: 1200 }]
   expect(finishNotice({ providers: withFallback, isDone: true })).toBe('finished: 3 of 5 answered, 1 error')
   expect(abandonedNotice({ providers: withFallback, isDone: false })).toBe('stopped before it finished: 3 of 5 answered')
-  expect(progressBand({ providers: withFallback, isDone: false }, undefined, 0)?.count).toBe('4 of 5')
+  expect(progressBand({ providers: withFallback, isDone: false }, undefined, 0, 0)?.event).toBe('4 of 5 done')
 })
 
 test('a seat the reader cancelled is counted as finished, apart from the errors', () => {
   const withCancel = [...providers, { name: 'grok-cli', state: 'cancelled' }]
   expect(finishNotice({ providers: withCancel, isDone: true })).toBe('finished: 2 of 5 answered, 1 error, 1 cancelled')
-  expect(progressBand({ providers: withCancel, isDone: false }, undefined, 0)?.count).toBe('4 of 5')
+  expect(progressBand({ providers: withCancel, isDone: false }, undefined, 0, 0)?.event).toBe('4 of 5 done')
 })
 
 test('wakePrompt asks for the result of a background job only', () => {
@@ -74,25 +74,23 @@ test('runPid accepts a process id and nothing else', () => {
   expect(runPid('42; rm -rf /')).toBeUndefined()
 })
 
-test('progressBand counts providers finished, an error included, with a fill bar, a clock and the latest event', () => {
-  // gemini + codex answered, grok errored, kimi querying: 3 of 4 finished, 6 of 8 cells.
-  expect(progressBand({ providers, isDone: false, latest: 'grok failed' }, 10_000, 34_900)).toEqual({
-    count: '3 of 4', bar: '▒▒▒▒▒▒··', clock: '0:24', event: 'grok failed',
+test('progressBand sweeps a bar on the frame, with a clock, and counts providers finished, an error included, before the latest event', () => {
+  // gemini + codex answered, grok errored, kimi querying: 3 of 4 finished.
+  expect(progressBand({ providers, isDone: false, latest: 'grok failed' }, 10_000, 34_900, 0)).toEqual({
+    bar: '░·······', clock: '0:24', event: '3 of 4 done · grok failed',
   })
+  expect(progressBand({ providers, isDone: false, latest: 'grok failed' }, 10_000, 34_900, 9)?.bar).toBe('···░▒▓█▓')
 })
 
-test('progressBand rounds down, so the bar is never full while a provider is out', () => {
+test('progressBand without an event says only the count, and the clock gains an hours field past an hour', () => {
   const nine = Array.from({ length: 9 }, (_, i) => ({ name: `p${i}`, state: i < 3 ? 'complete' : 'querying' }))
-  expect(progressBand({ providers: nine, isDone: false }, 0, 79_000)).toEqual({ count: '3 of 9', bar: '▒▒······', clock: '1:19' })
-  const oneOut = nine.map((p, i) => ({ ...p, state: i < 8 ? 'complete' : 'querying' }))
-  expect(progressBand({ providers: oneOut, isDone: false }, 0, 0)?.bar).toBe('▒▒▒▒▒▒▒·')
-  // Past an hour the clock gains an hours field.
-  expect(progressBand({ providers: nine, isDone: false }, 0, 3_661_000)?.clock).toBe('1:01:01')
+  expect(progressBand({ providers: nine, isDone: false }, 0, 79_000, 0)).toEqual({ bar: '░·······', clock: '1:19', event: '3 of 9 done' })
+  expect(progressBand({ providers: nine, isDone: false }, 0, 3_661_000, 0)?.clock).toBe('1:01:01')
 })
 
 test('progressBand starts empty and leaves the clock out until a run is picked up', () => {
   const waiting = [{ name: 'gemini', state: 'pending' }, { name: 'openai', state: 'querying' }]
-  expect(progressBand({ providers: waiting, isDone: false }, undefined, 5_000)).toEqual({ count: '0 of 2', bar: '········' })
+  expect(progressBand({ providers: waiting, isDone: false }, undefined, 5_000, 0)).toEqual({ bar: '░·······', event: '0 of 2 done' })
 })
 
 test('progressBand shows nothing once the run is done or before any provider is listed', () => {

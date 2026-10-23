@@ -138,7 +138,7 @@ function seatState({ name, state }: ProviderStatus, { cancels = [], retries = []
 }
 
 // Whether a live run's pane and band move: a seat querying or waiting on its
-// retry runs a clock and a sweep, and the chip shimmers.
+// retry runs a clock and a sweep, and so does the band.
 export function isMoving(view: Pick<RunView, 'providers'> & SeatMarks): boolean {
   return !view.isDone && view.providers.some(provider => provider.state === 'querying' || seatState(provider, view) === 'retrying')
 }

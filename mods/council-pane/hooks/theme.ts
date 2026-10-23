@@ -23,11 +23,8 @@ export const COLOR = {
 // Fills carry white letters, and a theme key would turn light on a dark theme
 // under them, so these are fixed and dark enough for 4.5:1 or better.
 export const FILL = {
-  // A deeper Claude orange (4.9:1 under white); the plain accent is 3.1:1.
+  // A deeper Claude orange (4.9:1 under white); the plain accent is 3.1:1. The SYNTHESIS header.
   chip: 'rgb(180,85,50)',
-  // The chip's mark cell, a step darker again.
+  // A step darker again: the heads-up note's badge.
   chipMark: 'rgb(150,68,40)',
 } as const
-
-// The chip's shimmer: warm light letters that pass over the chip fill.
-export const SHIMMER = { peak: 'rgb(255,226,150)', near: 'rgb(255,242,208)' } as const

@@ -9,7 +9,7 @@ type RunProgress = { providers: ProviderStatus[]; isDone: boolean }
 export function finishNotice({ providers }: RunProgress, jobId = ''): string {
   const errors = count(providers, 'error')
   const cancelled = count(providers, 'cancelled')
-  // The band draws a COUNCIL badge ahead of this, so the text does not repeat the name.
+  // The band draws the COUNCIL label ahead of this, so the text does not repeat the name.
   const subject = jobId ? `job ${jobId} finished` : 'finished'
   const answered = `${count(providers, ...ANSWERED_STATES)} of ${providers.length} answered`
   return `${subject}: ${answered}${errors > 0 ? `, ${errors} error` : ''}${cancelled > 0 ? `, ${cancelled} cancelled` : ''}`
@@ -26,22 +26,22 @@ function runClock(startedMs: number, nowMs: number): string {
   return hours > 0 ? `${hours}:${String(mins).padStart(2, '0')}:${ss}` : `${mins}:${ss}`
 }
 
-// The band above the prompt while a run is live: how many providers finished (an error or a cancel included), a bar filled to the
-// same share, an m:ss clock and the latest event. The bar rounds down, so it
-// never reads full while a provider is still out. `startedAtMs` is
-// when the pane picked the run up; before that there is no clock.
+// The band above the prompt while a run is live: a bar sweeping on the frame,
+// an m:ss clock, and how many providers finished (an error or a cancel
+// included) with the latest event after it. `startedAtMs` is when the pane
+// picked the run up; before that there is no clock.
 export function progressBand(
   { providers, isDone, latest }: RunProgress & { latest?: string },
   startedAtMs: number | undefined,
   nowMs: number,
-): { count: string; bar: string; clock?: string; event?: string } | undefined {
+  frame: number,
+): { bar: string; clock?: string; event: string } | undefined {
   if (isDone || providers.length === 0) return undefined
   const finished = count(providers, ...ENDED_STATES)
   return {
-    count: `${finished} of ${providers.length}`,
-    bar: bar({ kind: 'share', filled: finished, total: providers.length }, PROGRESS_CELLS),
+    bar: bar({ kind: 'sweep', frame }, PROGRESS_CELLS),
     ...(startedAtMs === undefined ? {} : { clock: runClock(startedAtMs, nowMs) }),
-    ...(latest ? { event: latest } : {}),
+    event: `${finished} of ${providers.length} done${latest ? ` \u00b7 ${latest}` : ''}`,
   }
 }
 

@@ -28,16 +28,15 @@ Plain `dimColor` serves secondary text that is fine to fade: counts, times, mode
 
 ### Fixed colours, and why
 
-- **Fills under white letters** (`FILL`): chips. A theme key would turn light on a dark theme and lose the white letters, so these stay fixed, each dark enough for white on both.
-  - `chip` `rgb(180,85,50)`, 4.9:1: a deeper Claude orange, because white on the orange itself is 3.1:1.
-  - `chipMark` `rgb(150,68,40)`, 6.7:1, the `✦` cell at the chip's start and the heads-up note's `!` or `?` badge.
+- **Fills under white letters** (`FILL`): the SYNTHESIS header and the heads-up badge. A theme key would turn light on a dark theme and lose the white letters, so these stay fixed, each dark enough for white on both.
+  - `chip` `rgb(180,85,50)`, 4.9:1: a deeper Claude orange, because white on the orange itself is 3.1:1. The SYNTHESIS header.
+  - `chipMark` `rgb(150,68,40)`, 6.7:1, the heads-up note's `!` or `?` badge.
 - **Data colours** tell things apart without meaning anything, and a theme has too few hues for that.
   - Vendor colours come from the council's config and draw the `▌` edge at the start of each seat row. No fill uses a vendor colour, so no text sits on one.
-- **Shimmer** (`SHIMMER`): the warm letters that pass over a running chip, 3.9:1 and 4.4:1 on the chip fill. They move, and the label stays readable in white between passes.
 
 ## Type
 
-- Bold uppercase is for two labels: the `COUNCIL` chip and the `SYNTHESIS` header.
+- Bold uppercase is for two labels: the `COUNCIL` label at the head of a band and the `SYNTHESIS` header.
 - Bold marks an identity: a provider's name in its own case (`openai`), the heads-up tag.
 - Dim marks metadata: counts, labels, hints, times, model names.
 
@@ -53,15 +52,14 @@ Each glyph has one meaning.
 | `○` | Set aside by the person: a seat cancelled, or cancelling |
 | `▌` | A seat's vendor, in the vendor colour, at the start of its row |
 | `▾` `▸` | A fold, open and closed: the synthesis header |
-| `✦` | The council's mark, on the chip |
 | ` ! ` ` ? ` | A heads-up note: `!` for this session's work, `?` for a concept to know; one ASCII letter on the `chipMark` fill, so every terminal draws it one cell wide |
 | `░▒▓█` `▒` `·` | A bar over a `·` track: a live seat's `░▒▓█▓▒░` block sweeps it left to right and enters again at the left; `▒` fills a share (a settled seat full, the band and the retry countdown by their count); a failed seat's `▓▒░` stub sits at the left; a cancelled seat's track is bare |
 | `─` | A dim rule across the pane that closes an open body |
 
 ## Components
 
-- **Chip**: a bold uppercase label on the `chip` fill in `onFill` letters, one space of padding each side. A running chip shimmers.
+- **Band head**: the run's state as a glyph and a word in the state's colour (`● running`, `✓ done`, `✗ failed`, `✗ retry`), then `COUNCIL` in bold. Plain text on the terminal's own background, so it draws alike everywhere.
 - **Seat row**: one line per seat for the whole run: the `▌` edge, the seat's digit, its glyph, its name in bold padded to the longest, the model dim (it gives way first when narrow; a cached or fallen-back seat adds `· cached` or `· fell back` in the glyph's colour), a 14-cell bar in the glyph's colour (a sweep while live, each row's a step behind the one above so they do not move in step; full once answered; a stub on an error; a bare track once cancelled), the time dim (running while live, final once settled), and at the right edge a fixed column with what the digit does now: `cancel`, `retry`, `open` or `fold`, or the digit dim alone when it does nothing. No word names the state: the glyph, the bar and their colour do. The row is the seat's fold header, and its answer or error text hangs under it when open. No seat appears twice.
 - **Footer**: the pane's last line, the keys that apply now and no others: `a` fold (with two or more sections to fold and one open) or `a` expand (with every one closed), `c` cancel all while a seat can be cancelled, `✕ close` for the pane's own close mark.
 - **Pane order**: a live run lists its seats, each open answer under its row, then the synthesis, then the footer. A finished run leads with its summary line (`4 of 5 answered · 1 error · 14.2s`); with `collapse_when_done` on, the synthesis follows it open and the seats come folded below, and off, the live order follows the summary.
-- **Band**: the one line above the prompt while a council run is live: chip, `N of M` finished, an 8-cell `▒` bar filled to that share in `accent`, the clock, the latest event, `c · cancel all` while a seat is querying, `o · open pane`. The finished notice, the retry offer and a heads-up note take the line before it.
+- **Band**: the one line above the prompt while a council run is live: the `● running` head, an 8-cell sweep in `accent`, the clock dim, then dim `N of M done · <latest event>`, `c · cancel all` while a seat is querying, `o · open pane`. The finished notice, the retry offer and a heads-up note take the line before it.

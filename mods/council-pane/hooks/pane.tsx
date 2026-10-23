@@ -18,7 +18,6 @@ import { readText, readView, type Files } from './snapshot'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
-import { shimmer } from './chip'
 import { isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { parseCatalog } from './catalog'
@@ -27,7 +26,7 @@ const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
 const RUN_TIMEOUT_MS = 600_000
 const POLL_MS = 500
-// Ten frames a second: the chip's shimmer, the live seats' sweeps and clocks.
+// Ten frames a second: the band's and the live seats' sweeps and clocks.
 const FRAME_MS = 100
 // The worker records its result seconds after .done; a worker killed outright
 // leaves its record at running, so the wait for it ends.
@@ -306,7 +305,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   }
 }
 
-// Advances the chip's shimmer, the live seats' sweeps and the clock the elapsed
+// Advances the band's and the live seats' sweeps and the clock the elapsed
 // times read, only while the run is moving; an idle pane costs no redraws.
 async function animate($: EngineInterface, state: PaneState): Promise<void> {
   const view = state.view
@@ -651,19 +650,13 @@ function headsUpRow(
   )
 }
 
-// The COUNCIL chip: a darker segment with a star, then the
-// label, white on solid colour. Coloured cells draw alike in every terminal,
-// where end-cap glyphs do not. Given a frame, a highlight moves across the
-// label's letters.
-function chip(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, label: string, frame?: number) {
+// A band's head: the run's state as a glyph and a word in the state's colour,
+// then the COUNCIL label in bold. Plain text, so it draws alike in every terminal.
+function bandHead(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, key: string, glyph: string, word: string, color: string) {
   return (
     <ui.Box key={key} flexDirection="row" flexShrink={0}>
-      <ui.Text bold color={COLOR.onFill} backgroundColor={FILL.chipMark}>{' \u2726 '}</ui.Text>
-      <ui.Text backgroundColor={FILL.chip}>{' '}</ui.Text>
-      {shimmer(label, frame).map((letter, index) => (
-        <ui.Text key={`${key}-${index}`} bold color={letter.color} backgroundColor={FILL.chip}>{letter.text}</ui.Text>
-      ))}
-      <ui.Text backgroundColor={FILL.chip}>{' '}</ui.Text>
+      <ui.Text color={color}>{`${glyph} ${word}`}</ui.Text>
+      <ui.Text bold>{'  COUNCIL'}</ui.Text>
     </ui.Box>
   )
 }
@@ -707,10 +700,10 @@ function retryRow(
 ) {
   return (
     <ui.Box key="retry" flexDirection="row" marginTop={1}>
-      {/* The other bands' chip; only the notice and the how-to give way when narrow. */}
-      {chip(ui, 'chip', offer.badge)}
+      {/* Only the notice and the how-to give way when narrow. */}
+      {bandHead(ui, 'head', '\u2717', 'retry', COLOR.danger)}
       <ui.Box flexShrink={1}>
-        <ui.Text bold color={COLOR.danger} wrap="truncate-end">{` \u2717 ${offer.notice}  `}</ui.Text>
+        <ui.Text bold color={COLOR.danger} wrap="truncate-end">{`  ${offer.notice}  `}</ui.Text>
       </ui.Box>
       <ui.Box flexShrink={0} flexDirection="row">
         <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
@@ -876,8 +869,8 @@ export const register: Register = (on, options) => {
       const ui = $.ui.resolve(e)
       return (
         <ui.Box key="finished" flexDirection="row" marginTop={1}>
-          {chip(ui, 'chip', 'COUNCIL')}
-          <ui.Text bold {...(finished.isFailure ? { color: COLOR.danger } : {})}>{` ${finished.isFailure ? '\u2717' : '\u2713'} ${finished.text}  `}</ui.Text>
+          {finished.isFailure ? bandHead(ui, 'head', '\u2717', 'failed', COLOR.danger) : bandHead(ui, 'head', '\u2713', 'done', COLOR.success)}
+          <ui.Text bold {...(finished.isFailure ? { color: COLOR.danger } : {})}>{`  ${finished.text}  `}</ui.Text>
           <ui.Button key="finished:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
           <ui.Text>{' '}</ui.Text>
           <ui.Button
@@ -916,22 +909,21 @@ export const register: Register = (on, options) => {
     const band = bandView((await read($, headsUp)).phase)
     if (band) return headsUpRow($.ui.resolve(e), band, headsUpPresses($, state, band.id), state.headsUpTurnOffArmed === band.id)
     const view = state.view
-    const progress = view ? progressBand(view, state.runStartedMs, state.nowMs) : undefined
+    const progress = view ? progressBand(view, state.runStartedMs, state.nowMs, state.frame) : undefined
     if (!view || !progress) return next(e)
     const ui = $.ui.resolve(e)
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
         {/* Only the event gives way when narrow. */}
-        {chip(ui, 'chip', 'COUNCIL', state.frame)}
+        {bandHead(ui, 'head', '\u25cf', 'running', COLOR.warning)}
         <ui.Box flexShrink={0}>
           <ui.Text>
-            <ui.Text bold>{`  ${progress.count}`}</ui.Text>
             <ui.Text color={COLOR.accent}>{`  ${progress.bar}`}</ui.Text>
-            {progress.clock ? <ui.Text bold color={COLOR.warning}>{`  \u25cf ${progress.clock}`}</ui.Text> : null}
+            {progress.clock ? <ui.Text dimColor>{`  ${progress.clock}`}</ui.Text> : null}
           </ui.Text>
         </ui.Box>
         <ui.Box flexGrow={1} flexShrink={1}>
-          <ui.Text dimColor wrap="truncate-end">{`  ${progress.event ?? ''}  `}</ui.Text>
+          <ui.Text dimColor wrap="truncate-end">{`  ${progress.event}  `}</ui.Text>
         </ui.Box>
         {seatsToCancel(view).length > 0 && (
           <ui.Box flexShrink={0}>
