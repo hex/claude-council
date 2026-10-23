@@ -18,7 +18,7 @@ import { readText, readView, type Files } from './snapshot'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
-import { isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
+import { headerFill, isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { parseCatalog } from './catalog'
 
@@ -984,17 +984,15 @@ export const register: Register = (on, options) => {
           const action = section.action
           // The model takes the slack and gives way when narrow, so the bar,
           // the time and the action sit in the same columns on every row. An
-          // open seat's row is a header on its provider's colour, in white, so
-          // each answer starts where the eye can find it and says whose it is.
+          // open seat's row is a header on its provider's colour, darkened, in
+          // white, so each answer starts where the eye can find it.
           const onFill = section.open ? { color: COLOR.onFill } : undefined
           return (
-            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: section.vendor } : {})}>
+            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: headerFill(section.vendor) } : {})}>
               <Box flexShrink={0}>
                 <Text>
                   <Text color={section.vendor}>{EDGE_MARK}</Text>
-                  <Text {...onFill}>{` ${section.digit.padStart(1)} `}</Text>
-                  <Text color={onFill?.color ?? section.glyphColor}>{`${section.glyph} `}</Text>
-                  <Text bold {...onFill}>{`${section.name}  `}</Text>
+                  <Text bold {...onFill}>{` ${section.name}  `}</Text>
                 </Text>
               </Box>
               <Box flexDirection="row" flexGrow={1} flexShrink={1}>
@@ -1005,14 +1003,14 @@ export const register: Register = (on, options) => {
                   <Box flexShrink={0}>
                     <Text>
                       {section.model === '' ? null : <Text {...(onFill ?? { dimColor: true })}>{' \u00b7 '}</Text>}
-                      <Text color={onFill?.color ?? section.glyphColor}>{section.note}</Text>
+                      <Text color={onFill?.color ?? section.stateColor}>{section.note}</Text>
                     </Text>
                   </Box>
                 )}
               </Box>
               <Box flexShrink={0}>
                 <Text>
-                  <Text color={onFill?.color ?? section.barColor}>{`  ${section.bar}`}</Text>
+                  <Text color={onFill?.color ?? section.stateColor}>{`  ${section.bar}`}</Text>
                   <Text {...(onFill ?? { dimColor: true })}>{`  ${section.time}`}</Text>
                 </Text>
               </Box>
@@ -1020,15 +1018,16 @@ export const register: Register = (on, options) => {
                 {action ? (
                   // Not plain: a plain Button draws its hotkey beside the label, and
                   // the row's leading digit already says which key presses it.
+                  // On a header fill the label is white; a Button takes no colour of its own.
                   <Button
                     key={`${action.press}:${action.seat}`}
                     label={action.press}
                     {...(section.digit ? { hotkey: section.digit } : {})}
                     onPress={() => (action.press === 'cancel' || action.press === 'retry' ? pressSeat($, state, action.press, action.seat) : toggleSection($, state, section.fold))}
-                  />
-                ) : (
-                  <Text dimColor>{section.digit}</Text>
-                )}
+                  >
+                    <Text {...onFill}>{action.press}</Text>
+                  </Button>
+                ) : null}
               </Box>
             </Box>
           )

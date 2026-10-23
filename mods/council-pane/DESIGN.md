@@ -44,10 +44,9 @@ Each glyph has one meaning.
 
 | Glyph | Meaning |
 |---|---|
-| `●` | Live, in `accent`: a seat querying or retrying, the band's head |
-| `✓` | Done: answered in `success`, cached in `info`, fell back in `accent` |
-| `✗` | Failed |
-| `○` | Set aside by the person: a seat cancelled, or cancelling |
+| `●` | Live, in `accent`: the band's head |
+| `✓` | Done, in `success`: the finished band's head |
+| `✗` | Failed, in `danger`: the failed and retry bands' head |
 | `▌` | A seat's vendor, in the vendor colour, at the start of its row |
 | `▾` `▸` | A fold, open and closed: the synthesis header |
 | ` ! ` ` ? ` | A heads-up note: `!` for this session's work, `?` for a concept to know; one ASCII letter on the `orange` fill, so every terminal draws it one cell wide |
@@ -56,7 +55,7 @@ Each glyph has one meaning.
 ## Components
 
 - **Band head**: the run's state as a glyph and a word in the state's colour (`● running`, `✓ done`, `✗ failed`, `✗ retry`), then `COUNCIL` in bold. Plain text on the terminal's own background, so it draws alike everywhere.
-- **Seat row**: one line per seat for the whole run: the `▌` edge, the seat's digit, its glyph, its name in bold padded to the longest, the model in `hint`, lighter than the name (it gives way first when narrow; a cached or fallen-back seat adds `· cached` or `· fell back` in the glyph's colour), a 14-cell bar in the glyph's colour (a sweep while live, each row's a step behind the one above so they do not move in step; full once answered; a stub on an error; a bare track once cancelled), the time dim (running while live, final once settled), and at the right edge a fixed column with a bracketed button for what the digit does now: `[ cancel ]`, `[ retry ]`, `[ open ]` or `[ fold ]` (not plain, so the number is not drawn twice), or the digit dim alone when it does nothing. No word names the state: the glyph, the bar and their colour do. The row is the seat's fold header, and its answer or error text hangs under it when open; an open seat's row is drawn on its provider's colour with every part in white. No seat appears twice.
+- **Seat row**: one line per seat for the whole run: the `▌` edge, the seat's name in bold padded to the longest, the model in `hint`, lighter than the name (it gives way first when narrow; a cached or fallen-back seat adds `· cached` or `· fell back` in the state's colour), a 14-cell bar in the state's colour (a sweep while live, each row's a step behind the one above so they do not move in step; full once answered; a stub on an error; a bare track once cancelled), the time dim (running while live, final once settled), and at the right edge a fixed column with a bracketed button for what the row's key does now: `[ cancel ]`, `[ retry ]`, `[ open ]` or `[ fold ]`. Keys 1 to 9, then 0, press the rows in order; nothing on the row draws its number (Alex, 2026-10-23). No glyph or word names the state: the bar's shape and colour do. The row is the seat's fold header, and its answer or error text hangs under it when open; an open seat's row is drawn on its provider's colour at seven tenths (`headerFill`) with every part in white, the button label included. No seat appears twice.
 - **Footer**: the pane's last line, a blank line above it and pushed to the right edge, the keys that apply now and no others: `a` fold (with two or more sections to fold and one open) or `a` expand (with every one closed), `c` cancel all while a seat can be cancelled, `✕ close` for the pane's own close mark.
 - **Pane order**: a live run lists its seats, each open answer under its row, then the synthesis, then the footer. A finished run leads with its summary line (`4 of 5 answered · 1 error · 14.2s`); with `collapse_when_done` on, the synthesis follows it open and the seats come folded below, and off, the live order follows the summary.
 - **Band**: the one line above the prompt while a council run is live: the `● running` head, an 8-cell sweep in `accent`, the clock dim, then dim `N of M done · <latest event>`, `c · cancel all` while a seat is querying, `o · open pane`. The finished notice, the retry offer and a heads-up note take the line before it. Every band is indented two columns, where Claude Code's own footer lines start.

@@ -39,7 +39,7 @@ export type Section =
   // One row per seat, its status and its fold header at once, with the name
   // padded to the column and the action's seat unpadded. A closed seat, or one
   // with nothing to show, is the row alone: no reason or body follows it.
-  | { kind: 'seat'; key: string; fold: string; digit: string; glyph: string; glyphColor: string; vendor: string; name: string; model: string; note: SeatNote; bar: string; barColor: string; time: string; open: boolean; action?: SeatAction }
+  | { kind: 'seat'; key: string; fold: string; digit: string; stateColor: string; vendor: string; name: string; model: string; note: SeatNote; bar: string; time: string; open: boolean; action?: SeatAction }
   | { kind: 'reason'; text: string }
   | { kind: 'body'; text: string }
   | { kind: 'synthesis'; key: string; fold: string; open: true; text: string }
@@ -49,22 +49,22 @@ export type Section =
   // The empty run's one line.
   | { kind: 'note'; text: string }
 
-// The bar takes the glyph's colour. A live seat has no share to show, so its
-// bar sweeps on the pane's frame.
-type SeatLook = { glyph: string; color: string; note: SeatNote; fill: (frame: number) => BarFill }
+// The bar's shape and colour are the seat's state: a sweep while live, since a
+// live seat has no share to show, full once answered, a stub on an error, bare
+// once cancelled.
+type SeatLook = { color: string; note: SeatNote; fill: (frame: number) => BarFill }
 const SWEEP = (frame: number): BarFill => ({ kind: 'sweep', frame })
 const FULL = (): BarFill => ({ kind: 'share', filled: 1, total: 1 })
-const LIVE: SeatLook = { glyph: '\u25cf', color: COLOR.accent, note: '', fill: SWEEP }
-const SET_ASIDE: SeatLook = { glyph: '\u25cb', color: COLOR.muted, note: '', fill: () => ({ kind: 'empty' }) }
-// The glyph and its colour are the state; only a seat that answered some other
-// way than asking says so in words. A state the pane does not know is drawn live.
+const LIVE: SeatLook = { color: COLOR.accent, note: '', fill: SWEEP }
+const SET_ASIDE: SeatLook = { color: COLOR.muted, note: '', fill: () => ({ kind: 'empty' }) }
+// Only a seat that answered some other way than asking says so in words. A state the pane does not know is drawn live.
 const SEAT_LOOKS: Record<string, SeatLook> = {
   querying: LIVE,
   retrying: LIVE,
-  complete: { glyph: '\u2713', color: COLOR.success, note: '', fill: FULL },
-  cached: { glyph: '\u2713', color: COLOR.info, note: 'cached', fill: FULL },
-  fallback: { glyph: '\u2713', color: COLOR.accent, note: 'fell back', fill: FULL },
-  error: { glyph: '\u2717', color: COLOR.danger, note: '', fill: () => ({ kind: 'stub' }) },
+  complete: { color: COLOR.success, note: '', fill: FULL },
+  cached: { color: COLOR.info, note: 'cached', fill: FULL },
+  fallback: { color: COLOR.accent, note: 'fell back', fill: FULL },
+  error: { color: COLOR.danger, note: '', fill: () => ({ kind: 'stub' }) },
   cancelled: SET_ASIDE,
   cancelling: SET_ASIDE,
 }
@@ -72,6 +72,15 @@ const SEAT_LOOKS: Record<string, SeatLook> = {
 const SWEEP_STAGGER = 7
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
+
+// An open seat's header fill: its provider's colour at seven tenths, so white
+// letters on it clear 4.5:1 for the vendor palette's mid-tones.
+export function headerFill(vendor: string): string {
+  const parts = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(vendor)
+  if (!parts) throw new Error(`headerFill takes rgb(r,g,b), got ${JSON.stringify(vendor)}`)
+  const [r, g, b] = parts.slice(1).map(part => Math.round(Number(part) * 0.7))
+  return `rgb(${r},${g},${b})`
+}
 
 const jumpKey = (name: string) => `jump:${name}`
 const fold = (kind: 'seat' | 'synthesis', key: string) => `${kind}:${key}`
@@ -201,14 +210,12 @@ export function paneSections(
       fold: seatFold,
       // The keyboard's number row: 1 to 9, then 0 for the tenth seat.
       digit: index < 10 ? String((index + 1) % 10) : '',
-      glyph: look.glyph,
-      glyphColor: look.color,
+      stateColor: look.color,
       vendor: `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`,
       name: name.padEnd(names),
       model: model ?? '',
       note: look.note,
       bar: bar(look.fill(frame + index * SWEEP_STAGGER)),
-      barColor: look.color,
       time: shownTime(provider).padStart(times),
       open,
       ...(press ? { action: { press, seat: name } } : {}),
