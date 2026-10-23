@@ -41,7 +41,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --result=<job-id>
   reformatting, no summarizing), except that a file opening with
   `<!-- council: round 1 was shown in the pane -->` gets the short form the
   council-execution skill describes for it. Then complete the synthesis under the
-  `## Synthesis` header following `${CLAUDE_PLUGIN_ROOT}/prompts/synthesis.md`.
+  `## 🧭 Synthesis` header following `${CLAUDE_PLUGIN_ROOT}/prompts/synthesis.md`.
 - **Exit 2**: the job is still running. Tell the user and suggest re-running
   `/claude-council:result <job-id>` in a little while.
 - **Exit 1**: unknown, failed, or cancelled job. Show the script's stderr,

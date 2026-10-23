@@ -3,8 +3,8 @@
 
 export function extractSynthesis(reply: string): string | undefined {
   const lines = reply.split('\n')
-  // The header may carry one mark before the word, the prompt's 🧭.
-  const start = lines.findIndex(line => /^#{1,6}\s+(?:\S+\s+)?Synthesis\s*$/.test(line))
+  // The transcript writes the header with its compass; a reply from before it has none.
+  const start = lines.findIndex(line => /^#{1,6}\s+(?:🧭\s+)?Synthesis\s*$/u.test(line))
   if (start < 0) return undefined
   const rest = lines.slice(start + 1)
   const saved = rest.findIndex(line => line.includes('Full output saved'))

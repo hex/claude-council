@@ -38,10 +38,10 @@ reprint them. Instead, output one line per provider in round 1, taken from
 its `## ` header (name, role, model, and any fallback note) followed by
 `answered` or the `Error:` line under it. When the header says the seat fell
 back, add the `> <provider>: <reason>` line printed under it. Then display VERBATIM the rest of
-the file from its `## Round 2` heading up to its `## Synthesis` line (debate
-rebuttals never reach the pane), or nothing more when there is no round 2, and
-continue with Step 3. Without that first line, display the whole file as below,
-up to its `## Synthesis` line.
+the file from its `## Round 2` heading, or from its `---` line above
+`## 🧭 Synthesis` when there is no round 2 (debate rebuttals never reach the
+pane), and continue with Step 3 under that header. Without that first line,
+display the whole file as below.
 
 **CRITICAL**: Display the file content EXACTLY as written. Do NOT:
 - Reformat or reinterpret any text
@@ -49,14 +49,14 @@ up to its `## Synthesis` line.
 - Summarize or abbreviate responses
 - Skip any lines including separator lines (`---`)
 
-Simply copy-paste the file content, up to its `## Synthesis` line, into your response.
+Simply copy-paste the entire file content into your response.
 
 ## Step 3: Complete the Synthesis Section
 
-The file ends with a plain `## Synthesis` header, which you do not print. Read
-`${CLAUDE_PLUGIN_ROOT}/prompts/synthesis.md` and write your synthesis under the
-`## 🧭 Synthesis` header it names, following its structure (Consensus /
-Divergence / Recommendation) and calibration rules.
+The file ends with a `## 🧭 Synthesis` header. Read
+`${CLAUDE_PLUGIN_ROOT}/prompts/synthesis.md` and write your synthesis UNDER
+that header following its structure (Consensus / Divergence / Recommendation)
+and calibration rules.
 
 ## Step 4: Notify User of Saved Output
 

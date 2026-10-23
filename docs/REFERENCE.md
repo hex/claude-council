@@ -45,7 +45,7 @@ the synthesis names the premise that could change the answer.
 For example:
 
 ```text
-## Synthesis
+## 🧭 Synthesis
 All five recommend SQLite. Read that as agreement about the reasoning, not
 as verification: every provider got the same description of a system none
 of them can inspect. The answer assumes this stays single-node. That is the

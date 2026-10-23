@@ -83,7 +83,7 @@ draw_fallback_reason() {
 draw_synthesis_header() {
     echo ""
     echo "---"
-    echo "## Synthesis"
+    echo "## 🧭 Synthesis"
 }
 
 # Render one provider entry's body. Output is never dropped: error status

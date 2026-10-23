@@ -91,7 +91,7 @@ The rules live in `hooks/heads-up.ts`, with their tests in `tests/heads-up.test.
 - A run that is killed outright writes no `.done`. The mod checks the run's pid every five seconds and, once the process is gone, shows `stopped before it finished` and moves on.
 - The pane follows one run at a time. If a second run starts while one is live, the pane picks it up when the first ends.
 - Saving a file in the mod or changing a setting reloads it and clears the pane. Run `/claude-council:ask` again.
-- The mod parses the synthesis out of Claude's reply, between the `## Synthesis` heading and the `Full output saved` line. If the council skill changes that format, the section stops appearing.
+- The mod parses the synthesis out of Claude's reply, between the `## 🧭 Synthesis` heading and the `Full output saved` line. If the council skill changes that format, the section stops appearing.
 - Answer bodies use Claude Code's own markdown styling. The Rich renderer's fitted tables and code highlighting are tmux only.
 - The mod cuts a single paragraph over 10,000 characters mid-text, because one `Markdown` element holds no more than that. A cut inside a code fence breaks the rendering of what follows.
 - The drawing has no automated test. `claude plugin test` exists from Claude Code 2.1.295, but no test here imports its kit from `claude-code/testing`. `bun test` covers the logic. Only a person looking at the pane checks the drawing.
