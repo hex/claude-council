@@ -1,13 +1,12 @@
 // ABOUTME: Reads the retry offer a council run leaves in its watch dir and shapes the pane's countdown for it
 // ABOUTME: The run waits on the offer; the pane accepts by renaming it to .retry or declines with .retry-declined
 
-import { bar } from './bar'
+import { bar, BAND_CELLS } from './bar'
 
 export type RetryOffer = { seconds: number; providers: string[] }
 
-export type RetrySection = { kind: 'retry'; badge: string; notice: string; label: string; skipLabel: string; remaining: number; bar: string }
+export type RetrySection = { kind: 'retry'; notice: string; remaining: number; bar: string }
 
-const COUNTDOWN_CELLS = 8
 
 export function parseRetryOffer(text: string): RetryOffer | undefined {
   const [window = '', ...rest] = text.split('\n').map(line => line.trim())
@@ -20,8 +19,7 @@ export function retrySection(offer: RetryOffer, seenAtMs: number, nowMs: number)
   const remaining = Math.max(0, offer.seconds - Math.floor((nowMs - seenAtMs) / 1000))
   const { providers } = offer
   // Rounded up, so the countdown empties only when no time is left.
-  const filled = Math.ceil((remaining / offer.seconds) * COUNTDOWN_CELLS)
+  const filled = Math.ceil((remaining / offer.seconds) * BAND_CELLS)
   const notice = providers.length === 1 ? `${providers[0]} failed` : `${providers.length} providers failed: ${providers.join(', ')}`
-  // No letters in the labels: the r and s keys answer only once the band holds the focus.
-  return { kind: 'retry', badge: 'COUNCIL', notice, label: 'retry', skipLabel: 'skip', remaining, bar: bar({ kind: 'share', filled, total: COUNTDOWN_CELLS }, COUNTDOWN_CELLS) }
+  return { kind: 'retry', notice, remaining, bar: bar({ kind: 'share', filled, total: BAND_CELLS }, BAND_CELLS) }
 }

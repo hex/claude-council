@@ -39,13 +39,14 @@ export type Section =
   // One row per seat, its status and its fold header at once, with the name
   // padded to the column and the action's seat unpadded. A closed seat, or one
   // with nothing to show, is the row alone: no reason or body follows it.
-  | { kind: 'seat'; key: string; fold: string; digit: string; stateColor: string; vendor: string; name: string; model: string; note: SeatNote; bar: string; time: string; open: boolean; action?: SeatAction }
+  | { kind: 'seat'; key: string; fold: string; digit: string; stateColor: string; vendor: string; fill: string; name: string; model: string; note: SeatNote; bar: string; time: string; open: boolean; action?: SeatAction }
   | { kind: 'reason'; text: string }
   | { kind: 'body'; text: string }
   | { kind: 'synthesis'; key: string; fold: string; open: true; text: string }
   | { kind: 'synthesis'; key: string; fold: string; open: false }
   // The pane's keys that apply now, last.
-  | { kind: 'footer'; keys: { hotkey: string; label: string }[] }
+  // a folds or expands two or more sections, c cancels every seat still out.
+  | { kind: 'footer'; fold?: { label: 'fold' | 'expand'; folds: string[] }; cancelAll: boolean }
   // The empty run's one line.
   | { kind: 'note'; text: string }
 
@@ -73,13 +74,13 @@ const SWEEP_STAGGER = 7
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
 
-// An open seat's header fill: its provider's colour at seven tenths, so white
-// letters on it clear 4.5:1 for the vendor palette's mid-tones.
-export function headerFill(vendor: string): string {
-  const parts = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(vendor)
-  if (!parts) throw new Error(`headerFill takes rgb(r,g,b), got ${JSON.stringify(vendor)}`)
-  const [r, g, b] = parts.slice(1).map(part => Math.round(Number(part) * 0.7))
-  return `rgb(${r},${g},${b})`
+// An open seat's header fill is its provider's colour at seven tenths, so
+// white letters on it clear 4.5:1 for the vendor palette's mid-tones.
+const HEADER_SHADE = 0.7
+
+// A provider's `r;g;b` as a colour, scaled toward black by `shade`.
+function rgb(triple: string, shade = 1): string {
+  return `rgb(${triple.split(';').map(part => Math.round(Number(part) * shade)).join(',')})`
 }
 
 const jumpKey = (name: string) => `jump:${name}`
@@ -185,8 +186,10 @@ export function paneSections(
       // its first attempt's error file. fitText rewrites an answer for the
       // pane's width before the budget is counted: a wide table becomes
       // records that repeat every header, which can lengthen it several times over.
-      const reason: Section[] = state === 'fallback' && error !== undefined ? [{ kind: 'reason', text: noticeText(`${name} fell back: ${error}`) }] : []
-      return () => [...reason, { kind: 'body', text: fitText(response) }]
+      return () => [
+        ...(state === 'fallback' && error !== undefined ? [{ kind: 'reason' as const, text: noticeText(`${name} fell back: ${error}`) }] : []),
+        { kind: 'body', text: fitText(response) },
+      ]
     }
     return state === 'error' && error !== undefined ? () => [{ kind: 'body', text: noticeText(error) }] : undefined
   }
@@ -196,11 +199,13 @@ export function paneSections(
   const times = width(providers.map(shownTime))
   const cancellable = seatsToCancel({ providers, cancels, isDone })
   const retriableNow = seatsToRetry({ providers, retries, retriable, isDone })
+  const folds: string[] = []
   const seats = providers.flatMap((provider, index): Section[] => {
     const { name, model } = provider
     const key = jumpKey(name)
     const seatFold = fold('seat', key)
     const text = textOf(provider)
+    if (text) folds.push(seatFold)
     const open = text !== undefined && !closed.has(seatFold)
     const look = SEAT_LOOKS[shownState(provider)] ?? LIVE
     const press = cancellable.includes(name) ? 'cancel' : retriableNow.includes(name) ? 'retry' : text ? (open ? 'fold' : 'open') : undefined
@@ -211,7 +216,8 @@ export function paneSections(
       // The keyboard's number row: 1 to 9, then 0 for the tenth seat.
       digit: index < 10 ? String((index + 1) % 10) : '',
       stateColor: look.color,
-      vendor: `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`,
+      vendor: rgb(colors[name] ?? NEUTRAL_RGB),
+      fill: rgb(colors[name] ?? NEUTRAL_RGB, HEADER_SHADE),
       name: name.padEnd(names),
       model: model ?? '',
       note: look.note,
@@ -227,7 +233,7 @@ export function paneSections(
   const synthesisSection: Section[] = !synthesis ? []
     : closed.has(synthesisFold) ? [{ kind: 'synthesis', key: synthesisKey, fold: synthesisFold, open: false }]
     : [{ kind: 'synthesis', key: synthesisKey, fold: synthesisFold, open: true, text: fitText(synthesis) }]
-  const folds = [...providers.filter(provider => textOf(provider) !== undefined).map(({ name }) => fold('seat', jumpKey(name))), ...(synthesis ? [synthesisFold] : [])]
+  if (synthesis) folds.push(synthesisFold)
   return withinTextBudget([
     ...(isDone ? [{ kind: 'summary' as const, text: summaryText(providers) }] : []),
     ...(isDone && collapsesWhenDone ? [...synthesisSection, ...seats] : [...seats, ...synthesisSection]),
@@ -235,16 +241,14 @@ export function paneSections(
   ])
 }
 
-// With two or more sections to fold, the a key folds the open ones while any
-// is, else expands them all; c cancels every seat still out; the pane's own
-// close mark closes it.
-function footer(folds: string[], closed: ReadonlySet<string>, isCancellable: boolean): Section {
-  const keys = [
-    ...(folds.length > 1 ? [{ hotkey: 'a', label: folds.some(each => !closed.has(each)) ? 'fold' : 'expand' }] : []),
-    ...(isCancellable ? [{ hotkey: 'c', label: 'cancel all' }] : []),
-    { hotkey: '\u2715', label: 'close' },
-  ]
-  return { kind: 'footer', keys }
+// With two or more sections to fold, a folds them while any is open, else
+// expands them all; c cancels every seat still out.
+function footer(folds: string[], closed: ReadonlySet<string>, cancelAll: boolean): Section {
+  return {
+    kind: 'footer',
+    ...(folds.length > 1 ? { fold: { label: folds.some(each => !closed.has(each)) ? 'fold' : 'expand', folds } } : {}),
+    cancelAll,
+  }
 }
 
 // The seats' folds, which close once the synthesis lands so it reads near

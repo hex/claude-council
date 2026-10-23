@@ -21,10 +21,7 @@ test('retrySection counts the window down from when the offer was first seen', (
   const offer = { seconds: 45, providers: ['cursor-cli', 'grok'] }
   expect(retrySection(offer, 10_000, 17_400)).toEqual({
     kind: 'retry',
-    badge: 'COUNCIL',
     notice: '2 providers failed: cursor-cli, grok',
-    label: 'retry',
-    skipLabel: 'skip',
     remaining: 38,
     bar: '━━━━━━━·',
   })

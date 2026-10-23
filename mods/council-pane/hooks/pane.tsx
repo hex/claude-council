@@ -4,7 +4,7 @@ import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren, Timer } from 'claude-code'
 import { tagMark, toastLine,
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, onCadence, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
-  bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
+  bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, headsUpStatus, statusText, withEnabled, type Counts, type HeadsUpStatus,
   seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEAT_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
   type Answer, type BandView, type Memory, type RunResult,
   EMPTY_MEMORY,
@@ -18,7 +18,7 @@ import { readText, readView, type Files } from './snapshot'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
-import { headerFill, isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
+import { isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { parseCatalog } from './catalog'
 
@@ -183,17 +183,17 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
 }
 
 // What /heads-up status prints, from the project file as it stands.
-async function headsUpStatus($: EngineInterface, rowOn: boolean): Promise<string> {
+async function readHeadsUpStatus($: EngineInterface, rowOn: boolean): Promise<HeadsUpStatus> {
   const { text } = await headsUpFile($)
-  return statusText(parseConfig(text, rowOn), rowOn, text, parseCounts(await $.store.get(COUNTS_KEY)))
+  return headsUpStatus(parseConfig(text, rowOn), rowOn, text, parseCounts(await $.store.get(COUNTS_KEY)))
 }
 
 // The status as the command's reply; mid-turn the reply waits for the turn to
 // end, so a toast carries its one-line form at once.
 async function headsUpReply($: EngineInterface, state: PaneState, rowOn: boolean): Promise<string> {
-  const status = await headsUpStatus($, rowOn)
+  const status = await readHeadsUpStatus($, rowOn)
   if (state.turnInFlight) $.ui.toast(toastLine(status), { timeoutMs: 8000 })
-  return status
+  return statusText(status)
 }
 
 // Once per install, while the check is off: the store flag is shared by every session.
@@ -707,9 +707,10 @@ function retryRow(
         <ui.Text bold color={COLOR.danger} wrap="truncate-end">{`  ${offer.notice}  `}</ui.Text>
       </ui.Box>
       <ui.Box flexShrink={0} flexDirection="row">
-        <ui.Button key="retry:accept" hotkey="r" label={offer.label} onPress={press.accept} />
+        {/* No letters in the labels: r and s answer only once the band holds the focus. */}
+        <ui.Button key="retry:accept" hotkey="r" label="retry" onPress={press.accept} />
         <ui.Text>{' '}</ui.Text>
-        <ui.Button key="retry:skip" hotkey="s" label={offer.skipLabel} onPress={press.skip} />
+        <ui.Button key="retry:skip" hotkey="s" label="skip" onPress={press.skip} />
         <ui.Text color={COLOR.accent}>{`  ${offer.bar}`}</ui.Text>
         <ui.Text dimColor>{` ${offer.remaining}s`}</ui.Text>
       </ui.Box>
@@ -968,11 +969,10 @@ export const register: Register = (on, options) => {
       <Button key={`toggle:${section.fold}`} plain onPress={() => toggleSection($, state, section.fold)}>{children}</Button>
     )
     const mark = (open: boolean) => (open ? OPEN_MARK : CLOSED_MARK)
-    // The a key folds the sections open now, so an answer that lands later
-    // still arrives open; expanding opens them all.
-    const foldAll = (closes: boolean) => {
-      const open = sections.flatMap(each => ((each.kind === 'seat' || each.kind === 'synthesis') && each.open ? [each.fold] : []))
-      state.closed = closes ? new Set([...state.closed, ...open]) : new Set()
+    // Folding closes the sections that have text now, so an answer that lands
+    // later still arrives open; expanding opens them all.
+    const foldAll = ({ label, folds }: { label: 'fold' | 'expand'; folds: string[] }) => {
+      state.closed = label === 'fold' ? new Set([...state.closed, ...folds]) : new Set()
       $.ui.invalidate('ui.render')
     }
     const draw = (section: Section, index: number) => {
@@ -986,46 +986,50 @@ export const register: Register = (on, options) => {
           // the time and the action sit in the same columns on every row. An
           // open seat's row is a header on its provider's colour, darkened, in
           // white, so each answer starts where the eye can find it.
-          const onFill = section.open ? { color: COLOR.onFill } : undefined
+          // Each cell's ink, chosen once: on the fill every cell is white.
+          const white = { color: COLOR.onFill }
+          const ink = section.open
+            ? { name: white, model: white, dim: white, state: white, label: white }
+            : { name: {}, model: { color: COLOR.hint }, dim: { dimColor: true }, state: { color: section.stateColor }, label: {} }
           return (
-            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: headerFill(section.vendor) } : {})}>
+            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: section.fill } : {})}>
               <Box flexShrink={0}>
                 <Text>
                   <Text color={section.vendor}>{EDGE_MARK}</Text>
-                  <Text bold {...onFill}>{` ${section.name}  `}</Text>
+                  <Text bold {...ink.name}>{` ${section.name}  `}</Text>
                 </Text>
               </Box>
               <Box flexDirection="row" flexGrow={1} flexShrink={1}>
                 <Box flexShrink={1}>
-                  <Text color={onFill?.color ?? COLOR.hint} wrap="truncate-end">{section.model}</Text>
+                  <Text {...ink.model} wrap="truncate-end">{section.model}</Text>
                 </Box>
                 {section.note === '' ? null : (
                   <Box flexShrink={0}>
                     <Text>
-                      {section.model === '' ? null : <Text {...(onFill ?? { dimColor: true })}>{' \u00b7 '}</Text>}
-                      <Text color={onFill?.color ?? section.stateColor}>{section.note}</Text>
+                      {section.model === '' ? null : <Text {...ink.dim}>{' \u00b7 '}</Text>}
+                      <Text {...ink.state}>{section.note}</Text>
                     </Text>
                   </Box>
                 )}
               </Box>
               <Box flexShrink={0}>
                 <Text>
-                  <Text color={onFill?.color ?? section.stateColor}>{`  ${section.bar}`}</Text>
-                  <Text {...(onFill ?? { dimColor: true })}>{`  ${section.time}`}</Text>
+                  <Text {...ink.state}>{`  ${section.bar}`}</Text>
+                  <Text {...ink.dim}>{`  ${section.time}`}</Text>
                 </Text>
               </Box>
               <Box flexShrink={0} width={ACTION_COLUMNS} paddingLeft={2}>
                 {action ? (
                   // Not plain: a plain Button draws its hotkey beside the label, and
-                  // the row's leading digit already says which key presses it.
-                  // On a header fill the label is white; a Button takes no colour of its own.
+                  // the row draws no number. A Button takes no colour of its own, so
+                  // the label is a Text child, white on a header fill.
                   <Button
                     key={`${action.press}:${action.seat}`}
                     label={action.press}
                     {...(section.digit ? { hotkey: section.digit } : {})}
                     onPress={() => (action.press === 'cancel' || action.press === 'retry' ? pressSeat($, state, action.press, action.seat) : toggleSection($, state, section.fold))}
                   >
-                    <Text {...onFill}>{action.press}</Text>
+                    <Text {...ink.label}>{action.press}</Text>
                   </Button>
                 ) : null}
               </Box>
@@ -1034,21 +1038,20 @@ export const register: Register = (on, options) => {
         }
         case 'summary':
           return <Text key={key} bold>{section.text}</Text>
-        case 'footer':
+        case 'footer': {
+          const { fold } = section
           return (
+            // Not plain, so no letter is drawn: a and c still press them once the pane holds the focus.
             <Box key={key} flexDirection="row" flexWrap="wrap" justifyContent="flex-end" width={columns} marginTop={1}>
-              {section.keys.map(({ hotkey, label }, part) => (
-                <Box key={`${key}-${hotkey}`} flexDirection="row">
-                  {part > 0 && <Text>{'  '}</Text>}
-                  {/* Not plain, so no letter is drawn: the keys still press them once the pane holds the focus. */}
-                  {hotkey === 'a' ? <Button key="footer:fold" hotkey="a" label={label} onPress={() => foldAll(label === 'fold')} />
-                    : hotkey === 'c' ? <Button key="footer:cancel" hotkey="c" label={label} onPress={() => cancelAll($, state)} />
-                    // The pane's own close mark, which the engine draws and answers.
-                    : <Text dimColor>{`${hotkey} ${label}`}</Text>}
-                </Box>
-              ))}
+              {fold && <Button key="footer:fold" hotkey="a" label={fold.label} onPress={() => foldAll(fold)} />}
+              {fold && <Text>{'  '}</Text>}
+              {section.cancelAll && <Button key="footer:cancel" hotkey="c" label="cancel all" onPress={() => cancelAll($, state)} />}
+              {section.cancelAll && <Text>{'  '}</Text>}
+              {/* The pane's own close mark, which the engine draws and answers. */}
+              <Text dimColor>{'\u2715 close'}</Text>
             </Box>
           )
+        }
         case 'synthesis':
           return (
             <Box key={section.key} flexDirection="column" marginTop={section.open ? 1 : 0}>

@@ -1,7 +1,7 @@
 // ABOUTME: Words for a council run outside the pane: the finish notice, the wake prompt, the reopen reply
 // ABOUTME: Pure functions over the run's provider states
 
-import { bar } from './bar'
+import { bar, BAND_CELLS } from './bar'
 import { ANSWERED_STATES, count, ENDED_STATES, type ProviderStatus } from './status'
 
 type RunProgress = { providers: ProviderStatus[]; isDone: boolean }
@@ -15,7 +15,6 @@ export function finishNotice({ providers }: RunProgress, jobId = ''): string {
   return `${subject}: ${answered}${errors > 0 ? `, ${errors} error` : ''}${cancelled > 0 ? `, ${cancelled} cancelled` : ''}`
 }
 
-const PROGRESS_CELLS = 8
 
 // An m:ss clock, h:mm:ss past an hour. Args: when the run started, now.
 function runClock(startedMs: number, nowMs: number): string {
@@ -39,7 +38,7 @@ export function progressBand(
   if (isDone || providers.length === 0) return undefined
   const finished = count(providers, ...ENDED_STATES)
   return {
-    bar: bar({ kind: 'sweep', frame }, PROGRESS_CELLS),
+    bar: bar({ kind: 'sweep', frame }, BAND_CELLS),
     ...(startedAtMs === undefined ? {} : { clock: runClock(startedAtMs, nowMs) }),
     event: `${finished} of ${providers.length} done${latest ? ` \u00b7 ${latest}` : ''}`,
   }

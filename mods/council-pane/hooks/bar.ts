@@ -2,6 +2,8 @@
 // ABOUTME: while a seat has no share to show, or a fill of the share that is done
 
 export const BAR_CELLS = 14
+// The bars in the bands above the prompt: the progress sweep and the retry countdown.
+export const BAND_CELLS = 8
 
 export type BarFill = { kind: 'sweep'; frame: number } | { kind: 'share'; filled: number; total: number } | { kind: 'stub' } | { kind: 'empty' }
 

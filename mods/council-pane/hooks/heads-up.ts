@@ -177,7 +177,9 @@ export function withEnabled(text: string | undefined, on: boolean | undefined, s
  * aligned row per fact: which switch set it, the seat and cadence, the counts
  * kept on this machine.
  */
-export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: string | undefined, counts: Counts): string {
+export type HeadsUpStatus = { state: string; rows: [string, string][] }
+
+export function headsUpStatus(config: HeadsUpConfig, rowOn: boolean, fileText: string | undefined, counts: Counts): HeadsUpStatus {
   const row = rowOn ? 'on' : 'off'
   const file = fileText === undefined ? undefined : fileEnabled(fileText)
   const fileNote = fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`
@@ -198,6 +200,10 @@ export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: stri
     rows.push(['by', `the /config row is off, ${fileNote}`], ['turn on', `/${COMMAND} on [seat] for this project, the /config row "Heads-up side-check" for every project`])
   }
   rows.push(['checks', countsLine(counts)], ['presses', pressesLine(counts)])
+  return { state, rows }
+}
+
+export function statusText({ state, rows }: HeadsUpStatus): string {
   const width = Math.max(...rows.map(([label]) => label.length))
   return [`Heads-up side-check: ${state}`, ...rows.map(([label, value]) => `  ${label.padEnd(width)}  ${value}`)].join('\n')
 }
@@ -208,13 +214,10 @@ export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: stri
  * command typed while a turn runs gets its reply drawn only when the turn
  * ends, so the toast is what the person sees at once.
  */
-export function toastLine(status: string): string {
-  const [head = '', ...rows] = status.split('\n')
+export function toastLine({ state, rows }: HeadsUpStatus): string {
   const kept = new Set(['seat', 'every', 'checks'])
-  const parts = rows
-    .map(row => row.trim().split(/\s{2,}/, 2))
-    .flatMap(([label, value]) => label !== undefined && value !== undefined && kept.has(label) ? [label === 'every' ? `every ${value}` : value] : [])
-  return [head, ...parts].join(' · ')
+  const parts = rows.flatMap(([label, value]) => (kept.has(label) ? [label === 'every' ? `every ${value}` : value] : []))
+  return [`Heads-up side-check: ${state}`, ...parts].join(' \u00b7 ')
 }
 
 /** The /heads-up setup dialogs: scope, seat, cadence. */

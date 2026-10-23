@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, tagMark, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, tagMark, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, headsUpStatus, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -315,41 +315,41 @@ test('a pick belongs to its seat: naming another seat drops it, naming the same 
 
 test('the toast is the status on one line: state, seat, cadence and the checks, without the presses', () => {
   const counts = { ...EMPTY_COUNTS, none: 3, notes: 1, learn: 1 }
-  expect(toastLine(statusText({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts)))
+  expect(toastLine(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts)))
     .toBe('Heads-up side-check: on for this project · codex · every 3 requests · checks 4 · none 3 · notes 1 · repeats 0 · failed 0')
-  expect(toastLine(statusText({ enabled: false, seat: 'codex', every: 3 }, false, undefined, EMPTY_COUNTS)))
+  expect(toastLine(headsUpStatus({ enabled: false, seat: 'codex', every: 3 }, false, undefined, EMPTY_COUNTS)))
     .toBe('Heads-up side-check: off · checks 0 · none 0 · notes 0 · repeats 0 · failed 0')
 })
 
 test('status names the effective state and which switch set it, then the counts, one aligned row per fact', () => {
   const counts = { ...EMPTY_COUNTS, none: 3, notes: 1, learn: 1 }
-  expect(statusText({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts)).toBe(
+  expect(statusText(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts))).toBe(
     'Heads-up side-check: on for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is off)\n'
     + '  seat     codex\n'
     + '  every    3 requests\n'
     + '  checks   checks 4 · none 3 · notes 1 · repeats 0 · failed 0\n'
     + '  presses  learn 1 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
-  expect(statusText({ enabled: true, seat: 'codex', every: 3, model: { model: 'gpt-6.1-sol', effort: 'high' } }, true, undefined, EMPTY_COUNTS)).toBe(
+  expect(statusText(headsUpStatus({ enabled: true, seat: 'codex', every: 3, model: { model: 'gpt-6.1-sol', effort: 'high' } }, true, undefined, EMPTY_COUNTS))).toBe(
     'Heads-up side-check: on for every project\n'
     + '  by       the /config row (no .claude/council-heads-up.json here)\n'
     + '  seat     codex (gpt-6.1-sol, high)\n'
     + '  every    3 requests\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
-  expect(statusText({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS)).toBe(
+  expect(statusText(headsUpStatus({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS))).toBe(
     'Heads-up side-check: off for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is on)\n'
     + '  turn on  /heads-up on [seat] turns it on here\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
-  expect(statusText({ enabled: false }, false, undefined, EMPTY_COUNTS)).toBe(
+  expect(statusText(headsUpStatus({ enabled: false }, false, undefined, EMPTY_COUNTS))).toBe(
     'Heads-up side-check: off\n'
     + '  by       the /config row is off, no .claude/council-heads-up.json here\n'
     + '  turn on  /heads-up on [seat] for this project, the /config row "Heads-up side-check" for every project\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
-  expect(statusText({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' }, true, '{', EMPTY_COUNTS)).toBe(
+  expect(statusText(headsUpStatus({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' }, true, '{', EMPTY_COUNTS))).toBe(
     'Heads-up side-check: off\n'
     + '  problem  .claude/council-heads-up.json is not valid JSON; heads-up is off\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0\n'
