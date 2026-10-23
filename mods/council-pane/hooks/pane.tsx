@@ -984,11 +984,11 @@ export const register: Register = (on, options) => {
           const action = section.action
           // The model takes the slack and gives way when narrow, so the bar,
           // the time and the action sit in the same columns on every row. An
-          // open seat's row is a header on Claude's orange, in white, so each
-          // answer starts where the eye can find it.
+          // open seat's row is a header on its provider's colour, in white, so
+          // each answer starts where the eye can find it and says whose it is.
           const onFill = section.open ? { color: COLOR.onFill } : undefined
           return (
-            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: FILL.orange } : {})}>
+            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: section.vendor } : {})}>
               <Box flexShrink={0}>
                 <Text>
                   <Text color={section.vendor}>{EDGE_MARK}</Text>
@@ -1037,7 +1037,7 @@ export const register: Register = (on, options) => {
           return <Text key={key} bold>{section.text}</Text>
         case 'footer':
           return (
-            <Box key={key} flexDirection="row" flexWrap="wrap">
+            <Box key={key} flexDirection="row" flexWrap="wrap" justifyContent="flex-end" width={columns} marginTop={1}>
               {section.keys.map(({ hotkey, label }, part) => (
                 <Box key={`${key}-${hotkey}`} flexDirection="row">
                   {part > 0 && <Text>{'  '}</Text>}
