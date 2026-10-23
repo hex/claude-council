@@ -5,10 +5,10 @@ export const BAR_CELLS = 14
 
 export type BarFill = { kind: 'sweep'; frame: number } | { kind: 'share'; filled: number; total: number } | { kind: 'stub' } | { kind: 'empty' }
 
-const TRACK = '·'
-const SWEEP = '░▒▓█▓▒░'
-const STUB = '▓▒░'
-const FILLED = '▒'
+const TRACK = '\u00b7'
+const SWEEP = '\u2591\u2592\u2593\u2588\u2593\u2592\u2591'
+const STUB = '\u2593\u2592\u2591'
+const FILLED = '\u2592'
 
 // Draws `block` with its first cell at `start`, clipped to the track.
 function placed(block: string, start: number, cells: number): string {
