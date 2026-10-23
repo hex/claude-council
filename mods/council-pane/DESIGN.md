@@ -8,7 +8,7 @@ How the mod looks, and why. Every colour lives in `hooks/theme.ts`, and no other
 - Colour carries meaning, and each meaning has one colour. Text or a glyph always says the same thing, so no state depends on colour alone.
 - Text a person reads meets 4.5:1 on a light and on a dark theme, with two exceptions: `info` is 4.4:1 on light, and the engine has no blue that does better; and the heads-up note's seat line and a seat row's model use `hint` at 2.2:1 by choice, so they recede. Glyphs and lines meet 3:1.
 - A screen fits the terminal. A pane taller than the terminal hands the keyboard back to the prompt, so text stays short. A text a person needs to read wraps and is shown whole.
-- A folded section costs one line. A blank line is spent only before an open body, and a dim rule with a blank line under it closes it when a section follows.
+- A folded section costs one line. A blank line is spent only around an open body, and an open seat's row is drawn on the `orange` fill in white, so each answer starts at a header the eye can find.
 
 ## Colour
 
@@ -28,7 +28,7 @@ Plain `dimColor` serves secondary text that is fine to fade: counts, times, mode
 ### Fixed colours, and why
 
 - **Fills under white letters** (`FILL`): the SYNTHESIS header and the heads-up badge. A theme key would turn light on a dark theme and lose the white letters, so these stay fixed.
-  - `orange` `rgb(215,119,87)`, Claude's orange, the one fill: the SYNTHESIS header and the heads-up note's `!` or `?`. White on it is 3.1:1, a deliberate exception to 4.5:1 (Alex, 2026-10-23: the deeper brown is not used anywhere).
+  - `orange` `rgb(215,119,87)`, Claude's orange, the one fill: the SYNTHESIS header, an open seat's row and the heads-up note's `!` or `?`. White on it is 3.1:1, a deliberate exception to 4.5:1 (Alex, 2026-10-23: the deeper brown is not used anywhere).
 - **Data colours** tell things apart without meaning anything, and a theme has too few hues for that.
   - Vendor colours come from the council's config and draw the `▌` edge at the start of each seat row. No fill uses a vendor colour, so no text sits on one.
 
@@ -52,7 +52,6 @@ Each glyph has one meaning.
 | `▾` `▸` | A fold, open and closed: the synthesis header |
 | ` ! ` ` ? ` | A heads-up note: `!` for this session's work, `?` for a concept to know; one ASCII letter on the `orange` fill, so every terminal draws it one cell wide |
 | `━` `·` | A bar over a `·` track, a line's height so it never stands taller than the text: a live seat's `━━━━` dash sweeps it left to right and enters again at the left; `━` fills a share (a settled seat full, the retry countdown by its time); a failed seat's `━━` stub sits at the left; a cancelled seat's track is bare |
-| `─` | A dim rule across the pane that closes an open body |
 
 ## Components
 

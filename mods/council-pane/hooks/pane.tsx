@@ -42,7 +42,6 @@ const OPEN_MARK = '\u25be'
 const CLOSED_MARK = '\u25b8'
 // A seat row's first cell, in the vendor's colour: identity without a fill.
 const EDGE_MARK = '\u258c'
-const RULE_MARK = '\u2500'
 // The bands above the prompt start where Claude Code's own footer lines do.
 const BAND_INDENT = 2
 // A seat row's action column: two cells of gap, then the widest a
@@ -984,34 +983,37 @@ export const register: Register = (on, options) => {
         case 'seat': {
           const action = section.action
           // The model takes the slack and gives way when narrow, so the bar,
-          // the time and the action sit in the same columns on every row.
+          // the time and the action sit in the same columns on every row. An
+          // open seat's row is a header on Claude's orange, in white, so each
+          // answer starts where the eye can find it.
+          const onFill = section.open ? { color: COLOR.onFill } : undefined
           return (
-            <Box key={section.key} flexDirection="row" width={columns}>
+            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: FILL.orange } : {})}>
               <Box flexShrink={0}>
                 <Text>
                   <Text color={section.vendor}>{EDGE_MARK}</Text>
-                  <Text>{` ${section.digit.padStart(1)} `}</Text>
-                  <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
-                  <Text bold>{`${section.name}  `}</Text>
+                  <Text {...onFill}>{` ${section.digit.padStart(1)} `}</Text>
+                  <Text color={onFill?.color ?? section.glyphColor}>{`${section.glyph} `}</Text>
+                  <Text bold {...onFill}>{`${section.name}  `}</Text>
                 </Text>
               </Box>
               <Box flexDirection="row" flexGrow={1} flexShrink={1}>
                 <Box flexShrink={1}>
-                  <Text color={COLOR.hint} wrap="truncate-end">{section.model}</Text>
+                  <Text color={onFill?.color ?? COLOR.hint} wrap="truncate-end">{section.model}</Text>
                 </Box>
                 {section.note === '' ? null : (
                   <Box flexShrink={0}>
                     <Text>
-                      {section.model === '' ? null : <Text dimColor>{' \u00b7 '}</Text>}
-                      <Text color={section.glyphColor}>{section.note}</Text>
+                      {section.model === '' ? null : <Text {...(onFill ?? { dimColor: true })}>{' \u00b7 '}</Text>}
+                      <Text color={onFill?.color ?? section.glyphColor}>{section.note}</Text>
                     </Text>
                   </Box>
                 )}
               </Box>
               <Box flexShrink={0}>
                 <Text>
-                  <Text color={section.barColor}>{`  ${section.bar}`}</Text>
-                  <Text dimColor>{`  ${section.time}`}</Text>
+                  <Text color={onFill?.color ?? section.barColor}>{`  ${section.bar}`}</Text>
+                  <Text {...(onFill ?? { dimColor: true })}>{`  ${section.time}`}</Text>
                 </Text>
               </Box>
               <Box flexShrink={0} width={ACTION_COLUMNS} paddingLeft={2}>
@@ -1060,15 +1062,13 @@ export const register: Register = (on, options) => {
           )
         case 'body':
           // The text arrives fitted to the pane's width and within its budget.
-          // A fallback's reason already took the blank line above it. A rule
-          // closes the body when another section follows, so the next row
-          // does not read as the answer's last line.
+          // A fallback's reason already took the blank line above it. A blank
+          // line follows when another section does.
           return (
-            <Box key={key} flexDirection="column" marginTop={sections[index - 1]?.kind === 'reason' ? 0 : 1}>
+            <Box key={key} flexDirection="column" marginTop={sections[index - 1]?.kind === 'reason' ? 0 : 1} marginBottom={index + 1 < sections.length ? 1 : 0}>
               {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
-              {index + 1 < sections.length && <Box marginBottom={1}><Text dimColor>{RULE_MARK.repeat(columns)}</Text></Box>}
             </Box>
           )
         case 'reason':
