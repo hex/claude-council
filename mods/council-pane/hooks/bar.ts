@@ -1,4 +1,4 @@
-// ABOUTME: The shade-block bar the pane and the band draw: a block that sweeps a dotted track
+// ABOUTME: The slim line bar the pane and the band draw: a block that sweeps a dotted track
 // ABOUTME: while a seat has no share to show, or a fill of the share that is done
 
 export const BAR_CELLS = 14
@@ -6,9 +6,9 @@ export const BAR_CELLS = 14
 export type BarFill = { kind: 'sweep'; frame: number } | { kind: 'share'; filled: number; total: number } | { kind: 'stub' } | { kind: 'empty' }
 
 const TRACK = '\u00b7'
-const SWEEP = '\u2591\u2592\u2593\u2588\u2593\u2592\u2591'
-const STUB = '\u2593\u2592\u2591'
-const FILLED = '\u2592'
+const SWEEP = '\u2501\u2501\u2501\u2501'
+const STUB = '\u2501\u2501'
+const FILLED = '\u2501'
 
 // Draws `block` with its first cell at `start`, clipped to the track.
 function placed(block: string, start: number, cells: number): string {

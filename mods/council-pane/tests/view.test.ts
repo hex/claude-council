@@ -27,10 +27,10 @@ test('paneSections gives one row per seat, its answer or its error text under it
     isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', glyph: '✓', glyphColor: 'success', vendor: 'rgb(59,130,246)', name: 'gemini', model: 'gemini-3-pro', note: '', bar: '▒▒▒▒▒▒▒▒▒▒▒▒▒▒', barColor: 'success', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
+    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', glyph: '✓', glyphColor: 'success', vendor: 'rgb(59,130,246)', name: 'gemini', model: 'gemini-3-pro', note: '', bar: '━━━━━━━━━━━━━━', barColor: 'success', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
     { kind: 'body', text: 'Use Postgres.' },
-    { kind: 'seat', key: 'jump:openai', fold: 'seat:jump:openai', digit: '2', glyph: '●', glyphColor: 'claude', vendor: 'rgb(113,113,122)', name: 'openai', model: '', note: '', bar: '·░▒▓█▓▒░······', barColor: 'claude', time: '    ', open: false, action: { press: 'cancel', seat: 'openai' } },
-    { kind: 'seat', key: 'jump:grok', fold: 'seat:jump:grok', digit: '3', glyph: '✗', glyphColor: 'error', vendor: 'rgb(239,68,68)', name: 'grok  ', model: '', note: '', bar: '▓▒░···········', barColor: 'error', time: '0.9s', open: true, action: { press: 'fold', seat: 'grok' } },
+    { kind: 'seat', key: 'jump:openai', fold: 'seat:jump:openai', digit: '2', glyph: '●', glyphColor: 'claude', vendor: 'rgb(113,113,122)', name: 'openai', model: '', note: '', bar: '····━━━━······', barColor: 'claude', time: '    ', open: false, action: { press: 'cancel', seat: 'openai' } },
+    { kind: 'seat', key: 'jump:grok', fold: 'seat:jump:grok', digit: '3', glyph: '✗', glyphColor: 'error', vendor: 'rgb(239,68,68)', name: 'grok  ', model: '', note: '', bar: '━━············', barColor: 'error', time: '0.9s', open: true, action: { press: 'fold', seat: 'grok' } },
     { kind: 'body', text: 'HTTP 429' },
     { kind: 'footer', keys: [{ hotkey: 'a', label: 'fold' }, { hotkey: 'c', label: 'cancel all' }, { hotkey: '✕', label: 'close' }] },
   ])
@@ -44,11 +44,11 @@ test('the glyph and its colour carry the state, and only a cached or fell-back s
   })
   const looks = sections.flatMap(section => (section.kind === 'seat' ? [[section.glyph, section.glyphColor, section.note, section.bar]] : []))
   expect(looks).toEqual([
-    ['●', 'claude', '', '░·············'],
-    ['✓', 'success', '', '▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
-    ['✓', 'suggestion', 'cached', '▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
-    ['✓', 'claude', 'fell back', '▒▒▒▒▒▒▒▒▒▒▒▒▒▒'],
-    ['✗', 'error', '', '▓▒░···········'],
+    ['●', 'claude', '', '━·············'],
+    ['✓', 'success', '', '━━━━━━━━━━━━━━'],
+    ['✓', 'suggestion', 'cached', '━━━━━━━━━━━━━━'],
+    ['✓', 'claude', 'fell back', '━━━━━━━━━━━━━━'],
+    ['✗', 'error', '', '━━············'],
     ['○', 'inactive', '', '··············'],
   ])
 })
@@ -67,12 +67,12 @@ test('a live seat\'s bar sweeps on the pane\'s frame, each a step behind the sea
   }
   const bars = (frame: number) => paneSections(view, { frame }).flatMap(section => (section.kind === 'seat' ? [[section.glyph, section.glyphColor, section.barColor, section.bar]] : []))
   expect(bars(6)).toEqual([
-    ['●', 'claude', 'claude', '░▒▓█▓▒░·······'],
-    ['●', 'claude', 'claude', '·······░▒▓█▓▒░'],
-    ['●', 'claude', 'claude', '░·············'],
+    ['●', 'claude', 'claude', '···━━━━·······'],
+    ['●', 'claude', 'claude', '··········━━━━'],
+    ['●', 'claude', 'claude', '━━━━··········'],
     ['○', 'inactive', 'inactive', '··············'],
   ])
-  expect(bars(7).map(([, , , bar]) => bar)).toEqual(['·░▒▓█▓▒░······', '········░▒▓█▓▒', '▒░············', '··············'])
+  expect(bars(7).map(([, , , bar]) => bar)).toEqual(['····━━━━······', '···········━━━', '·━━━━·········', '··············'])
 })
 
 test('a run moves while a seat queries or waits on its retry, and stops once nothing is out', () => {
@@ -123,7 +123,7 @@ test('a retriable error keeps its text open under the row while its digit retrie
     responses: {}, errors: { kimi: 'HTTP 500' }, colors: {}, retriable: ['kimi'], isDone: false,
   })
   expect(sections.slice(1, 3)).toEqual([
-    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '2', glyph: '✗', glyphColor: 'error', vendor: 'rgb(113,113,122)', name: 'kimi  ', model: '', note: '', bar: '▓▒░···········', barColor: 'error', time: '0.3s', open: true, action: { press: 'retry', seat: 'kimi' } },
+    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '2', glyph: '✗', glyphColor: 'error', vendor: 'rgb(113,113,122)', name: 'kimi  ', model: '', note: '', bar: '━━············', barColor: 'error', time: '0.3s', open: true, action: { press: 'retry', seat: 'kimi' } },
     { kind: 'body', text: 'HTTP 500' },
   ])
 })
@@ -181,7 +181,7 @@ test('a cancelled seat draws a grey hollow ring, and a finished run leads with i
   })
   expect(sections).toEqual([
     { kind: 'summary', text: '1 of 2 answered · 1 cancelled · 4.2s' },
-    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', glyph: '✓', glyphColor: 'success', vendor: 'rgb(59,130,246)', name: 'gemini  ', model: '', note: '', bar: '▒▒▒▒▒▒▒▒▒▒▒▒▒▒', barColor: 'success', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
+    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', glyph: '✓', glyphColor: 'success', vendor: 'rgb(59,130,246)', name: 'gemini  ', model: '', note: '', bar: '━━━━━━━━━━━━━━', barColor: 'success', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
     { kind: 'body', text: 'a' },
     { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '2', glyph: '○', glyphColor: 'inactive', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: 'grok-4.7', note: '', bar: '··············', barColor: 'inactive', time: '    ', open: false },
     { kind: 'footer', keys: [{ hotkey: '✕', label: 'close' }] },
@@ -206,11 +206,11 @@ test('a closed section draws its row alone; an open one keeps its text', () => {
   expect(sections).toEqual([
     { kind: 'summary', text: '2 of 3 answered · 1 error · 1 fell back · 4.2s' },
     { kind: 'synthesis', key: 'jump:synthesis', fold: 'synthesis:jump:synthesis', open: false },
-    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', glyph: '✓', glyphColor: 'success', vendor: 'rgb(113,113,122)', name: 'gemini  ', model: '', note: '', bar: '▒▒▒▒▒▒▒▒▒▒▒▒▒▒', barColor: 'success', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
+    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', glyph: '✓', glyphColor: 'success', vendor: 'rgb(113,113,122)', name: 'gemini  ', model: '', note: '', bar: '━━━━━━━━━━━━━━', barColor: 'success', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
     { kind: 'body', text: 'Use Postgres.' },
     // The fallback reason goes with the answer it explains, so a closed seat hides both.
-    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '2', glyph: '✓', glyphColor: 'claude', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: '', note: 'fell back', bar: '▒▒▒▒▒▒▒▒▒▒▒▒▒▒', barColor: 'claude', time: '1.2s', open: false, action: { press: 'open', seat: 'grok-cli' } },
-    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '3', glyph: '✗', glyphColor: 'error', vendor: 'rgb(113,113,122)', name: 'kimi    ', model: '', note: '', bar: '▓▒░···········', barColor: 'error', time: '0.9s', open: false, action: { press: 'open', seat: 'kimi' } },
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '2', glyph: '✓', glyphColor: 'claude', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: '', note: 'fell back', bar: '━━━━━━━━━━━━━━', barColor: 'claude', time: '1.2s', open: false, action: { press: 'open', seat: 'grok-cli' } },
+    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '3', glyph: '✗', glyphColor: 'error', vendor: 'rgb(113,113,122)', name: 'kimi    ', model: '', note: '', bar: '━━············', barColor: 'error', time: '0.9s', open: false, action: { press: 'open', seat: 'kimi' } },
     { kind: 'footer', keys: [{ hotkey: 'a', label: 'fold' }, { hotkey: '✕', label: 'close' }] },
   ])
 })
@@ -271,7 +271,7 @@ test('paneSections falls back to a neutral vendor colour and notes an empty run'
   expect(paneSections({ ...base, providers: [], isDone: false })).toEqual([{ kind: 'note', text: 'Waiting for the council...' }])
   expect(paneSections({ ...base, providers: [], isDone: true })).toEqual([{ kind: 'note', text: 'Council finished with no answers.' }])
   const [, seat] = paneSections({ ...base, providers: [{ name: 'kimi', state: 'cached' }], responses: { kimi: 'x' }, isDone: true })
-  expect(seat).toEqual({ kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '1', glyph: '✓', glyphColor: 'suggestion', vendor: 'rgb(113,113,122)', name: 'kimi', model: '', note: 'cached', bar: '▒▒▒▒▒▒▒▒▒▒▒▒▒▒', barColor: 'suggestion', time: '', open: true, action: { press: 'fold', seat: 'kimi' } })
+  expect(seat).toEqual({ kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '1', glyph: '✓', glyphColor: 'suggestion', vendor: 'rgb(113,113,122)', name: 'kimi', model: '', note: 'cached', bar: '━━━━━━━━━━━━━━', barColor: 'suggestion', time: '', open: true, action: { press: 'fold', seat: 'kimi' } })
 })
 
 test('paneSections shows why a seat fell back, between its row and the answer its API gave', () => {
@@ -283,7 +283,7 @@ test('paneSections shows why a seat fell back, between its row and the answer it
     isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', glyph: '✓', glyphColor: 'claude', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: 'grok-4.6 via grok API', note: 'fell back', bar: '▒▒▒▒▒▒▒▒▒▒▒▒▒▒', barColor: 'claude', time: '1.2s', open: true, action: { press: 'fold', seat: 'grok-cli' } },
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', glyph: '✓', glyphColor: 'claude', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: 'grok-4.6 via grok API', note: 'fell back', bar: '━━━━━━━━━━━━━━', barColor: 'claude', time: '1.2s', open: true, action: { press: 'fold', seat: 'grok-cli' } },
     { kind: 'reason', text: 'grok-cli fell back: Error from grok CLI: sandbox could not be applied' },
     { kind: 'body', text: 'Use Postgres.' },
     { kind: 'footer', keys: [{ hotkey: '✕', label: 'close' }] },
@@ -311,7 +311,7 @@ test('a fallback seat whose answer has not landed yet shows nothing to open, not
     responses: {}, errors: { 'grok-cli': 'sandbox could not be applied' }, colors: {}, isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', glyph: '✓', glyphColor: 'claude', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: '', note: 'fell back', bar: '▒▒▒▒▒▒▒▒▒▒▒▒▒▒', barColor: 'claude', time: '', open: false },
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', glyph: '✓', glyphColor: 'claude', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: '', note: 'fell back', bar: '━━━━━━━━━━━━━━', barColor: 'claude', time: '', open: false },
     { kind: 'footer', keys: [{ hotkey: '✕', label: 'close' }] },
   ])
 })

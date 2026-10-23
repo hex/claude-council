@@ -51,7 +51,7 @@ Each glyph has one meaning.
 | `▌` | A seat's vendor, in the vendor colour, at the start of its row |
 | `▾` `▸` | A fold, open and closed: the synthesis header |
 | ` ! ` ` ? ` | A heads-up note: `!` for this session's work, `?` for a concept to know; one ASCII letter on the `orange` fill, so every terminal draws it one cell wide |
-| `░▒▓█` `▒` `·` | A bar over a `·` track: a live seat's `░▒▓█▓▒░` block sweeps it left to right and enters again at the left; `▒` fills a share (a settled seat full, the band and the retry countdown by their count); a failed seat's `▓▒░` stub sits at the left; a cancelled seat's track is bare |
+| `━` `·` | A bar over a `·` track, a line's height so it never stands taller than the text: a live seat's `━━━━` dash sweeps it left to right and enters again at the left; `━` fills a share (a settled seat full, the retry countdown by its time); a failed seat's `━━` stub sits at the left; a cancelled seat's track is bare |
 | `─` | A dim rule across the pane that closes an open body |
 
 ## Components
