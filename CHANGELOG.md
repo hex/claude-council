@@ -12,6 +12,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - A seat keeps its digit through a retry and after the run ends. The digits no longer switch from cancelling to jumping once the run ends.
 - Each seat row carries a bar between the model and the time, in the glyph's color: a `━` dash sweeps a dotted track while the seat queries, each row a step behind the one above; the line fills once the seat answers; a short stub stays at the left on an error; a cancelled seat's track is bare. The retry countdown uses the same line over the dotted track.
 - The bands above the prompt lose the orange COUNCIL chip and its shimmer. Each opens with the run's state in its colour and a plain bold `COUNCIL`: `● running` with a sweeping bar, the clock and `N of M done · <latest event>` while a run is live, `✓ done` or `✗ failed` once it ends, `✗ retry` on the retry offer.
+- The synthesis in Claude Code's reply opens with a rule and a `## 🧭 Synthesis` header, so it stands apart from the answers above it; the pane still finds it.
 - A footer lists the keys that apply now: `a` to fold or expand, `c` to cancel every seat still out, and the close mark.
 - A finished run opens on its summary and the synthesis, with the seats folded below. With `collapse_when_done` off the synthesis stays below the seats. A folded row takes one line, with no blank line between rows.
 

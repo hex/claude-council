@@ -9,7 +9,7 @@ const REPLY = [
   'Use SQLite.',
   '',
   '---',
-  '## Synthesis',
+  '## 🧭 Synthesis',
   '',
   '**Consensus.** All five seats pick SQLite.',
   '',

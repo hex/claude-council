@@ -1,4 +1,5 @@
-Write the synthesis under the `## Synthesis` header:
+Open the synthesis with a `---` line, then the header `## 🧭 Synthesis` on its own line, so it stands
+apart from the answers above it in the chat. Under it:
 
 - **Consensus**: where providers agree
 - **Divergence**: where they disagree, and why the disagreement matters
