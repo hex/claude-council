@@ -74,25 +74,25 @@ test('runPid accepts a process id and nothing else', () => {
   expect(runPid('42; rm -rf /')).toBeUndefined()
 })
 
-test('progressBand counts providers finished, an error included, with a thin line, a clock and the latest event', () => {
+test('progressBand counts providers finished, an error included, with a fill bar, a clock and the latest event', () => {
   // gemini + codex answered, grok errored, kimi querying: 3 of 4 finished, 6 of 8 cells.
   expect(progressBand({ providers, isDone: false, latest: 'grok failed' }, 10_000, 34_900)).toEqual({
-    count: '3 of 4', bar: '\u2501\u2501\u2501\u2501\u2501\u2501\u2500\u2500', clock: '0:24', event: 'grok failed',
+    count: '3 of 4', bar: '▒▒▒▒▒▒··', clock: '0:24', event: 'grok failed',
   })
 })
 
-test('progressBand rounds down, so the line is never full while a provider is out', () => {
+test('progressBand rounds down, so the bar is never full while a provider is out', () => {
   const nine = Array.from({ length: 9 }, (_, i) => ({ name: `p${i}`, state: i < 3 ? 'complete' : 'querying' }))
-  expect(progressBand({ providers: nine, isDone: false }, 0, 79_000)).toEqual({ count: '3 of 9', bar: '\u2501\u2501\u2500\u2500\u2500\u2500\u2500\u2500', clock: '1:19' })
+  expect(progressBand({ providers: nine, isDone: false }, 0, 79_000)).toEqual({ count: '3 of 9', bar: '▒▒······', clock: '1:19' })
   const oneOut = nine.map((p, i) => ({ ...p, state: i < 8 ? 'complete' : 'querying' }))
-  expect(progressBand({ providers: oneOut, isDone: false }, 0, 0)?.bar).toBe('\u2501'.repeat(7) + '\u2500')
+  expect(progressBand({ providers: oneOut, isDone: false }, 0, 0)?.bar).toBe('▒▒▒▒▒▒▒·')
   // Past an hour the clock gains an hours field.
   expect(progressBand({ providers: nine, isDone: false }, 0, 3_661_000)?.clock).toBe('1:01:01')
 })
 
 test('progressBand starts empty and leaves the clock out until a run is picked up', () => {
   const waiting = [{ name: 'gemini', state: 'pending' }, { name: 'openai', state: 'querying' }]
-  expect(progressBand({ providers: waiting, isDone: false }, undefined, 5_000)).toEqual({ count: '0 of 2', bar: '\u2500'.repeat(8) })
+  expect(progressBand({ providers: waiting, isDone: false }, undefined, 5_000)).toEqual({ count: '0 of 2', bar: '········' })
 })
 
 test('progressBand shows nothing once the run is done or before any provider is listed', () => {

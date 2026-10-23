@@ -1,11 +1,13 @@
 // ABOUTME: Reads the retry offer a council run leaves in its watch dir and shapes the pane's countdown for it
 // ABOUTME: The run waits on the offer; the pane accepts by renaming it to .retry or declines with .retry-declined
 
+import { bar } from './bar'
+
 export type RetryOffer = { seconds: number; providers: string[] }
 
 export type RetrySection = { kind: 'retry'; badge: string; notice: string; label: string; skipLabel: string; remaining: number; bar: string }
 
-const BAR_CELLS = 8
+const COUNTDOWN_CELLS = 8
 
 export function parseRetryOffer(text: string): RetryOffer | undefined {
   const [window = '', ...rest] = text.split('\n').map(line => line.trim())
@@ -17,10 +19,9 @@ export function parseRetryOffer(text: string): RetryOffer | undefined {
 export function retrySection(offer: RetryOffer, seenAtMs: number, nowMs: number): RetrySection {
   const remaining = Math.max(0, offer.seconds - Math.floor((nowMs - seenAtMs) / 1000))
   const { providers } = offer
-  const filled = Math.ceil((remaining / offer.seconds) * BAR_CELLS)
-  // The thin line the progress band draws; shade blocks render dithered in some fonts.
-  const bar = '\u2501'.repeat(filled) + '\u2500'.repeat(BAR_CELLS - filled)
+  // Rounded up, so the countdown empties only when no time is left.
+  const filled = Math.ceil((remaining / offer.seconds) * COUNTDOWN_CELLS)
   const notice = providers.length === 1 ? `${providers[0]} failed` : `${providers.length} providers failed: ${providers.join(', ')}`
   // The labels name their hotkeys: a terminal Button draws as `[ label ]` and shows no key of its own.
-  return { kind: 'retry', badge: 'COUNCIL', notice, label: 'r \u00b7 retry', skipLabel: 's \u00b7 skip', remaining, bar }
+  return { kind: 'retry', badge: 'COUNCIL', notice, label: 'r \u00b7 retry', skipLabel: 's \u00b7 skip', remaining, bar: bar({ kind: 'share', filled, total: COUNTDOWN_CELLS }, COUNTDOWN_CELLS) }
 }

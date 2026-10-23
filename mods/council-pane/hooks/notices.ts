@@ -1,6 +1,7 @@
 // ABOUTME: Words for a council run outside the pane: the finish notice, the wake prompt, the reopen reply
 // ABOUTME: Pure functions over the run's provider states
 
+import { bar } from './bar'
 import { ANSWERED_STATES, count, ENDED_STATES, type ProviderStatus } from './status'
 
 type RunProgress = { providers: ProviderStatus[]; isDone: boolean }
@@ -25,9 +26,9 @@ function runClock(startedMs: number, nowMs: number): string {
   return hours > 0 ? `${hours}:${String(mins).padStart(2, '0')}:${ss}` : `${mins}:${ss}`
 }
 
-// The band above the prompt while a run is live: how many providers finished (an error or a cancel included), a thin line of the
-// same share, an m:ss clock and the latest event. Both counts round down, so
-// the line never reads full while a provider is still out. `startedAtMs` is
+// The band above the prompt while a run is live: how many providers finished (an error or a cancel included), a bar filled to the
+// same share, an m:ss clock and the latest event. The bar rounds down, so it
+// never reads full while a provider is still out. `startedAtMs` is
 // when the pane picked the run up; before that there is no clock.
 export function progressBand(
   { providers, isDone, latest }: RunProgress & { latest?: string },
@@ -36,10 +37,9 @@ export function progressBand(
 ): { count: string; bar: string; clock?: string; event?: string } | undefined {
   if (isDone || providers.length === 0) return undefined
   const finished = count(providers, ...ENDED_STATES)
-  const filled = Math.floor((finished / providers.length) * PROGRESS_CELLS)
   return {
     count: `${finished} of ${providers.length}`,
-    bar: '\u2501'.repeat(filled) + '\u2500'.repeat(PROGRESS_CELLS - filled),
+    bar: bar({ kind: 'share', filled: finished, total: providers.length }, PROGRESS_CELLS),
     ...(startedAtMs === undefined ? {} : { clock: runClock(startedAtMs, nowMs) }),
     ...(latest ? { event: latest } : {}),
   }
