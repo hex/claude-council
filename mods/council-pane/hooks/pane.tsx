@@ -1065,7 +1065,7 @@ export const register: Register = (on, options) => {
               {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
-              {index + 1 < sections.length && <Text dimColor>{RULE_MARK.repeat(columns)}</Text>}
+              {index + 1 < sections.length && <Box marginBottom={1}><Text dimColor>{RULE_MARK.repeat(columns)}</Text></Box>}
             </Box>
           )
         case 'reason':
