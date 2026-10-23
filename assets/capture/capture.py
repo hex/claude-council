@@ -342,7 +342,7 @@ class Capture:
         self.wait("Heads-up side-check: on for this project")
         self.type("Run date, then ls, then pwd, as three separate shell commands, one per step. Then say ok.")
         self.wait("1: Learn more")
-        self.save("The note and its four choices", "✦ Heads up")
+        self.save("The note and its four choices", "Heads up \u00b7")
         time.sleep(2)
         self.key("1")
         self.wait(r"\d: Tell Claude", regex=True)
