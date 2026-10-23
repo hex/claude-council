@@ -7,6 +7,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Changed
+- The heads-up note's mark is a badge, `!` for a Heads up and `?` for a You should know, one ASCII letter in white on the chip's orange, so it draws one cell wide on every terminal; `✦` stays on the COUNCIL chip.
 - The pane inside Claude Code gives each seat one row for the whole run. The row starts with a `▌` edge in the provider's color, then the seat's digit, a glyph for its state, the name, the model and the time. An amber `●` is live, a green `✓` answered, `✓ · cached` and `✓ · fell back` say how, a red `✗` failed and a grey `○` was cancelled. At the right edge the row shows what its digit does now: `cancel`, `retry`, `open` or `fold`. The answer or error hangs under its row, so no seat appears twice. The pane drops the status words, the spinner, the colored banners, the row of names and the hint line.
 - A seat keeps its digit through a retry and after the run ends. The digits no longer switch from cancelling to jumping once the run ends.
 - A footer lists the keys that apply now: `a` to fold or expand, `c` to cancel every seat still out, and the close mark.

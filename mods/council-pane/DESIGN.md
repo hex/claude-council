@@ -30,7 +30,7 @@ Plain `dimColor` serves secondary text that is fine to fade: counts, times, mode
 
 - **Fills under white letters** (`FILL`): chips. A theme key would turn light on a dark theme and lose the white letters, so these stay fixed, each dark enough for white on both.
   - `chip` `rgb(180,85,50)`, 4.9:1: a deeper Claude orange, because white on the orange itself is 3.1:1.
-  - `chipMark` `rgb(150,68,40)`, 6.7:1, the `✦` cell at the chip's start.
+  - `chipMark` `rgb(150,68,40)`, 6.7:1, the `✦` cell at the chip's start and the heads-up note's `!` or `?` badge.
 - **Data colours** tell things apart without meaning anything, and a theme has too few hues for that.
   - Vendor colours come from the council's config and draw the `▌` edge at the start of each seat row. No fill uses a vendor colour, so no text sits on one.
 - **Shimmer** (`SHIMMER`): the warm letters that pass over a running chip, 3.9:1 and 4.4:1 on the chip fill. They move, and the label stays readable in white between passes.
@@ -53,7 +53,8 @@ Each glyph has one meaning.
 | `○` | Set aside by the person: a seat cancelled, or cancelling |
 | `▌` | A seat's vendor, in the vendor colour, at the start of its row |
 | `▾` `▸` | A fold, open and closed: the synthesis header |
-| `✦` | The council's mark |
+| `✦` | The council's mark, on the chip |
+| ` ! ` ` ? ` | A heads-up note: `!` for this session's work, `?` for a concept to know; one ASCII letter on the `chipMark` fill, so every terminal draws it one cell wide |
 | `━` `─` | The progress bar, filled and empty |
 
 ## Components

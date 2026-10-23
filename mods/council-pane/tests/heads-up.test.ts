@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, tagMark, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -242,6 +242,11 @@ test('the tell-Claude draft quotes the note as a list and asks for a check befor
   ].join('\n\n'))
   expect(tellClaudeDraft({ ...note, title: '', points: [] })).toBe('A side check by codex (not you) flagged this: The test ran on an empty DB.\n\nTreat this as a claim, not a conclusion. Before continuing: verify it against the evidence, report what you find, and only then act on it.')
   expect(tellClaudeDraft({ ...note, tag: 'You should know', title: '', points: ['Quote the value.'] })).toBe('A side check by codex (not you) flagged this: The test ran on an empty DB.\n\n- Quote the value.\n\nTake this into account before continuing and say whether it changes your plan.')
+})
+
+test('the band badge is ! for a Heads up and ? for a You should know', () => {
+  expect(tagMark('Heads up')).toBe('!')
+  expect(tagMark('You should know')).toBe('?')
 })
 
 test('kilobytes reads to one decimal', () => {

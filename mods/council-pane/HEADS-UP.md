@@ -22,7 +22,7 @@ Opt in once per project:
 During a long turn, above the prompt:
 
 ```
-✦ Heads up · The migration test passed against the empty fixture DB, so the backfill path never ran.
+ ! Heads up · The migration test passed against the empty fixture DB, so the backfill path never ran.
   codex · gpt-6.1-sol · 12.4 KB · 27 s      1: Learn more   2: Knew this already   3: Turn off   0: Dismiss
 ```
 

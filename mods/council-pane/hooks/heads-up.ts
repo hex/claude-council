@@ -554,6 +554,11 @@ export type BandView = {
   /** The note's id, so the shell knows whether its armed Turn off belongs to this note. */
   readonly id: string
 }
+/** The band's mark for a tag: a badge of one ASCII letter on the chip-mark fill, drawn on every terminal. */
+export function tagMark(tag: Tag): '!' | '?' {
+  return tag === 'Heads up' ? '!' : '?'
+}
+
 export function bandView(p: Phase): BandView | null {
   if (p.kind !== 'showing') return null
   const { note } = p
