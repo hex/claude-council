@@ -2,7 +2,7 @@
   "title": "Five council seats inside Claude Code",
   "description": "Captured terminal output in real seat mode. Each state lasts 2.5 seconds.",
   "provenance": {
-    "checkout_head": "9059e08271426d341c74361197caf4b42e709ad2",
+    "checkout_head": "ae9995dacb0c632ad07444bcfca99315b28e6775",
     "seat_mode": "real",
     "providers": [
       "codex",
@@ -22,8 +22,8 @@
     "codex_home": "Temporary auth.json-only home, removed on exit",
     "question": "Should a single-node demo app use SQLite or Postgres?",
     "cli_versions": {
-      "codex": "codex-cli 0.163.0",
-      "agy": "1.4.3",
+      "codex": "codex-cli 0.164.0",
+      "agy": "1.4.6",
       "kimi": "fake-kimi 0.0.1"
     },
     "real_invocations": [
@@ -69,7 +69,7 @@
             7,
             17
           ],
-          "sha256": "092d80d88947a9bcecee7f89c18aa402849e7b797a0fcf041176c5a6b891402f"
+          "sha256": "8d8fb2bceaf40ea0e6798bf755c73b61c893427d8f0bb0a5514c45a4c6c7f3c8"
         },
         "dark": {
           "file": "council-run-0-dark.ansi",
@@ -77,7 +77,7 @@
             7,
             17
           ],
-          "sha256": "57567bab1dfee049b6b494e3788ad53ee323ec5972395d4f893feef294064619"
+          "sha256": "0f2e1f1768a1a113b8a77a0d044cc0a8be9ee2291d0305d8f9ab5908d0e67e55"
         }
       }
     },
@@ -88,17 +88,17 @@
           "file": "council-run-1-light.ansi",
           "crop": [
             16,
-            32
+            33
           ],
-          "sha256": "06f396c730f8f3f12495c153d22e777601e1c480ccca0f861f95f45acdef6aa6"
+          "sha256": "08473bf2e1a06ea73b70d120ec2f7b8aa2c8564ec47f79eecc168f17e31374f3"
         },
         "dark": {
           "file": "council-run-1-dark.ansi",
           "crop": [
             16,
-            32
+            33
           ],
-          "sha256": "ad8ae415f60cfb619468c36c826d7202f884d831255f2f9bfe51f1109b4e4a92"
+          "sha256": "a3fbee1d9cf4ef346e1a31c700ba0c7386fa6377d192d9970b5608fb6b5ab8ad"
         }
       }
     },
@@ -108,39 +108,39 @@
         "light": {
           "file": "council-run-2-light.ansi",
           "crop": [
-            17,
+            16,
             36
           ],
-          "sha256": "f5d55ea2fa4303994a89177cb2bf50eb4f7d20ebeb5bba50409c407508e99f95"
+          "sha256": "5606371aae7e418ea1c06fd065b93d58c6427ef4220de7382f599026d93689cf"
         },
         "dark": {
           "file": "council-run-2-dark.ansi",
           "crop": [
-            16,
-            35
+            17,
+            37
           ],
-          "sha256": "b34090a558f98fe67f41dea832be1da3c23ebcddde662f8ea24801d9671a2b4d"
+          "sha256": "243b0cf855d4a50c1868b151f209e0ae001c282aec4a517c6a975098f6678db5"
         }
       }
     },
     {
-      "label": "Answers arrive with their banners",
+      "label": "Answers arrive under their headers",
       "captures": {
         "light": {
           "file": "council-run-3-light.ansi",
           "crop": [
             17,
-            50
+            46
           ],
-          "sha256": "928de1f3a7b26c0840a64d927d673c08b03dc1417143e85f6f3ddce1df37d8e3"
+          "sha256": "9b0e54ae5312a58b29ac158dc9b3851e03d517038fc6556731902e58a17b582d"
         },
         "dark": {
           "file": "council-run-3-dark.ansi",
           "crop": [
             17,
-            47
+            45
           ],
-          "sha256": "48e3049cb6b8a743a46997208ae195ea342f5f895c2121975123c3f9f682c80a"
+          "sha256": "fa8c089173447682b188b06525ca7c6ff2160e268ae65dcd1bf3365e30aa3575"
         }
       }
     },
@@ -150,18 +150,18 @@
         "light": {
           "file": "council-run-4-light.ansi",
           "crop": [
-            46,
-            74
+            41,
+            62
           ],
-          "sha256": "917fd4b8c561fc2db0cc3fc6089faa4374bf94a6f3dcc1e5ac28e97ef0e50803"
+          "sha256": "329e184027aad12119532ac057a4ed9bcba96a185ca9b9255aef8a6ba40ba496"
         },
         "dark": {
           "file": "council-run-4-dark.ansi",
           "crop": [
-            39,
-            67
+            46,
+            68
           ],
-          "sha256": "3d7a665792b65baa572ab5a34d1c5223bc5601119a0d9dd06600276cebcbcf86"
+          "sha256": "54daa643c070c354367fe8d00a73854c51996a7ddead09b52546fdcabfad9dde"
         }
       }
     }

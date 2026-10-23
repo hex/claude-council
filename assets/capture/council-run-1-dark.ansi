@@ -1,36 +1,36 @@
-[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.304[39m
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.309[39m
 [38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mHaiku[39m [38;5;246m5.5[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
-[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project[39m
+[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-vz_zd5qw/project[39m
 
 [2m▎[0m [38;5;246mDebug[39m [38;5;246mmode[39m [38;5;246menabled[39m [38;5;246m·[39m [38;5;246mlogging[39m [38;5;246mto[39m
-[2m▎[0m [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/debug-dark.log[39m
+[2m▎[0m [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-vz_zd5qw/debug-dark.log[39m
 
 [38;5;246m[48;5;237m❯[39m [38;5;231m/claude-council:ask --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief [39m
 [38;5;231m--no-auto-context --no-cache "Should a single-node demo app use SQLite or Postgres?"[39m
 [49m
 [38;5;246m [39m [1mBash[0m(bash ~/.claude-sessions/claude-council/scripts/run-council.sh
-      --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief --no-cache -- "Should a
-      single-node demo app use SQLite or Postgres?")
+      --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief --no-auto-context --no-cache --
+      "Should a single-node demo app use SQLite or Postgres?")
 [38;5;246m  ⎿  Running…[39m
 
-[38;5;174m✳[39m [38;5;216mGesticulating…[38;5;174m [38;5;246m(7s · ↓[39m [38;5;246m605 tokens)[39m
+[38;5;174m✳[39m [38;5;174mPolishing… [38;5;246m(8s · ↓[39m [38;5;246m785 tokens)[39m
 [2m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────[0m[38;5;246m✕[2m[39m─╮
-│[0m [38;5;103m⠴ [1m[39mcodex        [0m[38;5;220mquerying  [38;5;246m1.4s  default[39m                                                           [38;5;153m1[39m: cancel [2m│
-│[0m [38;5;75m⠴ [1m[39mantigravity  [0m[38;5;220mquerying  [38;5;246m1.4s  Gemini 3.8 Flash (High)[39m                                           [38;5;153m2[39m: cancel [2m│
-│[0m [38;5;75m⠴ [1m[39mgemini       [0m[38;5;220mquerying  [38;5;246m1.4s  gemini-flash-latest[39m                                               [38;5;153m3[39m: cancel [2m│
-│[0m [38;5;103m⠴ [1m[39mopenai       [0m[38;5;220mquerying  [38;5;246m1.4s  gpt-6-astra[39m                                                       [38;5;153m4[39m: cancel [2m│
-│[0m [38;5;59m⠴ [1m[39mkimi-cli     [0m[38;5;220mquerying  [38;5;246m1.4s  moonshot-ai/kimi-k3[39m                                               [38;5;153m5[39m: cancel [2m│
-│[0m [38;5;246mclick cancel or retry on a row, or ctrl+x tab then its digit[39m                                               [2m│
+│[0m [38;5;103m▌[1m[39m codex        [0m[38;5;239mdefault[39m                                                  [38;5;174m  ·········━━━━·[38;5;246m  1.2s[39m  [1m[ cancel ][0m [2m│
+│[0m [38;5;75m▌[1m[39m antigravity  [0m[38;5;239mGemini 3.8 Flash (High)[39m                                  [38;5;174m  ━━━···········[38;5;246m  1.2s[39m  [1m[ cancel ][0m [2m│
+│[0m [38;5;75m▌[1m[39m gemini       [0m[38;5;239mgemini-flash-latest[39m                                      [38;5;174m  ······━━━━····[38;5;246m  1.2s[39m  [1m[ cancel ][0m [2m│
+│[0m [38;5;103m▌[1m[39m openai       [0m[38;5;239mgpt-6-astra[39m                                              [38;5;174m  ·············━[38;5;246m  1.2s[39m  [1m[ cancel ][0m [2m│
+│[0m [38;5;59m▌[1m[39m kimi-cli     [0m[38;5;239mmoonshot-ai/kimi-k3[39m                                      [38;5;174m  ···━━━━·······[38;5;246m  1.2s[39m  [1m[ cancel ][0m [2m│
+│[0m                                                                                                            [2m│
+│[0m                                                                                    [1m[ cancel all ][0m  [38;5;246m✕ close[39m [2m│
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 [0m                                                                                                          [38;5;246m[-][39m
-[1m[38;5;231m[48;5;131m ✦ [0m[48;5;173m [1m[38;5;231mCOUNCIL[0m[48;5;173m [1m[49m [0m [1m0[0m [1mof[0m [1m5[0m[38;5;174m [39m [38;5;174m────────[1m[38;5;220m [0m [1m[38;5;220m●[0m [1m[38;5;220m0:01[0m[38;5;246m [39m [38;5;246masking[39m [38;5;246mkimi-cli[39m             [1;7m[ c · cancel all ][0m  [1m[[0m [1mo[0m [1m·[0m [1mopen[0m [1mpane[0m [1m][0m
+  [38;5;174m● running[1m[39m  COUNCIL[0m[38;5;174m  ━━······[38;5;246m  0:01[38;5;239m  0 of 5 done · asking kimi-cli  [39m       [1;7m[ cancel all ][0m  [1m[ open pane ][0m
 
 [38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 [38;5;246m❯ [7m[39m [0m
 [38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;211m⏵⏵[39m [38;5;211mbypass[39m [38;5;211mpermissions[39m [38;5;211mon[38;5;246m (shift+tab[39m [38;5;246mto[39m [38;5;246mcycle)[39m [38;5;246m·[39m [38;5;246mesc[39m [38;5;246mto[39m [38;5;246minterrupt[39m                              [38;5;246m26823[39m [38;5;246mtokens[39m
+[39m  [38;5;211m⏵⏵[39m [38;5;211mbypass[39m [38;5;211mpermissions[39m [38;5;211mon[38;5;246m (shift+tab[39m [38;5;246mto[39m [38;5;246mcycle)[39m [38;5;246m·[39m [38;5;246mesc[39m [38;5;246mto[39m [38;5;246minterrupt[39m                              [38;5;246m27591[39m [38;5;246mtokens[39m
                                                                                           [38;5;246m◐[39m [38;5;246mmedium[39m [38;5;246m·[39m [38;5;246m/effort[39m
-
 
 
 

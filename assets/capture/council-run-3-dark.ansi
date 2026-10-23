@@ -1,51 +1,51 @@
-[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.304[39m
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.309[39m
 [38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mHaiku[39m [38;5;246m5.5[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
-[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project[39m
+[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-vz_zd5qw/project[39m
 
 [2m▎[0m [38;5;246mDebug[39m [38;5;246mmode[39m [38;5;246menabled[39m [38;5;246m·[39m [38;5;246mlogging[39m [38;5;246mto[39m
-[2m▎[0m [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/debug-dark.log[39m
+[2m▎[0m [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-vz_zd5qw/debug-dark.log[39m
 
 [38;5;246m[48;5;237m❯[39m [38;5;231m/claude-council:ask --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief [39m
 [38;5;231m--no-auto-context --no-cache "Should a single-node demo app use SQLite or Postgres?"[39m
 [49m
-[38;5;246m⏺[39m [1mBash[0m(bash ~/.claude-sessions/claude-council/scripts/run-council.sh
-      --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief --no-cache -- "Should a
-      single-node demo app use SQLite or Postgres?")
-[38;5;246m  ⎿  Running… (6s · timeout 10m)[39m
+[38;5;246m [39m [1mBash[0m(bash ~/.claude-sessions/claude-council/scripts/run-council.sh
+      --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief --no-auto-context --no-cache --
+      "Should a single-node demo app use SQLite or Postgres?")
+[38;5;246m  ⎿  Running… (5s · timeout 10m)[39m
      [38;5;246m(ctrl+b ctrl+b (twice) to run in background)[39m
 
-[38;5;174m✻[39m [38;5;216mGesticulating…[38;5;174m [38;5;246m(11s · ↓[39m [38;5;246m715 tokens)[39m
+[38;5;174m✻[39m [38;5;174mPolishing… [38;5;246m(12s · ↓[39m [38;5;246m934 tokens)[39m
 [2m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────[0m[38;5;246m✕[2m[39m─╮
-│[0m [38;5;103m⠧ [1m[39mcodex        [0m[38;5;220mquerying  [38;5;246m5.6s  default[39m                                                           [38;5;153m1[39m: cancel [2m│
-│[0m [38;5;75m⠧ [1m[39mantigravity  [0m[38;5;220mquerying  [38;5;246m5.6s  Gemini 3.8 Flash (High)[39m                                           [38;5;153m2[39m: cancel [2m│
-│[0m [38;5;75m⠧ [1m[39mgemini       [0m[38;5;220mquerying  [38;5;246m5.6s  gemini-flash-latest[39m                                               [38;5;153m3[39m: cancel [2m│
-│[0m [38;5;103m● [1m[39mopenai       [0m[38;5;114mcomplete  [38;5;246m5.4s  gpt-6-astra[39m                                                                 [2m│
-│[0m [38;5;211m✗ [1m[39mkimi-cli     [0m[38;5;211merror     [38;5;246m      moonshot-ai/kimi-k3[39m                                                [38;5;153m5[39m: retry [2m│
-│[0m [38;5;246mclick cancel or retry on a row, or ctrl+x tab then its digit[39m                                               [2m│
+│[0m [38;5;103m▌[1m[39m codex        [0m[38;5;239mdefault[39m                                                  [38;5;174m  ···········━━━[38;5;246m  4.8s[39m  [1m[ cancel ][0m [2m│
+│[0m [38;5;75m▌[1m[39m antigravity  [0m[38;5;239mGemini 3.8 Flash (High)[39m                                  [38;5;174m  ·━━━━·········[38;5;246m  4.8s[39m  [1m[ cancel ][0m [2m│
+│[0m [38;5;75m▌[1m[39m gemini       [0m[38;5;239mgemini-flash-latest[39m                                      [38;5;174m  ········━━━━··[38;5;246m  4.8s[39m  [1m[ cancel ][0m [2m│
+│[0m [38;5;103m[48;5;66m▌[1m[38;5;231m openai       [0m[38;5;231m[48;5;66mgpt-6-astra[39m                                              [38;5;231m  ━━━━━━━━━━━━━━  4.5s[39m  [1m[ [38;5;231mfold[39m ][0m[48;5;66m  [49m [2m│
 │[0m                                                                                                            [2m│
-│[0m [38;5;153ma[39m: collapse all                                                                                            [2m│
+│[0m - [1mUse SQLite by default[0m for a single-node demo: it needs no database server, is easy to reset, and handles [2m│
+│[0m   typical demo workloads well.                                                                             [2m│
+│[0m - [1mUse Postgres[0m if the demo needs Postgres-specific features, substantial concurrent writes, or close       [2m│
+│[0m   alignment with a planned Postgres production environment.                                                [2m│
+│[0m - With SQLite, keep the database file on persistent local storage if data must survive redeployments.      [2m│
+│[0m - [1mRecommendation:[0m choose SQLite unless demonstrating or validating Postgres behavior is part of the goal.  [2m│
 │[0m                                                                                                            [2m│
-│[0m [48;5;103m [1m[38;5;231m▾ OPENAI[0;3m[38;5;231m[48;5;103m gpt-6-astra (5.4s)[0m[48;5;103m                                                                              [49m [2m│
-│[0m - [1mUse SQLite by default[0m for a single-node demo: it requires no database server, keeps setup simple, and    [2m│
-│[0m   stores data in one file.                                                                                 [2m│
-│[0m - [1mChoose Postgres[0m if the demo needs Postgres-specific features, many concurrent writes, or close parity    [2m│
-│[0m   with a planned Postgres production environment.                                                          [2m│
-│[0m - For SQLite, enable foreign-key enforcement and use WAL mode to improve read/write concurrency.           [2m│
-│[0m - Don’t add Postgres just for hypothetical growth, but don’t assume migrating later will be effortless—SQL [2m│
-│[0m   behavior and schema migrations can differ.                                                               [2m│
+│[0m [38;5;59m[48;5;59m▌[1m[38;5;231m kimi-cli     [0m[38;5;231m[48;5;59mmoonshot-ai/kimi-k3[39m                                      [38;5;231m  ━━············      [39m  [1m[ [38;5;231mretry[39m ][0m[48;5;59m [49m [2m│
 │[0m                                                                                                            [2m│
-│[0m [1m[38;5;211m▾ ✗ kimi-cli error[0m                                                                                         [2m│
-│[0m [38;5;246mError[39m [38;5;246mfrom[39m [38;5;246mkimi[39m [38;5;246mCLI:[39m [38;5;246mError:[39m [38;5;246m429[39m [38;5;246mToo[39m [38;5;246mMany[39m [38;5;246mRequests[39m                                                          [2m│
+│[0m Error from kimi CLI: Error: 429 Too Many Requests                                                          [2m│
+│[0m                                                                                                            [2m│
+│[0m                                                                                                            [2m│
+│[0m                                                                          [1m[ fold ][0m  [1m[ cancel all ][0m  [38;5;246m✕ close[39m [2m│
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 [0m                                                                                                          [38;5;246m[-][39m
-[1m[38;5;231m[48;5;131m ✦ [0m[48;5;173m [1m[38;5;231mCO[38;5;230mU[38;5;223mN[38;5;230mC[38;5;231mIL[0m[48;5;173m [1m[49m [0m [1m2[0m [1mof[0m [1m5[0m[38;5;174m [39m [38;5;174m━━━─────[1m[38;5;220m [0m [1m[38;5;220m●[0m [1m[38;5;220m0:06[0m[38;5;246m [39m [38;5;246mopenai[39m [38;5;246manswered[39m             [1;7m[ c · cancel all ][0m  [1m[[0m [1mo[0m [1m·[0m [1mopen[0m [1mpane[0m [1m][0m
+  [38;5;174m●[39m [38;5;174mrunning[1m[39m [0m [1mCOUNCIL[0m[38;5;174m [39m [38;5;174m·━━━━···[38;5;246m [39m [38;5;246m0:04[38;5;239m [39m [38;5;239m2[39m [38;5;239mof[39m [38;5;239m5[39m [38;5;239mdone[39m [38;5;239m·[39m [38;5;239mopenai[39m [38;5;239manswered[39m         [1;7m[ cancel all ][0m  [1m[[0m [1mopen[0m [1mpane[0m [1m][0m
 
 [38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 [38;5;246m❯ [7m[39m [0m
 [38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 [39m  [38;5;211m⏵⏵[39m [38;5;211mbypass[39m [38;5;211mpermissions[39m [38;5;211mon[38;5;246m (shift+tab[39m [38;5;246mto[39m [38;5;246mcycle)[39m [38;5;246m·[39m [38;5;246mesc[39m [38;5;246mto[39m [38;5;246minterrupt[39m
-                                                                                                [38;5;246m27531[39m [38;5;246mtokens[39m
+                                                                                                [38;5;246m28522[39m [38;5;246mtokens[39m
         [38;5;246mtmux[39m [38;5;246mfocus-events[39m [38;5;246moff[39m [38;5;246m·[39m [38;5;246madd[39m [38;5;246m'set[39m [38;5;246m-g[39m [38;5;246mfocus-events[39m [38;5;246mon'[39m [38;5;246mto[39m [38;5;246m~/.tmux.conf[39m [38;5;246mand[39m [38;5;246mreattach[39m [38;5;246mfor[39m [38;5;246mfocus[39m [38;5;246mtracking[39m
+
+
 
 
 

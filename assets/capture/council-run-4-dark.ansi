@@ -1,71 +1,71 @@
-[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.304[39m
-[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mHaiku[39m [38;5;246m5.5[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
-[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project[39m
 
-[2m▎[0m [38;5;246mDebug[39m [38;5;246mmode[39m [38;5;246menabled[39m [38;5;246m·[39m [38;5;246mlogging[39m [38;5;246mto[39m
-[2m▎[0m [38;5;246m~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/debug-dark.log[39m
+[38;5;231m⏺[39m [1mCouncil responses[0m
 
-[38;5;246m[48;5;237m❯[39m [38;5;231m/claude-council:ask --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief [39m
-[38;5;231m--no-auto-context --no-cache "Should a single-node demo app use SQLite or Postgres?"[39m
-[49m
-[38;5;114m⏺[39m [1mBash[0m(bash ~/.claude-sessions/claude-council/scripts/run-council.sh
-      --providers=codex,antigravity,gemini,openai,kimi-cli --verbosity=brief --no-cache -- "Should a
-      single-node demo app use SQLite or Postgres?")
-[38;5;246m  ⎿  [39m.claude/council-cache/council-1792499620.md
-[38;5;246m  ⎿  (timeout 10m)[39m
+  [1mAntigravity (Gemini 3.8 Flash High)[0m
+  For a single-node demo application, [1mSQLite[0m is the recommended choice due to its simplicity and zero
+  operational overhead.
+  - [1mZero setup:[0m It runs in-process as a single portable file, with no network ports, credentials, or database
+    containers.
+  - [1mSufficient performance:[0m It handles single-node demo traffic with sub-millisecond local reads and instant
+    startup.
+  - [1mPostgres exception:[0m Choose [1mPostgres[0m only if the demo needs Postgres-specific features, such as extensions,
+    [38;5;153mLISTEN/NOTIFY[39m, or high-concurrency write testing.
 
-[38;5;114m⏺[39m [1mRead[0m(]8;id=14hha9n;file://~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project/.claude/council-cache/council-1792499620.md\~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project/.claude/]8;;\
-  ]8;id=14hha9n;file://~/.claude-sessions/claude-council/assets/capture/.council-run-6ye0cjaj/project/.claude/council-cache/council-1792499620.md\council-cache/council-1792499620.md]8;;\)
-[38;5;246m  ⎿  [39mRead [1m45[0m lines
+  [1mCodex (default)[0m
+  - [1mUse SQLite[0m for a single-node demo: no database server, simple setup, and easy to distribute and reset.
+  - Choose [1mPostgres[0m if the demo needs Postgres-specific features, many concurrent writes, or close parity with
+    an existing Postgres production environment.
+  - Otherwise, start with SQLite. Migrating later is possible but requires schema and query adjustments.
 
-[38;5;231m⏺[39m [1mCouncil responses (brief):[0m
+  [1mGemini (gemini-flash-latest)[0m
+  For a single-node demo app, [1mSQLite[0m is recommended to minimize friction and operational overhead.
+  - [1mZero configuration:[0m It runs in-process with no separate server or Docker container.
+  - [1mTrivial state resets:[0m The database is a single file, easy to version-control, snapshot, or reset.
 
-  - [1mAntigravity (Gemini 3.8 Flash High):[0m SQLite, unless the demo must showcase Postgres-specific features.
-  - [1mCodex:[0m SQLite by default; Postgres if production parity or Postgres features matter.
-  - [1mGemini (gemini-flash-latest):[0m SQLite for zero-config portability; Postgres only for Postgres-specific
-    features.
-  - [1mKimi-cli:[0m Failed with [38;5;153m429 Too Many Requests[39m, so there is no answer from this seat.
-  - [1mOpenAI (gpt-6-astra):[0m SQLite by default, with foreign keys enforced and WAL mode; Postgres if the demo
-    needs its features or many concurrent writes.
+  Choose [1mPostgres[0m only if the demo relies on engine-exclusive features, such as [38;5;153mpgvector[39m or complex
+  concurrency.
+
+  [1mKimi-cli (moonshot-ai/kimi-k3)[0m
+  Error: Error from kimi CLI: Error: 429 Too Many Requests
+
+  [1mOpenAI (gpt-6-astra)[0m
+  - [1mUse SQLite by default[0m for a single-node demo: no database server, easy to reset, and handles typical demo
+    workloads well.
+  - [1mUse Postgres[0m if the demo needs Postgres-specific features, substantial concurrent writes, or alignment
+    with a planned Postgres production environment.
+  - With SQLite, keep the database file on persistent local storage if data must survive redeployments.
 
   [1mSynthesis[0m
 
-  All four responding seats recommend SQLite for a single-node demo unless the demo must show
-  Postgres-specific features, production parity, or heavy concurrent writes; Kimi returned a rate-limit error
-  and was not retried.
+  Four of five providers (Antigravity, Codex, Gemini, OpenAI) recommend SQLite for a single-node demo unless
+  the demo specifically needs Postgres features or heavy concurrent writes; Kimi returned a 429 rate-limit
+  error and is not represented.
 
-  Full output saved: [38;5;153m.claude/council-cache/council-1792499620.md[39m
+  Full output saved: [38;5;153m.claude/council-cache/council-1792751668.md[39m
 
-[38;5;246m✻[39m [38;5;246mCogitated for 39s · done 3:34 PM[39m
+[38;5;246m✻[39m [38;5;246mBrewed for 42s · done 1:35 PM[39m
 [2m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────[0m[38;5;246m✕[2m[39m─╮
-│[0m [1m4 of 5 answered · 1 error · 14.2s[0m                                                                          [2m│
-│[0m [38;5;103m● [38;5;153m1[39m: codex  [38;5;75m● [38;5;153m2[39m: antigravity  [38;5;75m● [38;5;153m3[39m: gemini  [38;5;103m● [38;5;153m4[39m: openai  [38;5;211m✗ [38;5;153m5[39m: kimi-cli  [38;5;102m≡ [38;5;153m0[39m: synthesis                      [2m│
+│[0m [1m4 of 5 answered · 1 error · 15.9s[0m                                                                          [2m│
 │[0m                                                                                                            [2m│
-│[0m [38;5;153ma[39m: collapse all                                                                                            [2m│
+│[0m [48;5;174m [1m[38;5;231m▾ SYNTHESIS[0m[48;5;174m                                                                                              [49m [2m│
+│[0m Four of five providers (Antigravity, Codex, Gemini, OpenAI) recommend SQLite for a single-node demo unless [2m│
+│[0m the demo specifically needs Postgres features or heavy concurrent writes; Kimi returned a 429 rate-limit   [2m│
+│[0m error and is not represented.                                                                              [2m│
+│[0m [38;5;103m▌[1m[39m codex        [0m[38;5;239mdefault[39m                                                 [38;5;114m  ━━━━━━━━━━━━━━[38;5;246m  10.6s[39m  [1m[ open ][0m   [2m│
+│[0m [38;5;75m▌[1m[39m antigravity  [0m[38;5;239mGemini 3.8 Flash (High)[39m                                 [38;5;114m  ━━━━━━━━━━━━━━[38;5;246m  15.9s[39m  [1m[ open ][0m   [2m│
+│[0m [38;5;75m▌[1m[39m gemini       [0m[38;5;239mgemini-flash-latest[39m                                     [38;5;114m  ━━━━━━━━━━━━━━[38;5;246m  10.1s[39m  [1m[ open ][0m   [2m│
+│[0m [38;5;103m▌[1m[39m openai       [0m[38;5;239mgpt-6-astra[39m                                             [38;5;114m  ━━━━━━━━━━━━━━[38;5;246m   4.5s[39m  [1m[ open ][0m   [2m│
+│[0m [38;5;59m▌[1m[39m kimi-cli     [0m[38;5;239mmoonshot-ai/kimi-k3[39m                                     [38;5;211m  ━━············[38;5;246m       [39m  [1m[ open ][0m   [2m│
 │[0m                                                                                                            [2m│
-│[0m [48;5;103m [1m[38;5;231m▸ CODEX[0;3m[38;5;231m[48;5;103m default (9.7s)[0m[48;5;103m                                                                                   [49m [2m│
-│[0m                                                                                                            [2m│
-│[0m [48;5;75m [1m[38;5;231m▸ ANTIGRAVITY[0;3m[38;5;231m[48;5;75m Gemini 3.8 Flash (High) (14.2s)[0m[48;5;75m                                                            [49m [2m│
-│[0m                                                                                                            [2m│
-│[0m [48;5;75m [1m[38;5;231m▸ GEMINI[0;3m[38;5;231m[48;5;75m gemini-flash-latest (7.9s)[0m[48;5;75m                                                                      [49m [2m│
-│[0m                                                                                                            [2m│
-│[0m [48;5;103m [1m[38;5;231m▸ OPENAI[0;3m[38;5;231m[48;5;103m gpt-6-astra (5.4s)[0m[48;5;103m                                                                              [49m [2m│
-│[0m                                                                                                            [2m│
-│[0m [1m[38;5;211m▸ ✗ kimi-cli error[0m                                                                                         [2m│
-│[0m                                                                                                            [2m│
-│[0m [48;5;173m [1m[38;5;231m▾ SYNTHESIS[0m[48;5;173m                                                                                              [49m [2m│
-│[0m All four responding seats recommend SQLite for a single-node demo unless the demo must show                [2m│
-│[0m Postgres-specific features, production parity, or heavy concurrent writes; Kimi returned a rate-limit      [2m│
-│[0m error and was not retried.                                                                                 [2m│
+│[0m                                                                                          [1m[ fold ][0m  [38;5;246m✕ close[39m [2m│
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 [0m                                                                                                          [38;5;246m[-][39m
-[1m[38;5;231m[48;5;131m ✦ [0m[48;5;173m [1m[38;5;231mCOUNCIL[0m[48;5;173m [1m[49m ✓ finished: 4 of 5 answered, 1 error  [ o · open pane ][0m [1m[ x · dismiss ][0m
+  [38;5;114m✓ done[1m[39m  COUNCIL  finished: 4 of 5 answered, 1 error  [ open pane ][0m [1m[ dismiss ][0m
 
 [38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ [7m [0m
 [38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;211m⏵⏵ bypass permissions on[38;5;246m (shift+tab to cycle)[39m                                                 [38;5;246m29350 tokens[39m
-
+[39m  [38;5;211m⏵⏵ bypass permissions on[38;5;246m (shift+tab to cycle)[39m                                                 [38;5;246m30721 tokens[39m
 
 
 

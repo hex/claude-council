@@ -2,7 +2,7 @@
   "title": "A heads-up note and an unsent draft",
   "description": "Captured terminal output in fake seat mode. Each state lasts 2.5 seconds.",
   "provenance": {
-    "checkout_head": "e9b00101760a5eafa5d2ed7a9dd644f21f262ee9",
+    "checkout_head": "ae9995dacb0c632ad07444bcfca99315b28e6775",
     "seat_mode": "fake",
     "providers": [
       "codex",
@@ -56,7 +56,7 @@
             8,
             12
           ],
-          "sha256": "3627c3c41c96534a9d3b916d588e66a07d2349b7ea26462e47b544cafd81ce53"
+          "sha256": "e44b64dc83fa454e55e93d1a991bf60f833b5d4535fdf208be33b76b9a9a012f"
         },
         "dark": {
           "file": "heads-up-0-dark.ansi",
@@ -64,7 +64,7 @@
             8,
             12
           ],
-          "sha256": "e8cb39404de9251c4f376ce7740fed521c432f84ec27e4da86cb4c434c57c526"
+          "sha256": "854536bf06cdf461209f48350ff573d61d6bac892df6a8e082b9ed3925a0e2b4"
         }
       }
     },
@@ -77,15 +77,15 @@
             26,
             34
           ],
-          "sha256": "bbe61bf737550212e7e550ef823f81e67e81585d59297784853af710a0fc4928"
+          "sha256": "e9f6374aef110be41b22a4f919d7391dfb3b0fbe053e15dadaa9d8fc6b4f0650"
         },
         "dark": {
           "file": "heads-up-1-dark.ansi",
           "crop": [
-            29,
-            37
+            27,
+            35
           ],
-          "sha256": "e8419c045a9dfd2673a603b0df2cb151043ed0c25842a00184c13c5c72472570"
+          "sha256": "ee8742f3aaf472ee5ffe54b63c1fa2eb2445542d1d4b972724c452eea35ee603"
         }
       }
     },
@@ -95,10 +95,10 @@
         "light": {
           "file": "heads-up-2-light.ansi",
           "crop": [
-            32,
-            43
+            35,
+            46
           ],
-          "sha256": "bc5e2f50791b3c1f567e782050044cc544a2fe4cf87e8d88e3e4e27a32bedebb"
+          "sha256": "801bd7f6dece9d1fd0423e3f17ce0b615024b8ba35e4249f2c5e77a8c2c4c321"
         },
         "dark": {
           "file": "heads-up-2-dark.ansi",
@@ -106,7 +106,7 @@
             35,
             46
           ],
-          "sha256": "0915f9eb38cc84d7d9473a664e120f94643a836aebbe8292f355d701faae32e2"
+          "sha256": "881b73145d401cfd03628db78b3177c4e07dae9eab9851ba4ce74fba92c33d47"
         }
       }
     },
@@ -116,10 +116,10 @@
         "light": {
           "file": "heads-up-3-light.ansi",
           "crop": [
-            31,
-            43
+            34,
+            46
           ],
-          "sha256": "e7e25b79e307e8e0533249ef8704374d9b0f9fb9a2624807b77716192c906bcb"
+          "sha256": "fdaec1b1130b38695c3d55b81855e020828ebd69464665891b0f82af629c6391"
         },
         "dark": {
           "file": "heads-up-3-dark.ansi",
@@ -127,7 +127,7 @@
             34,
             46
           ],
-          "sha256": "82e2f90d093fafc0cfad6349ec7fbb6be287bb2530ae9833419ff49fcacc97fa"
+          "sha256": "fb8bc6e59ce6337ce6060780e9aada114e6d5567bdf6e4ccd1e9b8697c5c6da2"
         }
       }
     }
