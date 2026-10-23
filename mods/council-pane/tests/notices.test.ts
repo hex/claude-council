@@ -88,7 +88,7 @@ test('progressBand without an event says only the count, and the clock gains an 
   expect(progressBand({ providers: nine, isDone: false }, 0, 3_661_000, 0)?.clock).toBe('1:01:01')
 })
 
-test('progressBand starts empty and leaves the clock out until a run is picked up', () => {
+test('progressBand sweeps from frame 0 and leaves the clock out until a run is picked up', () => {
   const waiting = [{ name: 'gemini', state: 'pending' }, { name: 'openai', state: 'querying' }]
   expect(progressBand({ providers: waiting, isDone: false }, undefined, 5_000, 0)).toEqual({ bar: '━·······', event: '0 of 2 done' })
 })

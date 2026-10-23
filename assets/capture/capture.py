@@ -277,7 +277,7 @@ class Capture:
                        "Do not load other skills, run git, or delegate. Run the council once only. "
                        "Do not inspect or print environment variables or authentication files. "
                        "Kimi is a rate-limit fixture. Other seats may answer or fail. Never retry a seat. "
-                       "Write a one-sentence synthesis under ## Synthesis, then Full output saved."]
+                       "Write a one-sentence synthesis under the transcript's synthesis header, then Full output saved."]
         self.tmux("-f", str(config), "new-session", "-d", "-s", "capture", "-x", "110", "-y", "80",
                   "-c", str(self.project), *command)
         self.started = True

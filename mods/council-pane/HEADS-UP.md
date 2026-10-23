@@ -23,7 +23,7 @@ During a long turn, above the prompt:
 
 ```
  ! Heads up · The migration test passed against the empty fixture DB, so the backfill path never ran.
-  codex · gpt-6.1-sol · 12.4 KB · 27 s      1: Learn more   2: Knew this already   3: Turn off   0: Dismiss
+    1: Learn more   2: Knew this already   3: Turn off   0: Dismiss      codex · gpt-6.1-sol · 12.4 KB · 27 s
 ```
 
 - `1` expands the band the way the builtin does: a bold title (80 characters) and three to six bullets (200 characters each, under 120 words together), the last one the action, drawn bold. The expanded band offers `1 · Understood`, `2 · tell Claude`, the dim `3 · Turn off` and `0 · close`; `Understood` is the builtin's acknowledge after reading: it marks the topic known as `Knew this already` does, but counts apart from it, since a note the person already knew was redundant and a note they took in was useful, and the counts are the dogfood's signal. `tell Claude` puts a draft quoting the note in the prompt box ("A side check by codex (not you) flagged this: <headline>", then the title and bullets as a list, then a close that asks for a check before action: for a Heads up, verify the claim and report before acting on the last bullet; for a You should know, weigh it against the plan), and the person sends or edits it. Reading the note alone tells Claude nothing, and nothing is submitted on the person's behalf.
@@ -74,7 +74,7 @@ Load-bearing decisions:
 - **Errors fail open, reported once.** A seat timeout or error writes `kind: failed` with the reason, which the pane logs through `logFailure`. The band never nags about infrastructure. Deadline: 60 s for the seat, counted in ticks of `sleep 1`, never `$((SECONDS+N))`.
 - **Learn more expands in place; tell Claude fills the prompt box.** Two presses, because reading more and telling Claude are different decisions. `$.prompt.submit` would start a turn the person did not ask for, and a hidden `prompt.submit` context vanished without a trace when pressed (seen live). `$.prompt.fill` puts a draft the person can read, edit and send, which is the builtin's behaviour and the promise: the main agent learns of a note only through the person.
 - **Typed past = a `prompt.submit` whose `origin.kind` is `composer` or `bridge` while a note shows.** This plugin's own submits and continuation turns do not count. Turn end alone does not either: the person may not have looked yet.
-- **Band priority: after finished and retry, before the progress band.** A note is one row and time-sensitive; the progress band returns when it is answered. Controls carry full-strength hotkey labels, no `dimColor`.
+- **Band priority: after finished and retry, before the progress band.** A note is one row and time-sensitive; the progress band returns when it is answered. Controls carry full-strength hotkey labels, no `dimColor`, save `3: Turn off`, which is dim by the ruling above.
 - **Settings: the file only.** A userConfig row would be a second switch, and `$.config.set` reloads the module.
 
 Depth: `heads-up.ts` exports the types and eleven pure functions that hide cadence, backoff, dedupe, result validation and the band's words; `pane.tsx` calls `decide`, `settle`, `parseRunResult`, `bandView`, `applyAnswer` and `learnMoreContext` and never inspects a counter. `heads-up.sh` hides the codex schema handshake, the deadline and payload measuring behind one command with four flags and an optional `--model`.

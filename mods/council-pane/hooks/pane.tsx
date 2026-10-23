@@ -873,7 +873,10 @@ export const register: Register = (on, options) => {
       return (
         <ui.Box key="finished" flexDirection="row" marginTop={1} paddingLeft={BAND_INDENT}>
           {finished.isFailure ? bandHead(ui, 'head', '\u2717', 'failed', COLOR.danger) : bandHead(ui, 'head', '\u2713', 'done', COLOR.success)}
-          <ui.Text bold {...(finished.isFailure ? { color: COLOR.danger } : {})}>{`  ${finished.text}  `}</ui.Text>
+          {/* Only the notice gives way when narrow, so the buttons stay on the line. */}
+          <ui.Box flexShrink={1}>
+            <ui.Text bold wrap="truncate-end" {...(finished.isFailure ? { color: COLOR.danger } : {})}>{`  ${finished.text}  `}</ui.Text>
+          </ui.Box>
           <ui.Button key="finished:open" hotkey="o" label="open pane" onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
           <ui.Text>{' '}</ui.Text>
           <ui.Button

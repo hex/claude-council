@@ -167,7 +167,7 @@ test('cancel all takes every seat still querying, in order, skipping one already
   expect(seatsToCancel({ ...view, isDone: true })).toEqual([])
 })
 
-test('a cancelled seat draws a grey hollow ring, and a finished run leads with its summary', () => {
+test('a cancelled seat draws a bare grey track, and a finished run leads with its summary', () => {
   const sections = paneSections({
     providers: [
       { name: 'gemini', state: 'complete', ms: 4210 },
