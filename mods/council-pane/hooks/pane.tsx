@@ -621,7 +621,7 @@ function headsUpRow(
   return (
     <ui.Box key="heads-up" flexDirection="column" marginTop={1} paddingLeft={BAND_INDENT}>
       <ui.Box flexDirection="row">
-        <ui.Box flexShrink={0}><ui.Text bold color={COLOR.onFill} backgroundColor={FILL.badge}>{` ${tagMark(band.tag)} `}</ui.Text><ui.Text>{' '}</ui.Text></ui.Box>
+        <ui.Box flexShrink={0}><ui.Text bold color={COLOR.onFill} backgroundColor={FILL.orange}>{` ${tagMark(band.tag)} `}</ui.Text><ui.Text>{' '}</ui.Text></ui.Box>
         <ui.Box flexGrow={1} flexShrink={1} flexDirection="column">
           <ui.Text wrap="wrap"><ui.Text bold>{band.tag}</ui.Text>{` \u00b7 ${band.headline}`}</ui.Text>
           {more !== null && (
@@ -917,7 +917,7 @@ export const register: Register = (on, options) => {
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1} paddingLeft={BAND_INDENT}>
         {/* Only the event gives way when narrow. */}
-        {bandHead(ui, 'head', '\u25cf', 'running', COLOR.warning)}
+        {bandHead(ui, 'head', '\u25cf', 'running', COLOR.accent)}
         <ui.Box flexShrink={0}>
           <ui.Text>
             <ui.Text color={COLOR.accent}>{`  ${progress.bar}`}</ui.Text>
@@ -1049,8 +1049,8 @@ export const register: Register = (on, options) => {
         case 'synthesis':
           return (
             <Box key={section.key} flexDirection="column" marginTop={section.open ? 1 : 0}>
-              <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={FILL.chip}>
-                {toggle(section, <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{`${mark(section.open)} SYNTHESIS`}</Text>)}
+              <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={FILL.orange}>
+                {toggle(section, <Text bold color={COLOR.onFill} backgroundColor={FILL.orange}>{`${mark(section.open)} SYNTHESIS`}</Text>)}
               </Box>
               {section.open && fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
@@ -1073,7 +1073,7 @@ export const register: Register = (on, options) => {
         case 'reason':
           return (
             <Box key={key} marginTop={1}>
-              <Text color={COLOR.warning} dimColor>{section.text}</Text>
+              <Text color={COLOR.muted}>{section.text}</Text>
             </Box>
           )
       }

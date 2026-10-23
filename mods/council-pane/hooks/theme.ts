@@ -9,8 +9,6 @@ export const COLOR = {
   accent: 'claude',
   success: 'success',
   danger: 'error',
-  // Running, live, a note.
-  warning: 'warning',
   info: 'suggestion',
   // Secondary text that must stay readable; plain dimColor serves the rest.
   muted: 'inactive',
@@ -23,9 +21,8 @@ export const COLOR = {
 // Fills carry white letters, and a theme key would turn light on a dark theme
 // under them, so these are fixed and dark enough for 4.5:1 or better.
 export const FILL = {
-  // A deeper Claude orange (4.9:1 under white); the plain accent is 3.1:1. The SYNTHESIS header.
-  chip: 'rgb(180,85,50)',
-  // Claude's orange under the heads-up note's one-letter badge: 3.1:1 under
-  // white, which meets the 3:1 a glyph needs, and fixed so a dark theme cannot lighten it.
-  badge: 'rgb(215,119,87)',
+  // Claude's orange, the one fill: the SYNTHESIS header and the heads-up badge.
+  // White on it is 3.1:1, a choice for the brand over 4.5:1; fixed so a dark
+  // theme cannot lighten it under the white letters.
+  orange: 'rgb(215,119,87)',
 } as const

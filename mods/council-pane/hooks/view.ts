@@ -49,13 +49,12 @@ export type Section =
   // The empty run's one line.
   | { kind: 'note'; text: string }
 
-// The bar takes the glyph's colour, except a live seat's: it has no share to
-// show, so its bar sweeps on the pane's frame in Claude's orange, since the
-// theme's warning colour is a brown on a light terminal.
-type SeatLook = { glyph: string; color: string; note: SeatNote; fill: (frame: number) => BarFill; barColor?: string }
+// The bar takes the glyph's colour. A live seat has no share to show, so its
+// bar sweeps on the pane's frame.
+type SeatLook = { glyph: string; color: string; note: SeatNote; fill: (frame: number) => BarFill }
 const SWEEP = (frame: number): BarFill => ({ kind: 'sweep', frame })
 const FULL = (): BarFill => ({ kind: 'share', filled: 1, total: 1 })
-const LIVE: SeatLook = { glyph: '\u25cf', color: COLOR.warning, note: '', fill: SWEEP, barColor: COLOR.accent }
+const LIVE: SeatLook = { glyph: '\u25cf', color: COLOR.accent, note: '', fill: SWEEP }
 const SET_ASIDE: SeatLook = { glyph: '\u25cb', color: COLOR.muted, note: '', fill: () => ({ kind: 'empty' }) }
 // The glyph and its colour are the state; only a seat that answered some other
 // way than asking says so in words. A state the pane does not know is drawn live.
@@ -64,7 +63,7 @@ const SEAT_LOOKS: Record<string, SeatLook> = {
   retrying: LIVE,
   complete: { glyph: '\u2713', color: COLOR.success, note: '', fill: FULL },
   cached: { glyph: '\u2713', color: COLOR.info, note: 'cached', fill: FULL },
-  fallback: { glyph: '\u2713', color: COLOR.warning, note: 'fell back', fill: FULL },
+  fallback: { glyph: '\u2713', color: COLOR.accent, note: 'fell back', fill: FULL },
   error: { glyph: '\u2717', color: COLOR.danger, note: '', fill: () => ({ kind: 'stub' }) },
   cancelled: SET_ASIDE,
   cancelling: SET_ASIDE,
@@ -209,7 +208,7 @@ export function paneSections(
       model: model ?? '',
       note: look.note,
       bar: bar(look.fill(frame + index * SWEEP_STAGGER)),
-      barColor: look.barColor ?? look.color,
+      barColor: look.color,
       time: shownTime(provider).padStart(times),
       open,
       ...(press ? { action: { press, seat: name } } : {}),
