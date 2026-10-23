@@ -43,6 +43,7 @@ const OPEN_MARK = '\u25be'
 const CLOSED_MARK = '\u25b8'
 // A seat row's first cell, in the vendor's colour: identity without a fill.
 const EDGE_MARK = '\u258c'
+const RULE_MARK = '\u2500'
 // A seat row's action column: two cells of gap, then the widest a plain
 // Button draws, its digit, a colon and the longest verb.
 const ACTION_COLUMNS = 2 + '0: cancel'.length
@@ -1061,12 +1062,15 @@ export const register: Register = (on, options) => {
           )
         case 'body':
           // The text arrives fitted to the pane's width and within its budget.
-          // A fallback's reason already took the blank line above it.
+          // A fallback's reason already took the blank line above it. A rule
+          // closes the body when another section follows, so the next row
+          // does not read as the answer's last line.
           return (
             <Box key={key} flexDirection="column" marginTop={sections[index - 1]?.kind === 'reason' ? 0 : 1}>
               {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
+              {index + 1 < sections.length && <Text dimColor>{RULE_MARK.repeat(columns)}</Text>}
             </Box>
           )
         case 'reason':

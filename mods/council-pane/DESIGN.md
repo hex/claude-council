@@ -8,7 +8,7 @@ How the mod looks, and why. Every colour lives in `hooks/theme.ts`, and no other
 - Colour carries meaning, and each meaning has one colour. Text or a glyph always says the same thing, so no state depends on colour alone.
 - Text a person reads meets 4.5:1 on a light and on a dark theme, with two exceptions: `info` is 4.4:1 on light, and the engine has no blue that does better; and the heads-up note's seat line uses `hint` at 2.2:1 by choice, so it recedes behind the choices. Glyphs and lines meet 3:1.
 - A screen fits the terminal. A pane taller than the terminal hands the keyboard back to the prompt, so text stays short. A text a person needs to read wraps and is shown whole.
-- A folded section costs one line. A blank line is spent only before an open body.
+- A folded section costs one line. A blank line is spent only before an open body, and a dim rule closes it when a section follows.
 
 ## Colour
 
@@ -55,7 +55,7 @@ Each glyph has one meaning.
 | `▾` `▸` | A fold, open and closed: the synthesis header |
 | `✦` | The council's mark, on the chip |
 | ` ! ` ` ? ` | A heads-up note: `!` for this session's work, `?` for a concept to know; one ASCII letter on the `chipMark` fill, so every terminal draws it one cell wide |
-| `━` `─` | The progress bar, filled and empty |
+| `━` `─` | The progress bar, filled and empty; a dim `─` rule across the pane closes an open body |
 
 ## Components
 
