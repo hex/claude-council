@@ -1,5 +1,6 @@
 // ABOUTME: Decides which council run the pane shows and turns its state into the markdown drawn there
 // ABOUTME: Pure functions over plain values, so they run without the engine
+import { bar, type BarFill } from './bar'
 import { ANSWERED_STATES, count, type ProviderStatus } from './status'
 import { COLOR } from './theme'
 
@@ -38,7 +39,7 @@ export type Section =
   // One row per seat, its status and its fold header at once, with the name
   // padded to the column and the action's seat unpadded. A closed seat, or one
   // with nothing to show, is the row alone: no reason or body follows it.
-  | { kind: 'seat'; key: string; fold: string; digit: string; glyph: string; glyphColor: string; vendor: string; name: string; model: string; note: SeatNote; time: string; open: boolean; action?: SeatAction }
+  | { kind: 'seat'; key: string; fold: string; digit: string; glyph: string; glyphColor: string; vendor: string; name: string; model: string; note: SeatNote; bar: string; time: string; open: boolean; action?: SeatAction }
   | { kind: 'reason'; text: string }
   | { kind: 'body'; text: string }
   | { kind: 'synthesis'; key: string; fold: string; open: true; text: string }
@@ -48,21 +49,27 @@ export type Section =
   // The empty run's one line.
   | { kind: 'note'; text: string }
 
-type SeatLook = { glyph: string; color: string; note: SeatNote }
-const LIVE: SeatLook = { glyph: '\u25cf', color: COLOR.warning, note: '' }
-const SET_ASIDE: SeatLook = { glyph: '\u25cb', color: COLOR.muted, note: '' }
+// The bar takes the glyph's colour. A live seat has no share to show, so its
+// bar sweeps on the pane's frame.
+type SeatLook = { glyph: string; color: string; note: SeatNote; fill: (frame: number) => BarFill }
+const SWEEP = (frame: number): BarFill => ({ kind: 'sweep', frame })
+const FULL = (): BarFill => ({ kind: 'share', filled: 1, total: 1 })
+const LIVE: SeatLook = { glyph: '\u25cf', color: COLOR.warning, note: '', fill: SWEEP }
+const SET_ASIDE: SeatLook = { glyph: '\u25cb', color: COLOR.muted, note: '', fill: () => ({ kind: 'empty' }) }
 // The glyph and its colour are the state; only a seat that answered some other
 // way than asking says so in words. A state the pane does not know is drawn live.
 const SEAT_LOOKS: Record<string, SeatLook> = {
   querying: LIVE,
   retrying: LIVE,
-  complete: { glyph: '\u2713', color: COLOR.success, note: '' },
-  cached: { glyph: '\u2713', color: COLOR.info, note: 'cached' },
-  fallback: { glyph: '\u2713', color: COLOR.warning, note: 'fell back' },
-  error: { glyph: '\u2717', color: COLOR.danger, note: '' },
+  complete: { glyph: '\u2713', color: COLOR.success, note: '', fill: FULL },
+  cached: { glyph: '\u2713', color: COLOR.info, note: 'cached', fill: FULL },
+  fallback: { glyph: '\u2713', color: COLOR.warning, note: 'fell back', fill: FULL },
+  error: { glyph: '\u2717', color: COLOR.danger, note: '', fill: () => ({ kind: 'stub' }) },
   cancelled: SET_ASIDE,
   cancelling: SET_ASIDE,
 }
+// Frames between one seat's sweep and the next one's, so the live rows do not move in step.
+const SWEEP_STAGGER = 7
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
 
@@ -120,22 +127,33 @@ export function queryingSince(since: Record<string, number>, providers: Provider
   return next
 }
 
+type SeatMarks = Pick<RunView, 'cancels' | 'retries' | 'retriable' | 'isDone'>
+
+// A seat still querying as far as the log knows, with its marker in the
+// watch dir, is cancelling: the run removes the marker once it logs the seat.
+function seatState({ name, state }: ProviderStatus, { cancels = [], retries = [], retriable = [], isDone }: SeatMarks): string {
+  return state === 'querying' && cancels.includes(name) ? 'cancelling'
+    : retriable.includes(name) && retries.includes(name) && !isDone ? 'retrying'
+    : state
+}
+
+// Whether a live run's pane and band move: a seat querying or waiting on its
+// retry runs a clock and a sweep, and the chip shimmers.
+export function isMoving(view: Pick<RunView, 'providers'> & SeatMarks): boolean {
+  return !view.isDone && view.providers.some(provider => provider.state === 'querying' || seatState(provider, view) === 'retrying')
+}
+
 // A run that is live lists its seats with any open answers under them and
 // the synthesis last. A finished one leads with its summary, and, collapsing
 // when done, with the synthesis, the seats below it.
 export function paneSections(
   { providers, responses, errors, cancels = [], retries = [], retriable = [], colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
-  { collapsesWhenDone = true, nowMs = 0, fitText = (text: string) => text, closed = new Set<string>() }: { collapsesWhenDone?: boolean; nowMs?: number; fitText?: (text: string) => string; closed?: ReadonlySet<string> } = {},
+  { collapsesWhenDone = true, nowMs = 0, frame = 0, fitText = (text: string) => text, closed = new Set<string>() }: { collapsesWhenDone?: boolean; nowMs?: number; frame?: number; fitText?: (text: string) => string; closed?: ReadonlySet<string> } = {},
 ): Section[] {
   if (providers.length === 0) {
     return [{ kind: 'note', text: isDone ? 'Council finished with no answers.' : 'Waiting for the council...' }]
   }
-  // A seat still querying as far as the log knows, with its marker in the
-  // watch dir, is cancelling: the run removes the marker once it logs the seat.
-  const shownState = ({ name, state }: ProviderStatus) =>
-    state === 'querying' && cancels.includes(name) ? 'cancelling'
-    : retriable.includes(name) && retries.includes(name) && !isDone ? 'retrying'
-    : state
+  const shownState = (provider: ProviderStatus) => seatState(provider, { cancels, retries, retriable, isDone })
   // A querying provider's time runs from when the pane first saw it, in whole tenths.
   const elapsed = (name: string) => {
     const since = queryingSinceMs[name]
@@ -189,6 +207,7 @@ export function paneSections(
       name: name.padEnd(names),
       model: model ?? '',
       note: look.note,
+      bar: bar(look.fill(frame + index * SWEEP_STAGGER)),
       time: shownTime(provider).padStart(times),
       open,
       ...(press ? { action: { press, seat: name } } : {}),

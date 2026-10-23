@@ -19,7 +19,7 @@ import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, T
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { shimmer } from './chip'
-import { markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
+import { isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { parseCatalog } from './catalog'
 
@@ -27,7 +27,7 @@ const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
 const RUN_TIMEOUT_MS = 600_000
 const POLL_MS = 500
-// Ten frames a second: the chip's shimmer and the live seats' clocks.
+// Ten frames a second: the chip's shimmer, the live seats' sweeps and clocks.
 const FRAME_MS = 100
 // The worker records its result seconds after .done; a worker killed outright
 // leaves its record at running, so the wait for it ends.
@@ -306,11 +306,11 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   }
 }
 
-// Advances the chip's shimmer and the clock the elapsed times read, only while a
-// provider is still querying; an idle pane costs no redraws.
+// Advances the chip's shimmer, the live seats' sweeps and the clock the elapsed
+// times read, only while the run is moving; an idle pane costs no redraws.
 async function animate($: EngineInterface, state: PaneState): Promise<void> {
   const view = state.view
-  if (!view || view.isDone || !view.providers.some(provider => provider.state === 'querying')) return
+  if (!view || !isMoving(view)) return
   state.frame += 1
   state.nowMs = await $.clock.now()
   $.ui.invalidate('ui.render')
@@ -961,7 +961,7 @@ export const register: Register = (on, options) => {
       fits.set(text, fitted)
       return fitted
     }
-    const sections = paneSections(state.view, { ...settings, nowMs: state.nowMs, fitText, closed: state.closed })
+    const sections = paneSections(state.view, { ...settings, nowMs: state.nowMs, frame: state.frame, fitText, closed: state.closed })
     state.tableFit = { columns, byText: fits }
     const fit = (sectionKey: string, text: string) => {
       const kept = state.fitted.get(sectionKey)
@@ -989,8 +989,8 @@ export const register: Register = (on, options) => {
           return <Text key={key} dimColor>{section.text}</Text>
         case 'seat': {
           const action = section.action
-          // The model takes the slack and gives way when narrow, so the time
-          // and the action sit in the same columns on every row.
+          // The model takes the slack and gives way when narrow, so the bar,
+          // the time and the action sit in the same columns on every row.
           return (
             <Box key={section.key} flexDirection="row" width={columns}>
               <Box flexShrink={0}>
@@ -1015,7 +1015,10 @@ export const register: Register = (on, options) => {
                 )}
               </Box>
               <Box flexShrink={0}>
-                <Text dimColor>{`  ${section.time}`}</Text>
+                <Text>
+                  <Text color={section.glyphColor}>{`  ${section.bar}`}</Text>
+                  <Text dimColor>{`  ${section.time}`}</Text>
+                </Text>
               </Box>
               <Box flexShrink={0} width={ACTION_COLUMNS} paddingLeft={2}>
                 {action ? (
