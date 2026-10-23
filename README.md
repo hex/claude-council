@@ -87,10 +87,10 @@ and the [heads-up guide](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default
 ## The pane
 
 With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, the pane opens inside Claude Code,
-as in the animation above. Each answer's banner names the seat, model, and
-elapsed time. Answers fold when the synthesis arrives so it sits near the
-top. Cancel a slow seat, fold sections, or reopen the last run with
-`/council-pane`. Inside tmux, the mod asks once which pane you want.
+as in the animation above. Each seat has one row with its model, its time,
+and what its digit does now: cancel, retry, open, or fold. When the run ends,
+the synthesis opens at the top with the answers folded below it. Reopen the
+last run with `/council-pane`. Inside tmux, the mod asks once which pane you want.
 
 Mods are early access. The [mod guide](mods/council-pane/README.md) lists
 keys, settings, and limits. It also lets Claude call the council as a tool;

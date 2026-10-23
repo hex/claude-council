@@ -43,7 +43,7 @@
     "collapse_when_done": {
       "type": "boolean",
       "title": "Collapse status when done",
-      "description": "Fold the per-provider status list into one line once a run finishes. Off keeps the full list on screen. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
+      "description": "Open a finished run on its summary and the synthesis, with the seats folded below. Off keeps the live order: the seats, then the synthesis. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
       "default": true
     },
     "wake_on_async_done": {

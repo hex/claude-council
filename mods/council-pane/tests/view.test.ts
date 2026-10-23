@@ -14,7 +14,7 @@ test('unseenRun names the first run dir not shown before, ignoring other entries
   expect(unseenRun(entries, new Set(['run.aaa111', 'run.bbb222']))).toBeUndefined()
 })
 
-test('paneSections gives a coloured status row per provider, then a banner and body or an error for each', () => {
+test('paneSections gives one row per seat, its answer or its error text under it, then the footer', () => {
   const sections = paneSections({
     providers: [
       { name: 'gemini', state: 'complete', ms: 4210, model: 'gemini-3-pro' },
@@ -27,81 +27,93 @@ test('paneSections gives a coloured status row per provider, then a banner and b
     isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'status', glyph: '\u25cf', glyphColor: 'rgb(59,130,246)', name: 'gemini', state: 'complete', stateColor: 'success', time: '4.2s', model: 'gemini-3-pro' },
-    { kind: 'status', glyph: '\u280b', glyphColor: 'rgb(113,113,122)', name: 'openai', state: 'querying', stateColor: 'warning', time: '    ', model: '', action: { press: 'cancel', seat: 'openai', hotkey: '2' } },
-    { kind: 'status', glyph: '\u2717', glyphColor: 'error', name: 'grok  ', state: 'error   ', stateColor: 'error', time: '0.9s', model: '' },
-    { kind: 'note', text: 'click cancel or retry on a row, or ctrl+x tab then its digit' },
-    { kind: 'toggleAll', closes: true, folds: ['banner:jump:gemini', 'error:jump:grok'] },
-    { kind: 'banner', key: 'jump:gemini', fold: 'banner:jump:gemini', title: 'GEMINI', subtitle: 'gemini-3-pro (4.2s)', background: 'rgb(59,130,246)', open: true },
+    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', glyph: '✓', glyphColor: 'success', vendor: 'rgb(59,130,246)', name: 'gemini', model: 'gemini-3-pro', note: '', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
     { kind: 'body', text: 'Use Postgres.' },
-    { kind: 'error', key: 'jump:grok', fold: 'error:jump:grok', title: 'grok error', open: true, text: 'HTTP 429' },
+    { kind: 'seat', key: 'jump:openai', fold: 'seat:jump:openai', digit: '2', glyph: '●', glyphColor: 'warning', vendor: 'rgb(113,113,122)', name: 'openai', model: '', note: '', time: '    ', open: false, action: { press: 'cancel', seat: 'openai' } },
+    { kind: 'seat', key: 'jump:grok', fold: 'seat:jump:grok', digit: '3', glyph: '✗', glyphColor: 'error', vendor: 'rgb(239,68,68)', name: 'grok  ', model: '', note: '', time: '0.9s', open: true, action: { press: 'fold', seat: 'grok' } },
+    { kind: 'body', text: 'HTTP 429' },
+    { kind: 'footer', keys: [{ hotkey: 'a', label: 'fold' }, { hotkey: 'c', label: 'cancel all' }, { hotkey: '✕', label: 'close' }] },
   ])
 })
 
-test('a querying row carries its digit as the cancel key while the run is live, and none once it is done', () => {
-  const view = {
-    providers: [
-      { name: 'gemini', state: 'complete', ms: 4210 },
-      { name: 'grok-cli', state: 'querying' },
-      { name: 'kimi', state: 'querying' },
-    ],
-    responses: {}, errors: {}, colors: {},
-    isDone: false,
-  }
-  const live = paneSections(view)
-  expect(live.map(section => section.kind === 'status' ? section.action?.hotkey : undefined)).toEqual([undefined, '2', '3'])
-  // The hint names the keys the way the retry row does, once per run.
-  expect(live.at(-1)).toEqual({ kind: 'note', text: 'click cancel or retry on a row, or ctrl+x tab then its digit' })
-  // A seat whose marker is in the watch dir draws as cancelling, with no key,
-  // until the run's log says cancelled.
-  const pending = paneSections({ ...view, cancels: ['grok-cli'] })
-  expect(pending[1]).toMatchObject({ kind: 'status', state: 'cancelling', stateColor: 'inactive', glyph: '\u25cb' })
-  expect(pending[1]).not.toHaveProperty('action')
-  // A marker for a seat that is past querying changes nothing.
-  expect(paneSections({ ...view, cancels: ['gemini'] })[0]).toMatchObject({ state: 'complete' })
-  const done = paneSections({ ...view, isDone: true }, { collapsesWhenDone: false })
-  expect(done.map(section => section.kind === 'status' && 'action' in section)).toEqual([false, false, false])
-  expect(done.at(-1)?.kind).toBe('status')
+test('the glyph and its colour carry the state, and only a cached or fell-back seat says so in words', () => {
+  const states = ['querying', 'complete', 'cached', 'fallback', 'error', 'cancelled']
+  const sections = paneSections({
+    providers: states.map(state => ({ name: state, state })),
+    responses: {}, errors: {}, colors: {}, isDone: false,
+  })
+  const looks = sections.flatMap(section => (section.kind === 'seat' ? [[section.glyph, section.glyphColor, section.note]] : []))
+  expect(looks).toEqual([
+    ['●', 'warning', ''],
+    ['✓', 'success', ''],
+    ['✓', 'suggestion', 'cached'],
+    ['✓', 'warning', 'fell back'],
+    ['✗', 'error', ''],
+    ['○', 'inactive', ''],
+  ])
 })
 
-test('an error row the run offers for retry carries the button with its digit; one the run withdrew, or a done run, has none', () => {
+const action = (sections: ReturnType<typeof paneSections>) => sections.flatMap(section => (section.kind === 'seat' ? [section.action?.press ?? 'none'] : []))
+
+test('a seat row\'s action is cancel while it queries, retry on an offered error, open or fold over its text, else none', () => {
   const view = {
     providers: [
-      { name: 'gemini', state: 'querying' },
+      { name: 'codex', state: 'querying' },
+      { name: 'gemini', state: 'complete', ms: 4210 },
       { name: 'grok-cli', state: 'error', ms: 900 },
       { name: 'kimi', state: 'error', ms: 300 },
+      { name: 'openai', state: 'querying' },
     ],
-    responses: {}, errors: { 'grok-cli': 'HTTP 429', kimi: 'HTTP 500' }, colors: {},
+    responses: { gemini: 'Use Postgres.' }, errors: { 'grok-cli': 'HTTP 429', kimi: 'HTTP 500' }, colors: {},
+    cancels: ['openai'],
     retriable: ['grok-cli'],
     isDone: false,
   }
-  const live = paneSections(view)
-  expect(live[1]).toMatchObject({ kind: 'status', state: 'error   ', action: { press: 'retry', seat: 'grok-cli', hotkey: '2' } })
-  // The run has not offered kimi: it has had its retry, or was never parked.
-  expect(live[2]).not.toHaveProperty('action')
-  expect(live[3]).toEqual({ kind: 'note', text: 'click cancel or retry on a row, or ctrl+x tab then its digit' })
-  // A pressed seat draws as retrying, with no key, until the run relaunches it and withdraws the offer.
+  // openai's cancel is pressed: it draws as cancelling, its digit with no verb.
+  expect(action(paneSections(view))).toEqual(['cancel', 'fold', 'retry', 'fold', 'none'])
+  expect(paneSections(view).find(section => section.kind === 'seat' && section.name.trim() === 'openai')).toMatchObject({ glyph: '○', glyphColor: 'inactive', digit: '5', open: false })
+  expect(action(paneSections(view, { closed: new Set(['seat:jump:gemini', 'seat:jump:kimi']) }))).toEqual(['cancel', 'open', 'retry', 'open', 'none'])
+  // A retry press draws the seat as retrying, live, until the run relaunches it; its text stays to fold.
   const pressed = paneSections({ ...view, retries: ['grok-cli'] })
-  expect(pressed[1]).toMatchObject({ kind: 'status', state: 'retrying', stateColor: 'warning', glyph: '\u280b' })
-  expect(pressed[1]).not.toHaveProperty('action')
-  // A press whose offer the run withdrew is a plain error row again.
-  expect(paneSections({ ...view, retries: ['grok-cli'], retriable: [] })[1]).toMatchObject({ state: 'error   ' })
-  const actions = (sections: ReturnType<typeof paneSections>) => sections.filter(section => section.kind === 'status').map(section => 'action' in section)
-  expect(actions(paneSections({ ...view, retriable: [] }))).toEqual([true, false, false])
-  const done = paneSections({ ...view, isDone: true }, { collapsesWhenDone: false })
-  expect(actions(done)).toEqual([false, false, false])
+  expect(pressed.find(section => section.kind === 'seat' && section.name.trim() === 'grok-cli')).toMatchObject({ glyph: '●', glyphColor: 'warning', action: { press: 'fold', seat: 'grok-cli' } })
+  // A press whose offer the run withdrew is a plain error again.
+  expect(paneSections({ ...view, retries: ['grok-cli'], retriable: [] }).find(section => section.kind === 'seat' && section.name.trim() === 'grok-cli')).toMatchObject({ glyph: '✗', glyphColor: 'error' })
+  // A cancel marker for a seat past querying changes nothing.
+  const stale = paneSections({ ...view, cancels: ['gemini'] })
+  expect(stale[0]).toMatchObject({ glyph: '●', action: { press: 'cancel', seat: 'codex' } })
+  expect(stale[1]).toMatchObject({ glyph: '✓', glyphColor: 'success' })
+  // A finished run cancels and retries nothing; what is left is its text.
+  expect(action(paneSections({ ...view, isDone: true }))).toEqual(['none', 'fold', 'fold', 'fold', 'none'])
 })
 
-test('every querying row can be cancelled by click; the first ten carry a digit, the tenth 0', () => {
-  const providers = Array.from({ length: 10 }, (_, index) => ({ name: `seat-${index + 1}`, state: 'querying' }))
-  const rows = paneSections({ providers, responses: {}, errors: {}, colors: {}, isDone: false }).filter(section => section.kind === 'status')
-  // The seat's name travels unpadded, since the row's is padded to the column.
-  expect(rows.map(row => (row.kind === 'status' ? row.action?.seat : undefined))).toEqual(providers.map(provider => provider.name))
-  expect(rows.map(row => (row.kind === 'status' ? row.action?.hotkey : undefined))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
-  // An eleventh row has a button and no key.
-  const eleven = paneSections({ providers: [...providers, { name: 'seat-11', state: 'querying' }], responses: {}, errors: {}, colors: {}, isDone: false }).filter(section => section.kind === 'status')
-  expect(eleven.at(-1)).toMatchObject({ action: { press: 'cancel', seat: 'seat-11' } })
-  expect(eleven.at(-1)).not.toHaveProperty('action.hotkey')
+test('a retriable error keeps its text open under the row while its digit retries', () => {
+  const sections = paneSections({
+    providers: [{ name: 'gemini', state: 'querying' }, { name: 'kimi', state: 'error', ms: 300 }],
+    responses: {}, errors: { kimi: 'HTTP 500' }, colors: {}, retriable: ['kimi'], isDone: false,
+  })
+  expect(sections.slice(1, 3)).toEqual([
+    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '2', glyph: '✗', glyphColor: 'error', vendor: 'rgb(113,113,122)', name: 'kimi  ', model: '', note: '', time: '0.3s', open: true, action: { press: 'retry', seat: 'kimi' } },
+    { kind: 'body', text: 'HTTP 500' },
+  ])
+})
+
+test('a seat keeps its digit through a retry and its answer', () => {
+  const digits = (sections: ReturnType<typeof paneSections>) => sections.flatMap(section => (section.kind === 'seat' ? [`${section.name.trim()} ${section.digit}`] : []))
+  const failed = { providers: [{ name: 'gemini', state: 'complete', ms: 4210 }, { name: 'kimi', state: 'error', ms: 300 }, { name: 'openai', state: 'querying' }], responses: { gemini: 'a' }, errors: { kimi: 'HTTP 500' }, colors: {}, retriable: ['kimi'], isDone: false }
+  expect(digits(paneSections(failed))).toEqual(['gemini 1', 'kimi 2', 'openai 3'])
+  const retrying = { ...failed, retries: ['kimi'] }
+  expect(digits(paneSections(retrying))).toEqual(['gemini 1', 'kimi 2', 'openai 3'])
+  const answered = { ...failed, providers: [{ name: 'gemini', state: 'complete', ms: 4210 }, { name: 'kimi', state: 'complete', ms: 1500 }, { name: 'openai', state: 'complete', ms: 900 }], responses: { gemini: 'a', kimi: 'b', openai: 'c' }, retriable: [], isDone: true }
+  expect(digits(paneSections(answered))).toEqual(['gemini 1', 'kimi 2', 'openai 3'])
+})
+
+test('the first ten seats carry a digit, the tenth 0, and the eleventh none but still its button', () => {
+  const providers = Array.from({ length: 11 }, (_, index) => ({ name: `seat-${index + 1}`, state: 'querying' }))
+  const rows = paneSections({ providers, responses: {}, errors: {}, colors: {}, isDone: false }).filter(section => section.kind === 'seat')
+  expect(rows.map(row => (row.kind === 'seat' ? row.digit : undefined))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', ''])
+  // The seat's name travels unpadded in its action, since the row's is padded to the column.
+  expect(rows.map(row => (row.kind === 'seat' ? row.action?.seat : undefined))).toEqual(providers.map(provider => provider.name))
+  expect(rows.at(-1)).toMatchObject({ digit: '', action: { press: 'cancel', seat: 'seat-11' } })
 })
 
 test('cancel all takes every seat still querying, in order, skipping one already pressed', () => {
@@ -124,7 +136,7 @@ test('cancel all takes every seat still querying, in order, skipping one already
   expect(seatsToCancel({ ...view, isDone: true })).toEqual([])
 })
 
-test('a cancelled seat draws in grey and is counted apart in the summary', () => {
+test('a cancelled seat draws a grey hollow ring, and a finished run leads with its summary', () => {
   const sections = paneSections({
     providers: [
       { name: 'gemini', state: 'complete', ms: 4210 },
@@ -136,23 +148,12 @@ test('a cancelled seat draws in grey and is counted apart in the summary', () =>
     colors: { gemini: '59;130;246' },
     isDone: true,
   })
-  expect(sections.slice(0, 2)).toEqual([
+  expect(sections).toEqual([
     { kind: 'summary', text: '1 of 2 answered · 1 cancelled · 4.2s' },
-    {
-      kind: 'strip',
-      items: [
-        { glyph: '●', color: 'rgb(59,130,246)', name: 'gemini', hotkey: '1', target: 'jump:gemini', fold: 'banner:jump:gemini' },
-        { glyph: '○', color: 'inactive', name: 'grok-cli', hotkey: '2' },
-      ],
-    },
-  ])
-  expect(sections.map(section => section.kind)).toEqual(['summary', 'strip', 'banner', 'body'])
-  const live = paneSections({
-    providers: [{ name: 'grok-cli', state: 'cancelled', model: 'grok-4.7' }],
-    responses: {}, errors: {}, colors: {}, isDone: false,
-  })
-  expect(live).toEqual([
-    { kind: 'status', glyph: '○', glyphColor: 'inactive', name: 'grok-cli', state: 'cancelled', stateColor: 'inactive', time: '', model: 'grok-4.7' },
+    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', glyph: '✓', glyphColor: 'success', vendor: 'rgb(59,130,246)', name: 'gemini  ', model: '', note: '', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
+    { kind: 'body', text: 'a' },
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '2', glyph: '○', glyphColor: 'inactive', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: 'grok-4.7', note: '', time: '    ', open: false },
+    { kind: 'footer', keys: [{ hotkey: '✕', label: 'close' }] },
   ])
 })
 
@@ -169,112 +170,80 @@ const answered = {
   synthesis: 'Postgres, mostly.',
 }
 
-test('a closed section draws its header alone; an open one keeps its text', () => {
-  const sections = paneSections(answered, { closed: new Set(['banner:jump:grok-cli', 'error:jump:kimi', 'synthesis:jump:synthesis']) }).slice(2)
+test('a closed section draws its row alone; an open one keeps its text', () => {
+  const sections = paneSections(answered, { closed: new Set(['seat:jump:grok-cli', 'seat:jump:kimi', 'synthesis:jump:synthesis']) })
   expect(sections).toEqual([
-    { kind: 'toggleAll', closes: true, folds: ['banner:jump:gemini', 'banner:jump:grok-cli', 'error:jump:kimi', 'synthesis:jump:synthesis'] },
-    { kind: 'banner', key: 'jump:gemini', fold: 'banner:jump:gemini', title: 'GEMINI', subtitle: '(4.2s)', background: 'rgb(113,113,122)', open: true },
-    { kind: 'body', text: 'Use Postgres.' },
-    // The fallback reason goes with the answer it explains.
-    { kind: 'banner', key: 'jump:grok-cli', fold: 'banner:jump:grok-cli', title: 'GROK-CLI', subtitle: '(1.2s)', background: 'rgb(113,113,122)', open: false },
-    { kind: 'error', key: 'jump:kimi', fold: 'error:jump:kimi', title: 'kimi error', open: false },
+    { kind: 'summary', text: '2 of 3 answered · 1 error · 1 fell back · 4.2s' },
     { kind: 'synthesis', key: 'jump:synthesis', fold: 'synthesis:jump:synthesis', open: false },
+    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', glyph: '✓', glyphColor: 'success', vendor: 'rgb(113,113,122)', name: 'gemini  ', model: '', note: '', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
+    { kind: 'body', text: 'Use Postgres.' },
+    // The fallback reason goes with the answer it explains, so a closed seat hides both.
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '2', glyph: '✓', glyphColor: 'warning', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: '', note: 'fell back', time: '1.2s', open: false, action: { press: 'open', seat: 'grok-cli' } },
+    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '3', glyph: '✗', glyphColor: 'error', vendor: 'rgb(113,113,122)', name: 'kimi    ', model: '', note: '', time: '0.9s', open: false, action: { press: 'open', seat: 'kimi' } },
+    { kind: 'footer', keys: [{ hotkey: 'a', label: 'fold' }, { hotkey: '✕', label: 'close' }] },
   ])
 })
 
-test('expand all shows once every section is closed, and no toggle shows for one section', () => {
-  const all = new Set(['banner:jump:gemini', 'banner:jump:grok-cli', 'error:jump:kimi', 'synthesis:jump:synthesis'])
-  expect(paneSections(answered, { closed: all })[2]).toEqual({ kind: 'toggleAll', closes: false, folds: [...all] })
-  const one = paneSections({ ...answered, providers: answered.providers.slice(0, 1), synthesis: undefined })
-  expect(one.map(section => section.kind)).toEqual(['summary', 'strip', 'banner', 'body'])
+test('the footer lists only the keys that apply now: a to fold or expand two or more, c while a seat can be cancelled, then close', () => {
+  const view = {
+    providers: [{ name: 'gemini', state: 'complete', ms: 4210 }, { name: 'kimi', state: 'error', ms: 300 }, { name: 'openai', state: 'querying' }],
+    responses: { gemini: 'a' }, errors: { kimi: 'HTTP 500' }, colors: {}, isDone: false,
+  }
+  const footer = (options: Parameters<typeof paneSections>[1], change = {}) => paneSections({ ...view, ...change }, options).at(-1)
+  expect(footer({})).toEqual({ kind: 'footer', keys: [{ hotkey: 'a', label: 'fold' }, { hotkey: 'c', label: 'cancel all' }, { hotkey: '✕', label: 'close' }] })
+  // One section left open is enough to fold.
+  expect(footer({ closed: new Set(['seat:jump:gemini']) })).toEqual({ kind: 'footer', keys: [{ hotkey: 'a', label: 'fold' }, { hotkey: 'c', label: 'cancel all' }, { hotkey: '✕', label: 'close' }] })
+  expect(footer({ closed: new Set(['seat:jump:gemini', 'seat:jump:kimi']) })).toEqual({ kind: 'footer', keys: [{ hotkey: 'a', label: 'expand' }, { hotkey: 'c', label: 'cancel all' }, { hotkey: '✕', label: 'close' }] })
+  // Once every querying seat's cancel is pressed, c goes.
+  expect(footer({}, { cancels: ['openai'] })).toEqual({ kind: 'footer', keys: [{ hotkey: 'a', label: 'fold' }, { hotkey: '✕', label: 'close' }] })
+  // With one section to fold there is no a.
+  expect(footer({}, { errors: {} })).toEqual({ kind: 'footer', keys: [{ hotkey: 'c', label: 'cancel all' }, { hotkey: '✕', label: 'close' }] })
 })
 
-test('the seat sections are what closes when the synthesis lands, the synthesis itself not', () => {
-  expect(seatFolds(paneSections(answered))).toEqual(['banner:jump:gemini', 'banner:jump:grok-cli', 'error:jump:kimi'])
+test('the seat folds are what closes when the synthesis lands, the synthesis itself not', () => {
+  expect(seatFolds(paneSections(answered))).toEqual(['seat:jump:gemini', 'seat:jump:grok-cli', 'seat:jump:kimi'])
 })
 
-test('closing a seat\'s error does not close the answer its retry brings', () => {
-  const failed = { ...answered, providers: [{ name: 'kimi', state: 'error', ms: 900 }], responses: {}, errors: { kimi: 'HTTP 429' }, isDone: false, synthesis: undefined }
-  // A live run with one seat: its status row, then its section.
-  const [, error] = paneSections(failed, { closed: new Set(['error:jump:kimi']) })
-  expect(error).toEqual({ kind: 'error', key: 'jump:kimi', fold: 'error:jump:kimi', title: 'kimi error', open: false })
-  const retried = { ...failed, providers: [{ name: 'kimi', state: 'complete', ms: 1500 }], responses: { kimi: 'Use SQLite.' }, errors: {} }
-  expect(paneSections(retried, { closed: new Set(['error:jump:kimi']) }).slice(1)).toEqual([
-    { kind: 'banner', key: 'jump:kimi', fold: 'banner:jump:kimi', title: 'KIMI', subtitle: '(1.5s)', background: 'rgb(113,113,122)', open: true },
-    { kind: 'body', text: 'Use SQLite.' },
-  ])
+test('each seat appears once, live or finished', () => {
+  for (const isDone of [false, true]) {
+    const seats = paneSections({ ...answered, isDone }).flatMap(section => (section.kind === 'seat' ? [section.name.trim()] : []))
+    expect(seats).toEqual(['gemini', 'grok-cli', 'kimi'])
+  }
+})
+
+test('a finished run opens on its summary and the synthesis, the seats below; a live one keeps the synthesis last', () => {
+  const view = {
+    providers: [{ name: 'kimi', state: 'cached' }, { name: 'codex', state: 'complete', ms: 2000 }],
+    responses: { kimi: 'x', codex: 'y' }, errors: {}, colors: {},
+    isDone: true,
+    synthesis: '**Consensus.** SQLite.',
+  }
+  const kinds = (sections: ReturnType<typeof paneSections>) => sections.map(section => section.kind)
+  // The pane closes the seat folds as the synthesis lands.
+  const folded = new Set(['seat:jump:kimi', 'seat:jump:codex'])
+  expect(kinds(paneSections(view, { closed: folded }))).toEqual(['summary', 'synthesis', 'seat', 'seat', 'footer'])
+  expect(paneSections(view, { closed: folded })[1]).toEqual({ kind: 'synthesis', key: 'jump:synthesis', fold: 'synthesis:jump:synthesis', open: true, text: '**Consensus.** SQLite.' })
+  expect(kinds(paneSections({ ...view, isDone: false }))).toEqual(['seat', 'body', 'seat', 'body', 'synthesis', 'footer'])
+  // Collapsing off keeps the live order under the summary.
+  expect(kinds(paneSections(view, { collapsesWhenDone: false }))).toEqual(['summary', 'seat', 'body', 'seat', 'body', 'synthesis', 'footer'])
 })
 
 test('a closed answer leaves its share of the text budget to the open ones', () => {
   const long = { ...answered, responses: { gemini: 'g'.repeat(60000), 'grok-cli': 'k'.repeat(60000) }, synthesis: undefined }
   const body = (sections: ReturnType<typeof paneSections>) => sections.find(section => section.kind === 'body') as { kind: 'body'; text: string }
-  expect(body(paneSections(long)).text).toMatch(/^g+\n\n_\u2026 \d+ more characters; the whole answer is in the result/)
-  expect(body(paneSections(long, { closed: new Set(['banner:jump:grok-cli']) })).text).toBe('g'.repeat(60000))
+  expect(body(paneSections(long)).text).toMatch(/^g+\n\n_… \d+ more characters; the whole answer is in the result/)
+  expect(body(paneSections(long, { closed: new Set(['seat:jump:grok-cli']) })).text).toBe('g'.repeat(60000))
 })
 
-test('paneSections falls back to a neutral banner colour and notes an empty run', () => {
+test('paneSections falls back to a neutral vendor colour and notes an empty run', () => {
   const base = { responses: {}, errors: {}, colors: {} }
   expect(paneSections({ ...base, providers: [], isDone: false })).toEqual([{ kind: 'note', text: 'Waiting for the council...' }])
   expect(paneSections({ ...base, providers: [], isDone: true })).toEqual([{ kind: 'note', text: 'Council finished with no answers.' }])
-  const [, , banner] = paneSections({ ...base, providers: [{ name: 'kimi', state: 'cached' }], responses: { kimi: 'x' }, isDone: true })
-  expect(banner).toEqual({ kind: 'banner', key: 'jump:kimi', fold: 'banner:jump:kimi', title: 'KIMI', subtitle: '', background: 'rgb(113,113,122)', open: true })
+  const [, seat] = paneSections({ ...base, providers: [{ name: 'kimi', state: 'cached' }], responses: { kimi: 'x' }, isDone: true })
+  expect(seat).toEqual({ kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '1', glyph: '✓', glyphColor: 'suggestion', vendor: 'rgb(113,113,122)', name: 'kimi', model: '', note: 'cached', time: '', open: true, action: { press: 'fold', seat: 'kimi' } })
 })
 
-test('paneSections collapses the status rows to a summary and a strip once the run is done', () => {
-  const sections = paneSections({
-    providers: [
-      { name: 'gemini', state: 'complete', ms: 4210 },
-      { name: 'codex', state: 'cached' },
-      { name: 'grok', state: 'error', ms: 900 },
-    ],
-    responses: { gemini: 'a' },
-    errors: { grok: 'b' },
-    colors: { gemini: '59;130;246' },
-    isDone: true,
-  })
-  // A provider with nothing drawn below (codex) has no jump target.
-  expect(sections.slice(0, 2)).toEqual([
-    { kind: 'summary', text: '2 of 3 answered \u00b7 1 error \u00b7 1 cached \u00b7 4.2s' },
-    {
-      kind: 'strip',
-      items: [
-        { glyph: '\u25cf', color: 'rgb(59,130,246)', name: 'gemini', hotkey: '1', target: 'jump:gemini', fold: 'banner:jump:gemini' },
-        { glyph: '\u25cf', color: 'rgb(113,113,122)', name: 'codex', hotkey: '2' },
-        { glyph: '\u2717', color: 'error', name: 'grok', hotkey: '3', target: 'jump:grok', fold: 'error:jump:grok' },
-      ],
-    },
-  ])
-})
-
-test('paneSections keeps the status rows on a finished run when collapsing is off', () => {
-  const view = { providers: [{ name: 'kimi', state: 'cached' }], responses: {}, errors: {}, colors: {}, isDone: true }
-  expect(paneSections(view, { collapsesWhenDone: false }).map(section => section.kind)).toEqual(['status'])
-  expect(paneSections(view).map(section => section.kind)).toEqual(['summary', 'strip'])
-})
-
-test('paneSections shows the synthesis after the provider answers, with a jump to it in the strip', () => {
-  const kinds = paneSections({
-    providers: [{ name: 'kimi', state: 'cached' }],
-    responses: { kimi: 'x' },
-    errors: {},
-    colors: {},
-    isDone: true,
-    synthesis: '**Consensus.** SQLite.',
-  })
-  expect(kinds.map(section => section.kind)).toEqual(['summary', 'strip', 'toggleAll', 'banner', 'body', 'synthesis'])
-  expect(kinds[5]).toEqual({ kind: 'synthesis', key: 'jump:synthesis', fold: 'synthesis:jump:synthesis', open: true, text: '**Consensus.** SQLite.' })
-  const strip = kinds[1]
-  expect(strip?.kind === 'strip' ? strip.items.at(-1) : undefined).toEqual({
-    glyph: '\u2261',
-    color: 'rgb(113,113,122)',
-    name: 'synthesis',
-    hotkey: '0',
-    target: 'jump:synthesis',
-    fold: 'synthesis:jump:synthesis',
-  })
-})
-
-test('paneSections shows why a seat fell back, between its banner and the answer its API gave', () => {
+test('paneSections shows why a seat fell back, between its row and the answer its API gave', () => {
   const sections = paneSections({
     providers: [{ name: 'grok-cli', state: 'fallback', ms: 1200, model: 'grok-4.6 via grok API' }],
     responses: { 'grok-cli': 'Use Postgres.' },
@@ -282,34 +251,38 @@ test('paneSections shows why a seat fell back, between its banner and the answer
     colors: {},
     isDone: false,
   })
-  expect(sections.slice(1)).toEqual([
-    { kind: 'banner', key: 'jump:grok-cli', fold: 'banner:jump:grok-cli', title: 'GROK-CLI', subtitle: 'grok-4.6 via grok API (1.2s)', background: 'rgb(113,113,122)', open: true },
+  expect(sections).toEqual([
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', glyph: '✓', glyphColor: 'warning', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: 'grok-4.6 via grok API', note: 'fell back', time: '1.2s', open: true, action: { press: 'fold', seat: 'grok-cli' } },
     { kind: 'reason', text: 'grok-cli fell back: Error from grok CLI: sandbox could not be applied' },
     { kind: 'body', text: 'Use Postgres.' },
+    { kind: 'footer', keys: [{ hotkey: '✕', label: 'close' }] },
   ])
   // A plain answer with no error on disk gets no reason line.
   const plain = paneSections({
     providers: [{ name: 'codex', state: 'complete' }],
     responses: { codex: 'x' }, errors: {}, colors: {}, isDone: false,
   })
-  expect(plain.map(section => section.kind)).toEqual(['status', 'banner', 'body'])
+  expect(plain.map(section => section.kind)).toEqual(['seat', 'body', 'footer'])
   // Nor does a seat that failed, was retried and then answered itself: the
   // first attempt's error file stays on disk, and it is not why anything fell back.
   const retried = paneSections({
     providers: [{ name: 'kimi', state: 'complete' }],
     responses: { kimi: 'x' }, errors: { kimi: 'HTTP 429' }, colors: {}, isDone: false,
   })
-  expect(retried.map(section => section.kind)).toEqual(['status', 'banner', 'body'])
+  expect(retried.map(section => section.kind)).toEqual(['seat', 'body', 'footer'])
 })
 
-test('a fallback seat whose answer has not landed yet shows nothing, not an error', () => {
+test('a fallback seat whose answer has not landed yet shows nothing to open, not an error', () => {
   // The run writes the reason and the fallback status before the answer; a
   // poll in between must not paint the seat red.
   const sections = paneSections({
     providers: [{ name: 'grok-cli', state: 'fallback' }],
     responses: {}, errors: { 'grok-cli': 'sandbox could not be applied' }, colors: {}, isDone: false,
   })
-  expect(sections.map(section => section.kind)).toEqual(['status'])
+  expect(sections).toEqual([
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', glyph: '✓', glyphColor: 'warning', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: '', note: 'fell back', time: '', open: false },
+    { kind: 'footer', keys: [{ hotkey: '✕', label: 'close' }] },
+  ])
 })
 
 test('an error is carried at the length the pane draws, so a huge one does not squeeze the answers', () => {
@@ -319,11 +292,10 @@ test('an error is carried at the length the pane draws, so a huge one does not s
     errors: { openai: 'Raw response: ' + '<html>'.repeat(15000) },
     colors: {}, isDone: false,
   })
-  const error = sections.find(section => section.kind === 'error') as { kind: 'error'; text: string }
-  expect(error.text.length).toBe(2000)
-  expect(error.text.startsWith('Raw response: <html><html>')).toBe(true)
-  const body = sections.find(section => section.kind === 'body') as { kind: 'body'; text: string }
-  expect(body.text).toBe('g'.repeat(20000))
+  const [, error, , answer] = sections as { kind: string; text: string }[]
+  expect(error!.text.length).toBe(2000)
+  expect(error!.text.startsWith('Raw response: <html><html>')).toBe(true)
+  expect(answer!.text).toBe('g'.repeat(20000))
 })
 
 test('a cut inside a code block closes the block before the note, and never splits a character', () => {
@@ -356,7 +328,7 @@ test('the done summary says how many seats their API sibling answered', () => {
   expect(sections[0]).toEqual({ kind: 'summary', text: '2 of 3 answered \u00b7 1 error \u00b7 1 fell back \u00b7 2.0s' })
 })
 
-test('a querying provider spins and counts up; a settled one keeps its dot and final time', () => {
+test('a live seat counts up and a settled one keeps its final time, in the same column', () => {
   const view = {
     providers: [
       { name: 'codex', state: 'querying' },
@@ -368,14 +340,14 @@ test('a querying provider spins and counts up; a settled one keeps its dot and f
     isDone: false,
     queryingSinceMs: { codex: 1_000 },
   }
-  const [codex, kimi] = paneSections(view, { frame: 13, nowMs: 13_450 })
-  expect(codex).toMatchObject({ kind: 'status', glyph: '\u2838', time: '12.4s' })
-  expect(kimi).toMatchObject({ kind: 'status', glyph: '\u25cf', time: ' 9.2s' })
-  // Frame 0 and a provider with no start recorded: first spinner frame, blank time.
-  const [first] = paneSections({ ...view, queryingSinceMs: {} }, { frame: 0, nowMs: 13_450 })
-  expect(first).toMatchObject({ glyph: '\u280b', time: '    ' })
+  const [codex, kimi] = paneSections(view, { nowMs: 13_450 })
+  expect(codex).toMatchObject({ kind: 'seat', glyph: '●', time: '12.4s' })
+  expect(kimi).toMatchObject({ kind: 'seat', glyph: '✓', time: ' 9.2s' })
+  // A provider with no start recorded has a blank time.
+  const [first] = paneSections({ ...view, queryingSinceMs: {} }, { nowMs: 13_450 })
+  expect(first).toMatchObject({ glyph: '●', time: '    ' })
   // A clock reading older than the start (the first frame lands before the first tick) shows zero.
-  const [early] = paneSections(view, { frame: 0, nowMs: 0 })
+  const [early] = paneSections(view, { nowMs: 0 })
   expect(early).toMatchObject({ time: '0.0s' })
 })
 

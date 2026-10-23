@@ -27,7 +27,7 @@ const PANE_ID = 'council'
 const REOPEN_COMMAND = 'council-pane'
 const RUN_TIMEOUT_MS = 600_000
 const POLL_MS = 500
-// Ten frames a second: the spinner's pace in the tmux pane.
+// Ten frames a second: the chip's shimmer and the live seats' clocks.
 const FRAME_MS = 100
 // The worker records its result seconds after .done; a worker killed outright
 // leaves its record at running, so the wait for it ends.
@@ -41,6 +41,11 @@ const SPECIALIST_STORE_KEYS = ['specialist-runs', 'specialists-latest', 'special
 // A section header's mark: open shows its text, closed only the header.
 const OPEN_MARK = '\u25be'
 const CLOSED_MARK = '\u25b8'
+// A seat row's first cell, in the vendor's colour: identity without a fill.
+const EDGE_MARK = '\u258c'
+// A seat row's action column: two cells of gap, then the widest a plain
+// Button draws, its digit, a colon and the longest verb.
+const ACTION_COLUMNS = 2 + '0: cancel'.length
 // The heads-up runner forks and returns its pid; anything slower is a fault.
 const HEADS_UP_LAUNCH_MS = 10_000
 
@@ -275,7 +280,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     $.ui.invalidate('ui.render')
   }
   const hasDied = !state.view.isDone && (await runHasDied($, state, runDir, now))
-  // A dead run is drawn as over: the spinners stop and the list collapses.
+  // A dead run is drawn as over: the clocks stop and the summary leads.
   if (hasDied) state.view = { ...state.view, isDone: true }
   // The run is over once .done lands: its dir is removed so the next run is
   // picked up, and the pane keeps the last view until the person closes it.
@@ -300,7 +305,7 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
   }
 }
 
-// Advances the spinner and the clock the elapsed times read, only while a
+// Advances the chip's shimmer and the clock the elapsed times read, only while a
 // provider is still querying; an idle pane costs no redraws.
 async function animate($: EngineInterface, state: PaneState): Promise<void> {
   const view = state.view
@@ -672,6 +677,13 @@ function pressSeat($: EngineInterface, state: PaneState, press: 'cancel' | 'retr
   void $.fs.write(`${runDir}/${press}/${name}`, '').catch((err: unknown) => $.ui.log(`${press} ${name}: ${String(err)}`))
 }
 
+// One marker per seat; the run cancels them one by one, as it would rows
+// pressed in turn. A press reads the seats again, since one may have
+// answered since the band or the pane was drawn.
+function cancelAll($: EngineInterface, state: PaneState): void {
+  if (state.view) for (const name of seatsToCancel(state.view)) pressSeat($, state, 'cancel', name)
+}
+
 // A section header's press: close it if open, open it if closed.
 function toggleSection($: EngineInterface, state: PaneState, fold: string): void {
   if (!state.closed.delete(fold)) state.closed.add(fold)
@@ -906,10 +918,6 @@ export const register: Register = (on, options) => {
     const progress = view ? progressBand(view, state.runStartedMs, state.nowMs) : undefined
     if (!view || !progress) return next(e)
     const ui = $.ui.resolve(e)
-    // One marker per seat; the run cancels them one by one, as it would rows
-    // pressed in turn. A press reads the seats again, since one may have
-    // answered since the band was drawn.
-    const cancelAll = () => { if (state.view) for (const name of seatsToCancel(state.view)) pressSeat($, state, 'cancel', name) }
     return (
       <ui.Box key="progress" flexDirection="row" marginTop={1}>
         {/* Only the event gives way when narrow. */}
@@ -926,7 +934,7 @@ export const register: Register = (on, options) => {
         </ui.Box>
         {seatsToCancel(view).length > 0 && (
           <ui.Box flexShrink={0}>
-            <ui.Button key="progress:cancel" hotkey="c" label={'c \u00b7 cancel all'} onPress={cancelAll} />
+            <ui.Button key="progress:cancel" hotkey="c" label={'c \u00b7 cancel all'} onPress={() => cancelAll($, state)} />
             <ui.Text>{'  '}</ui.Text>
           </ui.Box>
         )}
@@ -952,7 +960,7 @@ export const register: Register = (on, options) => {
       fits.set(text, fitted)
       return fitted
     }
-    const sections = paneSections(state.view, { ...settings, frame: state.frame, nowMs: state.nowMs, fitText, closed: state.closed })
+    const sections = paneSections(state.view, { ...settings, nowMs: state.nowMs, fitText, closed: state.closed })
     state.tableFit = { columns, byText: fits }
     const fit = (sectionKey: string, text: string) => {
       const kept = state.fitted.get(sectionKey)
@@ -966,92 +974,83 @@ export const register: Register = (on, options) => {
       <Button key={`toggle:${section.fold}`} plain onPress={() => toggleSection($, state, section.fold)}>{children}</Button>
     )
     const mark = (open: boolean) => (open ? OPEN_MARK : CLOSED_MARK)
+    // The a key folds the sections open now, so an answer that lands later
+    // still arrives open; expanding opens them all.
+    const foldAll = (closes: boolean) => {
+      const open = sections.flatMap(each => ((each.kind === 'seat' || each.kind === 'synthesis') && each.open ? [each.fold] : []))
+      state.closed = closes ? new Set([...state.closed, ...open]) : new Set()
+      $.ui.invalidate('ui.render')
+    }
     const draw = (section: Section, index: number) => {
       const key = `section-${index}`
       switch (section.kind) {
         case 'note':
           return <Text key={key} dimColor>{section.text}</Text>
-        case 'status': {
+        case 'seat': {
           const action = section.action
-          // The model takes the slack and gives way when narrow, so every
-          // row's button sits at the pane's right edge.
+          // The model takes the slack and gives way when narrow, so the time
+          // and the action sit in the same columns on every row.
           return (
-            <Box key={key} flexDirection="row" width={columns}>
+            <Box key={section.key} flexDirection="row" width={columns}>
               <Box flexShrink={0}>
                 <Text>
+                  <Text color={section.vendor}>{EDGE_MARK}</Text>
+                  <Text>{` ${section.digit.padStart(1)} `}</Text>
                   <Text color={section.glyphColor}>{`${section.glyph} `}</Text>
                   <Text bold>{`${section.name}  `}</Text>
-                  <Text color={section.stateColor}>{`${section.state}  `}</Text>
-                  <Text dimColor>{`${section.time}  `}</Text>
                 </Text>
               </Box>
-              <Box flexGrow={1} flexShrink={1}>
-                <Text dimColor wrap="truncate-end">{section.model}</Text>
-              </Box>
-              {action && (
-                <Box flexDirection="row" flexShrink={0}>
-                  <Text>{'  '}</Text>
-                  <Button key={`${action.press}:${action.seat}`} plain label={action.press} {...(action.hotkey ? { hotkey: action.hotkey } : {})} onPress={() => pressSeat($, state, action.press, action.seat)} />
+              <Box flexDirection="row" flexGrow={1} flexShrink={1}>
+                <Box flexShrink={1}>
+                  <Text dimColor wrap="truncate-end">{section.model}</Text>
                 </Box>
-              )}
+                {section.note === '' ? null : (
+                  <Box flexShrink={0}>
+                    <Text>
+                      {section.model === '' ? null : <Text dimColor>{' \u00b7 '}</Text>}
+                      <Text color={section.glyphColor}>{section.note}</Text>
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+              <Box flexShrink={0}>
+                <Text dimColor>{`  ${section.time}`}</Text>
+              </Box>
+              <Box flexShrink={0} width={ACTION_COLUMNS} paddingLeft={2}>
+                {action ? (
+                  <Button
+                    key={`${action.press}:${action.seat}`}
+                    plain
+                    label={action.press}
+                    {...(section.digit ? { hotkey: section.digit } : {})}
+                    onPress={() => (action.press === 'cancel' || action.press === 'retry' ? pressSeat($, state, action.press, action.seat) : toggleSection($, state, section.fold))}
+                  />
+                ) : (
+                  <Text dimColor>{section.digit}</Text>
+                )}
+              </Box>
             </Box>
           )
         }
         case 'summary':
           return <Text key={key} bold>{section.text}</Text>
-        case 'strip':
+        case 'footer':
           return (
             <Box key={key} flexDirection="row" flexWrap="wrap">
-              {section.items.map(({ target, ...item }) => (
-                <Box key={`${key}-${item.name}`} flexDirection="row">
-                  <Text color={item.color}>{`${item.glyph} `}</Text>
-                  {target ? (
-                    <Button
-                      key={`press:${item.name}`}
-                      plain
-                      label={item.name}
-                      {...(item.hotkey ? { hotkey: item.hotkey } : {})}
-                      onPress={() => {
-                        // A jump opens the section it lands on.
-                        if (item.fold && state.closed.delete(item.fold)) $.ui.invalidate('ui.render')
-                        void $.ui.scroll({ in: PANE_ID, to: { key: target }, block: 'start' })
-                      }}
-                    />
-                  ) : (
-                    <Text dimColor>{item.name}</Text>
-                  )}
-                  <Text>{'  '}</Text>
+              {section.keys.map(({ hotkey, label }, part) => (
+                <Box key={`${key}-${hotkey}`} flexDirection="row">
+                  {part > 0 && <Text>{'  '}</Text>}
+                  {hotkey === 'a' ? <Button key="footer:fold" plain hotkey="a" label={label} onPress={() => foldAll(label === 'fold')} />
+                    : hotkey === 'c' ? <Button key="footer:cancel" plain hotkey="c" label={label} onPress={() => cancelAll($, state)} />
+                    // The pane's own close mark, which the engine draws and answers.
+                    : <Text dimColor>{`${hotkey} ${label}`}</Text>}
                 </Box>
               ))}
             </Box>
           )
-        case 'toggleAll':
-          return (
-            <Box key={key} marginTop={1}>
-              <Button
-                key="toggle:all"
-                plain
-                hotkey="a"
-                label={section.closes ? 'collapse all' : 'expand all'}
-                onPress={() => {
-                  state.closed = section.closes ? new Set(section.folds) : new Set()
-                  $.ui.invalidate('ui.render')
-                }}
-              />
-            </Box>
-          )
-        case 'banner':
-          return (
-            <Box key={section.key} flexDirection="row" marginTop={1} paddingX={1} width={columns} backgroundColor={section.background}>
-              {toggle(section, [
-                <Text key="title" bold color={COLOR.onFill} backgroundColor={section.background}>{`${mark(section.open)} ${section.title}`}</Text>,
-                <Text key="subtitle" italic color={COLOR.onFill} backgroundColor={section.background}>{` ${section.subtitle}`}</Text>,
-              ])}
-            </Box>
-          )
         case 'synthesis':
           return (
-            <Box key={section.key} flexDirection="column" marginTop={1}>
+            <Box key={section.key} flexDirection="column" marginTop={section.open ? 1 : 0}>
               <Box flexDirection="row" paddingX={1} width={columns} backgroundColor={FILL.chip}>
                 {toggle(section, <Text bold color={COLOR.onFill} backgroundColor={FILL.chip}>{`${mark(section.open)} SYNTHESIS`}</Text>)}
               </Box>
@@ -1062,20 +1061,18 @@ export const register: Register = (on, options) => {
           )
         case 'body':
           // The text arrives fitted to the pane's width and within its budget.
+          // A fallback's reason already took the blank line above it.
           return (
-            <Box key={key} flexDirection="column">
+            <Box key={key} flexDirection="column" marginTop={sections[index - 1]?.kind === 'reason' ? 0 : 1}>
               {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
             </Box>
           )
         case 'reason':
-          return <Text key={key} color={COLOR.warning} dimColor>{section.text}</Text>
-        case 'error':
           return (
-            <Box key={section.key} flexDirection="column" marginTop={1}>
-              {toggle(section, <Text bold color={COLOR.danger}>{`${mark(section.open)} \u2717 ${section.title}`}</Text>)}
-              {section.open && <Text color={COLOR.danger} dimColor>{section.text}</Text>}
+            <Box key={key} marginTop={1}>
+              <Text color={COLOR.warning} dimColor>{section.text}</Text>
             </Box>
           )
       }

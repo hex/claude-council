@@ -28,37 +28,46 @@ export function unseenRun(entries: readonly DirEntry[], shown: ReadonlySet<strin
   return entries.find(entry => entry.kind === 'dir' && entry.name.startsWith('run.') && !shown.has(entry.name))?.name
 }
 
+// What a seat row's digit does now: end the seat, re-query it, or open or
+// close the text under it.
+type SeatAction = { press: 'cancel' | 'retry' | 'open' | 'fold'; seat: string }
+type SeatNote = '' | 'cached' | 'fell back'
+
 export type Section =
-  | { kind: 'note'; text: string }
-  // action: the row's one button, cancel on a querying row while the run is
-  // live or retry on an error row the run offers for it, with its seat (the
-  // name unpadded) and, for the first ten rows, its digit.
-  | { kind: 'status'; glyph: string; glyphColor: string; name: string; state: string; stateColor: string; time: string; model: string; action?: { press: 'cancel' | 'retry'; seat: string; hotkey?: string } }
   | { kind: 'summary'; text: string }
-  // fold: what the jump opens, the fold of the section it lands on.
-  | { kind: 'strip'; items: { glyph: string; color: string; name: string; hotkey: string; target?: string; fold?: string }[] }
-  // A section the person closed is drawn as its header alone: a banner is
-  // followed by no reason or body, and a closed error or synthesis carries no
-  // text. fold names its open or closed state apart from its jump key, so an
-  // error closed by the person does not close the answer a retry brings.
-  | { kind: 'banner'; key: string; fold: string; title: string; subtitle: string; background: string; open: boolean }
-  | { kind: 'body'; text: string }
+  // One row per seat, its status and its fold header at once, with the name
+  // padded to the column and the action's seat unpadded. A closed seat, or one
+  // with nothing to show, is the row alone: no reason or body follows it.
+  | { kind: 'seat'; key: string; fold: string; digit: string; glyph: string; glyphColor: string; vendor: string; name: string; model: string; note: SeatNote; time: string; open: boolean; action?: SeatAction }
   | { kind: 'reason'; text: string }
+  | { kind: 'body'; text: string }
   | { kind: 'synthesis'; key: string; fold: string; open: true; text: string }
   | { kind: 'synthesis'; key: string; fold: string; open: false }
-  | { kind: 'error'; key: string; fold: string; title: string; open: true; text: string }
-  | { kind: 'error'; key: string; fold: string; title: string; open: false }
-  // Above the first section, closing every one while any is open, else opening all.
-  | { kind: 'toggleAll'; closes: boolean; folds: string[] }
+  // The pane's keys that apply now, last.
+  | { kind: 'footer'; keys: { hotkey: string; label: string }[] }
+  // The empty run's one line.
+  | { kind: 'note'; text: string }
 
-const STATE_COLORS: Record<string, string> = { querying: COLOR.warning, retrying: COLOR.warning, complete: COLOR.success, cached: COLOR.info, error: COLOR.danger, fallback: COLOR.warning, cancelled: COLOR.muted, cancelling: COLOR.muted }
-export const CANCEL_HINT = 'click cancel or retry on a row, or ctrl+x tab then its digit'
+type SeatLook = { glyph: string; color: string; note: SeatNote }
+const LIVE: SeatLook = { glyph: '\u25cf', color: COLOR.warning, note: '' }
+const SET_ASIDE: SeatLook = { glyph: '\u25cb', color: COLOR.muted, note: '' }
+// The glyph and its colour are the state; only a seat that answered some other
+// way than asking says so in words. A state the pane does not know is drawn live.
+const SEAT_LOOKS: Record<string, SeatLook> = {
+  querying: LIVE,
+  retrying: LIVE,
+  complete: { glyph: '\u2713', color: COLOR.success, note: '' },
+  cached: { glyph: '\u2713', color: COLOR.info, note: 'cached' },
+  fallback: { glyph: '\u2713', color: COLOR.warning, note: 'fell back' },
+  error: { glyph: '\u2717', color: COLOR.danger, note: '' },
+  cancelled: SET_ASIDE,
+  cancelling: SET_ASIDE,
+}
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
-const SPINNER = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f']
-export const spinner = (frame: number) => SPINNER[frame % SPINNER.length] ?? '\u25cf'
 
 const jumpKey = (name: string) => `jump:${name}`
+const fold = (kind: 'seat' | 'synthesis', key: string) => `${kind}:${key}`
 
 function seconds(ms: number | undefined): string {
   return ms === undefined ? '' : `${(ms / 1000).toFixed(1)}s`
@@ -72,47 +81,6 @@ export function parseColors(log: string): Record<string, string> {
   }
   return colors
 }
-
-// Columns are padded here so the rows line up whatever the surface's layout does.
-// A cancelled seat's glyph is hollow and grey, where an error is a red cross.
-const glyphColor = (name: string, state: string, vendor: (name: string) => string) =>
-  state === 'error' ? COLOR.danger : state === 'cancelled' ? COLOR.muted : vendor(name)
-
-// Each seat cancel all would take carries its own cancel button, and each
-// seat a row retry can take its retry button, with the row's digit for the
-// first nine and 0 for the tenth, as a keyboard's number row runs (once the
-// run is done the digits jump to the answers instead, and 0 to the
-// synthesis), and a hint line follows the rows.
-function statusRows(
-  providers: ProviderStatus[],
-  vendor: (name: string) => string,
-  glyph: (state: string) => string,
-  elapsed: (name: string) => string,
-  cancellable: string[],
-  retriable: string[],
-): Section[] {
-  const shownTime = ({ name, state, ms }: ProviderStatus) => (state === 'querying' || state === 'retrying' ? elapsed(name) : seconds(ms))
-  const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
-  const names = width(providers.map(provider => provider.name))
-  const states = width(providers.map(provider => provider.state))
-  const times = width(providers.map(shownTime))
-  const rows: Section[] = providers.map((provider, index) => ({
-    kind: 'status',
-    glyph: glyph(provider.state),
-    glyphColor: glyphColor(provider.name, provider.state, vendor),
-    name: provider.name.padEnd(names),
-    state: provider.state.padEnd(states),
-    stateColor: STATE_COLORS[provider.state] ?? COLOR.muted,
-    time: shownTime(provider).padStart(times),
-    model: provider.model ?? '',
-    ...(cancellable.includes(provider.name) ? { action: { press: 'cancel' as const, seat: provider.name, ...digit(index) } }
-      : retriable.includes(provider.name) ? { action: { press: 'retry' as const, seat: provider.name, ...digit(index) } } : {}),
-  }))
-  if (rows.some(row => row.kind === 'status' && row.action)) rows.push({ kind: 'note', text: CANCEL_HINT })
-  return rows
-}
-
-const digit = (index: number) => (index < 10 ? { hotkey: String((index + 1) % 10) } : {})
 
 // The seats whose error row can be retried: the ones the run offers, in the
 // log's order, less any already pressed. The run offers a seat while its
@@ -129,38 +97,17 @@ export function seatsToCancel({ providers, cancels = [], isDone }: Pick<RunView,
   return providers.filter(({ name, state }) => state === 'querying' && !cancels.includes(name)).map(({ name }) => name)
 }
 
-function doneSummary(
-  providers: ProviderStatus[],
-  vendor: (name: string) => string,
-  glyph: (state: string) => string,
-  hasSection: (name: string) => boolean,
-  foldOf: (name: string) => string | undefined,
-): Section[] {
+function summaryText(providers: ProviderStatus[]): string {
   const tally = (state: string, word: string) => (count(providers, state) > 0 ? `${count(providers, state)} ${word}` : '')
   const slowest = Math.max(0, ...providers.map(provider => provider.ms ?? 0))
-  const parts = [
+  return [
     `${count(providers, ...ANSWERED_STATES)} of ${providers.length} answered`,
     tally('error', 'error'),
     tally('cancelled', 'cancelled'),
     tally('fallback', 'fell back'),
     tally('cached', 'cached'),
     slowest > 0 ? seconds(slowest) : '',
-  ]
-  return [
-    { kind: 'summary', text: parts.filter(Boolean).join(' \u00b7 ') },
-    {
-      kind: 'strip',
-      // The digit is the hotkey that jumps to the provider's section while the pane has the keys.
-      items: providers.map(({ name, state }, index) => ({
-        glyph: glyph(state),
-        color: glyphColor(name, state, vendor),
-        name,
-        hotkey: index < 9 ? String(index + 1) : '',
-        ...(hasSection(name) ? { target: jumpKey(name) } : {}),
-        ...(foldOf(name) ? { fold: foldOf(name) } : {}),
-      })),
-    },
-  ]
+  ].filter(Boolean).join(' \u00b7 ')
 }
 
 // When each provider now querying was first seen querying. One that stops
@@ -173,102 +120,115 @@ export function queryingSince(since: Record<string, number>, providers: Provider
   return next
 }
 
+// A run that is live lists its seats with any open answers under them and
+// the synthesis last. A finished one leads with its summary, and, collapsing
+// when done, with the synthesis, the seats below it.
 export function paneSections(
   { providers, responses, errors, cancels = [], retries = [], retriable = [], colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
-  { collapsesWhenDone = true, frame = 0, nowMs = 0, fitText = (text: string) => text, closed = new Set<string>() }: { collapsesWhenDone?: boolean; frame?: number; nowMs?: number; fitText?: (text: string) => string; closed?: ReadonlySet<string> } = {},
+  { collapsesWhenDone = true, nowMs = 0, fitText = (text: string) => text, closed = new Set<string>() }: { collapsesWhenDone?: boolean; nowMs?: number; fitText?: (text: string) => string; closed?: ReadonlySet<string> } = {},
 ): Section[] {
   if (providers.length === 0) {
     return [{ kind: 'note', text: isDone ? 'Council finished with no answers.' : 'Waiting for the council...' }]
   }
   // A seat still querying as far as the log knows, with its marker in the
   // watch dir, is cancelling: the run removes the marker once it logs the seat.
-  const shown = providers.map(provider =>
-    provider.state === 'querying' && cancels.includes(provider.name) ? { ...provider, state: 'cancelling' }
-    : retriable.includes(provider.name) && retries.includes(provider.name) && !isDone ? { ...provider, state: 'retrying' }
-    : provider,
-  )
-  const vendor = (name: string) => `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`
-  const glyph = (state: string) => {
-    if (state === 'error') return '\u2717'
-    if (state === 'retrying') return spinner(0)
-    if (state === 'cancelled' || state === 'cancelling') return '\u25cb'
-    return state === 'querying' ? spinner(frame) : '\u25cf'
-  }
+  const shownState = ({ name, state }: ProviderStatus) =>
+    state === 'querying' && cancels.includes(name) ? 'cancelling'
+    : retriable.includes(name) && retries.includes(name) && !isDone ? 'retrying'
+    : state
   // A querying provider's time runs from when the pane first saw it, in whole tenths.
   const elapsed = (name: string) => {
     const since = queryingSinceMs[name]
     return since === undefined ? '' : `${(Math.floor(Math.max(0, nowMs - since) / 100) / 10).toFixed(1)}s`
   }
-  const hasSection = (name: string) => responses[name] !== undefined || errors[name] !== undefined
-  const foldOf = (name: string) => {
-    if (responses[name] !== undefined) return fold('banner', jumpKey(name))
-    return errors[name] !== undefined ? fold('error', jumpKey(name)) : undefined
+  const shownTime = (provider: ProviderStatus) => {
+    const state = shownState(provider)
+    return state === 'querying' || state === 'retrying' ? elapsed(provider.name) : seconds(provider.ms)
   }
-  const sections: Section[] = isDone && collapsesWhenDone ? doneSummary(shown, vendor, glyph, hasSection, foldOf) : statusRows(shown, vendor, glyph, elapsed, seatsToCancel({ providers, cancels, isDone }), seatsToRetry({ providers, retries, retriable, isDone }))
-  for (const { name, state, ms, model } of providers) {
+  // What hangs under a seat's row while it is open, built only then: its
+  // answer, or the error of a seat that ended on one. A seat querying again
+  // after a failure keeps its first error file and shows nothing.
+  const textOf = ({ name, state }: ProviderStatus): (() => Section[]) | undefined => {
     const response = responses[name]
     const error = errors[name]
-    const key = jumpKey(name)
     if (response !== undefined) {
-      const timing = ms === undefined ? '' : `(${seconds(ms)})`
-      const banner = fold('banner', key)
-      const open = !closed.has(banner)
-      sections.push({
-        kind: 'banner',
-        key,
-        fold: banner,
-        title: name.toUpperCase(),
-        subtitle: [model, timing].filter(Boolean).join(' '),
-        background: vendor(name),
-        open,
-      })
-      if (!open) continue
       // A seat whose API sibling answered has both files: the error is why
       // the seat itself did not, and it belongs above that answer. The state
       // decides, since a seat that failed and then answered on a retry keeps
-      // its first attempt's error file.
-      if (state === 'fallback' && error !== undefined) sections.push({ kind: 'reason', text: noticeText(`${name} fell back: ${error}`) })
-      // fitText rewrites an answer for the pane's width before the budget is
-      // counted: a wide table becomes records that repeat every header, which
-      // can lengthen it several times over.
-      sections.push({ kind: 'body', text: fitText(response) })
-    } else if (error !== undefined && state !== 'fallback') {
-      // A fallback seat's error file is its reason, written just before the
-      // answer its API gave: with no answer yet there is nothing to show.
-      const header = { kind: 'error', key, fold: fold('error', key), title: `${name} error` } as const
-      sections.push(closed.has(header.fold) ? { ...header, open: false } : { ...header, open: true, text: noticeText(error) })
+      // its first attempt's error file. fitText rewrites an answer for the
+      // pane's width before the budget is counted: a wide table becomes
+      // records that repeat every header, which can lengthen it several times over.
+      const reason: Section[] = state === 'fallback' && error !== undefined ? [{ kind: 'reason', text: noticeText(`${name} fell back: ${error}`) }] : []
+      return () => [...reason, { kind: 'body', text: fitText(response) }]
     }
+    return state === 'error' && error !== undefined ? () => [{ kind: 'body', text: noticeText(error) }] : undefined
   }
-  if (synthesis) {
-    // It is written last and read last; landing above the answers would push them down mid-read.
-    const key = jumpKey('synthesis')
-    const header = { kind: 'synthesis', key, fold: fold('synthesis', key) } as const
-    sections.push(closed.has(header.fold) ? { ...header, open: false } : { ...header, open: true, text: fitText(synthesis) })
-    const strip = sections.find(section => section.kind === 'strip')
-    if (strip?.kind === 'strip') {
-      strip.items.push({ glyph: '\u2261', color: `rgb(${NEUTRAL_RGB.replaceAll(';', ',')})`, name: 'synthesis', hotkey: '0', target: key, fold: header.fold })
+  // Columns are padded here so the rows line up whatever the surface's layout does.
+  const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
+  const names = width(providers.map(provider => provider.name))
+  const times = width(providers.map(shownTime))
+  const cancellable = seatsToCancel({ providers, cancels, isDone })
+  const retriableNow = seatsToRetry({ providers, retries, retriable, isDone })
+  const seats = providers.flatMap((provider, index): Section[] => {
+    const { name, model } = provider
+    const key = jumpKey(name)
+    const seatFold = fold('seat', key)
+    const text = textOf(provider)
+    const open = text !== undefined && !closed.has(seatFold)
+    const look = SEAT_LOOKS[shownState(provider)] ?? LIVE
+    const press = cancellable.includes(name) ? 'cancel' : retriableNow.includes(name) ? 'retry' : text ? (open ? 'fold' : 'open') : undefined
+    const row: Section = {
+      kind: 'seat',
+      key,
+      fold: seatFold,
+      // The keyboard's number row: 1 to 9, then 0 for the tenth seat.
+      digit: index < 10 ? String((index + 1) % 10) : '',
+      glyph: look.glyph,
+      glyphColor: look.color,
+      vendor: `rgb(${(colors[name] ?? NEUTRAL_RGB).replaceAll(';', ',')})`,
+      name: name.padEnd(names),
+      model: model ?? '',
+      note: look.note,
+      time: shownTime(provider).padStart(times),
+      open,
+      ...(press ? { action: { press, seat: name } } : {}),
     }
-  }
-  const first = sections.findIndex(isClosable)
-  const folds = sections.filter(isClosable).map(section => section.fold)
-  if (folds.length > 1) sections.splice(first, 0, { kind: 'toggleAll', closes: folds.some(each => !closed.has(each)), folds })
-  return withinTextBudget(sections)
+    return text && open ? [row, ...text()] : [row]
+  })
+  const synthesisKey = jumpKey('synthesis')
+  const synthesisFold = fold('synthesis', synthesisKey)
+  const synthesisSection: Section[] = !synthesis ? []
+    : closed.has(synthesisFold) ? [{ kind: 'synthesis', key: synthesisKey, fold: synthesisFold, open: false }]
+    : [{ kind: 'synthesis', key: synthesisKey, fold: synthesisFold, open: true, text: fitText(synthesis) }]
+  const folds = [...providers.filter(provider => textOf(provider) !== undefined).map(({ name }) => fold('seat', jumpKey(name))), ...(synthesis ? [synthesisFold] : [])]
+  return withinTextBudget([
+    ...(isDone ? [{ kind: 'summary' as const, text: summaryText(providers) }] : []),
+    ...(isDone && collapsesWhenDone ? [...synthesisSection, ...seats] : [...seats, ...synthesisSection]),
+    footer(folds, closed, cancellable.length > 0),
+  ])
 }
 
-type ClosableSection = Extract<Section, { open: boolean }>
-const isClosable = (section: Section): section is ClosableSection => section.kind === 'banner' || section.kind === 'error' || section.kind === 'synthesis'
+// With two or more sections to fold, the a key folds the open ones while any
+// is, else expands them all; c cancels every seat still out; the pane's own
+// close mark closes it.
+function footer(folds: string[], closed: ReadonlySet<string>, isCancellable: boolean): Section {
+  const keys = [
+    ...(folds.length > 1 ? [{ hotkey: 'a', label: folds.some(each => !closed.has(each)) ? 'fold' : 'expand' }] : []),
+    ...(isCancellable ? [{ hotkey: 'c', label: 'cancel all' }] : []),
+    { hotkey: '\u2715', label: 'close' },
+  ]
+  return { kind: 'footer', keys }
+}
 
-const fold = (kind: ClosableSection['kind'], key: string) => `${kind}:${key}`
-
-// The folds of the seats' answers and errors, which close once the synthesis
-// lands so it reads near the top; the synthesis stays open.
+// The seats' folds, which close once the synthesis lands so it reads near
+// the top; the synthesis stays open.
 export function seatFolds(sections: Section[]): string[] {
-  return sections.filter(isClosable).flatMap(section => (section.kind === 'synthesis' ? [] : [section.fold]))
+  return sections.flatMap(section => (section.kind === 'seat' ? [section.fold] : []))
 }
 
 // Claude Code refuses a Pane render carrying more than 100000 characters of
 // text and draws its own. The budget sits under that with room for what the
-// pane draws around the sections (the retry row, the jump strip's names).
+// pane draws around the sections (the retry row, the action labels, the footer's keys).
 const PANE_TEXT_BUDGET = 80000
 const CLIPPED = (more: number) => `\n\n_\u2026 ${more} more characters; the whole answer is in the result (/claude-council:result)_`
 
@@ -286,9 +246,9 @@ const sectionLength = (section: Section) => {
   return length
 }
 
-// Cuts the answer bodies, and only them, until the pane fits the budget: the
-// synthesis, banners, status rows and errors keep their text, and the bodies
-// share what is left. A body within an even share is left whole and its unused
+// Cuts the bodies, and only them, until the pane fits the budget: the
+// synthesis, the seat rows and the reasons keep their text, and the bodies
+// (the answers, and the errors already cut to their opening) share what is left. A body within an even share is left whole and its unused
 // room goes to the longer ones, which are all cut to the same length, so one
 // long answer beside short ones is cut only as far as the budget demands.
 export function withinTextBudget(sections: Section[], budget: number = PANE_TEXT_BUDGET): Section[] {
