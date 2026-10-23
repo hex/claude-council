@@ -872,12 +872,12 @@ export const register: Register = (on, options) => {
         <ui.Box key="finished" flexDirection="row" marginTop={1} paddingLeft={BAND_INDENT}>
           {finished.isFailure ? bandHead(ui, 'head', '\u2717', 'failed', COLOR.danger) : bandHead(ui, 'head', '\u2713', 'done', COLOR.success)}
           <ui.Text bold {...(finished.isFailure ? { color: COLOR.danger } : {})}>{`  ${finished.text}  `}</ui.Text>
-          <ui.Button key="finished:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
+          <ui.Button key="finished:open" hotkey="o" label="open pane" onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
           <ui.Text>{' '}</ui.Text>
           <ui.Button
             key="finished:dismiss"
             hotkey="x"
-            label={'x \u00b7 dismiss'}
+            label="dismiss"
             onPress={() => {
               state.finished = undefined
               $.ui.invalidate('ui.render')
@@ -896,7 +896,7 @@ export const register: Register = (on, options) => {
           <ui.Button
             key="heads-up-failure:dismiss"
             hotkey="x"
-            label={'x \u00b7 dismiss'}
+            label="dismiss"
             onPress={() => {
               state.headsUpFailure = undefined
               $.ui.invalidate('ui.render')
@@ -933,7 +933,7 @@ export const register: Register = (on, options) => {
           </ui.Box>
         )}
         <ui.Box flexShrink={0}>
-          <ui.Button key="progress:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
+          <ui.Button key="progress:open" hotkey="o" label="open pane" onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
         </ui.Box>
       </ui.Box>
     )
