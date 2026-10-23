@@ -45,9 +45,9 @@ const EDGE_MARK = '\u258c'
 const RULE_MARK = '\u2500'
 // The bands above the prompt start where Claude Code's own footer lines do.
 const BAND_INDENT = 2
-// A seat row's action column: two cells of gap, then the widest a plain
-// Button draws, its digit, a colon and the longest verb.
-const ACTION_COLUMNS = 2 + '0: cancel'.length
+// A seat row's action column: two cells of gap, then the widest a
+// bracketed Button draws, the longest verb inside its brackets.
+const ACTION_COLUMNS = 2 + '[ cancel ]'.length
 // The heads-up runner forks and returns its pid; anything slower is a fault.
 const HEADS_UP_LAUNCH_MS = 10_000
 
@@ -997,7 +997,7 @@ export const register: Register = (on, options) => {
               </Box>
               <Box flexDirection="row" flexGrow={1} flexShrink={1}>
                 <Box flexShrink={1}>
-                  <Text dimColor wrap="truncate-end">{section.model}</Text>
+                  <Text color={COLOR.hint} wrap="truncate-end">{section.model}</Text>
                 </Box>
                 {section.note === '' ? null : (
                   <Box flexShrink={0}>
@@ -1016,9 +1016,10 @@ export const register: Register = (on, options) => {
               </Box>
               <Box flexShrink={0} width={ACTION_COLUMNS} paddingLeft={2}>
                 {action ? (
+                  // Not plain: a plain Button draws its hotkey beside the label, and
+                  // the row's leading digit already says which key presses it.
                   <Button
                     key={`${action.press}:${action.seat}`}
-                    plain
                     label={action.press}
                     {...(section.digit ? { hotkey: section.digit } : {})}
                     onPress={() => (action.press === 'cancel' || action.press === 'retry' ? pressSeat($, state, action.press, action.seat) : toggleSection($, state, section.fold))}
