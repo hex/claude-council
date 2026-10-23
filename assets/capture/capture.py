@@ -317,6 +317,11 @@ class Capture:
             raise RuntimeError(f"Crop marker {first!r} missing for {label}")
         start = matches[-1] if first == "❯" else matches[0]
         stop = len(lines)
+        # Claude Code's own usage notices name the account's limits and reset
+        # time; the crop ends above them so they never reach a README image.
+        notice = next((i for i in range(start, stop) if "session limit" in lines[i] or "usage limit" in lines[i]), None)
+        if notice is not None:
+            stop = notice
         while stop > start and not lines[stop - 1].strip():
             stop -= 1
         if (self.name in ("heads-up", "council-run") and stop > start
@@ -362,12 +367,10 @@ class Capture:
         self.key("o")
         self.wait("codex        ")
         self.save("Seats querying", "╭")
-        self.wait("retry", seconds=90)
-        kimi_key = self.roster.split(",").index("kimi-cli") + 1
-        self.wait(f"{kimi_key}: retry", seconds=90)
+        self.wait("[ retry ]", seconds=90)
         self.save("A failed seat can be retried while others query", "╭")
-        self.wait(r"▾ (?:CODEX|ANTIGRAVITY|GEMINI|OPENAI|GROK-CLI|CURSOR-CLI)\b", seconds=330, regex=True)
-        self.save("Answers arrive with their banners", "╭")
+        self.wait("[ fold ]", seconds=330)
+        self.save("Answers arrive under their headers", "╭")
         self.wait("▾ SYNTHESIS", seconds=420)
         time.sleep(3)
         self.save("Answers fold around the synthesis", "╭")
