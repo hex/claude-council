@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, statusText, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION } from '../hooks/heads-up'
+import { applyAnswer, avoidList, bandView, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -306,6 +306,14 @@ test('a pick belongs to its seat: naming another seat drops it, naming the same 
   expect(withEnabled('{"seat": "gemini", "model": {"model": "gemini-2.5-pro"}}', true, 'grok-cli')).toBe('{"enabled": true, "seat": "grok-cli"}\n')
   expect(withEnabled('{"model": {"model": "gpt-6.1-sol"}}', true, 'codex')).toBe('{"enabled": true, "model": {"model": "gpt-6.1-sol"}, "seat": "codex"}\n')
   expect(withEnabled('{"seat": "gemini", "model": {"model": "gemini-2.5-pro"}}', false)).toBe('{"enabled": false, "seat": "gemini", "model": {"model": "gemini-2.5-pro"}}\n')
+})
+
+test('the toast is the status on one line: state, seat, cadence and the checks, without the presses', () => {
+  const counts = { ...EMPTY_COUNTS, none: 3, notes: 1, learn: 1 }
+  expect(toastLine(statusText({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts)))
+    .toBe('Heads-up side-check: on for this project · codex · every 3 requests · checks 4 · none 3 · notes 1 · repeats 0 · failed 0')
+  expect(toastLine(statusText({ enabled: false, seat: 'codex', every: 3 }, false, undefined, EMPTY_COUNTS)))
+    .toBe('Heads-up side-check: off · checks 0 · none 0 · notes 0 · repeats 0 · failed 0')
 })
 
 test('status names the effective state and which switch set it, then the counts, one aligned row per fact', () => {

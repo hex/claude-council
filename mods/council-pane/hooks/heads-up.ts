@@ -202,6 +202,21 @@ export function statusText(config: HeadsUpConfig, rowOn: boolean, fileText: stri
   return [`Heads-up side-check: ${state}`, ...rows.map(([label, value]) => `  ${label.padEnd(width)}  ${value}`)].join('\n')
 }
 
+/**
+ * The status on one line for a toast: its first line, then the seat, cadence
+ * and checks rows joined with dots; the presses and the switch stay out. A
+ * command typed while a turn runs gets its reply drawn only when the turn
+ * ends, so the toast is what the person sees at once.
+ */
+export function toastLine(status: string): string {
+  const [head = '', ...rows] = status.split('\n')
+  const kept = new Set(['seat', 'every', 'checks'])
+  const parts = rows
+    .map(row => row.trim().split(/\s{2,}/, 2))
+    .flatMap(([label, value]) => label !== undefined && value !== undefined && kept.has(label) ? [label === 'every' ? `every ${value}` : value] : [])
+  return [head, ...parts].join(' · ')
+}
+
 /** The /heads-up setup dialogs: scope, seat, cadence. */
 export const SCOPE = { project: 'This project', all: 'Every project', off: 'Off for this project' } as const
 export const SCOPE_QUESTION = 'Where should the heads-up side-check run?'

@@ -4,6 +4,11 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixed
+- `/heads-up` typed while Claude works showed nothing until the turn ended: the command ran at once (it is registered immediate), but Claude Code draws a command's reply only when the turn ends. Mid-turn the status now also shows as a one-line toast (state, seat, cadence, checks) for eight seconds; the full reply still arrives with the turn.
+
 ## 2026.10.10
 
 ### Features

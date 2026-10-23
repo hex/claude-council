@@ -57,7 +57,7 @@ fold when the synthesis arrives. The band above the prompt tracks the run.
 - Press `1` to `9` in the focused pane to jump to that provider's answer once the run is done and the rows have collapsed; while it is live the same digits cancel that seat, and `0` cancels the tenth. Once the run is done `0` jumps to the synthesis, so a tenth seat has no jump key.
 - When a run ends, a `COUNCIL` notice sits above the prompt for 20 seconds with buttons to open the pane or dismiss it. This covers `--async` jobs too, and the notice names the job.
 - `/council-pane` reopens the pane with the last run.
-- `/heads-up [setup | on [seat] | off | status]` sets the heads-up side-check up in Claude Code's own dialogs, switches it on for this project naming the one seat to ask, or off, or shows its state and counts. See [Heads-up side-check](#heads-up-side-check).
+- `/heads-up [setup | on [seat] | off | status]` sets the heads-up side-check up in Claude Code's own dialogs, switches it on for this project naming the one seat to ask, or off, or shows its state and counts. It runs at once mid-turn; since the engine draws a command's reply only when the turn ends, the status then also shows as a one-line toast. See [Heads-up side-check](#heads-up-side-check).
 
 ## Settings
 

@@ -2,7 +2,7 @@
 // ABOUTME: Polls the watch dir run-council.sh writes when COUNCIL_MOD_PANE_DIR is exported
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren, Timer } from 'claude-code'
-import {
+import { toastLine,
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, onCadence, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
   bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, statusText, withEnabled, type Counts,
   seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEAT_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
@@ -70,6 +70,8 @@ type PaneState = {
   lastFailure: string
   // The intro tail on the prompt hint; '' once typed past, turned on, or never due.
   headsUpTip: string
+  // A model request is in flight: a command's text reply waits for the turn, a toast does not.
+  turnInFlight: boolean
   // The last check that found nothing, on the prompt hint until a keystroke or the next check.
   headsUpReceipt: string
   // The last skipped check logged; the same reason on the next cadence point is not logged again.
@@ -178,6 +180,14 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
 async function headsUpStatus($: EngineInterface, rowOn: boolean): Promise<string> {
   const { text } = await headsUpFile($)
   return statusText(parseConfig(text, rowOn), rowOn, text, parseCounts(await $.store.get(COUNTS_KEY)))
+}
+
+// The status as the command's reply; mid-turn the reply waits for the turn to
+// end, so a toast carries its one-line form at once.
+async function headsUpReply($: EngineInterface, state: PaneState, rowOn: boolean): Promise<string> {
+  const status = await headsUpStatus($, rowOn)
+  if (state.turnInFlight) $.ui.toast(toastLine(status), { timeoutMs: 8000 })
+  return status
 }
 
 // Once per install, while the check is off: the store flag is shared by every session.
@@ -705,7 +715,8 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
-  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: '', headsUpTip: '', headsUpReceipt: '', headsUpSkipped: '', headsUpTurnOffArmed: '', frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() } }
+  const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: '', headsUpTip: '',
+    turnInFlight: false, headsUpReceipt: '', headsUpSkipped: '', headsUpTurnOffArmed: '', frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() } }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
@@ -723,6 +734,7 @@ export const register: Register = (on, options) => {
   // holds it, so it is lifted from the main loop's final message.
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
+    if (e.agentId === undefined) state.turnInFlight = false
     const view = state.view
     const synthesis = e.agentId === undefined && view && !state.synthesis ? extractSynthesis(e.answer) : undefined
     if (view && synthesis) {
@@ -741,6 +753,7 @@ export const register: Register = (on, options) => {
   on('turn.step', async function* ($, e, next) {
     const response = next(e)
     if (e.agentId === undefined) {
+      state.turnInFlight = true
       const step = { turnId: e.turnId, index: e.index }
       void logFailure($, state, () => stepHeadsUp($, state, settings, step))
     }
@@ -803,7 +816,7 @@ export const register: Register = (on, options) => {
       if (outcome.turnRowOn) {
         const written = await $.config.set({ key: 'claude-council.heads_up', value: true })
         if (written.deny) return { text: `The file is written, but the /config row was refused: ${written.deny}` }
-        return { text: await headsUpStatus($, true) }
+        return { text: await headsUpReply($, state, true) }
       }
     } else if (command.action !== 'status') {
       const unknown = command.action === 'on' && command.seat !== undefined ? await notASeat($, command.seat) : undefined
@@ -812,7 +825,7 @@ export const register: Register = (on, options) => {
       await $.fs.write(file.path, withEnabled(file.text, command.action === 'on', command.action === 'on' ? command.seat : undefined))
       state.headsUpTip = ''
     }
-    return { text: await headsUpStatus($, settings.headsUp) }
+    return { text: await headsUpReply($, state, settings.headsUp) }
   })
 
   on('command.run', { command: REOPEN_COMMAND }, async ($, e) => {
