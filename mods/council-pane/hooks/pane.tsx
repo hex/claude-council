@@ -924,7 +924,7 @@ export const register: Register = (on, options) => {
           </ui.Text>
         </ui.Box>
         <ui.Box flexGrow={1} flexShrink={1}>
-          <ui.Text dimColor wrap="truncate-end">{`  ${progress.event}  `}</ui.Text>
+          <ui.Text color={COLOR.hint} wrap="truncate-end">{`  ${progress.event}  `}</ui.Text>
         </ui.Box>
         {seatsToCancel(view).length > 0 && (
           <ui.Box flexShrink={0}>

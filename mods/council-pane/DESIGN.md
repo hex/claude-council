@@ -6,7 +6,7 @@ How the mod looks, and why. Every colour lives in `hooks/theme.ts`, and no other
 
 - The council speaks inside Claude Code, so it borrows Claude's orange and the engine's own theme instead of bringing a palette of its own.
 - Colour carries meaning, and each meaning has one colour. Text or a glyph always says the same thing, so no state depends on colour alone.
-- Text a person reads meets 4.5:1 on a light and on a dark theme, with two exceptions: `info` is 4.4:1 on light, and the engine has no blue that does better; and the heads-up note's seat line and a seat row's model use `hint` at 2.2:1 by choice, so they recede. Glyphs and lines meet 3:1.
+- Text a person reads meets 4.5:1 on a light and on a dark theme, with two exceptions: `info` is 4.4:1 on light, and the engine has no blue that does better; and the heads-up note's seat line, a seat row's model and the band's event use `hint` at 2.2:1 by choice, so they recede. Glyphs and lines meet 3:1.
 - A screen fits the terminal. A pane taller than the terminal hands the keyboard back to the prompt, so text stays short. A text a person needs to read wraps and is shown whole.
 - A folded section costs one line. A blank line is spent only around an open body, and an open seat's row is drawn on its provider's colour in white, so each answer starts at a header the eye can find and says whose it is.
 
@@ -21,7 +21,7 @@ Most colours are engine theme keys. The engine resolves each one for the theme t
 | `danger` | `error` | 6.7 | 6.1 | Failed, errors |
 | `info` | `suggestion` | 4.4 | 8.9 | A cached provider |
 | `muted` | `inactive` | 5.7 | 5.9 | Secondary text that must stay readable; a seat the reader cancelled |
-| `hint` | `subtle` | 2.2 | 2.1 | The heads-up note's seat line and a seat row's model: a deliberate exception to 4.5:1, chosen so they recede |
+| `hint` | `subtle` | 2.2 | 2.1 | The heads-up note's seat line, a seat row's model and the band's event: a deliberate exception to 4.5:1, chosen so they recede |
 
 Plain `dimColor` serves secondary text that is fine to fade: counts, times, model names, a seat's digit when it has no action, and hints.
 
@@ -58,4 +58,4 @@ Each glyph has one meaning.
 - **Seat row**: one line per seat for the whole run: the `▌` edge, the seat's name in bold padded to the longest, the model in `hint`, lighter than the name (it gives way first when narrow; a cached or fallen-back seat adds `· cached` or `· fell back` in the state's colour), a 14-cell bar in the state's colour (a sweep while live, each row's a step behind the one above so they do not move in step; full once answered; a stub on an error; a bare track once cancelled), the time dim (running while live, final once settled), and at the right edge a fixed column with a bracketed button for what the row's key does now: `[ cancel ]`, `[ retry ]`, `[ open ]` or `[ fold ]`. Keys 1 to 9, then 0, press the rows in order; nothing on the row draws its number (Alex, 2026-10-23). No glyph or word names the state: the bar's shape and colour do. The row is the seat's fold header, and its answer or error text hangs under it when open; an open seat's row is drawn on its provider's colour at seven tenths (`headerFill`) with every part in white, the button label included. No seat appears twice.
 - **Footer**: the pane's last line, a blank line above it and pushed to the right edge, the keys that apply now and no others: `a` fold (with two or more sections to fold and one open) or `a` expand (with every one closed), `c` cancel all while a seat can be cancelled, `✕ close` for the pane's own close mark.
 - **Pane order**: a live run lists its seats, each open answer under its row, then the synthesis, then the footer. A finished run leads with its summary line (`4 of 5 answered · 1 error · 14.2s`); with `collapse_when_done` on, the synthesis follows it open and the seats come folded below, and off, the live order follows the summary.
-- **Band**: the one line above the prompt while a council run is live: the `● running` head, an 8-cell sweep in `accent`, the clock dim, then dim `N of M done · <latest event>`, `c · cancel all` while a seat is querying, `o · open pane`. The finished notice, the retry offer and a heads-up note take the line before it. Every band is indented two columns, where Claude Code's own footer lines start.
+- **Band**: the one line above the prompt while a council run is live: the `● running` head, an 8-cell sweep in `accent`, the clock dim, then `N of M done · <latest event>` in `hint`, `c · cancel all` while a seat is querying, `o · open pane`. The finished notice, the retry offer and a heads-up note take the line before it. Every band is indented two columns, where Claude Code's own footer lines start.
