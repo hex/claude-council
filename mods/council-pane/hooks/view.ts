@@ -39,7 +39,7 @@ export type Section =
   // One row per seat, its status and its fold header at once, with the name
   // padded to the column and the action's seat unpadded. A closed seat, or one
   // with nothing to show, is the row alone: no reason or body follows it.
-  | { kind: 'seat'; key: string; fold: string; digit: string; glyph: string; glyphColor: string; vendor: string; name: string; model: string; note: SeatNote; bar: string; time: string; open: boolean; action?: SeatAction }
+  | { kind: 'seat'; key: string; fold: string; digit: string; glyph: string; glyphColor: string; vendor: string; name: string; model: string; note: SeatNote; bar: string; barColor: string; time: string; open: boolean; action?: SeatAction }
   | { kind: 'reason'; text: string }
   | { kind: 'body'; text: string }
   | { kind: 'synthesis'; key: string; fold: string; open: true; text: string }
@@ -49,12 +49,13 @@ export type Section =
   // The empty run's one line.
   | { kind: 'note'; text: string }
 
-// The bar takes the glyph's colour. A live seat has no share to show, so its
-// bar sweeps on the pane's frame.
-type SeatLook = { glyph: string; color: string; note: SeatNote; fill: (frame: number) => BarFill }
+// The bar takes the glyph's colour, except a live seat's: it has no share to
+// show, so its bar sweeps on the pane's frame in Claude's orange, since the
+// theme's warning colour is a brown on a light terminal.
+type SeatLook = { glyph: string; color: string; note: SeatNote; fill: (frame: number) => BarFill; barColor?: string }
 const SWEEP = (frame: number): BarFill => ({ kind: 'sweep', frame })
 const FULL = (): BarFill => ({ kind: 'share', filled: 1, total: 1 })
-const LIVE: SeatLook = { glyph: '\u25cf', color: COLOR.warning, note: '', fill: SWEEP }
+const LIVE: SeatLook = { glyph: '\u25cf', color: COLOR.warning, note: '', fill: SWEEP, barColor: COLOR.accent }
 const SET_ASIDE: SeatLook = { glyph: '\u25cb', color: COLOR.muted, note: '', fill: () => ({ kind: 'empty' }) }
 // The glyph and its colour are the state; only a seat that answered some other
 // way than asking says so in words. A state the pane does not know is drawn live.
@@ -208,6 +209,7 @@ export function paneSections(
       model: model ?? '',
       note: look.note,
       bar: bar(look.fill(frame + index * SWEEP_STAGGER)),
+      barColor: look.barColor ?? look.color,
       time: shownTime(provider).padStart(times),
       open,
       ...(press ? { action: { press, seat: name } } : {}),

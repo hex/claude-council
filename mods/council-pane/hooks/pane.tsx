@@ -1008,7 +1008,7 @@ export const register: Register = (on, options) => {
               </Box>
               <Box flexShrink={0}>
                 <Text>
-                  <Text color={section.glyphColor}>{`  ${section.bar}`}</Text>
+                  <Text color={section.barColor}>{`  ${section.bar}`}</Text>
                   <Text dimColor>{`  ${section.time}`}</Text>
                 </Text>
               </Box>
