@@ -928,7 +928,7 @@ export const register: Register = (on, options) => {
         </ui.Box>
         {seatsToCancel(view).length > 0 && (
           <ui.Box flexShrink={0}>
-            <ui.Button key="progress:cancel" hotkey="c" label={'c \u00b7 cancel all'} onPress={() => cancelAll($, state)} />
+            <ui.Button key="progress:cancel" hotkey="c" label="cancel all" onPress={() => cancelAll($, state)} />
             <ui.Text>{'  '}</ui.Text>
           </ui.Box>
         )}

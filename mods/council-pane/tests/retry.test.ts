@@ -23,8 +23,8 @@ test('retrySection counts the window down from when the offer was first seen', (
     kind: 'retry',
     badge: 'COUNCIL',
     notice: '2 providers failed: cursor-cli, grok',
-    label: 'r \u00b7 retry',
-    skipLabel: 's \u00b7 skip',
+    label: 'retry',
+    skipLabel: 'skip',
     remaining: 38,
     bar: '━━━━━━━·',
   })

@@ -22,6 +22,6 @@ export function retrySection(offer: RetryOffer, seenAtMs: number, nowMs: number)
   // Rounded up, so the countdown empties only when no time is left.
   const filled = Math.ceil((remaining / offer.seconds) * COUNTDOWN_CELLS)
   const notice = providers.length === 1 ? `${providers[0]} failed` : `${providers.length} providers failed: ${providers.join(', ')}`
-  // The labels name their hotkeys: a terminal Button draws as `[ label ]` and shows no key of its own.
-  return { kind: 'retry', badge: 'COUNCIL', notice, label: 'r \u00b7 retry', skipLabel: 's \u00b7 skip', remaining, bar: bar({ kind: 'share', filled, total: COUNTDOWN_CELLS }, COUNTDOWN_CELLS) }
+  // No letters in the labels: the r and s keys answer only once the band holds the focus.
+  return { kind: 'retry', badge: 'COUNCIL', notice, label: 'retry', skipLabel: 'skip', remaining, bar: bar({ kind: 'share', filled, total: COUNTDOWN_CELLS }, COUNTDOWN_CELLS) }
 }
