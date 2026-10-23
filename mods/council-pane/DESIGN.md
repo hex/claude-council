@@ -23,7 +23,7 @@ Most colours are engine theme keys. The engine resolves each one for the theme t
 | `muted` | `inactive` | 5.7 | 5.9 | Secondary text that must stay readable; a seat the reader cancelled |
 | `hint` | `subtle` | 2.2 | 2.1 | The heads-up note's seat line, a seat row's model and the band's event: a deliberate exception to 4.5:1, chosen so they recede |
 
-Plain `dimColor` serves secondary text that is fine to fade: counts, times, model names, a seat's digit when it has no action, and hints.
+Plain `dimColor` serves secondary text that is fine to fade: counts, times and hints.
 
 ### Fixed colours, and why
 
