@@ -1040,8 +1040,9 @@ export const register: Register = (on, options) => {
               {section.keys.map(({ hotkey, label }, part) => (
                 <Box key={`${key}-${hotkey}`} flexDirection="row">
                   {part > 0 && <Text>{'  '}</Text>}
-                  {hotkey === 'a' ? <Button key="footer:fold" plain hotkey="a" label={label} onPress={() => foldAll(label === 'fold')} />
-                    : hotkey === 'c' ? <Button key="footer:cancel" plain hotkey="c" label={label} onPress={() => cancelAll($, state)} />
+                  {/* Not plain, so no letter is drawn: the keys still press them once the pane holds the focus. */}
+                  {hotkey === 'a' ? <Button key="footer:fold" hotkey="a" label={label} onPress={() => foldAll(label === 'fold')} />
+                    : hotkey === 'c' ? <Button key="footer:cancel" hotkey="c" label={label} onPress={() => cancelAll($, state)} />
                     // The pane's own close mark, which the engine draws and answers.
                     : <Text dimColor>{`${hotkey} ${label}`}</Text>}
                 </Box>
