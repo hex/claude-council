@@ -4,7 +4,7 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.10.11
 
 ### Changed
 - The pane inside Claude Code gives each seat one row for the whole run: a `▌` edge in the provider's color, the name, the model in a light grey, a bar and the time. The bar carries the state: a `━` dash in Claude's orange sweeps a dotted track while the seat queries, each row out of step with the one above; the line fills in green once the seat answers (blue `· cached`, orange `· fell back`); a red stub stays on an error; a cancelled seat's track is bare. The row draws no digit and no state glyph; keys 1 to 9, then 0, still press the rows in order. The answer or error hangs under its row, so no seat appears twice. The pane drops the status words, the spinner, the colored banners, the row of names and the hint line.
