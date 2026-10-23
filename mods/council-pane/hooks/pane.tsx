@@ -43,6 +43,8 @@ const CLOSED_MARK = '\u25b8'
 // A seat row's first cell, in the vendor's colour: identity without a fill.
 const EDGE_MARK = '\u258c'
 const RULE_MARK = '\u2500'
+// The bands above the prompt start where Claude Code's own footer lines do.
+const BAND_INDENT = 2
 // A seat row's action column: two cells of gap, then the widest a plain
 // Button draws, its digit, a colon and the longest verb.
 const ACTION_COLUMNS = 2 + '0: cancel'.length
@@ -617,9 +619,9 @@ function headsUpRow(
         <ui.Button key="heads-up:close" hotkey="0" label="Close" plain role="dismiss" onPress={press.dismiss} />,
       ]
   return (
-    <ui.Box key="heads-up" flexDirection="column" marginTop={1}>
+    <ui.Box key="heads-up" flexDirection="column" marginTop={1} paddingLeft={BAND_INDENT}>
       <ui.Box flexDirection="row">
-        <ui.Box flexShrink={0}><ui.Text bold color={COLOR.onFill} backgroundColor={FILL.chipMark}>{` ${tagMark(band.tag)} `}</ui.Text><ui.Text>{' '}</ui.Text></ui.Box>
+        <ui.Box flexShrink={0}><ui.Text bold color={COLOR.onFill} backgroundColor={FILL.badge}>{` ${tagMark(band.tag)} `}</ui.Text><ui.Text>{' '}</ui.Text></ui.Box>
         <ui.Box flexGrow={1} flexShrink={1} flexDirection="column">
           <ui.Text wrap="wrap"><ui.Text bold>{band.tag}</ui.Text>{` \u00b7 ${band.headline}`}</ui.Text>
           {more !== null && (
@@ -699,7 +701,7 @@ function retryRow(
   press: { accept: () => void; skip: () => void },
 ) {
   return (
-    <ui.Box key="retry" flexDirection="row" marginTop={1}>
+    <ui.Box key="retry" flexDirection="row" marginTop={1} paddingLeft={BAND_INDENT}>
       {/* Only the notice and the how-to give way when narrow. */}
       {bandHead(ui, 'head', '\u2717', 'retry', COLOR.danger)}
       <ui.Box flexShrink={1}>
@@ -868,7 +870,7 @@ export const register: Register = (on, options) => {
     if (finished && !retry) {
       const ui = $.ui.resolve(e)
       return (
-        <ui.Box key="finished" flexDirection="row" marginTop={1}>
+        <ui.Box key="finished" flexDirection="row" marginTop={1} paddingLeft={BAND_INDENT}>
           {finished.isFailure ? bandHead(ui, 'head', '\u2717', 'failed', COLOR.danger) : bandHead(ui, 'head', '\u2713', 'done', COLOR.success)}
           <ui.Text bold {...(finished.isFailure ? { color: COLOR.danger } : {})}>{`  ${finished.text}  `}</ui.Text>
           <ui.Button key="finished:open" hotkey="o" label={'o \u00b7 open pane'} onPress={() => { void $.ui.open({ id: PANE_ID, title: 'Council' }) }} />
@@ -890,8 +892,8 @@ export const register: Register = (on, options) => {
     if (failure) {
       const ui = $.ui.resolve(e)
       return (
-        <ui.Box key="heads-up-failure" flexDirection="row" marginTop={1}>
-          <ui.Text bold color={COLOR.danger}>{` \u2717 ${failure.text}  `}</ui.Text>
+        <ui.Box key="heads-up-failure" flexDirection="row" marginTop={1} paddingLeft={BAND_INDENT}>
+          <ui.Text bold color={COLOR.danger}>{`\u2717 ${failure.text}  `}</ui.Text>
           <ui.Button
             key="heads-up-failure:dismiss"
             hotkey="x"
@@ -913,7 +915,7 @@ export const register: Register = (on, options) => {
     if (!view || !progress) return next(e)
     const ui = $.ui.resolve(e)
     return (
-      <ui.Box key="progress" flexDirection="row" marginTop={1}>
+      <ui.Box key="progress" flexDirection="row" marginTop={1} paddingLeft={BAND_INDENT}>
         {/* Only the event gives way when narrow. */}
         {bandHead(ui, 'head', '\u25cf', 'running', COLOR.warning)}
         <ui.Box flexShrink={0}>

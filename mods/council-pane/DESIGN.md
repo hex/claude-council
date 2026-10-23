@@ -28,9 +28,9 @@ Plain `dimColor` serves secondary text that is fine to fade: counts, times, mode
 
 ### Fixed colours, and why
 
-- **Fills under white letters** (`FILL`): the SYNTHESIS header and the heads-up badge. A theme key would turn light on a dark theme and lose the white letters, so these stay fixed, each dark enough for white on both.
+- **Fills under white letters** (`FILL`): the SYNTHESIS header and the heads-up badge. A theme key would turn light on a dark theme and lose the white letters, so these stay fixed.
   - `chip` `rgb(180,85,50)`, 4.9:1: a deeper Claude orange, because white on the orange itself is 3.1:1. The SYNTHESIS header.
-  - `chipMark` `rgb(150,68,40)`, 6.7:1, the heads-up note's `!` or `?` badge.
+  - `badge` `rgb(215,119,87)`, Claude's orange, 3.1:1: the heads-up note's `!` or `?`. One bold glyph, so the 3:1 glyph rule applies, not the 4.5:1 text rule.
 - **Data colours** tell things apart without meaning anything, and a theme has too few hues for that.
   - Vendor colours come from the council's config and draw the `▌` edge at the start of each seat row. No fill uses a vendor colour, so no text sits on one.
 
@@ -52,7 +52,7 @@ Each glyph has one meaning.
 | `○` | Set aside by the person: a seat cancelled, or cancelling |
 | `▌` | A seat's vendor, in the vendor colour, at the start of its row |
 | `▾` `▸` | A fold, open and closed: the synthesis header |
-| ` ! ` ` ? ` | A heads-up note: `!` for this session's work, `?` for a concept to know; one ASCII letter on the `chipMark` fill, so every terminal draws it one cell wide |
+| ` ! ` ` ? ` | A heads-up note: `!` for this session's work, `?` for a concept to know; one ASCII letter on the `badge` fill, so every terminal draws it one cell wide |
 | `░▒▓█` `▒` `·` | A bar over a `·` track: a live seat's `░▒▓█▓▒░` block sweeps it left to right and enters again at the left; `▒` fills a share (a settled seat full, the band and the retry countdown by their count); a failed seat's `▓▒░` stub sits at the left; a cancelled seat's track is bare |
 | `─` | A dim rule across the pane that closes an open body |
 
@@ -62,4 +62,4 @@ Each glyph has one meaning.
 - **Seat row**: one line per seat for the whole run: the `▌` edge, the seat's digit, its glyph, its name in bold padded to the longest, the model dim (it gives way first when narrow; a cached or fallen-back seat adds `· cached` or `· fell back` in the glyph's colour), a 14-cell bar in the glyph's colour, except the sweep, which is `accent` because the theme's warning colour is a brown on a light terminal (a sweep while live, each row's a step behind the one above so they do not move in step; full once answered; a stub on an error; a bare track once cancelled), the time dim (running while live, final once settled), and at the right edge a fixed column with what the digit does now: `cancel`, `retry`, `open` or `fold`, or the digit dim alone when it does nothing. No word names the state: the glyph, the bar and their colour do. The row is the seat's fold header, and its answer or error text hangs under it when open. No seat appears twice.
 - **Footer**: the pane's last line, the keys that apply now and no others: `a` fold (with two or more sections to fold and one open) or `a` expand (with every one closed), `c` cancel all while a seat can be cancelled, `✕ close` for the pane's own close mark.
 - **Pane order**: a live run lists its seats, each open answer under its row, then the synthesis, then the footer. A finished run leads with its summary line (`4 of 5 answered · 1 error · 14.2s`); with `collapse_when_done` on, the synthesis follows it open and the seats come folded below, and off, the live order follows the summary.
-- **Band**: the one line above the prompt while a council run is live: the `● running` head, an 8-cell sweep in `accent`, the clock dim, then dim `N of M done · <latest event>`, `c · cancel all` while a seat is querying, `o · open pane`. The finished notice, the retry offer and a heads-up note take the line before it.
+- **Band**: the one line above the prompt while a council run is live: the `● running` head, an 8-cell sweep in `accent`, the clock dim, then dim `N of M done · <latest event>`, `c · cancel all` while a seat is querying, `o · open pane`. The finished notice, the retry offer and a heads-up note take the line before it. Every band is indented two columns, where Claude Code's own footer lines start.

@@ -25,6 +25,7 @@ export const COLOR = {
 export const FILL = {
   // A deeper Claude orange (4.9:1 under white); the plain accent is 3.1:1. The SYNTHESIS header.
   chip: 'rgb(180,85,50)',
-  // A step darker again: the heads-up note's badge.
-  chipMark: 'rgb(150,68,40)',
+  // Claude's orange under the heads-up note's one-letter badge: 3.1:1 under
+  // white, which meets the 3:1 a glyph needs, and fixed so a dark theme cannot lighten it.
+  badge: 'rgb(215,119,87)',
 } as const
