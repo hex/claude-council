@@ -1256,7 +1256,12 @@ opencode_run_call() {
     [ "$(jq -r '.OPENCODE_CONFIG_PROJECT_DISABLE' <<<"$seen")" = "1" ]
     [ "$(jq -r '.OPENCODE_DISABLE_PROJECT_CONFIG' <<<"$seen")" = "1" ]
     [ "$(jq -r 'has("OPENCODE_CONFIG")' <<<"$seen")" = "false" ]
-    [[ "$(jq -r '.OPENCODE_CONFIG_DIR' <<<"$seen")" == "${TMPDIR:-/tmp}/council-opencode-config."* ]]
+    # By name, not by its TMPDIR prefix: MSYS hands the CLI a C:/ spelling
+    # of the path, and the point is that it is the seat's dir, not the user's.
+    local cli_dir
+    cli_dir=$(jq -r '.OPENCODE_CONFIG_DIR' <<<"$seen")
+    [[ "${cli_dir##*/}" == council-opencode-config.* ]]
+    [ "$cli_dir" != "$OPENCODE_CONFIG_DIR" ]
     [ "$(jq -r '.config_dir_empty' <<<"$seen")" = "true" ]
     # The model still came from the inherited config file.
     [ "$(opencode_run_call | jq -c '.args')" = \
