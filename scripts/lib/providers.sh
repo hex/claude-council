@@ -387,7 +387,8 @@ cli_config_model() {
 # same is true of the model-unavailable verdicts keyed on it in model_fallback.sh.
 # CLI providers pass no model flag
 # unless the *_MODEL override is set, so their model is whatever their own
-# config selects; "default" remains for the CLIs that publish no such config
+# config selects (opencode's seat hides that config, so it passes the model
+# itself); "default" remains for the CLIs that publish no such config
 # and for a CLI that has not been configured. The value reaches the cache key,
 # so reconfiguring a CLI's model correctly stops the council serving an answer
 # the previous model gave.
