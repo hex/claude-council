@@ -281,9 +281,12 @@ EOF
 # prompt from stdin; keep a copy so a test can assert what reached the CLI and
 # that it never rode argv. Keep the OPENCODE_ variables too, and whether the
 # config dir it was handed was an empty directory, so a test can assert what
-# isolation the seat was given.
+# isolation the seat was given. Each run gets its own session id, kept in
+# opencode-session.txt, so a test can assert the seat deleted that session.
 if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
     cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
+    SID="ses_fake\${RANDOM}\${RANDOM}"
+    echo "\$SID" > "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-session.txt"
     CONFIG_EMPTY=false
     [[ -d "\${OPENCODE_CONFIG_DIR:-}" && -z "\$(ls -A "\$OPENCODE_CONFIG_DIR")" ]] && CONFIG_EMPTY=true
     jq -cn --argjson empty "\$CONFIG_EMPTY" \\
@@ -293,8 +296,8 @@ if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
         valid|empty)
             ANSWER="$marker: deterministic answer"
             [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "empty" ]] && ANSWER=""
-            echo '{"type":"step_start","timestamp":1,"sessionID":"ses_fake","part":{"id":"prt_1","sessionID":"ses_fake","messageID":"msg_1","type":"step-start","snapshot":"fake"}}'
-            jq -cn --arg a "\$ANSWER" '{type: "text", timestamp: 2, sessionID: "ses_fake", part: {id: "prt_2", sessionID: "ses_fake", messageID: "msg_1", type: "text", text: \$a, time: {start: 1, end: 2}}}'
+            jq -cn --arg s "\$SID" '{type: "step_start", timestamp: 1, sessionID: \$s, part: {id: "prt_1", sessionID: \$s, messageID: "msg_1", type: "step-start", snapshot: "fake"}}'
+            jq -cn --arg s "\$SID" --arg a "\$ANSWER" '{type: "text", timestamp: 2, sessionID: \$s, part: {id: "prt_2", sessionID: \$s, messageID: "msg_1", type: "text", text: \$a, time: {start: 1, end: 2}}}'
             exit 0 ;;
         bad-model)
             # The real CLI's unknown-model event on stdout, stderr empty, exit 1.
@@ -302,9 +305,14 @@ if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
             # -m on the floor cannot pass this case.
             MODEL=""; PREV=""
             for a in "\$@"; do [[ "\$PREV" == "-m" ]] && MODEL="\$a"; PREV="\$a"; done
-            jq -cn --arg m "Model unavailable: \${MODEL:-none}" '{type: "error", timestamp: 1, sessionID: "ses_fake", error: {type: "provider.no-route", message: \$m}}'
+            jq -cn --arg s "\$SID" --arg m "Model unavailable: \${MODEL:-none}" '{type: "error", timestamp: 1, sessionID: \$s, error: {type: "provider.no-route", message: \$m}}'
             exit 1 ;;
     esac
+fi
+# The real CLI answers "opencode session delete <id>" with this line, exit 0.
+if [[ "\${1:-} \${2:-}" == "session delete" ]]; then
+    echo "Session \${*: -1} deleted"
+    exit 0
 fi
 # The real CLI answers "opencode auth list" with one row per stored login or
 # vendor key, exit 0; with none it prints "No authenticated integrations",

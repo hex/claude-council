@@ -43,7 +43,17 @@ COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
 ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-opencode-err.XXXXXX")
 OUT_TMP=$(mktemp "${TMPDIR:-/tmp}/council-opencode-out.XXXXXX")
 CONFIG_TMP=$(mktemp -d "${TMPDIR:-/tmp}/council-opencode-config.XXXXXX")
-trap 'rm -rf "$ERR_TMP" "$OUT_TMP" "$CONFIG_TMP"' EXIT
+SESSION_ID=""
+# The CLI saves every run in the user's session history and no flag stops it,
+# so the seat deletes its own session: the prompt can carry --file contents or
+# a transcript digest. Best effort and bounded; it never changes the exit code.
+remove_run() {
+    if [[ -n "$SESSION_ID" ]]; then
+        run_with_deadline 30 opencode session delete --standalone "$SESSION_ID" >/dev/null 2>&1 || true
+    fi
+    rm -rf "$ERR_TMP" "$OUT_TMP" "$CONFIG_TMP"
+}
+trap remove_run EXIT
 
 # The seat must answer the prompt every other seat gets and nothing else, so
 # it starts blind to the user's setup:
@@ -73,7 +83,6 @@ export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny"}}'
 # .part.text; the default format adds a "> build · provider/model" header.
 # No message argument: the prompt arrives on stdin, which keeps the whole
 # prompt off argv (see cursor-cli.sh for the argument limit this avoids).
-# What no flag removes: each run is saved in the user's session history.
 ARGS=(run --standalone --format json)
 # -m only on an explicit override, so an unset OPENCODE_MODEL defers to the
 # CLI's own choice (mirrors claude-cli.sh and copilot-cli.sh). The value is
@@ -81,6 +90,10 @@ ARGS=(run --standalone --format json)
 [[ -n "${OPENCODE_MODEL:-}" ]] && ARGS+=(-m "$OPENCODE_MODEL")
 
 if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" opencode "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
+# Every event names the run's session; the first one is enough. Only a plain
+# word is kept, so nothing the stream says can reach the delete as a flag.
+SESSION_ID=$(jq -rnR 'first(inputs | fromjson? | objects | .sessionID // empty
+                            | strings | select(test("^[A-Za-z0-9_]+$")))' "$OUT_TMP" 2>/dev/null || true)
 # A provider error or an unknown model exits 1 with stderr empty: the cause is
 # an error event on stdout. Line by line rather than slurped, so a notice line
 # that is not JSON cannot abort the parse. The .error type is checked before

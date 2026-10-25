@@ -1196,6 +1196,11 @@ $off" ]
 # opencode.sh against the fake binary
 # ============================================================================
 
+# The seat's run call; the session delete that follows it is the last call.
+opencode_run_call() {
+    jq -c 'select(.bin == "opencode" and .args[0] == "run")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | tail -1
+}
+
 @test "fixture: fake opencode shadows any real opencode on PATH" {
     run command -v opencode
     [ "$status" -eq 0 ]
@@ -1216,7 +1221,7 @@ $off" ]
     [ "$status" -eq 0 ]
     # The whole argument list, so a flag lost in quoting fails here instead of
     # shifting every other one.
-    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
+    [ "$(opencode_run_call | jq -c '.args')" = \
       '["run","--standalone","--format","json"]' ]
     [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"test prompt"* ]]
     local seen
@@ -1235,7 +1240,7 @@ $off" ]
     run "${PROVIDERS_DIR_REAL}/opencode.sh" --prompt-file "$pf"
     [ "$status" -eq 0 ]
     [ "$(wc -c < "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" -gt 300000 ]
-    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -c)" -lt 1000 ]
+    [ "$(opencode_run_call | wc -c)" -lt 1000 ]
 }
 
 @test "opencode.sh: passes -m only when OPENCODE_MODEL is set" {
@@ -1243,7 +1248,30 @@ $off" ]
     export OPENCODE_MODEL=example/example-model
     run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
     [ "$status" -eq 0 ]
-    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("-m") as $i | .[$i+1]')" = "example/example-model" ]
+    [ "$(opencode_run_call | jq -r '.args | index("-m") as $i | .[$i+1]')" = "example/example-model" ]
+}
+
+@test "opencode.sh: deletes the run's session from the user's history afterwards" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
+      "[\"session\",\"delete\",\"--standalone\",\"$(cat "$COUNCIL_FAKE_STATE_DIR/opencode-session.txt")\"]" ]
+}
+
+@test "opencode.sh: a failed run still deletes its session, and keeps its own exit code" {
+    export COUNCIL_FAKE_BEHAVIOR=bad-model OPENCODE_MODEL=example/missing-model
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
+      "[\"session\",\"delete\",\"--standalone\",\"$(cat "$COUNCIL_FAKE_STATE_DIR/opencode-session.txt")\"]" ]
+}
+
+@test "opencode.sh: a run that names no session deletes nothing" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_TIMEOUT=1
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$(jq -c 'select(.args[0] == "session")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = "" ]
 }
 
 @test "opencode.sh: an empty answer is an error, not a blank answer" {
