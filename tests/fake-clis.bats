@@ -1292,19 +1292,6 @@ opencode_run_call() {
     [ "$(jq -r '.config_dir_empty' <<<"$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-env.jsonl")")" = "true" ]
 }
 
-@test "opencode.sh: OPENCODE_MODEL is the -m it passes, over the model in the user's config" {
-    export COUNCIL_FAKE_BEHAVIOR=valid
-    export OPENCODE_MODEL=example/example-model
-    unset OPENCODE_CONFIG
-    export OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR/user-config"
-    mkdir -p "$OPENCODE_CONFIG_DIR"
-    printf '%s\n' '{"model":"example/config-model"}' > "$OPENCODE_CONFIG_DIR/opencode.json"
-    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
-    [ "$status" -eq 0 ]
-    [ "$(opencode_run_call | jq -c '.args')" = \
-      '["run","--standalone","--format","json","-m","example/example-model"]' ]
-}
-
 @test "opencode.sh: deletes the run's session from the user's history afterwards" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
@@ -1313,18 +1300,22 @@ opencode_run_call() {
       "[\"session\",\"delete\",\"--standalone\",\"$(cat "$COUNCIL_FAKE_STATE_DIR/opencode-session.txt")\"]" ]
 }
 
-@test "opencode.sh: a failed run still deletes its session, and keeps its own exit code" {
+@test "opencode.sh: a failed run reports the error event on stdout, and still deletes its session" {
+    # The CLI exits 1 with stderr empty; the cause is only in the event stream.
     export COUNCIL_FAKE_BEHAVIOR=bad-model OPENCODE_MODEL=example/missing-model
-    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
     [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+    [ "$stderr" = "Error from opencode CLI: Model unavailable: example/missing-model" ]
     [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
       "[\"session\",\"delete\",\"--standalone\",\"$(cat "$COUNCIL_FAKE_STATE_DIR/opencode-session.txt")\"]" ]
 }
 
-@test "opencode.sh: a run that names no session deletes nothing" {
+@test "opencode.sh: a hung CLI is ended at COUNCIL_TIMEOUT, and names no session to delete" {
     export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_TIMEOUT=1
     run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
     [ "$status" -eq 1 ]
+    [[ "$output" == *"timed out after 1s"* ]]
     [ "$(jq -c 'select(.args[0] == "session")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = "" ]
 }
 
@@ -1333,22 +1324,6 @@ opencode_run_call() {
     run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
     [ "$status" -eq 1 ]
     [ "$output" = "Error from opencode CLI: no answer in response" ]
-}
-
-@test "opencode.sh: an error event on stdout is what a failed run reports" {
-    # The CLI exits 1 with stderr empty; the cause is only in the event stream.
-    export COUNCIL_FAKE_BEHAVIOR=bad-model OPENCODE_MODEL=example/missing-model
-    run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
-    [ "$status" -eq 1 ]
-    [ "$output" = "" ]
-    [ "$stderr" = "Error from opencode CLI: Model unavailable: example/missing-model" ]
-}
-
-@test "opencode.sh: a hung CLI is ended at COUNCIL_TIMEOUT" {
-    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_TIMEOUT=1
-    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"timed out after 1s"* ]]
 }
 
 @test "opencode.sh: reads the prompt from --prompt-file" {

@@ -387,6 +387,24 @@ cli_config_model() {
     esac
 }
 
+# Hides the user's OpenCode setup from a run, for the seat and the status probe
+# alike, so this is the one place the two stay in step. An empty config dir
+# keeps their global config, plugins, MCP servers, agents and commands out; the
+# login in auth.json lives under XDG_DATA_HOME, so it stays. An OPENCODE_CONFIG
+# file would load in full beside the empty dir, and an inline
+# OPENCODE_CONFIG_CONTENT can start MCP servers, so both go. Project config
+# (opencode.json, AGENTS.md) is off under both names: 2.1.3 reads
+# OPENCODE_CONFIG_PROJECT_DISABLE first (A ?? B), so an inherited 0 there would
+# win, while the CLI's docs name OPENCODE_DISABLE_PROJECT_CONFIG; both are set
+# because the two disagree.
+# The empty dir hides the user's model too, so read get_model before this.
+opencode_blind_env() {
+    unset OPENCODE_CONFIG OPENCODE_CONFIG_CONTENT
+    export OPENCODE_CONFIG_DIR="$1"
+    export OPENCODE_CONFIG_PROJECT_DISABLE=1
+    export OPENCODE_DISABLE_PROJECT_CONFIG=1
+}
+
 # Default model per provider, and the one place any of them is named: the
 # provider scripts read their model from here too. API defaults are pinned ids
 # (bump when a vendor ships a flagship we want to track), except gemini and grok,

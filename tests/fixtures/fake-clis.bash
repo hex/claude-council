@@ -79,6 +79,19 @@ write_fake_cli() {
 set -euo pipefail
 jq -cn --arg bin "$bin" '{bin: \$bin, args: \$ARGS.positional}' --args -- "\$@" \\
     >> "\${COUNCIL_FAKE_STATE_DIR:?}/calls.jsonl"
+# The value after the last <flag> in the arguments, empty when absent.
+flag_value() {
+    local flag="\$1" value="" prev="" a
+    shift
+    for a in "\$@"; do [[ "\$prev" == "\$flag" ]] && value="\$a"; prev="\$a"; done
+    printf '%s' "\$value"
+}
+# Appends the environment variables named <prefix>* to <file> as one JSON line,
+# merged over an optional JSON object of extra fields.
+record_env() {
+    jq -cn --arg p "\$1" --argjson extra "\${3:-null}" \\
+        '(\$extra // {}) + (env | with_entries(select(.key | startswith(\$p))))' >> "\$2"
+}
 # Version probes succeed regardless of behavior, mirroring real CLIs where
 # --version works even when logged out
 if [[ "\${1:-}" == "--version" ]]; then
@@ -105,8 +118,7 @@ EOF
 # answer goes to the -o file and the JSONL events to stdout. The real CLI exits
 # 0 on SIGTERM, so only a turn.completed event says the turn finished.
 if [[ " $* " == *" --output-schema "* ]]; then
-    OUT=""; PREV=""
-    for a in "$@"; do [[ "$PREV" == "-o" ]] && OUT="$a"; PREV="$a"; done
+    OUT=$(flag_value -o "$@")
     cat > "${COUNCIL_FAKE_STATE_DIR:?}/codex-stdin.txt"
     note='{"none":false,"tag":"Heads up","topic":"backfill never ran","headline":"The migration test used an empty fixture, so the backfill path never ran.","title":"The backfill path never ran","points":["The fixture had no rows, so the loop had nothing to do.","Seed one row in C:\\fixtures\\empty.db and rerun the migration test."]}'
     case "${COUNCIL_FAKE_BEHAVIOR:-valid}" in
@@ -187,8 +199,7 @@ if [[ " \$* " == *" --output-format json "* ]]; then
         bad-model)
             # Names the model it was actually handed, so a provider that drops
             # --model on the floor cannot pass this case.
-            MODEL=""; PREV=""
-            for a in "\$@"; do [[ "\$PREV" == "--model" ]] && MODEL="\$a"; PREV="\$a"; done
+            MODEL=\$(flag_value --model "\$@")
             echo "Cannot use this model: \${MODEL:-none}. Available models: auto" >&2
             exit 1 ;;
     esac
@@ -289,9 +300,7 @@ if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
     echo "\$SID" > "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-session.txt"
     CONFIG_EMPTY=false
     [[ -d "\${OPENCODE_CONFIG_DIR:-}" && -z "\$(ls -A "\$OPENCODE_CONFIG_DIR")" ]] && CONFIG_EMPTY=true
-    jq -cn --argjson empty "\$CONFIG_EMPTY" \\
-        '{config_dir_empty: \$empty} + (env | with_entries(select(.key | startswith("OPENCODE_"))))' \\
-        >> "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-env.jsonl"
+    record_env OPENCODE_ "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-env.jsonl" "{\"config_dir_empty\":\$CONFIG_EMPTY}"
     case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
         valid|empty)
             ANSWER="$marker: deterministic answer"
@@ -303,8 +312,7 @@ if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
             # The real CLI's unknown-model event on stdout, stderr empty, exit 1.
             # Names the model it was actually handed, so a provider that drops
             # -m on the floor cannot pass this case.
-            MODEL=""; PREV=""
-            for a in "\$@"; do [[ "\$PREV" == "-m" ]] && MODEL="\$a"; PREV="\$a"; done
+            MODEL=\$(flag_value -m "\$@")
             jq -cn --arg s "\$SID" --arg m "Model unavailable: \${MODEL:-none}" '{type: "error", timestamp: 1, sessionID: \$s, error: {type: "provider.no-route", message: \$m}}'
             exit 1 ;;
     esac
@@ -319,8 +327,7 @@ fi
 # still exit 0. Keep the OPENCODE_ variables it saw, so a test can assert what
 # the status probe hands it.
 if [[ "\${1:-} \${2:-}" == "auth list" ]]; then
-    jq -cn 'env | with_entries(select(.key | startswith("OPENCODE_")))' \\
-        >> "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-auth-env.jsonl"
+    record_env OPENCODE_ "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-auth-env.jsonl"
     if [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then
         echo "No authenticated integrations"
         exit 0

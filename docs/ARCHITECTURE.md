@@ -217,10 +217,11 @@ Two flavors share the interface:
   joins only when named. `--standalone` gives the run a private server rather
   than the user's background service, which holds the environment and config
   it started with. An empty `OPENCODE_CONFIG_DIR`, with `OPENCODE_CONFIG`
-  unset, keeps the user's global config, plugins and MCP servers out, `OPENCODE_DISABLE_PROJECT_CONFIG=1`
-  and `OPENCODE_CONFIG_PROJECT_DISABLE=1` (the CLI reads the second first, so
-  an inherited `0` would win) keep the working directory's `opencode.json` and
-  `AGENTS.md` out, and an
+  unset, keeps the user's global config, plugins and MCP servers out,
+  `OPENCODE_CONFIG_PROJECT_DISABLE=1` (the name the CLI reads, so an inherited
+  `0` would win) and `OPENCODE_DISABLE_PROJECT_CONFIG=1` (the name the CLI's docs
+  give) keep the working directory's `opencode.json` and `AGENTS.md`
+  out, all set by `opencode_blind_env`, which the status probe shares, and an
   inline `OPENCODE_CONFIG_CONTENT` that denies every permission sends the model
   no tool. The CLI saves every run in its session history and no flag stops
   that, so the exit trap deletes the run's session with `opencode session

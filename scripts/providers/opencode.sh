@@ -57,33 +57,21 @@ remove_run() {
 trap remove_run EXIT
 
 # The seat must answer the prompt every other seat gets and nothing else, so
-# it starts blind to the user's setup:
-# OPENCODE_CONFIG_DIR, an empty directory: none of the user's global config,
-# MCP servers, plugins, agents or commands load. The login in auth.json lives
-# under XDG_DATA_HOME, not here, so the seat keeps it.
-# OPENCODE_DISABLE_PROJECT_CONFIG: no opencode.json or AGENTS.md from the
-# working directory reaches the seat.
-# OPENCODE_CONFIG_CONTENT denying every permission: the CLI then sends the
-# model no tool at all, and the prompt can carry --file contents or another
-# seat's answer, so the seat gets no tool to act on them with. OPENCODE_PERMISSION
-# is ignored by 2.1.3, so the deny rides the inline config instead. A model that
-# asks for a tool anyway fails (Gemini answers UNEXPECTED_TOOL_CALL), and that
-# arrives as an error event, reported below.
+# it starts blind to the user's setup (opencode_blind_env). That also hides the
+# model the user picked, so get_model reads it first and the seat passes it as
+# -m below.
 # The council's environment scrub keeps only OPENCODE_MODEL, OPENCODE_CONFIG
 # and OPENCODE_CONFIG_DIR of the OPENCODE_ names here, so no vendor's API key
 # reaches the seat and it runs on the `opencode auth login` credentials;
 # COUNCIL_PASS_ENV names any key it should keep.
-# The empty config dir also hides the model the user picked, so get_model reads
-# it first and the seat passes it as -m below.
-# OPENCODE_CONFIG, a config file the CLI loads on top of any config dir, is
-# unset for the same reason as the empty dir.
 MODEL="$(get_model opencode)"
-unset OPENCODE_CONFIG
-export OPENCODE_CONFIG_DIR="$CONFIG_TMP"
-export OPENCODE_DISABLE_PROJECT_CONFIG=1
-# The CLI reads this name first, so an inherited 0 would otherwise win when the
-# seat runs outside the scrub.
-export OPENCODE_CONFIG_PROJECT_DISABLE=1
+opencode_blind_env "$CONFIG_TMP"
+# An inline config denying every permission: the CLI then sends the model no
+# tool at all, and the prompt can carry --file contents or another seat's
+# answer, so the seat gets no tool to act on them with. OPENCODE_PERMISSION is
+# ignored by 2.1.3, so the deny rides the inline config instead. A model that
+# asks for a tool anyway fails (Gemini answers UNEXPECTED_TOOL_CALL), and that
+# arrives as an error event, reported below.
 export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny"}}'
 
 # --standalone: a private server for this run. Without it the run goes to the
@@ -103,7 +91,7 @@ ARGS=(run --standalone --format json)
 if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" opencode "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
 # Every event names the run's session; the first one is enough. Only a plain
 # word is kept, so nothing the stream says can reach the delete as a flag.
-SESSION_ID=$(jq -rnR 'first(inputs | fromjson? | objects | .sessionID // empty
+SESSION_ID=$(jq -rnR 'first(inputs | fromjson? | objects | .sessionID
                             | strings | select(test("^[A-Za-z0-9_]+$")))' "$OUT_TMP" 2>/dev/null || true)
 # A provider error or an unknown model exits 1 with stderr empty: the cause is
 # an error event on stdout. Line by line rather than slurped, so a notice line
@@ -112,7 +100,7 @@ SESSION_ID=$(jq -rnR 'first(inputs | fromjson? | objects | .sessionID // empty
 STREAM_ERROR=$(jq -rnR '
     [ inputs
       | fromjson?
-      | select(type == "object" and .type == "error")
+      | objects | select(.type == "error")
       | (.error | if type == "object" then (.message // .type) else . end)
         // "error event with no message"
       | tostring
@@ -121,7 +109,7 @@ if [[ $rc -eq 0 && -z "$STREAM_ERROR" ]]; then
     RESPONSE=$(jq -rnR '
         [ inputs
           | fromjson?
-          | select(type == "object" and .type == "text")
+          | objects | select(.type == "text")
           | .part.text // empty
         ] | join("")' "$OUT_TMP" 2>/dev/null || true)
     if [[ ! "$RESPONSE" =~ [^[:space:]] ]]; then
