@@ -1,7 +1,7 @@
 // ABOUTME: Pure policy for the heads-up side-check: cadence, backoff, memory, the runner's result and the band's words
 // ABOUTME: No engine calls, so every rule runs under bun test; pane.tsx is the shell that feeds events in
 
-import type { Note, Phase, Session, Tag } from '../types'
+import type { Note, Paused, Phase, Session, Tag } from '../types'
 import { isRecord } from './json'
 
 /** Fire when the message index within the turn is a positive multiple of this; the builtin's number. */
@@ -82,6 +82,8 @@ export type Counts = {
   /** A seat's note on a topic already seen or known: nothing drawn. */
   readonly repeats: number
   readonly failed: number
+  /** The seat was out of credits; the session paused. */
+  readonly quota: number
   readonly learn: number
   readonly tell: number
   readonly knew: number
@@ -90,8 +92,8 @@ export type Counts = {
   readonly turnOff: number
   readonly typedPast: number
 }
-export const COUNT_KEYS = ['none', 'notes', 'repeats', 'failed', 'learn', 'tell', 'knew', 'understood', 'dismiss', 'turnOff', 'typedPast'] as const
-export const EMPTY_COUNTS: Counts = { none: 0, notes: 0, repeats: 0, failed: 0, learn: 0, tell: 0, knew: 0, understood: 0, dismiss: 0, turnOff: 0, typedPast: 0 }
+export const COUNT_KEYS = ['none', 'notes', 'repeats', 'failed', 'quota', 'learn', 'tell', 'knew', 'understood', 'dismiss', 'turnOff', 'typedPast'] as const
+export const EMPTY_COUNTS: Counts = { none: 0, notes: 0, repeats: 0, failed: 0, quota: 0, learn: 0, tell: 0, knew: 0, understood: 0, dismiss: 0, turnOff: 0, typedPast: 0 }
 
 export function parseCounts(raw: unknown): Counts {
   if (!isRecord(raw)) return EMPTY_COUNTS
@@ -102,9 +104,9 @@ export function bumped(c: Counts, ...keys: (keyof Counts)[]): Counts {
   return keys.reduce((counts, key) => ({ ...counts, [key]: counts[key] + 1 }), c)
 }
 
-/** "checks 12 · none 8 · notes 2 · repeats 1 · failed 1": checks is the outcomes added up, so it cannot drift from them. */
+/** "checks 13 · none 8 · notes 2 · repeats 1 · failed 1 · out of credits 1": checks is the outcomes added up, so it cannot drift from them. */
 export function countsLine(c: Counts): string {
-  return `checks ${c.none + c.notes + c.repeats + c.failed} · none ${c.none} · notes ${c.notes} · repeats ${c.repeats} · failed ${c.failed}`
+  return `checks ${c.none + c.notes + c.repeats + c.failed + c.quota} · none ${c.none} · notes ${c.notes} · repeats ${c.repeats} · failed ${c.failed} · out of credits ${c.quota}`
 }
 
 /** "learn 2 · tell 1 · knew 0 · understood 1 · dismiss 1 · turned off 0 · typed past 3" */
@@ -174,12 +176,12 @@ export function withEnabled(text: string | undefined, on: boolean | undefined, s
 
 /**
  * What /heads-up status prints: a headline with the effective state, then one
- * aligned row per fact: which switch set it, the seat and cadence, the counts
- * kept on this machine.
+ * aligned row per fact: which switch set it, the seat and cadence, this
+ * session's pause, the counts kept on this machine.
  */
 export type HeadsUpStatus = { state: string; rows: [string, string][] }
 
-export function headsUpStatus(config: HeadsUpConfig, rowOn: boolean, fileText: string | undefined, counts: Counts): HeadsUpStatus {
+export function headsUpStatus(config: HeadsUpConfig, rowOn: boolean, fileText: string | undefined, counts: Counts, paused: Paused | null): HeadsUpStatus {
   const row = rowOn ? 'on' : 'off'
   const file = fileText === undefined ? undefined : fileEnabled(fileText)
   const fileNote = fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`
@@ -199,6 +201,7 @@ export function headsUpStatus(config: HeadsUpConfig, rowOn: boolean, fileText: s
     state = 'off'
     rows.push(['by', `the /config row is off, ${fileNote}`], ['turn on', `/${COMMAND} on [seat] for this project, the /config row "Heads-up side-check" for every project`])
   }
+  if (paused !== null) rows.push(['paused', `${paused.seat} out of credits this session · /${COMMAND} on to resume`])
   rows.push(['checks', countsLine(counts)], ['presses', pressesLine(counts)])
   return { state, rows }
 }
@@ -209,13 +212,13 @@ export function statusText({ state, rows }: HeadsUpStatus): string {
 }
 
 /**
- * The status on one line for a toast: its first line, then the seat, cadence
- * and checks rows joined with dots; the presses and the switch stay out. A
+ * The status on one line for a toast: its first line, then the seat, cadence,
+ * pause and checks rows joined with dots; the presses and the switch stay out. A
  * command typed while a turn runs gets its reply drawn only when the turn
  * ends, so the toast is what the person sees at once.
  */
 export function toastLine({ state, rows }: HeadsUpStatus): string {
-  const kept = new Set(['seat', 'every', 'checks'])
+  const kept = new Set(['seat', 'every', 'paused', 'checks'])
   const parts = rows.flatMap(([label, value]) => (kept.has(label) ? [label === 'every' ? `every ${value}` : value] : []))
   return [`Heads-up side-check: ${state}`, ...parts].join(' \u00b7 ')
 }
@@ -387,7 +390,22 @@ export function avoidList(m: Memory): string {
   return topics.map(topic => `${topic}\n`).join('')
 }
 
-export const FRESH_SESSION: Session = { offeredTurn: null, phase: { kind: 'idle' } }
+export const FRESH_SESSION: Session = { offeredTurn: null, phase: { kind: 'idle' }, paused: null }
+
+/** The session as $.state holds it: one written without `paused` reads as not paused. */
+export function storedSession(stored: Omit<Session, 'paused'> & { readonly paused?: Paused | null }): Session {
+  return { ...stored, paused: stored.paused ?? null }
+}
+
+/** The red row's Dismiss: the row goes, the pause stays. */
+export function acknowledgePause(s: Session): Session {
+  return s.paused === null ? s : { ...s, paused: { ...s.paused, acknowledged: true } }
+}
+
+/** The red row above the prompt while the pause is not dismissed. */
+export function pausedLine(p: Paused): string {
+  return `heads-up paused · ${p.seat} is out of credits · ${p.detail}`
+}
 
 /** What turn.step carries that the rules read: the turn, and this request's position in it, from 0. */
 export type StepFacts = { turnId: string; index: number }
@@ -398,7 +416,7 @@ export function onCadence(every: number, index: number): boolean {
 }
 
 export type Decision =
-  | { kind: 'skip'; why: 'disabled' | 'off-cadence' | 'showing' | 'checking' | 'offered-this-turn' }
+  | { kind: 'skip'; why: 'disabled' | 'off-cadence' | 'paused' | 'showing' | 'checking' | 'offered-this-turn' }
   | { kind: 'skip'; why: 'backoff'; memory: Memory }
   | { kind: 'launch'; checkId: string }
 
@@ -408,11 +426,13 @@ export type Decision =
  * conversation's messageCount is not a per-step fact, it grows by whatever the
  * request carries). Backoff consumes one looksToSkip and returns the memory to
  * write. A launch does not stamp offeredTurn: a NONE result leaves later
- * cadence points of the turn free; `checking` alone stops overlap.
+ * cadence points of the turn free; `checking` alone stops overlap. A seat out
+ * of credits pauses the session: every later check would fail the same way.
  */
 export function decide(cfg: HeadsUpConfig, s: Session, m: Memory, e: StepFacts, nowMs: number): Decision {
   if (!cfg.enabled) return { kind: 'skip', why: 'disabled' }
   if (!onCadence(cfg.every, e.index)) return { kind: 'skip', why: 'off-cadence' }
+  if (s.paused !== null) return { kind: 'skip', why: 'paused' }
   if (s.phase.kind === 'showing') return { kind: 'skip', why: 'showing' }
   if (s.phase.kind === 'checking') return { kind: 'skip', why: 'checking' }
   if (s.offeredTurn === e.turnId) return { kind: 'skip', why: 'offered-this-turn' }
@@ -422,7 +442,7 @@ export function decide(cfg: HeadsUpConfig, s: Session, m: Memory, e: StepFacts, 
 
 export type SeatOutcome = {
   readonly seat: string
-  readonly outcome: 'none' | 'note' | 'error' | 'timeout'
+  readonly outcome: 'none' | 'note' | 'error' | 'timeout' | 'quota'
   readonly elapsedMs: number
   readonly detail?: string
 }
@@ -431,6 +451,8 @@ export type SeatOutcome = {
 export type RunResult =
   | { kind: 'note'; note: Note; seats: readonly SeatOutcome[] }
   | { kind: 'none'; payloadBytes: number; seats: readonly SeatOutcome[] }
+  /** The seat is out of credits; `seat` and `detail` are those of its quota outcome. */
+  | { kind: 'quota'; seat: string; detail: string; payloadBytes: number; seats: readonly SeatOutcome[] }
   /** The runner found nobody to warn (a transcript holding no prompt) and asked no seat. */
   | { kind: 'skipped'; detail: string }
   | { kind: 'failed'; payloadBytes: number; seats: readonly SeatOutcome[] }
@@ -438,6 +460,7 @@ export type RunResult =
 /**
  * Wire shape: {kind, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?, seats:[{seat,outcome,ms,detail?}]}.
  * A skipped check carries only its detail: no seat ran and nothing left the machine.
+ * A quota check carries its seat and words in the seat outcome marked quota.
  * A text that does not parse to it is `failed` naming the text, so a runner
  * change can never read as "no note". A headline is cut to HEADLINE_CHARS, one line.
  */
@@ -456,6 +479,11 @@ export function parseRunResult(checkId: string, text: string): RunResult {
   const seats = raw.seats.map(seatOutcome)
   if (!seats.every((seat): seat is SeatOutcome => seat !== undefined)) return unread
   if (raw.kind === 'none') return { kind: 'none', payloadBytes: raw.bytes, seats }
+  if (raw.kind === 'quota') {
+    const out = seats.find(seat => seat.outcome === 'quota')
+    if (out?.detail === undefined || out.detail === '') return unread
+    return { kind: 'quota', seat: out.seat, detail: out.detail, payloadBytes: raw.bytes, seats }
+  }
   // A failure or skip before any seat ran names its reason at the top level.
   const detail = typeof raw.detail === 'string' && raw.detail !== '' ? raw.detail : undefined
   if (raw.kind === 'skipped') return detail === undefined ? unread : { kind: 'skipped', detail }
@@ -503,7 +531,7 @@ function isCount(value: unknown): value is number {
 // A stored counter off its shape reads as 0.
 const countOr0 = (value: unknown): number => (isCount(value) ? value : 0)
 
-const OUTCOMES: readonly SeatOutcome['outcome'][] = ['none', 'note', 'error', 'timeout']
+const OUTCOMES: readonly SeatOutcome['outcome'][] = ['none', 'note', 'error', 'timeout', 'quota']
 
 function seatOutcome(raw: unknown): SeatOutcome | undefined {
   if (!isRecord(raw) || typeof raw.seat !== 'string' || !isCount(raw.ms)) return undefined
@@ -521,11 +549,13 @@ export function isRepeat(m: Memory, topic: string): boolean {
 /**
  * The poller's transition. A note stamps offeredTurn with the turn the check
  * was launched in, so one landing after its turn ended counts against the
- * right turn; a repeat, none or failed returns to idle. Not checking -> unchanged.
+ * right turn; a repeat, none or failed returns to idle; quota returns to idle
+ * paused, the red row not yet dismissed. Not checking -> unchanged.
  */
 export function settle(s: Session, m: Memory, r: RunResult): Session {
   if (s.phase.kind !== 'checking') return s
   if (r.kind === 'note' && !isRepeat(m, r.note.topic)) return { ...s, offeredTurn: s.phase.turnId, phase: { kind: 'showing', note: r.note, expanded: false } }
+  if (r.kind === 'quota') return { ...s, phase: { kind: 'idle' }, paused: { seat: r.seat, detail: r.detail, acknowledged: false } }
   return { ...s, phase: { kind: 'idle' } }
 }
 
@@ -584,6 +614,10 @@ export function checkLine(r: RunResult): string {
     return `heads-up: ${r.seats.map(seat => seat.seat).join(', ')} · none · ${kilobytes(r.payloadBytes)} · ${seconds(ms)}`
   }
   if (r.kind === 'skipped') return `heads-up: skipped · ${r.detail}`
+  if (r.kind === 'quota') {
+    const ms = r.seats.reduce((total, seat) => total + seat.elapsedMs, 0)
+    return `heads-up: paused · ${r.seat} out of credits after ${seconds(ms)}: ${r.detail} · /${COMMAND} on resumes`
+  }
   const reasons = r.seats.map(seat => `${seat.seat} ${seat.outcome} after ${seconds(seat.elapsedMs)}${seat.detail ? `: ${seat.detail}` : ''}`)
   return `heads-up: failed · ${kilobytes(r.payloadBytes)} · ${reasons.join('; ')}`
 }

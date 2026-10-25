@@ -6,6 +6,16 @@ export type Session = {
   /** The turn a note was offered in; at most one note per turn. */
   readonly offeredTurn: string | null
   readonly phase: Phase
+  /** The seat ran out of credits: no check launches until /heads-up on or a fresh session. */
+  readonly paused: Paused | null
+}
+
+export type Paused = {
+  readonly seat: string
+  /** The seat's own words for why. */
+  readonly detail: string
+  /** The person dismissed the red row; the pause holds. */
+  readonly acknowledged: boolean
 }
 
 /** A check in flight and a note on screen cannot both be true: the union says so. */
