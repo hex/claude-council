@@ -316,8 +316,11 @@ if [[ "\${1:-} \${2:-}" == "session delete" ]]; then
 fi
 # The real CLI answers "opencode auth list" with one row per stored login or
 # vendor key, exit 0; with none it prints "No authenticated integrations",
-# still exit 0.
+# still exit 0. Keep the OPENCODE_ variables it saw, so a test can assert what
+# the status probe hands it.
 if [[ "\${1:-} \${2:-}" == "auth list" ]]; then
+    jq -cn 'env | with_entries(select(.key | startswith("OPENCODE_")))' \\
+        >> "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-auth-env.jsonl"
     if [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then
         echo "No authenticated integrations"
         exit 0

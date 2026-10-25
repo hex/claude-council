@@ -69,9 +69,10 @@ trap remove_run EXIT
 # is ignored by 2.1.3, so the deny rides the inline config instead. A model that
 # asks for a tool anyway fails (Gemini answers UNEXPECTED_TOOL_CALL), and that
 # arrives as an error event, reported below.
-# The council's environment scrub keeps only the OPENCODE_ family here, so no
-# vendor's API key reaches the seat and it runs on the `opencode auth login`
-# credentials; COUNCIL_PASS_ENV names any key it should keep.
+# The council's environment scrub keeps only OPENCODE_MODEL, OPENCODE_CONFIG
+# and OPENCODE_CONFIG_DIR of the OPENCODE_ names here, so no vendor's API key
+# reaches the seat and it runs on the `opencode auth login` credentials;
+# COUNCIL_PASS_ENV names any key it should keep.
 # The empty config dir also hides the model the user picked, so get_model reads
 # it first and the seat passes it as -m below.
 # OPENCODE_CONFIG, a config file the CLI loads on top of any config dir, is
@@ -80,6 +81,9 @@ MODEL="$(get_model opencode)"
 unset OPENCODE_CONFIG
 export OPENCODE_CONFIG_DIR="$CONFIG_TMP"
 export OPENCODE_DISABLE_PROJECT_CONFIG=1
+# The CLI reads this name first, so an inherited 0 would otherwise win when the
+# seat runs outside the scrub.
+export OPENCODE_CONFIG_PROJECT_DISABLE=1
 export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny"}}'
 
 # --standalone: a private server for this run. Without it the run goes to the

@@ -154,6 +154,15 @@ provider_env_scrub() {
         # choose the account a council question bills.
         copilot-cli)                families="COPILOT_CLI_"
                                     exact=",COPILOT_GITHUB_TOKEN,COPILOT_HOME,COPILOT_GH_HOST,GH_CONFIG_DIR,GH_HOST," ;;
+        # No family: every other OPENCODE_ variable is a config or isolation
+        # knob the seat sets itself, and an inherited one would undo the blind
+        # run (OPENCODE_CONFIG_PROJECT_DISABLE, which the CLI reads ahead of
+        # the seat's flag, or an OPENCODE_CONFIG_CONTENT that starts MCP
+        # servers). COUNCIL_PASS_ENV still passes any name on purpose.
+        # OPENCODE_CONFIG and OPENCODE_CONFIG_DIR stay because get_model reads the
+        # user's model through them; the seat and the probe replace both after.
+        opencode)                   families=""
+                                    exact=",OPENCODE_MODEL,OPENCODE_CONFIG,OPENCODE_CONFIG_DIR," ;;
         openrouter|openrouter-*)    families="OPENROUTER_" ;;
         *)                          families="$(provider_env_prefix "$provider")_" ;;
     esac

@@ -390,6 +390,20 @@ plain_output() {
     [[ "$(plain_output)" == *"OpenCode      ✗  Installed, not authenticated fix: opencode auth login"* ]]
 }
 
+@test "check-status: the opencode probe gets no inherited inline config and keeps project config off" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    # An inline config can start MCP servers in the probe's private server.
+    export OPENCODE_CONFIG_CONTENT='{"mcp":{"example":{"type":"local","command":["example"]}}}'
+    export OPENCODE_CONFIG_PROJECT_DISABLE=0
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-auth-env.jsonl")
+    [ "$(jq -r 'has("OPENCODE_CONFIG_CONTENT")' <<<"$seen")" = "false" ]
+    [ "$(jq -r '.OPENCODE_CONFIG_PROJECT_DISABLE' <<<"$seen")" = "1" ]
+    [ "$(jq -r '.OPENCODE_DISABLE_PROJECT_CONFIG' <<<"$seen")" = "1" ]
+}
+
 @test "check-status: a missing opencode names the OpenCode CLI as what to install" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     rm "$FAKE_BIN_DIR/opencode"

@@ -431,13 +431,14 @@ copilotcli_status=$(check_cli_provider "copilot-cli" "copilot")
 # loading the user's plugins and starting their MCP servers. Listing the
 # stored logins sends no prompt, so the probe bills nothing. With none stored
 # it prints "No authenticated integrations" and exits 0. An exported
-# OPENCODE_CONFIG file would load in full beside the empty dir, so it is
-# unset, as the seat unsets it. Discovery never seats it, so a healthy row
-# says how to.
+# OPENCODE_CONFIG file would load in full beside the empty dir, and an
+# OPENCODE_CONFIG_CONTENT inline config can start MCP servers, so both are
+# unset; project config is off under both names the CLI reads, as in the seat.
+# Discovery never seats it, so a healthy row says how to.
 opencode_status=$(provider_env_scrub opencode
     OPENCODE_CONFIG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/council-opencode-config.XXXXXX")
-    unset OPENCODE_CONFIG
-    export OPENCODE_CONFIG_DIR OPENCODE_DISABLE_PROJECT_CONFIG=1
+    unset OPENCODE_CONFIG OPENCODE_CONFIG_CONTENT
+    export OPENCODE_CONFIG_DIR OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_CONFIG_PROJECT_DISABLE=1
     check_cli_provider "opencode" "opencode" auth list --standalone
     rm -rf "$OPENCODE_CONFIG_DIR")
 [[ "$opencode_status" == ok:* ]] && opencode_status="${opencode_status} · seat with --providers=opencode"

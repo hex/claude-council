@@ -1238,6 +1238,31 @@ opencode_run_call() {
     [ ! -e "$(jq -r '.OPENCODE_CONFIG_DIR' <<<"$seen")" ]
 }
 
+@test "opencode.sh: inherited config locations and OPENCODE_CONFIG_PROJECT_DISABLE=0 never reach the CLI" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    # The CLI reads this name ahead of OPENCODE_DISABLE_PROJECT_CONFIG, and the
+    # seat can run outside the council's environment scrub.
+    export OPENCODE_CONFIG_PROJECT_DISABLE=0
+    # The scrub passes these two so get_model can read the user's model; the
+    # seat must replace both before the CLI starts.
+    export OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR/user-config-dir"
+    export OPENCODE_CONFIG="$BATS_TEST_TMPDIR/user-config.json"
+    mkdir -p "$OPENCODE_CONFIG_DIR"
+    printf '%s\n' '{"model":"example/config-model"}' > "$OPENCODE_CONFIG"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-env.jsonl")
+    [ "$(jq -r '.OPENCODE_CONFIG_PROJECT_DISABLE' <<<"$seen")" = "1" ]
+    [ "$(jq -r '.OPENCODE_DISABLE_PROJECT_CONFIG' <<<"$seen")" = "1" ]
+    [ "$(jq -r 'has("OPENCODE_CONFIG")' <<<"$seen")" = "false" ]
+    [[ "$(jq -r '.OPENCODE_CONFIG_DIR' <<<"$seen")" == "${TMPDIR:-/tmp}/council-opencode-config."* ]]
+    [ "$(jq -r '.config_dir_empty' <<<"$seen")" = "true" ]
+    # The model still came from the inherited config file.
+    [ "$(opencode_run_call | jq -c '.args')" = \
+      '["run","--standalone","--format","json","-m","example/config-model"]' ]
+}
+
 @test "opencode.sh: a prompt past the argument limit still reaches the CLI whole" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     local pf="$BATS_TEST_TMPDIR/prompt.txt"

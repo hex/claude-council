@@ -140,7 +140,8 @@ ENV:    scrubbed by provider_env_scrub (lib/providers.sh) in the subshell
         COUNCIL_*, the provider's vendor prefixes and exact names (claude-cli
         keeps CLAUDE_CODE_OAUTH_TOKEN and CLAUDE_CONFIG_DIR; copilot-cli keeps
         COPILOT_GITHUB_TOKEN and COPILOT_HOME, not GH_TOKEN or GITHUB_TOKEN;
-        opencode keeps OPENCODE_* and drops every vendor key), and COUNCIL_PASS_ENV
+        opencode keeps OPENCODE_MODEL, OPENCODE_CONFIG and OPENCODE_CONFIG_DIR,
+        no other OPENCODE_* name and no vendor key), and COUNCIL_PASS_ENV
         names stay; every other exported variable is unset. Nothing goes
         on an env -i argv, where ps would show a key.
 ```
@@ -217,16 +218,21 @@ Two flavors share the interface:
   than the user's background service, which holds the environment and config
   it started with. An empty `OPENCODE_CONFIG_DIR`, with `OPENCODE_CONFIG`
   unset, keeps the user's global config, plugins and MCP servers out, `OPENCODE_DISABLE_PROJECT_CONFIG=1`
-  keeps the working directory's `opencode.json` and `AGENTS.md` out, and an
+  and `OPENCODE_CONFIG_PROJECT_DISABLE=1` (the CLI reads the second first, so
+  an inherited `0` would win) keep the working directory's `opencode.json` and
+  `AGENTS.md` out, and an
   inline `OPENCODE_CONFIG_CONTENT` that denies every permission sends the model
   no tool. The CLI saves every run in its session history and no flag stops
   that, so the exit trap deletes the run's session with `opencode session
   delete --standalone`; a delete that fails leaves it. A provider error exits 1 with stderr
   empty and arrives as an `error` event on stdout, which is what the seat
-  reports. Its scrubbed environment keeps `OPENCODE_*` and drops every vendor
-  key, so it runs on the logins in `auth.json` under `XDG_DATA_HOME`.
-  `check-status.sh` probes `opencode auth list --standalone` under that
-  environment and the same empty config dir, and reads `No authenticated
+  reports. Its scrubbed environment keeps `OPENCODE_MODEL`, `OPENCODE_CONFIG`
+  and `OPENCODE_CONFIG_DIR`, which `get_model` reads, and drops every other
+  `OPENCODE_*` name and every vendor key, so it runs on the logins in
+  `auth.json` under `XDG_DATA_HOME`. `check-status.sh` probes `opencode auth
+  list --standalone` under that environment, the same empty config dir and
+  project-disable pair, with `OPENCODE_CONFIG` and `OPENCODE_CONFIG_CONTENT`
+  unset, and reads `No authenticated
   integrations` as logged out. The empty config dir hides the user's model
   too, so `get_model` reads it before the seat swaps the dir in, and the seat
   passes it as `-m`: `OPENCODE_MODEL`, else `.model` from an `OPENCODE_CONFIG`
