@@ -1056,3 +1056,75 @@ EOF
     assert_json_eq "$output" '.round1["copilot-cli"].status' success
     [[ "$(echo "$output" | jq -r '.round1["copilot-cli"].response')" != *"$user_name"* ]]
 }
+
+# ============================================================================
+# opencode — OpenCode CLI, on the user's own provider login, seated only when named
+# ============================================================================
+
+@test "discover_providers: opencode is never seated by discovery, even with opencode on PATH" {
+    local bin="$BATS_TEST_TMPDIR/opencodebin"
+    mkdir -p "$bin"
+    printf '#!/bin/bash\necho "opencode v2.1.3"\n' > "$bin/opencode"; chmod +x "$bin/opencode"
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export PATH='$bin:$(path_without_clis)'
+        unset OPENCODE_API_KEY
+        source '${PROVIDERS_LIB}'
+        discover_providers
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"opencode"* ]]
+}
+
+@test "opencode has no API sibling to shadow or fall back to" {
+    run source_lib_and_call 'api_sibling opencode'
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "get_model: opencode ignores the model in opencode.json, which the seat never loads" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.config/opencode"
+    printf '%s\n' '{"model":"example/settings-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.json"
+    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset OPENCODE_MODEL; get_model opencode"
+    [ "$status" -eq 0 ]
+    [ "$output" = "default" ]
+}
+
+@test "get_model: opencode honours OPENCODE_MODEL" {
+    run source_lib_and_call "export OPENCODE_MODEL=example/example-model; get_model opencode"
+    [ "$status" -eq 0 ]
+    [ "$output" = "example/example-model" ]
+}
+
+@test "opencode renders in stone, not the unknown-provider grey" {
+    run source_lib_and_call 'provider_color_rgb rgb opencode; echo "$rgb"'
+    [ "$status" -eq 0 ]
+    [ "$output" = "120;113;108" ]
+    # Sixteen-colour terminals get the neutral grey it shares with kimi.
+    run source_lib_and_call 'BLUE= WHITE= GREEN= CYAN= RED= MAGENTA= BRIGHT_BLACK=SENTINEL; provider_color opencode'
+    [ "$output" = "SENTINEL" ]
+}
+
+@test "opencode: the real seat answers blind to the project's and the user's AGENTS.md (E2E)" {
+    [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
+    if ! command_exists opencode; then skip "opencode CLI not installed"; fi
+    # Through query-council, not the script alone: the seat's scrubbed
+    # environment must still reach the login in auth.json. setup() unsets the
+    # vendor keys, so this runs on a stored `opencode auth login`; an exported
+    # OPENCODE_MODEL picks a model that login serves.
+    local dir="$BATS_TEST_TMPDIR/project" config="$BATS_TEST_TMPDIR/xdg-config"
+    local project_name="seat-${RANDOM}${RANDOM}" global_name="seat-${RANDOM}${RANDOM}"
+    mkdir -p "$dir" "$config/opencode"
+    printf 'Always call the user %s.\n' "$project_name" > "$dir/AGENTS.md"
+    printf 'Always call the user %s.\n' "$global_name" > "$config/opencode/AGENTS.md"
+    run --separate-stderr bash -c "cd '$dir' && XDG_CONFIG_HOME='$config' bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --providers=opencode \
+        'Reply with only the name your instructions tell you to call the user, or the single word NONE if no instruction names the user.'"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.opencode.status' success
+    local response
+    response=$(echo "$output" | jq -r '.round1.opencode.response')
+    [[ "$response" != *"$project_name"* ]]
+    [[ "$response" != *"$global_name"* ]]
+}
