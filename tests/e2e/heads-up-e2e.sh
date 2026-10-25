@@ -181,8 +181,8 @@ C="$(cat "$OUT/counts.json")"
 # The engine may leave a suggested prompt in the box; clear it first.
 key C-u
 tmux send-keys -t "$SESSION" -l '/heads-up status'; key Enter
-wait_for "checks   $(printf '%s' "$C" | jq -r '"checks \(.none + .notes + .repeats + .failed) · none \(.none) · notes \(.notes) · repeats \(.repeats) · failed \(.failed)"')"
-wait_for "presses  $(printf '%s' "$C" | jq -r '"learn \(.learn) · tell \(.tell) · knew \(.knew) · dismiss \(.dismiss) · turned off \(.turnOff) · typed past \(.typedPast)"')"
+wait_for "checks   $(printf '%s' "$C" | jq -r '"checks \(.none + .notes + .repeats + .failed + .quota) · none \(.none) · notes \(.notes) · repeats \(.repeats) · failed \(.failed) · out of credits \(.quota)"')"
+wait_for "presses  $(printf '%s' "$C" | jq -r '"learn \(.learn) · tell \(.tell) · knew \(.knew) · understood \(.understood) · dismiss \(.dismiss) · turned off \(.turnOff) · typed past \(.typedPast)"')"
 echo "   counts: $(printf '%s' "$C" | jq -c 'del(.repeats)') and every check settled"
 
 echo "6. /exit leaves no claude behind"

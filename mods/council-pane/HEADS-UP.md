@@ -37,7 +37,7 @@ A check that found nothing logs one line (`heads-up: codex · none · 12.4 KB ·
  ✗ heads-up paused · codex is out of credits · Your workspace is out of credits. Add credits to continue.   0: Dismiss
 ```
 
-The row is red, one line, the seat's words cut to fit. `0` dismisses the row and keeps the pause. No check launches while paused; `/heads-up on` and a fresh session are the only resumes, and `/heads-up off` leaves the pause. `/heads-up status` and its toast carry a `paused` row (`codex out of credits this session · /heads-up on to resume`), and the counts keep these checks apart: `checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331`. A transcript holding no prompt, typed or submitted by a mod on the person's behalf (a teammate pane, an SDK-driven session), is a skipped check: `heads-up: skipped · digest: nothing in the window to review`, logged once per reason, no band, no seat asked, not counted.
+One red line, the seat's words cut to fit. `0` dismisses the row and keeps the pause. No check launches while paused; `/heads-up on` and a fresh session are the only resumes, and `/heads-up off` leaves the pause. `/heads-up status` and its toast carry a `paused` row (`codex out of credits this session · /heads-up on to resume`), and the counts keep these checks apart: `checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331`. A transcript holding no prompt, typed or submitted by a mod on the person's behalf (a teammate pane, an SDK-driven session), is a skipped check: `heads-up: skipped · digest: nothing in the window to review`, logged once per reason, no band, no seat asked, not counted.
 
 Call sites in `pane.tsx`, the whole shell:
 
