@@ -49,6 +49,12 @@
 #                    an answer that fits the schema and says nothing
 #   heads-up-no-turn - codex only: writes a note, exits 0, but its events hold
 #                    no turn.completed, as codex looks after a SIGTERM
+#   heads-up-quota - codex only: the workspace is out of credits; its events
+#                    end in error and turn.failed naming that, stderr holds
+#                    unrelated MCP noise, exit 1
+#   heads-up-turn-failed - codex only: turn.failed with a message that is not
+#                    about credits, a line that is not JSON ahead of it, the
+#                    same stderr noise, exit 1
 #   off-contract   - a reply that neither starts NONE nor NOTE:, though it
 #                    carries a NOTE: further along
 #
@@ -142,6 +148,19 @@ if [[ " $* " == *" --output-schema "* ]]; then
             printf '%s\n' "$note" > "$OUT"
             echo "codex: interrupted" >&2
             exit 0 ;;
+        heads-up-quota)
+            echo 'ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer" })' >&2
+            echo '{"type":"turn.started"}'
+            echo '{"type":"error","message":"Your workspace is out of credits. Add credits to continue."}'
+            echo '{"type":"turn.failed","error":{"message":"Your workspace is out of credits. Add credits to continue."}}'
+            exit 1 ;;
+        heads-up-turn-failed)
+            echo 'ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer" })' >&2
+            echo '{"type":"turn.started"}'
+            echo 'not json: a stray line the CLI printed'
+            echo '{"type":"error","message":"stream disconnected before completion"}'
+            echo '{"type":"turn.failed","error":{"message":"stream disconnected before completion"}}'
+            exit 1 ;;
     esac
 fi
 EOF

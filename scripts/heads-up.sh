@@ -11,9 +11,10 @@
 #   DIR/pid                           before the fork returns
 #   DIR/digest.md, DIR/prompt.md      what left the machine; kept until the mod removes the dir
 #   DIR/seat.{out,err,events}         the seat's raw output
-#   DIR/result.json                   {kind:note|none|skipped|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
+#   DIR/result.json                   {kind:note|none|quota|skipped|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
 #                                      seats:[{seat,outcome,ms,detail?}]}; seats holds the seat's outcome, none
-#                                      when the run skipped or failed before asking it; written to a temp name and moved
+#                                      when the run skipped or failed before asking it; quota is the seat out of
+#                                      credits, its words in seats[0].detail; written to a temp name and moved
 #   DIR/.done                         last; the mod trusts result.json only after it
 # Env (COUNCIL_* so provider_env_scrub keeps them):
 #   COUNCIL_HEADS_UP_SEAT_SECONDS   the seat's deadline, default 60
@@ -151,9 +152,27 @@ codex_call() {
         < "${RUN_DIR}/prompt.md" > "${RUN_DIR}/seat.events" 2> "${RUN_DIR}/seat.err"
 }
 
+# Wording in a turn.failed message that means the seat's account has run dry,
+# matched case-insensitively: every later check this session would fail the same way.
+QUOTA_WORDING='out of credits|usage limit'
+
+is_quota() {
+    grep -qiE -- "$QUOTA_WORDING" <<< "$1"
+}
+
+# The message of codex's last turn.failed event, on one line and at most 300
+# characters; empty when there is none. A line that is not JSON is passed over.
+turn_failure() {
+    local text
+    text=$(jq -Rr 'fromjson? | select(type == "object" and .type == "turn.failed") | .error.message? | strings | gsub("[\\r\\n\\t]+"; " ")' "$1" | tail -n 1 | tr -d '\r')
+    printf '%s' "${text:0:300}"
+}
+
 # codex: structured output. Success only on a "turn.completed" event, since
-# codex exits 0 on SIGTERM. Sets OUTCOME (none|note|error|timeout), DETAIL and,
+# codex exits 0 on SIGTERM. Sets OUTCOME (none|note|error|timeout|quota), DETAIL and,
 # for a note, TAG, TOPIC, HEADLINE, TITLE and POINTS_JSON (a JSON array).
+# A turn.failed message is the reason when codex gave one; its stderr can hold
+# unrelated noise (MCP servers it failed to reach), so it is only the fallback.
 ask_codex() {
     local limit="$1" answer="${RUN_DIR}/seat.out" rc=0
     run_with_deadline "$limit" codex_call || rc=$?
@@ -162,6 +181,12 @@ ask_codex() {
         return 0
     fi
     if ! grep -q '"type":"turn.completed"' "${RUN_DIR}/seat.events" 2>/dev/null; then
+        DETAIL=$(turn_failure "${RUN_DIR}/seat.events")
+        if [[ -n "$DETAIL" ]]; then
+            OUTCOME=error
+            if is_quota "$DETAIL"; then OUTCOME=quota; fi
+            return 0
+        fi
         DETAIL=$(error_excerpt "${RUN_DIR}/seat.err")
         OUTCOME=error DETAIL="exit ${rc} without turn.completed${DETAIL:+: $DETAIL}"
         return 0
@@ -303,6 +328,7 @@ worker() {
             write_result note
             ;;
         none) write_result none ;;
+        quota) write_result quota ;;
         *) write_result failed ;;
     esac
 }

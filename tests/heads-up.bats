@@ -258,6 +258,26 @@ result() {
     [ "$(result '.seats[0] | .seat + " " + .outcome + " " + .detail')" = "codex error exit 1 without turn.completed: Error: fake provider failure" ]
 }
 
+@test "heads-up: codex out of credits is kind quota, with codex's own words rather than its stderr" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-quota
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "quota" ]
+    [ "$(result '.seats | length')" = "1" ]
+    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex quota" ]
+    [ "$(result '.seats[0].detail')" = "Your workspace is out of credits. Add credits to continue." ]
+    [ "$(result 'has("detail")')" = "false" ]
+}
+
+@test "heads-up: codex failing its turn for another reason is kind failed, with that reason rather than its stderr" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-turn-failed
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "failed" ]
+    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex error" ]
+    [ "$(result '.seats[0].detail')" = "stream disconnected before completion" ]
+}
+
 @test "heads-up: a text seat erroring is kind failed, with its exit status and the end of its stderr" {
     export COUNCIL_FAKE_BEHAVIOR=error
     start_runner antigravity
