@@ -924,6 +924,27 @@ env_reporting_provider() {
     done
 }
 
+@test "query-council: opencode keeps OPENCODE_ and XDG_ variables, no vendor key and none of the driving session's" {
+    local fakedir="${BATS_TEST_TMPDIR}/env-opencode"
+    env_reporting_provider "$fakedir" opencode
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" OPENCODE_MODEL=example/example-model \
+        OPENCODE_SERVER_PASSWORD=example-password XDG_DATA_HOME=/tmp/example-data \
+        ANTHROPIC_API_KEY=example-key OPENAI_API_KEY=example-key GEMINI_API_KEY=example-key \
+        CLAUDE_CODE_SESSION_ID=example-session CLAUDECODE=1 \
+        "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=opencode "ping"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=" $(echo "$output" | jq -r '.round1.opencode.response') "
+    # The login lives in auth.json under XDG_DATA_HOME.
+    for name in OPENCODE_MODEL OPENCODE_SERVER_PASSWORD XDG_DATA_HOME PATH HOME; do
+        [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
+    done
+    # Every vendor key stays behind, so the seat runs on the stored login.
+    for name in ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY CLAUDE_CODE_SESSION_ID CLAUDECODE; do
+        [[ "$seen" != *" $name "* ]] || { echo "leaked $name in:$seen"; return 1; }
+    done
+}
+
 @test "query-council: grok gets the xAI key it is issued under" {
     local fakedir="${BATS_TEST_TMPDIR}/env-grok"
     env_reporting_provider "$fakedir" grok
