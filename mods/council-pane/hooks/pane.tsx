@@ -146,7 +146,7 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
   }
   if (scope !== SCOPE.project && scope !== SCOPE.all) return { text: `Setup closed: ${JSON.stringify(scope)} is not one of the choices; nothing changed.` }
   // The council's own discovery, so the seats offered are the seats a council run would seat.
-  const discovered = await $.process.run(['bash', '-c', 'export PROVIDERS_DIR="$1/scripts/providers"; source "$1/scripts/lib/keys.sh"; resolve_grok_key; source "$1/scripts/lib/providers.sh"; discover_providers', '_', $.plugin.root])
+  const discovered = await seatInfo($, 'discover')
   if (discovered.exitCode !== 0) return { text: `Setup closed: seat discovery exited ${discovered.exitCode}: ${discovered.stderr.trim()}; nothing changed.` }
   const seatAnswer = await ask(SEAT_QUESTION, seatOptions(seatsFromDiscovery(discovered.stdout)))
   if (seatAnswer === undefined) return closed
@@ -160,7 +160,7 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
   const every = everyFromAnswer(everyAnswer)
   if ('why' in every) return { text: `Setup closed: ${every.why}; nothing changed.` }
   // The seat's model; codex also takes an effort, from its own catalog.
-  const current = (await $.process.run(['bash', '-c', 'source "$1/scripts/lib/providers.sh" && get_model "$2"', '_', $.plugin.root, seat]).catch(() => ({ stdout: '' }))).stdout.trim()
+  const current = (await seatInfo($, 'model', seat).catch(() => ({ stdout: '' }))).stdout.trim()
   const catalog = seat === 'codex' ? await readCatalog($) : undefined
   const slugs = catalog !== undefined && 'models' in catalog ? catalog.models.filter(m => m.listed).map(m => m.slug) : undefined
   const modelAnswer = await ask(MODEL_QUESTION(seat), modelOptions(current, slugs))
@@ -408,10 +408,16 @@ async function count($: EngineInterface, ...keys: (keyof Counts)[]): Promise<voi
   await $.store.set(COUNTS_KEY, bumped(parseCounts(await $.store.get(COUNTS_KEY)), ...keys))
 }
 
+// The runner's seat questions, answered by its shipped script with fixed
+// subcommands, so the mod never hands bash an inline script.
+function seatInfo($: EngineInterface, ...args: ['discover'] | ['model' | 'allowlisted', string]) {
+  return $.process.run(['bash', `${$.plugin.root}/scripts/seat-info.sh`, ...args])
+}
+
 // The runner's own allowlist (a providers/<seat>.sh exists) decides what a
 // seat is, so no second list lives here; the refusal names the real ones.
 async function notASeat($: EngineInterface, seat: string): Promise<string | undefined> {
-  const ok = await $.process.run(['bash', '-c', 'source "$1/scripts/lib/providers.sh" && provider_allowlisted "$2"', '_', $.plugin.root, seat])
+  const ok = await seatInfo($, 'allowlisted', seat)
   if (ok.exitCode === 0) return undefined
   const names = (await $.fs.list(`${$.plugin.root}/scripts/providers`)).map(entry => entry.name).filter(name => name.endsWith('.sh')).map(name => name.slice(0, -3)).sort()
   return `${JSON.stringify(seat)} is not a council seat; one of ${names.join(', ')}`

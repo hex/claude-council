@@ -4,6 +4,8 @@ A Claude Code mod that draws the council's streaming pane inside Claude Code, so
 
 Mods are early access. You need `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, and the API can change between Claude Code releases. The heads-up side-check needs Claude Code 2.1.302 or later; the rest of the mod runs on 2.1.278. The tmux pane is still the default and nothing here replaces it.
 
+The [plugin README](../../README.md#what-the-mod-runs-reads-and-sends) lists every program the mod starts and what it reads, writes and sends.
+
 ## Run it
 
 The mod ships with the plugin: `hooks/hooks.json` at the repo root names `pane.tsx` as a module, so an installed council loads it whenever the variable is set. Without the variable Claude Code skips the module and the tmux pane works as before.

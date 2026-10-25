@@ -98,6 +98,50 @@ Mods are early access. The [mod guide](mods/council-pane/README.md) lists
 keys, settings, and limits. It also lets Claude call the council as a tool;
 every call asks you first.
 
+### What the mod runs, reads and sends
+
+The mod makes no network calls of its own. Anything that leaves the machine
+goes through the council's own scripts below. It runs each one as
+`bash <script>` with a fixed argument list, and never hands `bash -c` a
+script of its own:
+
+- `bash scripts/run-council.sh` when Claude calls the council tool and you
+  choose `Send to the council`. It sends your question to the providers you
+  set up.
+- `bash scripts/heads-up.sh`, only with the heads-up side-check on. It reads
+  this session's transcript (by default the last 5 turns and up to 8 tool
+  results of 2,000 characters each) and sends that digest to one seat, `codex` unless
+  you pick another. The run directory keeps `digest.md` and `prompt.md`,
+  exactly what left the machine, until the mod reads the result and removes it.
+- `bash scripts/seat-info.sh discover`, `model <seat>` or
+  `allowlisted <seat>` during `/heads-up setup` and `/heads-up on <seat>`.
+  It checks which seats this machine can run and sends nothing.
+- `codex debug models` during `/heads-up setup` with the codex seat, to list
+  its models.
+- `kill -0 <pid>` to check a council run is still alive. It sends no
+  signal.
+- `rm -rf` and `mv -f` on its own run directories under
+  `$TMPDIR/council-mod.<session id>`, to clean up a finished run and to
+  answer the retry offer.
+
+It writes files in that `$TMPDIR` directory, including `model.json` and
+`avoid.txt`, which `heads-up.sh` reads. Outside it, it writes one file,
+`.claude/council-heads-up.json` in the project, and only from
+`/heads-up setup`, `/heads-up on`, `/heads-up off` or a note's `Turn off`.
+That file is the heads-up switch. Claude Code itself does not read it.
+
+It touches the prompt in two places. With `wake_on_async_done` on, it
+submits `The background council job <id> has finished. Fetch it with
+/claude-council:result <id> and summarise it.` once a background job
+finishes. A note's `Tell Claude` puts a draft in the prompt box, and you decide
+whether to send it.
+
+It reads the text of each Bash command Claude runs, only to spot a call
+to `run-council.sh`. Just before that call it sets `COUNCIL_MOD_PANE_DIR`,
+so the run draws in this pane, and clears it when tmux owns the pane. It reads `TMPDIR` and `TMUX`. It turns on the
+`claude-council.heads_up` setting only when you pick "every project" in
+`/heads-up setup`.
+
 ![Real SQLite-or-Postgres answers arrive in tmux beside a fake Kimi failure and the retry offer](assets/tmux-pane.svg)
 
 Without the mod, tmux opens a side pane that streams answers and each
