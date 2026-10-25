@@ -145,7 +145,7 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
     return { turnRowOn: false }
   }
   if (scope !== SCOPE.project && scope !== SCOPE.all) return { text: `Setup closed: ${JSON.stringify(scope)} is not one of the choices; nothing changed.` }
-  // The council's own discovery, so the seats offered are the seats a council run would seat.
+  // The council's own discovery, so the seats offered are the ones this machine can run.
   const discovered = await seatInfo($, 'discover')
   if (discovered.exitCode !== 0) return { text: `Setup closed: seat discovery exited ${discovered.exitCode}: ${discovered.stderr.trim()}; nothing changed.` }
   const seatAnswer = await ask(SEAT_QUESTION, seatOptions(seatsFromDiscovery(discovered.stdout)))

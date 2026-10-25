@@ -110,9 +110,10 @@ script of its own:
   set up.
 - `bash scripts/heads-up.sh`, only with the heads-up side-check on. It reads
   this session's transcript (by default the last 5 turns and up to 8 tool
-  results of 2,000 characters each) and sends that digest to one seat, `codex` unless
-  you pick another. The run directory keeps `digest.md` and `prompt.md`,
-  exactly what left the machine, until the mod reads the result and removes it.
+  results of 2,000 characters each) and sends that digest to one seat,
+  `codex` unless you pick another. The run directory keeps `digest.md` and
+  `prompt.md`, exactly what left the machine, until the mod reads the result
+  and removes it.
 - `bash scripts/seat-info.sh discover`, `model <seat>` or
   `allowlisted <seat>` during `/heads-up setup` and `/heads-up on <seat>`.
   It checks which seats this machine can run and sends nothing.
