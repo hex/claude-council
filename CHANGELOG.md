@@ -4,13 +4,17 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
-## Unreleased
+## 2026.10.13
+
+### Fixed
+- `/heads-up setup` and `/heads-up on <seat>` report a failed seat check with its exit code and error, instead of calling a real seat "not a council seat" or offering models as if the seat had none. Each check has a 15-second limit.
 
 ### Changed
-- The pane mod asks `scripts/seat-info.sh` which seats exist, which model a seat runs and whether a name is a seat, in place of three inline `bash -c` scripts. Same answers, one named program with fixed arguments.
+- The pane mod asks `scripts/seat-info.sh` which seats exist, which model a seat runs and whether a name is a seat, in place of three inline `bash -c` scripts. Same answers, one named program with fixed arguments. `tests/seat-info.bats` covers its exit codes and usage. (#73)
+- Dependabot bumps the HOL plugin scanner action. (#61)
 
 ### Documentation
-- README lists what the pane mod runs, reads, writes and sends: its programs, the two scripts that send anything off the machine, the one project file it writes, its two prompt calls, and the variable and setting it changes.
+- README lists what the pane mod runs, reads, writes and sends: every program it starts and why, the two scripts that carry your text to model providers, the one project file it writes, its two prompt calls, and the variable and setting it changes. The mod guide links to it. (#73)
 
 ## 2026.10.12
 
