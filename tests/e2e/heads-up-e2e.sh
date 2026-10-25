@@ -22,15 +22,15 @@ mkdir -p "$FAKE_BIN_DIR" "$COUNCIL_FAKE_STATE_DIR" "$PROJECT/.claude"
 export FAKE_BIN_DIR COUNCIL_FAKE_STATE_DIR
 write_fake_cli codex
 
-# The heads-up memory (seen and known topics, backoff), the usage counts and
-# the intro flag are shared by every session in the plugin store; this run
-# must leave all three as it found them. The intro flag is dropped for the run
-# so the once-per-install line shows.
-KEYS='["heads-up", "heads-up-counts", "heads-up-intro-shown"]'
+# The heads-up memory (seen and known topics, backoff), the usage counts, the
+# token totals and the intro flag are shared by every session in the plugin
+# store; this run must leave all four as it found them. The intro flag is
+# dropped for the run so the once-per-install line shows.
+KEYS='["heads-up", "heads-up-counts", "heads-up-tokens", "heads-up-intro-shown"]'
 for store in "$HOME"/.claude/plugins/store/claude-council_inline-*.json; do
     [ -f "$store" ] || continue
     jq --argjson keys "$KEYS" 'with_entries(select(.key as $k | $keys | index($k)))' "$store" > "$OUT/before.$(basename "$store")"
-    jq 'del(.["heads-up-intro-shown"], .["heads-up-counts"])' "$store" > "$OUT/cleared.json"
+    jq 'del(.["heads-up-intro-shown"], .["heads-up-counts"], .["heads-up-tokens"])' "$store" > "$OUT/cleared.json"
     cat "$OUT/cleared.json" > "$store"
 done
 # The workspace trust dialog is one flag per project path; it is seeded so the
@@ -93,6 +93,7 @@ on_screen() { screen | grep -qF -- "$1"; }
 wait_for() { wait_until 90 "never saw '$1'" on_screen "$1"; }
 memory() { jq -c '.["heads-up"] // {}' "$HOME"/.claude/plugins/store/claude-council_inline-*.json | head -1; }
 counts() { jq -c '.["heads-up-counts"] // {}' "$HOME"/.claude/plugins/store/claude-council_inline-*.json | head -1; }
+tokens() { jq -c '.["heads-up-tokens"] // {}' "$HOME"/.claude/plugins/store/claude-council_inline-*.json | head -1; }
 
 git -C "$PROJECT" init -q -b main
 printf '{"enabled": false, "seat": "codex", "every": 2}\n' > "$PROJECT/.claude/council-heads-up.json"
@@ -171,6 +172,7 @@ checks_settled() {
     inflight=$(find "${TMPDIR:-/tmp}"/council-mod.*/heads-up -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
     [ -z "$inflight" ] || { printf '%s\n' "$inflight" > "$OUT/inflight.txt"; return 1; }
     counts > "$OUT/counts.json"
+    tokens > "$OUT/tokens.json"
 }
 wait_until 90 "a check never settled: its run dir is named in $OUT/inflight.txt" checks_settled
 C="$(cat "$OUT/counts.json")"
@@ -182,6 +184,11 @@ C="$(cat "$OUT/counts.json")"
 key C-u
 tmux send-keys -t "$SESSION" -l '/heads-up status'; key Enter
 wait_for "checks   $(printf '%s' "$C" | jq -r '"checks \(.none + .notes + .repeats + .failed + .quota) · none \(.none) · notes \(.notes) · repeats \(.repeats) · failed \(.failed) · out of credits \(.quota)"')"
+# The fake codex reports the same tokens on every turn, so each settled check
+# was counted with them; none went unreported.
+T="$(cat "$OUT/tokens.json")"
+[ "$(jq -n --argjson c "$C" --argjson t "$T" '$t.checks == ($c.none + $c.notes + $c.repeats + $c.failed + $c.quota) and $t.unreported == 0')" = true ] || fail "tokens are $T for counts $C"
+wait_for "tokens   $(printf '%s' "$T" | jq -r '"\(.checks) latest checks, counted from this version on"')"
 wait_for "presses  $(printf '%s' "$C" | jq -r '"learn \(.learn) · tell \(.tell) · knew \(.knew) · understood \(.understood) · dismiss \(.dismiss) · turned off \(.turnOff) · typed past \(.typedPast)"')"
 echo "   counts: $(printf '%s' "$C" | jq -c 'del(.repeats)') and every check settled"
 

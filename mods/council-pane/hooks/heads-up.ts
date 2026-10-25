@@ -19,6 +19,7 @@ const SEAT_SHAPE = /^[a-z][a-z0-9-]+$/
 export const CONFIG_FILE = '.claude/council-heads-up.json'
 export const STORE_KEY = 'heads-up'
 export const COUNTS_KEY = 'heads-up-counts'
+export const TOKENS_KEY = 'heads-up-tokens'
 export const INTRO_KEY = 'heads-up-intro-shown'
 export const COMMAND = 'heads-up'
 
@@ -114,6 +115,84 @@ export function pressesLine(c: Counts): string {
   return `learn ${c.learn} · tell ${c.tell} · knew ${c.knew} · understood ${c.understood} · dismiss ${c.dismiss} · turned off ${c.turnOff} · typed past ${c.typedPast}`
 }
 
+/**
+ * The tokens checks used on this machine, in $.store under TOKENS_KEY, shared
+ * by every session, kept apart from Counts because a check adds amounts here,
+ * not one. Each check reads, adds and writes, so two sessions adding at once
+ * can lose one check's tokens; the totals guide a decision, they are not
+ * billing. Kept from the version that began counting them, so they cover
+ * fewer checks than Counts: `checks + unreported` is every check counted
+ * since. `checks` reported usage; `unreported` did not (a seat whose output
+ * carries no counts, a timeout, a check that failed before its seat
+ * answered). cached and reasoning sum only the checks that gave that split,
+ * which cachedChecks and reasoningChecks count; a vendor that leaves a zero
+ * split out is among those that did not.
+ */
+export type Tokens = {
+  readonly checks: number
+  readonly input: number
+  readonly cached: number
+  readonly cachedChecks: number
+  readonly output: number
+  readonly reasoning: number
+  readonly reasoningChecks: number
+  readonly unreported: number
+}
+const TOKEN_KEYS = ['checks', 'input', 'cached', 'cachedChecks', 'output', 'reasoning', 'reasoningChecks', 'unreported'] as const
+export const EMPTY_TOKENS: Tokens = { checks: 0, input: 0, cached: 0, cachedChecks: 0, output: 0, reasoning: 0, reasoningChecks: 0, unreported: 0 }
+
+export function parseTokens(raw: unknown): Tokens {
+  if (!isRecord(raw)) return EMPTY_TOKENS
+  return Object.fromEntries(TOKEN_KEYS.map(key => [key, countOr0(raw[key])])) as Record<keyof Tokens, number>
+}
+
+/** A finished check's tokens added in; one more unreported when no seat gave any; a skipped check, which is not counted, adds nothing. */
+export function addedTokens(t: Tokens, r: RunResult): Tokens {
+  if (r.kind === 'skipped') return t
+  const usages = r.seats.flatMap(seat => (seat.usage === undefined ? [] : [seat.usage]))
+  if (usages.length === 0) return { ...t, unreported: t.unreported + 1 }
+  const sum = (split: (u: Usage) => number | null) => usages.reduce((total, u) => total + (split(u) ?? 0), 0)
+  const gave = (split: (u: Usage) => number | null) => (usages.some(u => split(u) !== null) ? 1 : 0)
+  return {
+    checks: t.checks + 1,
+    input: t.input + sum(u => u.input),
+    cached: t.cached + sum(u => u.cached),
+    cachedChecks: t.cachedChecks + gave(u => u.cached),
+    output: t.output + sum(u => u.output),
+    reasoning: t.reasoning + sum(u => u.reasoning),
+    reasoningChecks: t.reasoningChecks + gave(u => u.reasoning),
+    unreported: t.unreported,
+  }
+}
+
+/** "999", "35.4k", "1.48M": the k band stops where one decimal would round up to 1000.0k. */
+export function tokenCount(n: number): string {
+  if (n < 1000) return String(n)
+  if (n < 999_950) return `${(n / 1000).toFixed(1)}k`
+  return `${(n / 1_000_000).toFixed(2)}M`
+}
+
+/**
+ * "45 latest checks, counted from this version on · 3 unreported · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out,
+ * 6.2k reasoning on 30 of 42 · 35.6k in and out per reported check". A split every reported check gave drops its
+ * "on X of Y"; one none gave drops out.
+ */
+export function tokensLine(t: Tokens): string {
+  const counted = t.checks + t.unreported
+  if (counted === 0) return 'none yet; counted from this version on'
+  const parts = [`${counted} latest checks, counted from this version on`]
+  if (t.unreported > 0) parts.push(`${t.unreported} unreported`)
+  if (t.checks > 0) {
+    const split = (amount: number, gave: number, name: string) => (gave === 0 ? '' : `, ${tokenCount(amount)} ${name}${gave < t.checks ? ` on ${gave} of ${t.checks}` : ''}`)
+    parts.push(
+      `${tokenCount(t.input)} in${split(t.cached, t.cachedChecks, 'cached')}`,
+      `${tokenCount(t.output)} out${split(t.reasoning, t.reasoningChecks, 'reasoning')}`,
+      `${tokenCount(Math.round((t.input + t.output) / t.checks))} in and out per reported check`,
+    )
+  }
+  return parts.join(' \u00b7 ')
+}
+
 export type HeadsUpCommand =
   | { action: 'status' }
   | { action: 'on'; seat?: string }
@@ -177,11 +256,11 @@ export function withEnabled(text: string | undefined, on: boolean | undefined, s
 /**
  * What /heads-up status prints: a headline with the effective state, then one
  * aligned row per fact: which switch set it, the seat and cadence, this
- * session's pause, the counts kept on this machine.
+ * session's pause, the counts and tokens kept on this machine.
  */
 export type HeadsUpStatus = { state: string; rows: [string, string][] }
 
-export function headsUpStatus(config: HeadsUpConfig, rowOn: boolean, fileText: string | undefined, counts: Counts, paused: Paused | null): HeadsUpStatus {
+export function headsUpStatus(config: HeadsUpConfig, rowOn: boolean, fileText: string | undefined, counts: Counts, tokens: Tokens, paused: Paused | null): HeadsUpStatus {
   const row = rowOn ? 'on' : 'off'
   const file = fileText === undefined ? undefined : fileEnabled(fileText)
   const fileNote = fileText === undefined ? `no ${CONFIG_FILE} here` : `${CONFIG_FILE} leaves it to the row`
@@ -202,7 +281,7 @@ export function headsUpStatus(config: HeadsUpConfig, rowOn: boolean, fileText: s
     rows.push(['by', `the /config row is off, ${fileNote}`], ['turn on', `/${COMMAND} on [seat] for this project, the /config row "Heads-up side-check" for every project`])
   }
   if (paused !== null) rows.push(['paused', `${paused.seat} out of credits this session · /${COMMAND} on to resume`])
-  rows.push(['checks', countsLine(counts)], ['presses', pressesLine(counts)])
+  rows.push(['checks', countsLine(counts)], ['tokens', tokensLine(tokens)], ['presses', pressesLine(counts)])
   return { state, rows }
 }
 
@@ -440,11 +519,20 @@ export function decide(cfg: HeadsUpConfig, s: Session, m: Memory, e: StepFacts, 
   return { kind: 'launch', checkId: `check-${nowMs}` }
 }
 
+/**
+ * The tokens one seat call used, in OpenAI's convention so seats add up: input
+ * holds the cached tokens and cache writes, output the reasoning; cached and
+ * reasoning are null when the vendor gave no such split.
+ */
+export type Usage = { readonly input: number; readonly cached: number | null; readonly output: number; readonly reasoning: number | null }
+
 export type SeatOutcome = {
   readonly seat: string
   readonly outcome: 'none' | 'note' | 'error' | 'timeout' | 'quota'
   readonly elapsedMs: number
   readonly detail?: string
+  /** Absent when the seat reported none. */
+  readonly usage?: Usage
 }
 
 /** result.json, read once at the boundary into this. */
@@ -458,7 +546,7 @@ export type RunResult =
   | { kind: 'failed'; payloadBytes: number; seats: readonly SeatOutcome[] }
 
 /**
- * Wire shape: {kind, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?, seats:[{seat,outcome,ms,detail?}]}.
+ * Wire shape: {kind, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?, seats:[{seat,outcome,ms,detail?,usage?}]}.
  * A skipped check carries only its detail: no seat ran and nothing left the machine.
  * A quota check carries its seat and words in the seat outcome marked quota.
  * A text that does not parse to it is `failed` naming the text, so a runner
@@ -533,12 +621,26 @@ const countOr0 = (value: unknown): number => (isCount(value) ? value : 0)
 
 const OUTCOMES: readonly SeatOutcome['outcome'][] = ['none', 'note', 'error', 'timeout', 'quota']
 
+// A seat outcome off its shape, usage included, makes the whole result
+// unreadable: the runner checks usage before writing it, so a bad one is a
+// runner bug, and a dropped one would undercount the tokens without a word.
 function seatOutcome(raw: unknown): SeatOutcome | undefined {
   if (!isRecord(raw) || typeof raw.seat !== 'string' || !isCount(raw.ms)) return undefined
   const outcome = OUTCOMES.find(known => known === raw.outcome)
   if (!outcome) return undefined
-  if (raw.detail === undefined) return { seat: raw.seat, outcome, elapsedMs: raw.ms }
-  return typeof raw.detail === 'string' ? { seat: raw.seat, outcome, elapsedMs: raw.ms, detail: raw.detail } : undefined
+  if (raw.detail !== undefined && typeof raw.detail !== 'string') return undefined
+  const usage = raw.usage === undefined ? undefined : usageOf(raw.usage)
+  if (usage === null) return undefined
+  return { seat: raw.seat, outcome, elapsedMs: raw.ms, ...(raw.detail === undefined ? {} : { detail: raw.detail }), ...(usage === undefined ? {} : { usage }) }
+}
+
+// The runner's usage record, or null when it is off the shape lib/usage.sh writes: a split no larger than its whole.
+function usageOf(raw: unknown): Usage | null {
+  if (!isRecord(raw) || !isCount(raw.input) || !isCount(raw.output)) return null
+  const { input, output, cached, reasoning } = raw
+  if (!(cached === null || (isCount(cached) && cached <= input))) return null
+  if (!(reasoning === null || (isCount(reasoning) && reasoning <= output))) return null
+  return { input, cached, output, reasoning }
 }
 
 /** A seat repeated a topic in seen or known anyway (case-folded, trimmed). */

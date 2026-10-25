@@ -4,7 +4,7 @@ import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren, Timer } from 'claude-code'
 import {
   applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, onCadence, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
-  bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, headsUpStatus, statusText, withEnabled, type Counts, type HeadsUpStatus,
+  addedTokens, bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, TOKENS_KEY, parseTokens, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, headsUpStatus, statusText, withEnabled, type Counts, type HeadsUpStatus,
   seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEAT_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
   tagMark, toastLine, type Answer, type BandView, type Memory, type RunResult,
   EMPTY_MEMORY, acknowledgePause, pausedLine, storedSession,
@@ -189,7 +189,7 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
 // What /heads-up status prints, from the project file as it stands.
 async function readHeadsUpStatus($: EngineInterface, rowOn: boolean): Promise<HeadsUpStatus> {
   const { text } = await headsUpFile($)
-  return headsUpStatus(parseConfig(text, rowOn), rowOn, text, parseCounts(await $.store.get(COUNTS_KEY)), storedSession(await read($, headsUp)).paused)
+  return headsUpStatus(parseConfig(text, rowOn), rowOn, text, parseCounts(await $.store.get(COUNTS_KEY)), parseTokens(await $.store.get(TOKENS_KEY)), storedSession(await read($, headsUp)).paused)
 }
 
 // The status as the command's reply; mid-turn the reply waits for the turn to
@@ -412,6 +412,11 @@ async function count($: EngineInterface, ...keys: (keyof Counts)[]): Promise<voi
   await $.store.set(COUNTS_KEY, bumped(parseCounts(await $.store.get(COUNTS_KEY)), ...keys))
 }
 
+// Read, add the check's tokens, write: never a lock (see Tokens).
+async function tallyTokens($: EngineInterface, result: RunResult): Promise<void> {
+  await $.store.set(TOKENS_KEY, addedTokens(parseTokens(await $.store.get(TOKENS_KEY)), result))
+}
+
 // The runner's seat questions, answered by its shipped script with fixed
 // subcommands, so the mod never hands bash an inline script.
 function seatInfo($: EngineInterface, ...args: ['discover'] | ['model' | 'allowlisted', string]) {
@@ -495,6 +500,7 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
     state.headsUpFailure = { text: `heads-up: failed · ${String(error)}`, untilMs: now + FINISH_NOTICE_MS, isFailure: true }
     $.ui.invalidate('ui.render')
     await count($, 'failed')
+    await tallyTokens($, { kind: 'failed', payloadBytes: 0, seats: [] })
     throw error
   }
 }
@@ -558,7 +564,10 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
   // Nobody to warn is not a fault: one log line per reason, no band, no outcome counted.
   logOnChange($, state, 'headsUpSkipped', result.kind === 'skipped' ? checkLine(result) : '')
   const drawn = settled.phase.kind === 'showing' && settled.phase.note.id === checkId
-  if (result.kind !== 'skipped') await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
+  if (result.kind !== 'skipped') {
+    await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
+    await tallyTokens($, result)
+  }
   await $.process.run(['rm', '-rf', runDir])
 }
 

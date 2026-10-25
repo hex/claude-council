@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { acknowledgePause, pausedLine, storedSession, applyAnswer, avoidList, bandView, tagMark, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, headsUpStatus, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION } from '../hooks/heads-up'
+import { acknowledgePause, pausedLine, storedSession, applyAnswer, avoidList, bandView, tagMark, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, headsUpStatus, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION, EMPTY_TOKENS, parseTokens, addedTokens, tokensLine, tokenCount, type RunResult, type Tokens } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -169,6 +169,27 @@ test('a seat out of credits reads as quota, carrying the seat and its words; wit
     .toBe('heads-up: paused · codex after 3 s: Your workspace is out of credits. Add credits to continue. · /heads-up on resumes')
 })
 
+test('a seat outcome keeps the tokens its call used, null where the vendor gave no split', () => {
+  const usage = { input: 32961, cached: 13568, output: 467, reasoning: 314 }
+  expect(parseRunResult('c1', JSON.stringify({ kind: 'none', bytes: 900, seats: [{ ...codexNone, usage }] })))
+    .toEqual({ kind: 'none', payloadBytes: 900, seats: [{ seat: 'codex', outcome: 'none', elapsedMs: 27400, usage }] })
+  const split = { input: 6012, cached: null, output: 3, reasoning: null }
+  expect(parseRunResult('c1', JSON.stringify({ kind: 'failed', bytes: 900, seats: [{ seat: 'claude-cli', outcome: 'error', ms: 1200, detail: 'off contract: x', usage: split }] })))
+    .toEqual({ kind: 'failed', payloadBytes: 900, seats: [{ seat: 'claude-cli', outcome: 'error', elapsedMs: 1200, detail: 'off contract: x', usage: split }] })
+})
+
+test('usage off its shape makes the whole result unreadable, as any other field off its shape does', () => {
+  const withUsage = (usage: unknown) => parseRunResult('c1', JSON.stringify({ kind: 'none', bytes: 900, seats: [{ ...codexNone, usage }] })).kind
+  expect(withUsage({ input: 10, cached: 2, output: 5, reasoning: 1 })).toBe('none')
+  expect(withUsage(null)).toBe('failed')
+  expect(withUsage({ input: 10, output: 5 })).toBe('failed')
+  expect(withUsage({ input: '10', cached: null, output: 5, reasoning: null })).toBe('failed')
+  expect(withUsage({ input: 10, cached: null, output: -1, reasoning: null })).toBe('failed')
+  expect(withUsage({ input: 10.5, cached: null, output: 5, reasoning: null })).toBe('failed')
+  expect(withUsage({ input: 10, cached: 11, output: 5, reasoning: null })).toBe('failed')
+  expect(withUsage({ input: 10, cached: null, output: 5, reasoning: 6 })).toBe('failed')
+})
+
 test('a check the runner skipped keeps its reason and asks for no band', () => {
   const text = JSON.stringify({ kind: 'skipped', bytes: 0, detail: 'digest: nothing in the window to review', seats: [] })
   expect(parseRunResult('c1', text)).toEqual({ kind: 'skipped', detail: 'digest: nothing in the window to review' })
@@ -315,6 +336,48 @@ test('the counts line names every count in a fixed order', () => {
   expect(pressesLine(full)).toBe('learn 2 · tell 1 · knew 0 · understood 1 · dismiss 1 · turned off 1 · typed past 3')
 })
 
+const seatRun = (usage?: { input: number; cached: number | null; output: number; reasoning: number | null }): RunResult =>
+  ({ kind: 'none', payloadBytes: 900, seats: [{ seat: 'codex', outcome: 'none', elapsedMs: 27400, ...(usage === undefined ? {} : { usage }) }] })
+
+test('each counted check adds its tokens, or one to unreported; a skipped check adds nothing', () => {
+  const first = addedTokens(EMPTY_TOKENS, seatRun({ input: 32961, cached: 13568, output: 467, reasoning: 314 }))
+  expect(first).toEqual({ checks: 1, input: 32961, cached: 13568, cachedChecks: 1, output: 467, reasoning: 314, reasoningChecks: 1, unreported: 0 })
+  const second = addedTokens(first, seatRun({ input: 6012, cached: 5200, output: 3, reasoning: null }))
+  expect(second).toEqual({ checks: 2, input: 38973, cached: 18768, cachedChecks: 2, output: 470, reasoning: 314, reasoningChecks: 1, unreported: 0 })
+  const third = addedTokens(second, seatRun())
+  expect(third).toEqual({ ...second, unreported: 1 })
+  const timeout: RunResult = { kind: 'failed', payloadBytes: 900, seats: [{ seat: 'codex', outcome: 'timeout', elapsedMs: 60000, detail: 'no answer in 60s' }] }
+  expect(addedTokens(third, timeout)).toEqual({ ...second, unreported: 2 })
+  expect(addedTokens(third, { kind: 'skipped', detail: 'digest: nothing in the window to review' })).toEqual(third)
+})
+
+test('stored tokens read field by field as zero; any other key is dropped', () => {
+  expect(parseTokens(undefined)).toEqual(EMPTY_TOKENS)
+  expect(parseTokens({ checks: 2, input: 900, cached: -1, output: '5', unreported: 1, extra: 3 }))
+    .toEqual({ ...EMPTY_TOKENS, checks: 2, input: 900, unreported: 1 })
+})
+
+test('a token count is plain under a thousand, thousands with one decimal, millions with two', () => {
+  expect(tokenCount(0)).toBe('0')
+  expect(tokenCount(999)).toBe('999')
+  expect(tokenCount(1000)).toBe('1.0k')
+  expect(tokenCount(35352)).toBe('35.4k')
+  expect(tokenCount(999949)).toBe('999.9k')
+  expect(tokenCount(999950)).toBe('1.00M')
+  expect(tokenCount(1484000)).toBe('1.48M')
+})
+
+test('the tokens line says which checks it covers, how many lacked a count, and how many gave each split', () => {
+  expect(tokensLine(EMPTY_TOKENS)).toBe('none yet; counted from this version on')
+  expect(tokensLine({ ...EMPTY_TOKENS, unreported: 2 })).toBe('2 latest checks, counted from this version on · 2 unreported')
+  const all: Tokens = { checks: 42, input: 1484200, cached: 820000, cachedChecks: 42, output: 9100, reasoning: 6200, reasoningChecks: 42, unreported: 0 }
+  expect(tokensLine(all)).toBe('42 latest checks, counted from this version on · 1.48M in, 820.0k cached · 9.1k out, 6.2k reasoning · 35.6k in and out per reported check')
+  expect(tokensLine({ ...all, cachedChecks: 40, reasoningChecks: 30, unreported: 3 }))
+    .toBe('45 latest checks, counted from this version on · 3 unreported · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out, 6.2k reasoning on 30 of 42 · 35.6k in and out per reported check')
+  expect(tokensLine({ ...all, cached: 0, cachedChecks: 0, reasoning: 0, reasoningChecks: 0 }))
+    .toBe('42 latest checks, counted from this version on · 1.48M in · 9.1k out · 35.6k in and out per reported check')
+})
+
 test('the heads-up command reads on with an optional seat, off and status, and refuses anything else', () => {
   expect(headsUpCommand('')).toEqual({ action: 'status' })
   expect(headsUpCommand(' Status ')).toEqual({ action: 'status' })
@@ -357,65 +420,87 @@ test('a pick belongs to its seat: naming another seat drops it, naming the same 
 
 test('the toast is the status on one line: state, seat, cadence and the checks, without the presses', () => {
   const counts = { ...EMPTY_COUNTS, none: 3, notes: 1, learn: 1 }
-  expect(toastLine(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts, null)))
+  expect(toastLine(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts, EMPTY_TOKENS, null)))
     .toBe('Heads-up side-check: on for this project · codex · every 3 requests · checks 4 · none 3 · notes 1 · repeats 0 · failed 0 · out of credits 0')
-  expect(toastLine(headsUpStatus({ enabled: false, seat: 'codex', every: 3 }, false, undefined, EMPTY_COUNTS, null)))
+  expect(toastLine(headsUpStatus({ enabled: false, seat: 'codex', every: 3 }, false, undefined, EMPTY_COUNTS, EMPTY_TOKENS, null)))
     .toBe('Heads-up side-check: off · checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0')
-  expect(toastLine(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', { ...EMPTY_COUNTS, quota: 1 }, paused.paused)))
+  expect(toastLine(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', { ...EMPTY_COUNTS, quota: 1 }, EMPTY_TOKENS, paused.paused)))
     .toBe('Heads-up side-check: on for this project · codex · every 3 requests · codex out of credits this session · /heads-up on to resume · checks 1 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 1')
 })
 
 test('status names the effective state and which switch set it, then the counts, one aligned row per fact', () => {
   const counts = { ...EMPTY_COUNTS, none: 3, notes: 1, learn: 1 }
-  expect(statusText(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts, null))).toBe(
+  expect(statusText(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts, EMPTY_TOKENS, null))).toBe(
     'Heads-up side-check: on for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is off)\n'
     + '  seat     codex\n'
     + '  every    3 requests\n'
     + '  checks   checks 4 · none 3 · notes 1 · repeats 0 · failed 0 · out of credits 0\n'
+    + '  tokens   none yet; counted from this version on\n'
     + '  presses  learn 1 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
-  expect(statusText(headsUpStatus({ enabled: true, seat: 'codex', every: 3, model: { model: 'gpt-6.1-sol', effort: 'high' } }, true, undefined, EMPTY_COUNTS, null))).toBe(
+  expect(statusText(headsUpStatus({ enabled: true, seat: 'codex', every: 3, model: { model: 'gpt-6.1-sol', effort: 'high' } }, true, undefined, EMPTY_COUNTS, EMPTY_TOKENS, null))).toBe(
     'Heads-up side-check: on for every project\n'
     + '  by       the /config row (no .claude/council-heads-up.json here)\n'
     + '  seat     codex (gpt-6.1-sol, high)\n'
     + '  every    3 requests\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
+    + '  tokens   none yet; counted from this version on\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
-  expect(statusText(headsUpStatus({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS, null))).toBe(
+  expect(statusText(headsUpStatus({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS, EMPTY_TOKENS, null))).toBe(
     'Heads-up side-check: off for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is on)\n'
     + '  turn on  /heads-up on [seat] turns it on here\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
+    + '  tokens   none yet; counted from this version on\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
-  expect(statusText(headsUpStatus({ enabled: false }, false, undefined, EMPTY_COUNTS, null))).toBe(
+  expect(statusText(headsUpStatus({ enabled: false }, false, undefined, EMPTY_COUNTS, EMPTY_TOKENS, null))).toBe(
     'Heads-up side-check: off\n'
     + '  by       the /config row is off, no .claude/council-heads-up.json here\n'
     + '  turn on  /heads-up on [seat] for this project, the /config row "Heads-up side-check" for every project\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
+    + '  tokens   none yet; counted from this version on\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
-  expect(statusText(headsUpStatus({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' }, true, '{', EMPTY_COUNTS, null))).toBe(
+  expect(statusText(headsUpStatus({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' }, true, '{', EMPTY_COUNTS, EMPTY_TOKENS, null))).toBe(
     'Heads-up side-check: off\n'
     + '  problem  .claude/council-heads-up.json is not valid JSON; heads-up is off\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
+    + '  tokens   none yet; counted from this version on\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
+})
+
+test('status carries the tokens row after the checks row; the toast leaves it out', () => {
+  const counts = { ...EMPTY_COUNTS, none: 1305, notes: 56, failed: 29, quota: 331 }
+  const tokens: Tokens = { checks: 2, input: 38973, cached: 18768, cachedChecks: 2, output: 470, reasoning: 314, reasoningChecks: 1, unreported: 1 }
+  const status = headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts, tokens, null)
+  expect(statusText(status)).toBe(
+    'Heads-up side-check: on for this project\n'
+    + '  by       .claude/council-heads-up.json (the /config row is off)\n'
+    + '  seat     codex\n'
+    + '  every    3 requests\n'
+    + '  checks   checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331\n'
+    + '  tokens   3 latest checks, counted from this version on · 1 unreported · 39.0k in, 18.8k cached · 470 out, 314 reasoning on 1 of 2 · 19.7k in and out per reported check\n'
+    + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
+  expect(toastLine(status)).toBe('Heads-up side-check: on for this project · codex · every 3 requests · checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331')
 })
 
 test('status says while the session is paused, dismissed or not, and what resumes it; off for the project it still says so', () => {
   const counts = { ...EMPTY_COUNTS, none: 1305, notes: 56, failed: 29, quota: 331 }
-  expect(statusText(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts, paused.paused))).toBe(
+  expect(statusText(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', counts, EMPTY_TOKENS, paused.paused))).toBe(
     'Heads-up side-check: on for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is off)\n'
     + '  seat     codex\n'
     + '  every    3 requests\n'
     + '  paused   codex out of credits this session · /heads-up on to resume\n'
     + '  checks   checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331\n'
+    + '  tokens   none yet; counted from this version on\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
-  expect(statusText(headsUpStatus({ enabled: false }, false, '{"enabled": false}', EMPTY_COUNTS, acknowledgePause(paused).paused))).toBe(
+  expect(statusText(headsUpStatus({ enabled: false }, false, '{"enabled": false}', EMPTY_COUNTS, EMPTY_TOKENS, acknowledgePause(paused).paused))).toBe(
     'Heads-up side-check: off for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is off)\n'
     + '  turn on  /heads-up on [seat] turns it on here\n'
     + '  paused   codex out of credits this session · /heads-up on to resume\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
+    + '  tokens   none yet; counted from this version on\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
 })
 
