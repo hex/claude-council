@@ -215,8 +215,8 @@ Two flavors share the interface:
   stdin. Discovery never seats it: each question bills that provider, so it
   joins only when named. `--standalone` gives the run a private server rather
   than the user's background service, which holds the environment and config
-  it started with. An empty `OPENCODE_CONFIG_DIR` keeps the user's global
-  config, plugins and MCP servers out, `OPENCODE_DISABLE_PROJECT_CONFIG=1`
+  it started with. An empty `OPENCODE_CONFIG_DIR`, with `OPENCODE_CONFIG`
+  unset, keeps the user's global config, plugins and MCP servers out, `OPENCODE_DISABLE_PROJECT_CONFIG=1`
   keeps the working directory's `opencode.json` and `AGENTS.md` out, and an
   inline `OPENCODE_CONFIG_CONTENT` that denies every permission sends the model
   no tool. The CLI saves every run in its session history and no flag stops
@@ -227,8 +227,11 @@ Two flavors share the interface:
   key, so it runs on the logins in `auth.json` under `XDG_DATA_HOME`.
   `check-status.sh` probes `opencode auth list --standalone` under that
   environment and the same empty config dir, and reads `No authenticated
-  integrations` as logged out. `get_model` reports `OPENCODE_MODEL` or
-  `default`, never the `opencode.json` model, which the seat does not load.
+  integrations` as logged out. The empty config dir hides the user's model
+  too, so `get_model` reads it before the seat swaps the dir in, and the seat
+  passes it as `-m`: `OPENCODE_MODEL`, else `.model` from an `OPENCODE_CONFIG`
+  file, else from `opencode.json` or `opencode.jsonc` in `OPENCODE_CONFIG_DIR`
+  or `${XDG_CONFIG_HOME:-~/.config}/opencode`, else `default` and no `-m`.
   It has no API sibling.
 - **`ollama`**, also gated on the binary being on `PATH`, but local and keyless:
   it shadows nothing, has no API sibling, and costs nothing per call.
@@ -810,7 +813,7 @@ claude-council/
 | `CURSOR_CLI_MODEL` | (unset) | Model passed to `cursor-agent --model`, only when set (else the model picked in the CLI). The CLI writes the passed model into its own config as the picked model, even when the plan rejects it |
 | `CLAUDE_CLI_MODEL` | (unset) | Model passed to `claude --model`, only when set (else the account's default model; the seat does not read `settings.json`) |
 | `COPILOT_CLI_MODEL` | (unset) | Model passed to `copilot --model`, only when set (else the CLI's automatic pick, which can change per question; a plan can reject every named model) |
-| `OPENCODE_MODEL` | (unset) | `provider/model` passed to `opencode run -m`, only when set (else the CLI's own default under the seat's empty config; the seat does not read `opencode.json`) |
+| `OPENCODE_MODEL` | (unset) | `provider/model` passed to `opencode run -m` (else the `model` from the user's `opencode.json`; with neither, no `-m` and the CLI's built-in default) |
 | `OPENROUTER_MODEL` | `anthropic/claude-fable-5.1` | Any id from openrouter.ai/models (single seat) |
 | `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
 | `OPENROUTER_<N>_MODEL` | (unset) | Overrides roster seat N's entry, as `<PROVIDER>_MODEL` does for any provider; the exit-3 degrade path sets it so a roster entry never resends the model that just failed |
