@@ -17,13 +17,13 @@ Calibration rules:
   was in a position to test it. Where the question distinguished what the asker
   observed from what they had not verified, name the unverified item; where it
   did not, say which premise you would check first.
-- A seat reached through a router (openrouter, or copilot-cli, which picks from
-  more than one vendor's models) may be running the same model as a
+- A seat reached through a router (openrouter, or copilot-cli and opencode, which
+  pick from more than one vendor's models) may be running the same model as a
   directly-seated vendor, and nothing in the response says so. Where such a seat
   agrees with another, report possible duplication, not corroboration: two headers
   are not two independent judgements if one id resolves to the other's model.
 - A seat whose model is Claude (`claude-cli`, a `claude-...` model through
-  `copilot-cli`, or an `anthropic/...` id through a router) is the same model
+  `copilot-cli`, or an `anthropic/...` id through a router or opencode) is the same model
   family writing this synthesis. Where it agrees
   with the direction you would take anyway, that is not independent support:
   count it as one voice among the others, and do not let it settle a split
