@@ -42,6 +42,12 @@ discover_providers() {
                 # copilot on PATH says nothing about wanting that, so it is
                 # seated only when named in --providers or COUNCIL_PROVIDERS.
                 ;;
+            opencode)
+                # Never discovered: each question bills whichever provider
+                # opencode is logged in to, and an opencode on PATH says
+                # nothing about wanting that, so it is seated only when named
+                # in --providers or COUNCIL_PROVIDERS.
+                ;;
             ollama)
                 command -v ollama >/dev/null 2>&1 && is_available=true
                 ;;
@@ -406,6 +412,9 @@ get_model() {
         # No cli_config_model arm: a model saved in copilot's settings.json
         # left a headless run on the CLI's automatic pick.
         copilot-cli) cli_model copilot-cli "${COPILOT_CLI_MODEL:-}" ;;
+        # No cli_config_model arm: the seat runs with an empty
+        # OPENCODE_CONFIG_DIR, so the model in opencode.json is never what it uses.
+        opencode)   cli_model opencode "${OPENCODE_MODEL:-}" ;;
         ollama)     echo "${OLLAMA_MODEL:-local}" ;;
         # Pinned rather than an alias for the reason stated above, and pinned to
         # an Anthropic id because that is the one vendor the council otherwise
@@ -527,7 +536,8 @@ provider_color() {
         # claude-cli has no sixteen-colour coral, so it shares grok's red.
         grok|grok-cli|claude-cli) echo -e "${RED:-}" ;;
         perplexity)        echo -e "${GREEN:-}" ;;
-        kimi|kimi-cli)     echo -e "${BRIGHT_BLACK:-}" ;;
+        # opencode speaks for no one vendor, so it takes kimi's neutral grey.
+        kimi|kimi-cli|opencode) echo -e "${BRIGHT_BLACK:-}" ;;
         ollama)            echo -e "${CYAN:-}" ;;
         # copilot-cli has no sixteen-colour pink, so it shares the router's magenta.
         openrouter|openrouter-[0-9]*|copilot-cli) echo -e "${MAGENTA:-}" ;;
@@ -551,6 +561,8 @@ provider_color_rgb() {
         ollama)            printf -v "$__out" '8;145;178'    ;;  # cyan-600
         claude-cli)        printf -v "$__out" '217;119;87'   ;;  # Claude coral
         copilot-cli)       printf -v "$__out" '191;57;137'   ;;  # GitHub Primer pink-5
+        # No brand colour; a warm neutral apart from kimi's zinc and the default.
+        opencode)          printf -v "$__out" '120;113;108'  ;;  # stone-500
         openrouter|openrouter-[0-9]*) printf -v "$__out" '124;58;237' ;;  # violet-600
         *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
     esac
