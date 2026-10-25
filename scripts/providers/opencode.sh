@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
 source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
@@ -89,6 +90,14 @@ ARGS=(run --standalone --format json)
 [[ "$MODEL" != default ]] && ARGS+=(-m "$MODEL")
 
 if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" opencode "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
+# One step_finish event per model request, summed. Its input leaves out the
+# cache reads and writes and its output the reasoning (opencode 2.1.3 prices
+# output and reasoning apart), so both are added back.
+emit_usage -nR 'def total(f): [.[] | f | numbers] | add;
+    [inputs | fromjson? | objects | select(.type == "step_finish") | .part.tokens | objects]
+    | select(length > 0)
+    | {input: total(.input + (.cache.read // 0) + (.cache.write // 0)), cached: total(.cache.read),
+       output: total(.output + (.reasoning // 0)), reasoning: total(.reasoning)}' "$OUT_TMP"
 # Every event names the run's session; the first one is enough. Only a plain
 # word is kept, so nothing the stream says can reach the delete as a flag.
 SESSION_ID=$(jq -rnR 'first(inputs | fromjson? | objects | .sessionID

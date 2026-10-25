@@ -965,6 +965,15 @@ $off" ]
     [ "$output" = "FAKE-CURSOR-AGENT-RESPONSE: deterministic answer" ]
 }
 
+@test "cursor-cli.sh: the run's tokens land in COUNCIL_USAGE_FILE, the cache added to input" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_USAGE_FILE="$BATS_TEST_TMPDIR/usage.json"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-CURSOR-AGENT-RESPONSE: deterministic answer" ]
+    [ "$stderr" = "" ]
+    [ "$(cat "$COUNCIL_USAGE_FILE")" = '{"input":3420,"cached":3000,"output":65,"reasoning":null}' ]
+}
+
 @test "cursor-cli.sh: runs headless in ask mode with the workspace trusted, and never --force" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
@@ -1051,6 +1060,24 @@ $off" ]
     [ "$output" = "FAKE-CLAUDE-RESPONSE: deterministic answer" ]
 }
 
+@test "claude-cli.sh: the run's tokens land in COUNCIL_USAGE_FILE, the cache reads and writes added to input" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_USAGE_FILE="$BATS_TEST_TMPDIR/usage.json"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-CLAUDE-RESPONSE: deterministic answer" ]
+    [ "$stderr" = "" ]
+    [ "$(cat "$COUNCIL_USAGE_FILE")" = '{"input":4530,"cached":4000,"output":75,"reasoning":null}' ]
+}
+
+@test "claude-cli.sh: an error result still records the tokens it was billed, and still fails" {
+    export COUNCIL_FAKE_BEHAVIOR=error-result COUNCIL_USAGE_FILE="$BATS_TEST_TMPDIR/usage.json"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+    [ "$stderr" = "Error from claude CLI: API Error: 529 Overloaded" ]
+    [ "$(cat "$COUNCIL_USAGE_FILE")" = '{"input":4131,"cached":4100,"output":0,"reasoning":null}' ]
+}
+
 @test "claude-cli.sh: runs a blind headless session with no tools, settings or saved transcript" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     unset CLAUDE_CLI_MODEL
@@ -1129,6 +1156,15 @@ $off" ]
     run --separate-stderr "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$output" = "FAKE-COPILOT-RESPONSE: deterministic answer" ]
+}
+
+@test "copilot-cli.sh: every request's tokens are summed into COUNCIL_USAGE_FILE" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_USAGE_FILE="$BATS_TEST_TMPDIR/usage.json"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-COPILOT-RESPONSE: deterministic answer" ]
+    [ "$stderr" = "" ]
+    [ "$(cat "$COUNCIL_USAGE_FILE")" = '{"input":2500,"cached":1500,"output":120,"reasoning":30}' ]
 }
 
 @test "copilot-cli.sh: runs a headless session with no tools, instructions, GitHub MCP server or update" {
@@ -1212,6 +1248,15 @@ opencode_run_call() {
     run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$output" = "FAKE-OPENCODE-RESPONSE: deterministic answer" ]
+}
+
+@test "opencode.sh: every step's tokens are summed into COUNCIL_USAGE_FILE, the cache and reasoning added in" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_USAGE_FILE="$BATS_TEST_TMPDIR/usage.json"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-OPENCODE-RESPONSE: deterministic answer" ]
+    [ "$stderr" = "" ]
+    [ "$(cat "$COUNCIL_USAGE_FILE")" = '{"input":6650,"cached":6300,"output":70,"reasoning":20}' ]
 }
 
 @test "opencode.sh: runs a private server blind to the user's config, with every tool denied" {

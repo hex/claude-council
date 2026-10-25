@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -72,6 +73,12 @@ OUT_TMP=$(mktemp "${TMPDIR:-/tmp}/council-copilot-cli-out.XXXXXX")
 trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
 if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" copilot "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
+# One assistant.usage event per model request, summed. Its inputTokens count
+# the cache reads and writes; reasoningTokens are part of outputTokens.
+emit_usage -nR 'def total(f): [.[] | f | numbers] | if length == 0 then null else add end;
+    [inputs | fromjson? | objects | select(.type == "assistant.usage") | .data | objects]
+    | select(length > 0)
+    | {input: total(.inputTokens), cached: total(.cacheReadTokens), output: total(.outputTokens), reasoning: total(.reasoningTokens)}' "$OUT_TMP"
 if [[ $rc -eq 0 ]]; then
     # One event per line, the last assistant message with content being the
     # answer. A line that is not a JSON object is skipped rather than aborting
