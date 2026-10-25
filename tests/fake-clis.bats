@@ -1193,6 +1193,92 @@ $off" ]
 }
 
 # ============================================================================
+# opencode.sh against the fake binary
+# ============================================================================
+
+@test "fixture: fake opencode shadows any real opencode on PATH" {
+    run command -v opencode
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$FAKE_BIN_DIR/opencode" ]]
+}
+
+@test "opencode.sh: returns the answer from the text event" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-OPENCODE-RESPONSE: deterministic answer" ]
+}
+
+@test "opencode.sh: runs a private server blind to the user's config, with every tool denied" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset OPENCODE_MODEL
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    # The whole argument list, so a flag lost in quoting fails here instead of
+    # shifting every other one.
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
+      '["run","--standalone","--format","json"]' ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"test prompt"* ]]
+    local seen
+    seen=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-env.jsonl")
+    [ "$(jq -r '.config_dir_empty' <<<"$seen")" = "true" ]
+    [ "$(jq -r '.OPENCODE_DISABLE_PROJECT_CONFIG' <<<"$seen")" = "1" ]
+    [ "$(jq -r '.OPENCODE_CONFIG_CONTENT' <<<"$seen")" = '{"permission":{"*":"deny"}}' ]
+    # The config dir goes with the run.
+    [ ! -e "$(jq -r '.OPENCODE_CONFIG_DIR' <<<"$seen")" ]
+}
+
+@test "opencode.sh: a prompt past the argument limit still reaches the CLI whole" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    big_prompt 300000 > "$pf"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [ "$(wc -c < "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" -gt 300000 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -c)" -lt 1000 ]
+}
+
+@test "opencode.sh: passes -m only when OPENCODE_MODEL is set" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    export OPENCODE_MODEL=example/example-model
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("-m") as $i | .[$i+1]')" = "example/example-model" ]
+}
+
+@test "opencode.sh: an empty answer is an error, not a blank answer" {
+    export COUNCIL_FAKE_BEHAVIOR=empty
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error from opencode CLI: no answer in response" ]
+}
+
+@test "opencode.sh: an error event on stdout is what a failed run reports" {
+    # The CLI exits 1 with stderr empty; the cause is only in the event stream.
+    export COUNCIL_FAKE_BEHAVIOR=bad-model OPENCODE_MODEL=example/missing-model
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+    [ "$stderr" = "Error from opencode CLI: Model unavailable: example/missing-model" ]
+}
+
+@test "opencode.sh: a hung CLI is ended at COUNCIL_TIMEOUT" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_TIMEOUT=1
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"timed out after 1s"* ]]
+}
+
+@test "opencode.sh: reads the prompt from --prompt-file" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    printf 'prompt from file' > "$pf"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"prompt from file"* ]]
+}
+
+# ============================================================================
 # A long stderr ahead of the cause, for the CLIs beside codex
 # ============================================================================
 
@@ -1218,4 +1304,8 @@ $off" ]
 
 @test "copilot-cli.sh: a failure buried under a long stderr still reports its cause" {
     assert_cause_after_noise copilot-cli.sh copilot
+}
+
+@test "opencode.sh: a failure buried under a long stderr still reports its cause" {
+    assert_cause_after_noise opencode.sh opencode
 }
