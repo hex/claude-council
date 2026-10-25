@@ -4,6 +4,12 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+- An `opencode` seat puts the OpenCode CLI on the council, on whichever provider you logged it in to with `opencode auth login`. Discovery never seats it, because each question bills that provider, so name it in `--providers` or `COUNCIL_PROVIDERS`. It uses the `model` from your `opencode.json`, and `OPENCODE_MODEL` (`provider/model`) overrides it. With neither, the CLI picks its built-in default, which on a fresh install is a free model that can run out. Each run gets a private server and an empty config dir, so your config, plugins, MCP servers and project `AGENTS.md` stay out, and the seat denies every tool. The seat deletes its own session from your OpenCode history afterwards. Vendor API keys in your environment stay behind; name one in `COUNCIL_PASS_ENV` if your OpenCode signs in with it. So does every `OPENCODE_*` variable but `OPENCODE_MODEL`, `OPENCODE_CONFIG` and `OPENCODE_CONFIG_DIR`, so an exported `OPENCODE_CONFIG_CONTENT` or `OPENCODE_CONFIG_PROJECT_DISABLE` cannot bring your setup back into the seat or the status check.
+- `/claude-council:status` shows an OpenCode row. It reads Connected when `opencode auth list` finds a stored login, and not authenticated, with `opencode auth login` as the fix, when it finds none.
+
 ## 2026.10.11
 
 ### Changed

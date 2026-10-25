@@ -924,6 +924,34 @@ env_reporting_provider() {
     done
 }
 
+@test "query-council: opencode keeps its model names and XDG_ variables, no other OPENCODE_ knob, no vendor key and none of the driving session's" {
+    local fakedir="${BATS_TEST_TMPDIR}/env-opencode"
+    env_reporting_provider "$fakedir" opencode
+    printf '%s\n' '{"model":"example/config-model"}' > "$BATS_TEST_TMPDIR/opencode-config.json"
+    run --separate-stderr env PROVIDERS_DIR="$fakedir" OPENCODE_MODEL=example/example-model \
+        OPENCODE_CONFIG="$BATS_TEST_TMPDIR/opencode-config.json" OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR" \
+        OPENCODE_SERVER_PASSWORD=example-password OPENCODE_CONFIG_PROJECT_DISABLE=0 \
+        OPENCODE_CONFIG_CONTENT='{"mcp":{}}' XDG_DATA_HOME=/tmp/example-data \
+        ANTHROPIC_API_KEY=example-key OPENAI_API_KEY=example-key GEMINI_API_KEY=example-key \
+        CLAUDE_CODE_SESSION_ID=example-session CLAUDECODE=1 \
+        "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=opencode "ping"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=" $(echo "$output" | jq -r '.round1.opencode.response') "
+    # The login lives in auth.json under XDG_DATA_HOME. get_model reads the
+    # user's model through OPENCODE_CONFIG and OPENCODE_CONFIG_DIR before the
+    # seat replaces both.
+    for name in OPENCODE_MODEL OPENCODE_CONFIG OPENCODE_CONFIG_DIR XDG_DATA_HOME PATH HOME; do
+        [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
+    done
+    # Every vendor key stays behind, so the seat runs on the stored login, and
+    # so does every OPENCODE_ knob that could reopen what the seat closes.
+    for name in OPENCODE_SERVER_PASSWORD OPENCODE_CONFIG_PROJECT_DISABLE OPENCODE_CONFIG_CONTENT \
+        ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY CLAUDE_CODE_SESSION_ID CLAUDECODE; do
+        [[ "$seen" != *" $name "* ]] || { echo "leaked $name in:$seen"; return 1; }
+    done
+}
+
 @test "query-council: grok gets the xAI key it is issued under" {
     local fakedir="${BATS_TEST_TMPDIR}/env-grok"
     env_reporting_provider "$fakedir" grok

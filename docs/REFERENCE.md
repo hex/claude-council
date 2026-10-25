@@ -98,7 +98,9 @@ and `openrouter-2`.
 
 `claude-cli` uses Claude Code on your subscription without your `CLAUDE.md`,
 settings, or plugins. `copilot-cli` uses GitHub Copilot's command-line tool on your
-Copilot plan without your `AGENTS.md` or tools. Both join only when named.
+Copilot plan without your `AGENTS.md` or tools. `opencode` uses the OpenCode CLI
+on whichever provider you logged it in to, without your config, plugins, MCP
+servers or tools. All three join only when named.
 
 See [API keys](#api-keys), [subscription providers](#cli-providers-subscription-auth-no-api-key),
 [model defaults](#model-selection), and [fallback rules](#model-fallback).
@@ -217,7 +219,15 @@ If the `codex`, `agy`, `grok`, `kimi`, or `cursor-agent` CLIs are installed and 
 - `/claude-council:status` shows whether `copilot` is on `PATH`, not whether it has a login. The CLI has no status command, and a test prompt would spend a premium request. A seat without a login fails with the CLI's `No authentication information found` and the ways to log in.
 - The automatic pick can be a Claude model, so the synthesis counts this seat's agreement the way it counts a router seat's.
 
-CLI providers use your existing CLI subscription and need no API key. None of them meters a call except `copilot-cli`, where each question spends one of the plan's premium requests. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai`, `--providers=gemini`, `--providers=grok`, or `--providers=kimi`. Listing both API and CLI together (e.g., `--providers=grok,grok-cli`) runs them side-by-side for comparison.
+**OpenCode seat (`opencode`), opt-in.** The OpenCode CLI can sit on the council, on whichever provider you logged it in to with `opencode auth login`. Discovery never seats it, because each question bills that provider; name it with `--providers=...,opencode` or in `COUNCIL_PROVIDERS`. It runs `opencode run --standalone --format json` with the prompt on stdin, and passes `-m` with the model from `OPENCODE_MODEL`, or else with the `model` from your own OpenCode config. `--standalone` gives each run a private server, so the run never reaches your background OpenCode service, which keeps the environment and config it started with. The seat points `OPENCODE_CONFIG_DIR` at an empty directory and unsets `OPENCODE_CONFIG`, so none of your global config, plugins, MCP servers, agents or commands load. It sets `OPENCODE_DISABLE_PROJECT_CONFIG=1`, so no `opencode.json` or `AGENTS.md` from the working directory reaches it. It also sets an inline config that denies every permission, so the model gets no tools. A model that asks for a tool anyway fails, and the seat reports the provider's error, such as Gemini's `UNEXPECTED_TOOL_CALL`. It has no API sibling to fall back to. Things to know before seating it:
+
+- The CLI saves every run in its session history (`~/.local/share/opencode/opencode.db`), and no flag stops that, which is a difference from `claude-cli`'s `--no-session-persistence`. The seat deletes its own session after each run with `opencode session delete --standalone`. The delete can fail, or the council can stop the seat before it runs, and that run then stays in your history.
+- It authenticates with the logins `opencode auth login` stores in `auth.json` under `XDG_DATA_HOME`. The council passes `OPENCODE_MODEL`, `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR` and `XDG_*`, and no vendor key: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` and the rest stay behind, as `ANTHROPIC_API_KEY` does for `claude-cli`. Every other `OPENCODE_*` variable stays behind too, because the seat sets its own config and an inherited one, such as `OPENCODE_CONFIG_CONTENT` or `OPENCODE_CONFIG_PROJECT_DISABLE`, would let your setup back in. If your OpenCode authenticates through a key in your environment, name it in `COUNCIL_PASS_ENV`, for example `COUNCIL_PASS_ENV=GEMINI_API_KEY`.
+- With `OPENCODE_MODEL` unset, the seat uses the `model` from your `opencode.json`, read where the CLI reads it: an `OPENCODE_CONFIG` file first, then `opencode.json` or `opencode.jsonc` in `OPENCODE_CONFIG_DIR`, or in `$XDG_CONFIG_HOME/opencode` (`~/.config/opencode` by default). A `.jsonc` file with comments reads as unset. `OPENCODE_MODEL` (`provider/model`, for example `google/gemini-2.5-flash-lite`) overrides it. With neither, the CLI uses its built-in default and the header shows `default`. On a fresh install that default is an OpenCode free model, which can run out, and the seat then fails with `Free usage limit reached`. The CLI also falls back to that default, with no error, for a model id it does not recognise.
+- `/claude-council:status` lists the stored logins with `opencode auth list --standalone` under the seat's own environment, and sends no prompt. With no login it reads not authenticated, with `opencode auth login` as the fix. It does not check that a stored login still works or that it belongs to the provider `OPENCODE_MODEL` names: an expired OAuth login reads Connected, and the seat then fails with the provider's error, for example `OAuth access token is invalid`.
+- The model can be any vendor's, Claude included, so the synthesis counts this seat's agreement the way it counts a router seat's.
+
+CLI providers use your existing CLI subscription and need no API key. None of them meters a call except `copilot-cli`, where each question spends one of the plan's premium requests, and `opencode`, which bills the provider you logged it in to. To opt back into the API variant for a single call, pass it explicitly: `--providers=openai`, `--providers=gemini`, `--providers=grok`, or `--providers=kimi`. Listing both API and CLI together (e.g., `--providers=grok,grok-cli`) runs them side-by-side for comparison.
 
 If a CLI provider fails at query time and its API sibling's key is set, the council automatically retries through that API sibling and marks the slot as a fallback: the answer is shown under the CLI slot with the API model's name, a "fell back to … API" note, and the CLI's own error as the reason; the pane row reads `fallback` with `<model> via <sibling> API`. The fallback is skipped when the sibling is already in your selected providers, so you never get the same vendor's answer twice.
 
@@ -236,6 +246,7 @@ export KIMI_CLI_MODEL="kimi-k3"                 # default: the kimi CLI's own co
 export CURSOR_CLI_MODEL="composer-2.5"          # default: the model picked in the Cursor CLI (paid plans only)
 export CLAUDE_CLI_MODEL="fable"                 # default: the account's default model (settings.json is not read)
 export COPILOT_CLI_MODEL="claude-sonnet-5.5"    # default: the CLI's automatic pick per question (settings.json is not read)
+export OPENCODE_MODEL="google/gemini-2.5-flash-lite"  # default: the model in your opencode.json, else the CLI's built-in default
 ```
 
 The Antigravity CLI cannot take its prompt on stdin — `--print` with no value

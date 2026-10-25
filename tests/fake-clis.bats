@@ -1193,6 +1193,174 @@ $off" ]
 }
 
 # ============================================================================
+# opencode.sh against the fake binary
+# ============================================================================
+
+# The seat's run call; the session delete that follows it is the last call.
+opencode_run_call() {
+    jq -c 'select(.bin == "opencode" and .args[0] == "run")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | tail -1
+}
+
+@test "fixture: fake opencode shadows any real opencode on PATH" {
+    run command -v opencode
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$FAKE_BIN_DIR/opencode" ]]
+}
+
+@test "opencode.sh: returns the answer from the text event" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-OPENCODE-RESPONSE: deterministic answer" ]
+}
+
+@test "opencode.sh: runs a private server blind to the user's config, with every tool denied" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset OPENCODE_MODEL
+    # A user config that names no model, so no -m joins the argument list.
+    export OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR/unconfigured"
+    export OPENCODE_CONFIG="$BATS_TEST_TMPDIR/user-config.json"
+    printf '%s\n' '{"mcp":{"example":{"type":"local","command":["example"]}}}' > "$OPENCODE_CONFIG"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    # The whole argument list, so a flag lost in quoting fails here instead of
+    # shifting every other one.
+    [ "$(opencode_run_call | jq -c '.args')" = \
+      '["run","--standalone","--format","json"]' ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"test prompt"* ]]
+    local seen
+    seen=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-env.jsonl")
+    [ "$(jq -r '.config_dir_empty' <<<"$seen")" = "true" ]
+    [ "$(jq -r '.OPENCODE_DISABLE_PROJECT_CONFIG' <<<"$seen")" = "1" ]
+    [ "$(jq -r '.OPENCODE_CONFIG_CONTENT' <<<"$seen")" = '{"permission":{"*":"deny"}}' ]
+    [ "$(jq -r 'has("OPENCODE_CONFIG")' <<<"$seen")" = "false" ]
+    # The config dir goes with the run.
+    [ ! -e "$(jq -r '.OPENCODE_CONFIG_DIR' <<<"$seen")" ]
+}
+
+@test "opencode.sh: inherited config locations and OPENCODE_CONFIG_PROJECT_DISABLE=0 never reach the CLI" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    # The CLI reads this name ahead of OPENCODE_DISABLE_PROJECT_CONFIG, and the
+    # seat can run outside the council's environment scrub.
+    export OPENCODE_CONFIG_PROJECT_DISABLE=0
+    # The scrub passes these two so get_model can read the user's model; the
+    # seat must replace both before the CLI starts.
+    export OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR/user-config-dir"
+    export OPENCODE_CONFIG="$BATS_TEST_TMPDIR/user-config.json"
+    mkdir -p "$OPENCODE_CONFIG_DIR"
+    printf '%s\n' '{"model":"example/config-model"}' > "$OPENCODE_CONFIG"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-env.jsonl")
+    [ "$(jq -r '.OPENCODE_CONFIG_PROJECT_DISABLE' <<<"$seen")" = "1" ]
+    [ "$(jq -r '.OPENCODE_DISABLE_PROJECT_CONFIG' <<<"$seen")" = "1" ]
+    [ "$(jq -r 'has("OPENCODE_CONFIG")' <<<"$seen")" = "false" ]
+    # By name, not by its TMPDIR prefix: MSYS hands the CLI a C:/ spelling
+    # of the path, and the point is that it is the seat's dir, not the user's.
+    local cli_dir
+    cli_dir=$(jq -r '.OPENCODE_CONFIG_DIR' <<<"$seen")
+    [[ "${cli_dir##*/}" == council-opencode-config.* ]]
+    [ "$cli_dir" != "$OPENCODE_CONFIG_DIR" ]
+    [ "$(jq -r '.config_dir_empty' <<<"$seen")" = "true" ]
+    # The model still came from the inherited config file.
+    [ "$(opencode_run_call | jq -c '.args')" = \
+      '["run","--standalone","--format","json","-m","example/config-model"]' ]
+}
+
+@test "opencode.sh: a prompt past the argument limit still reaches the CLI whole" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    big_prompt 300000 > "$pf"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [ "$(wc -c < "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" -gt 300000 ]
+    [ "$(opencode_run_call | wc -c)" -lt 1000 ]
+}
+
+@test "opencode.sh: passes the model from the user's opencode.json as -m" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    unset OPENCODE_MODEL OPENCODE_CONFIG
+    export OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR/user-config"
+    mkdir -p "$OPENCODE_CONFIG_DIR"
+    printf '%s\n' '{"model":"example/config-model"}' > "$OPENCODE_CONFIG_DIR/opencode.json"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(opencode_run_call | jq -c '.args')" = \
+      '["run","--standalone","--format","json","-m","example/config-model"]' ]
+    # The model came from the user's config, not from a config the CLI loaded.
+    [ "$(jq -r '.config_dir_empty' <<<"$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-env.jsonl")")" = "true" ]
+}
+
+@test "opencode.sh: OPENCODE_MODEL is the -m it passes, over the model in the user's config" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    export OPENCODE_MODEL=example/example-model
+    unset OPENCODE_CONFIG
+    export OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR/user-config"
+    mkdir -p "$OPENCODE_CONFIG_DIR"
+    printf '%s\n' '{"model":"example/config-model"}' > "$OPENCODE_CONFIG_DIR/opencode.json"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(opencode_run_call | jq -c '.args')" = \
+      '["run","--standalone","--format","json","-m","example/example-model"]' ]
+}
+
+@test "opencode.sh: deletes the run's session from the user's history afterwards" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
+      "[\"session\",\"delete\",\"--standalone\",\"$(cat "$COUNCIL_FAKE_STATE_DIR/opencode-session.txt")\"]" ]
+}
+
+@test "opencode.sh: a failed run still deletes its session, and keeps its own exit code" {
+    export COUNCIL_FAKE_BEHAVIOR=bad-model OPENCODE_MODEL=example/missing-model
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -c '.args')" = \
+      "[\"session\",\"delete\",\"--standalone\",\"$(cat "$COUNCIL_FAKE_STATE_DIR/opencode-session.txt")\"]" ]
+}
+
+@test "opencode.sh: a run that names no session deletes nothing" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_TIMEOUT=1
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$(jq -c 'select(.args[0] == "session")' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = "" ]
+}
+
+@test "opencode.sh: an empty answer is an error, not a blank answer" {
+    export COUNCIL_FAKE_BEHAVIOR=empty
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error from opencode CLI: no answer in response" ]
+}
+
+@test "opencode.sh: an error event on stdout is what a failed run reports" {
+    # The CLI exits 1 with stderr empty; the cause is only in the event stream.
+    export COUNCIL_FAKE_BEHAVIOR=bad-model OPENCODE_MODEL=example/missing-model
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+    [ "$stderr" = "Error from opencode CLI: Model unavailable: example/missing-model" ]
+}
+
+@test "opencode.sh: a hung CLI is ended at COUNCIL_TIMEOUT" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_TIMEOUT=1
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"timed out after 1s"* ]]
+}
+
+@test "opencode.sh: reads the prompt from --prompt-file" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local pf="$BATS_TEST_TMPDIR/prompt.txt"
+    printf 'prompt from file' > "$pf"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" --prompt-file "$pf"
+    [ "$status" -eq 0 ]
+    [[ "$(cat "$COUNCIL_FAKE_STATE_DIR/stdin.txt")" == *"prompt from file"* ]]
+}
+
+# ============================================================================
 # A long stderr ahead of the cause, for the CLIs beside codex
 # ============================================================================
 
@@ -1218,4 +1386,8 @@ $off" ]
 
 @test "copilot-cli.sh: a failure buried under a long stderr still reports its cause" {
     assert_cause_after_noise copilot-cli.sh copilot
+}
+
+@test "opencode.sh: a failure buried under a long stderr still reports its cause" {
+    assert_cause_after_noise opencode.sh opencode
 }

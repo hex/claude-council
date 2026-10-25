@@ -42,6 +42,12 @@ discover_providers() {
                 # copilot on PATH says nothing about wanting that, so it is
                 # seated only when named in --providers or COUNCIL_PROVIDERS.
                 ;;
+            opencode)
+                # Never discovered: each question bills whichever provider
+                # opencode is logged in to, and an opencode on PATH says
+                # nothing about wanting that, so it is seated only when named
+                # in --providers or COUNCIL_PROVIDERS.
+                ;;
             ollama)
                 command -v ollama >/dev/null 2>&1 && is_available=true
                 ;;
@@ -148,6 +154,15 @@ provider_env_scrub() {
         # choose the account a council question bills.
         copilot-cli)                families="COPILOT_CLI_"
                                     exact=",COPILOT_GITHUB_TOKEN,COPILOT_HOME,COPILOT_GH_HOST,GH_CONFIG_DIR,GH_HOST," ;;
+        # No family: every other OPENCODE_ variable is a config or isolation
+        # knob the seat sets itself, and an inherited one would undo the blind
+        # run (OPENCODE_CONFIG_PROJECT_DISABLE, which the CLI reads ahead of
+        # the seat's flag, or an OPENCODE_CONFIG_CONTENT that starts MCP
+        # servers). COUNCIL_PASS_ENV still passes any name on purpose.
+        # OPENCODE_CONFIG and OPENCODE_CONFIG_DIR stay because get_model reads the
+        # user's model through them; the seat and the probe replace both after.
+        opencode)                   families=""
+                                    exact=",OPENCODE_MODEL,OPENCODE_CONFIG,OPENCODE_CONFIG_DIR," ;;
         openrouter|openrouter-*)    families="OPENROUTER_" ;;
         *)                          families="$(provider_env_prefix "$provider")_" ;;
     esac
@@ -359,6 +374,16 @@ cli_config_model() {
         # and all ("Gemini 3.6 Flash (High)"). The key is absent until a model
         # has actually been selected, so a fresh install still reads as unset.
         antigravity) json_value "$HOME/.gemini/antigravity-cli/settings.json" .model ;;
+        # The CLI's own order: an OPENCODE_CONFIG file outranks the config dir,
+        # which XDG_CONFIG_HOME moves. jq cannot read comments, so a .jsonc
+        # with comments reads as unset.
+        opencode)
+            local dir="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" file model=""
+            for file in ${OPENCODE_CONFIG:+"$OPENCODE_CONFIG"} "$dir/opencode.json" "$dir/opencode.jsonc"; do
+                model=$(json_value "$file" .model)
+                [[ -n "$model" ]] && break
+            done
+            printf '%s\n' "$model" ;;
     esac
 }
 
@@ -371,7 +396,8 @@ cli_config_model() {
 # same is true of the model-unavailable verdicts keyed on it in model_fallback.sh.
 # CLI providers pass no model flag
 # unless the *_MODEL override is set, so their model is whatever their own
-# config selects; "default" remains for the CLIs that publish no such config
+# config selects (opencode's seat hides that config, so it passes the model
+# itself); "default" remains for the CLIs that publish no such config
 # and for a CLI that has not been configured. The value reaches the cache key,
 # so reconfiguring a CLI's model correctly stops the council serving an answer
 # the previous model gave.
@@ -406,6 +432,7 @@ get_model() {
         # No cli_config_model arm: a model saved in copilot's settings.json
         # left a headless run on the CLI's automatic pick.
         copilot-cli) cli_model copilot-cli "${COPILOT_CLI_MODEL:-}" ;;
+        opencode)   cli_model opencode "${OPENCODE_MODEL:-}" ;;
         ollama)     echo "${OLLAMA_MODEL:-local}" ;;
         # Pinned rather than an alias for the reason stated above, and pinned to
         # an Anthropic id because that is the one vendor the council otherwise
@@ -527,7 +554,8 @@ provider_color() {
         # claude-cli has no sixteen-colour coral, so it shares grok's red.
         grok|grok-cli|claude-cli) echo -e "${RED:-}" ;;
         perplexity)        echo -e "${GREEN:-}" ;;
-        kimi|kimi-cli)     echo -e "${BRIGHT_BLACK:-}" ;;
+        # opencode speaks for no one vendor, so it takes kimi's neutral grey.
+        kimi|kimi-cli|opencode) echo -e "${BRIGHT_BLACK:-}" ;;
         ollama)            echo -e "${CYAN:-}" ;;
         # copilot-cli has no sixteen-colour pink, so it shares the router's magenta.
         openrouter|openrouter-[0-9]*|copilot-cli) echo -e "${MAGENTA:-}" ;;
@@ -551,6 +579,8 @@ provider_color_rgb() {
         ollama)            printf -v "$__out" '8;145;178'    ;;  # cyan-600
         claude-cli)        printf -v "$__out" '217;119;87'   ;;  # Claude coral
         copilot-cli)       printf -v "$__out" '191;57;137'   ;;  # GitHub Primer pink-5
+        # No brand colour; a warm neutral apart from kimi's zinc and the default.
+        opencode)          printf -v "$__out" '120;113;108'  ;;  # stone-500
         openrouter|openrouter-[0-9]*) printf -v "$__out" '124;58;237' ;;  # violet-600
         *)                 printf -v "$__out" '113;113;122'  ;;  # zinc-500
     esac

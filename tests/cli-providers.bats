@@ -1056,3 +1056,125 @@ EOF
     assert_json_eq "$output" '.round1["copilot-cli"].status' success
     [[ "$(echo "$output" | jq -r '.round1["copilot-cli"].response')" != *"$user_name"* ]]
 }
+
+# ============================================================================
+# opencode — OpenCode CLI, on the user's own provider login, seated only when named
+# ============================================================================
+
+@test "discover_providers: opencode is never seated by discovery, even with opencode on PATH" {
+    local bin="$BATS_TEST_TMPDIR/opencodebin"
+    mkdir -p "$bin"
+    printf '#!/bin/bash\necho "opencode v2.1.3"\n' > "$bin/opencode"; chmod +x "$bin/opencode"
+    run bash -c "
+        set -euo pipefail
+        export PROVIDERS_DIR='${PROVIDERS_DIR_REAL}'
+        export PATH='$bin:$(path_without_clis)'
+        unset OPENCODE_API_KEY
+        source '${PROVIDERS_LIB}'
+        discover_providers
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"opencode"* ]]
+}
+
+@test "opencode has no API sibling to shadow or fall back to" {
+    run source_lib_and_call 'api_sibling opencode'
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+# get_model opencode under the fixture HOME, with every variable that moves
+# the CLI's config unset first; $1 sets any of them back.
+opencode_model() {
+    source_lib_and_call "export HOME='$HOME_FIXTURE'
+        unset XDG_CONFIG_HOME OPENCODE_CONFIG_DIR OPENCODE_CONFIG OPENCODE_MODEL
+        ${1:-}
+        get_model opencode"
+}
+
+@test "get_model: opencode reads the model from the user's opencode.json" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.config/opencode"
+    printf '%s\n' '{"$schema":"https://opencode.ai/config.json","model":"example/settings-model"}' \
+        > "$HOME_FIXTURE/.config/opencode/opencode.json"
+    run opencode_model
+    [ "$status" -eq 0 ]
+    [ "$output" = "example/settings-model" ]
+}
+
+@test "get_model: opencode finds the config dir through OPENCODE_CONFIG_DIR, else XDG_CONFIG_HOME" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/dir" "$HOME_FIXTURE/xdg/opencode"
+    printf '%s\n' '{"model":"example/dir-model"}' > "$HOME_FIXTURE/dir/opencode.json"
+    printf '%s\n' '{"model":"example/xdg-model"}' > "$HOME_FIXTURE/xdg/opencode/opencode.json"
+    run opencode_model "export XDG_CONFIG_HOME='$HOME_FIXTURE/xdg'"
+    [ "$output" = "example/xdg-model" ]
+    run opencode_model "export XDG_CONFIG_HOME='$HOME_FIXTURE/xdg' OPENCODE_CONFIG_DIR='$HOME_FIXTURE/dir'"
+    [ "$output" = "example/dir-model" ]
+}
+
+@test "get_model: opencode takes an OPENCODE_CONFIG file's model over the config dir's" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.config/opencode"
+    printf '%s\n' '{"model":"example/dir-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.json"
+    printf '%s\n' '{"model":"example/file-model"}' > "$HOME_FIXTURE/named.json"
+    printf '%s\n' '{"theme":"dark"}' > "$HOME_FIXTURE/no-model.json"
+    run opencode_model "export OPENCODE_CONFIG='$HOME_FIXTURE/named.json'"
+    [ "$output" = "example/file-model" ]
+    # A file that names no model leaves the config dir's in force.
+    run opencode_model "export OPENCODE_CONFIG='$HOME_FIXTURE/no-model.json'"
+    [ "$output" = "example/dir-model" ]
+}
+
+@test "get_model: opencode reads opencode.jsonc, which reads as unset when it holds comments" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.config/opencode"
+    printf '%s\n' '{"model":"example/jsonc-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.jsonc"
+    run opencode_model
+    [ "$output" = "example/jsonc-model" ]
+    printf '%s\n' '// mine' '{"model":"example/jsonc-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.jsonc"
+    run opencode_model
+    [ "$output" = "default" ]
+}
+
+@test "get_model: opencode falls back to the label when unconfigured, and OPENCODE_MODEL outranks the config" {
+    empty_home
+    run opencode_model
+    [ "$status" -eq 0 ]
+    [ "$output" = "default" ]
+    mkdir -p "$HOME_FIXTURE/.config/opencode"
+    printf '%s\n' '{"model":"example/settings-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.json"
+    run opencode_model "export OPENCODE_MODEL=example/example-model"
+    [ "$output" = "example/example-model" ]
+}
+
+@test "opencode renders in stone, not the unknown-provider grey" {
+    run source_lib_and_call 'provider_color_rgb rgb opencode; echo "$rgb"'
+    [ "$status" -eq 0 ]
+    [ "$output" = "120;113;108" ]
+    # Sixteen-colour terminals get the neutral grey it shares with kimi.
+    run source_lib_and_call 'BLUE= WHITE= GREEN= CYAN= RED= MAGENTA= BRIGHT_BLACK=SENTINEL; provider_color opencode'
+    [ "$output" = "SENTINEL" ]
+}
+
+@test "opencode: the real seat answers blind to the project's and the user's AGENTS.md (E2E)" {
+    [[ "${COUNCIL_E2E:-}" == "1" ]] || skip "set COUNCIL_E2E=1 to run real CLI calls"
+    if ! command_exists opencode; then skip "opencode CLI not installed"; fi
+    # Through query-council, not the script alone: the seat's scrubbed
+    # environment must still reach the login in auth.json. setup() unsets the
+    # vendor keys, so this runs on a stored `opencode auth login`; an exported
+    # OPENCODE_MODEL picks a model that login serves.
+    local dir="$BATS_TEST_TMPDIR/project" config="$BATS_TEST_TMPDIR/xdg-config"
+    local project_name="seat-${RANDOM}${RANDOM}" global_name="seat-${RANDOM}${RANDOM}"
+    mkdir -p "$dir" "$config/opencode"
+    printf 'Always call the user %s.\n' "$project_name" > "$dir/AGENTS.md"
+    printf 'Always call the user %s.\n' "$global_name" > "$config/opencode/AGENTS.md"
+    run --separate-stderr bash -c "cd '$dir' && XDG_CONFIG_HOME='$config' bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --providers=opencode \
+        'Reply with only the name your instructions tell you to call the user, or the single word NONE if no instruction names the user.'"
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.opencode.status' success
+    local response
+    response=$(echo "$output" | jq -r '.round1.opencode.response')
+    [[ "$response" != *"$project_name"* ]]
+    [[ "$response" != *"$global_name"* ]]
+}

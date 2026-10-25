@@ -329,15 +329,16 @@ check_cli_provider() {
 
     # A probe can signal a logged-out state two ways: a non-zero exit (codex
     # login status) or a message with exit 0 ("You are not authenticated." from
-    # grok models, "Not logged in" from cursor-agent status), so both the exit
-    # code and the output classify auth.
+    # grok models, "Not logged in" from cursor-agent status, "No authenticated
+    # integrations" from opencode auth list), so both the exit code and the
+    # output classify auth.
     local probe_out
     if [[ $# -gt 0 ]]; then
         if ! probe_out=$("$binary" "$@" 2>/dev/null); then
             echo "unauthed"
             return
         fi
-        if echo "$probe_out" | grep -qiE "not authenticated|not logged in"; then
+        if echo "$probe_out" | grep -qiE "not authenticated|not logged in|no authenticated integrations"; then
             echo "unauthed"
             return
         fi
@@ -371,6 +372,8 @@ remediation_for() {
         claude-cli:no_binary) echo "install Claude Code (claude)" ;;
         claude-cli:unauthed)  echo "claude auth login" ;;
         copilot-cli:no_binary) echo "install the GitHub Copilot CLI (copilot)" ;;
+        opencode:no_binary)   echo "install the OpenCode CLI (opencode)" ;;
+        opencode:unauthed)    echo "opencode auth login" ;;
         ollama:no_binary)     echo "install Ollama (ollama.com)" ;;
         ollama:unauthed)      echo "start the daemon: ollama serve" ;;
         grok-cli:unauthed)    echo "grok login" ;;
@@ -421,6 +424,24 @@ claudecli_status=$(provider_env_scrub claude-cli; check_cli_provider "claude-cli
 # plan, so like agy it stays a single-tier check. Discovery never seats it.
 copilotcli_status=$(check_cli_provider "copilot-cli" "copilot")
 [[ "$copilotcli_status" == ok:* ]] && copilotcli_status="${copilotcli_status} · seat with --providers=copilot-cli"
+# Probed with --standalone under the seat's own scrubbed environment: without
+# it, auth list asks the user's background service, which reports the vendor
+# keys of the shell that started it, keys the seat never receives. The empty
+# config dir is the seat's too, and keeps the probe's private server from
+# loading the user's plugins and starting their MCP servers. Listing the
+# stored logins sends no prompt, so the probe bills nothing. With none stored
+# it prints "No authenticated integrations" and exits 0. An exported
+# OPENCODE_CONFIG file would load in full beside the empty dir, and an
+# OPENCODE_CONFIG_CONTENT inline config can start MCP servers, so both are
+# unset; project config is off under both names the CLI reads, as in the seat.
+# Discovery never seats it, so a healthy row says how to.
+opencode_status=$(provider_env_scrub opencode
+    OPENCODE_CONFIG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/council-opencode-config.XXXXXX")
+    unset OPENCODE_CONFIG OPENCODE_CONFIG_CONTENT
+    export OPENCODE_CONFIG_DIR OPENCODE_DISABLE_PROJECT_CONFIG=1 OPENCODE_CONFIG_PROJECT_DISABLE=1
+    check_cli_provider "opencode" "opencode" auth list --standalone
+    rm -rf "$OPENCODE_CONFIG_DIR")
+[[ "$opencode_status" == ok:* ]] && opencode_status="${opencode_status} · seat with --providers=opencode"
 ollama_status=$(check_cli_provider "ollama" "ollama" list)
 
 # Format output
@@ -571,6 +592,7 @@ format_status "Kimi CLI" "kimi-cli" "$kimicli_status"
 format_status "Cursor CLI" "cursor-cli" "$cursorcli_status"
 format_status "Claude CLI" "claude-cli" "$claudecli_status"
 format_status "Copilot CLI" "copilot-cli" "$copilotcli_status"
+format_status "OpenCode" "opencode" "$opencode_status"
 format_status "Ollama" "ollama" "$ollama_status"
 format_status "Codex CLI"  "codex"      "$codex_status"
 format_status "Antigravity" "antigravity" "$antigravity_status"
@@ -590,6 +612,7 @@ echo ""
 [[ "$cursorcli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$claudecli_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$copilotcli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$opencode_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$ollama_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
 [[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))

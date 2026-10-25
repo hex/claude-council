@@ -42,8 +42,8 @@ plain_output() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     # antigravity, kimi-cli and copilot-cli have no offline auth probe, so all three still count;
-    # codex, grok-cli, cursor-cli and claude-cli probe auth and report unauthed under auth-failure
-    [[ "$output" == *"3/14 providers available"* ]]
+    # codex, grok-cli, cursor-cli, claude-cli and opencode probe auth and report unauthed under auth-failure
+    [[ "$output" == *"3/15 providers available"* ]]
 }
 
 @test "check-status: missing API key shows exact export remediation" {
@@ -104,8 +104,8 @@ plain_output() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connected"* ]]
-    # 6 API providers + codex + antigravity + grok-cli + kimi-cli + cursor-cli + claude-cli + copilot-cli + ollama, all healthy
-    [[ "$output" == *"14/14 providers available"* ]]
+    # 6 API providers + codex + antigravity + grok-cli + kimi-cli + cursor-cli + claude-cli + copilot-cli + opencode + ollama, all healthy
+    [[ "$output" == *"15/15 providers available"* ]]
 }
 
 @test "check-status: the footer total equals the number of provider rows printed" {
@@ -136,8 +136,8 @@ plain_output() {
     # Every API provider must classify 401, not just whichever one happens to be
     # first: a substring match alone cannot tell six rows from one.
     [ "$(auth_failures "$output")" -eq 6 ]
-    # Only the eight local providers remain (codex, antigravity, grok-cli, kimi-cli, cursor-cli, claude-cli, copilot-cli, ollama)
-    [[ "$output" == *"8/14 providers available"* ]]
+    # Only the nine local providers remain (codex, antigravity, grok-cli, kimi-cli, cursor-cli, claude-cli, copilot-cli, opencode, ollama)
+    [[ "$output" == *"9/15 providers available"* ]]
 }
 
 # Gemini answers 403 PERMISSION_DENIED for a referer-restricted key, OpenAI for a
@@ -218,7 +218,7 @@ plain_output() {
     local plain
     plain=$(plain_output)
     [[ "$plain" == *"Perplexity    ✗  Unsupported model           PERPLEXITY_MODEL=sonar-pro is a retired Sonar id; use fast, another Agent API preset or a provider/model id"* ]]
-    [[ "$plain" == *"13/14 providers available"* ]]
+    [[ "$plain" == *"14/15 providers available"* ]]
     grep -qF 'https://api.openai.com/v1/models' "$CS_ARGV_FILE"
     run ! grep -qF 'api.perplexity.ai' "$CS_ARGV_FILE"
 }
@@ -231,7 +231,7 @@ plain_output() {
     [[ "$output" == *"Error (HTTP 500)"* ]]
     # A server-side fault is not a credentials problem
     [ "$(auth_failures "$output")" -eq 0 ]
-    [[ "$output" == *"8/14 providers available"* ]]
+    [[ "$output" == *"9/15 providers available"* ]]
 }
 
 @test "check-status: curl failure (000) reports a connection timeout" {
@@ -240,7 +240,7 @@ plain_output() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Connection timeout"* ]]
-    [[ "$output" == *"8/14 providers available"* ]]
+    [[ "$output" == *"9/15 providers available"* ]]
 }
 
 # Gemini and xAI answer a rejected key with 400 rather than a 401, so the status
@@ -374,6 +374,44 @@ plain_output() {
     [[ "$output" == *"install the GitHub Copilot CLI (copilot)"* ]]
 }
 
+@test "check-status: opencode row says how to seat it, and a logged-out opencode says how to log in" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$(plain_output)" == *"OpenCode      ✓  Connected"*"--providers=opencode"* ]]
+    # The private server's view, not the background service's, and never a
+    # run: a prompt would bill the user's provider.
+    [ "$(jq -c 'select(.bin == "opencode" and .args[0] != "--version") | .args' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = \
+      '["auth","list","--standalone"]' ]
+    # The real CLI prints "No authenticated integrations" and exits 0.
+    export COUNCIL_FAKE_BEHAVIOR=auth-failure
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$(plain_output)" == *"OpenCode      ✗  Installed, not authenticated fix: opencode auth login"* ]]
+}
+
+@test "check-status: the opencode probe gets no inherited inline config and keeps project config off" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    # An inline config can start MCP servers in the probe's private server.
+    export OPENCODE_CONFIG_CONTENT='{"mcp":{"example":{"type":"local","command":["example"]}}}'
+    export OPENCODE_CONFIG_PROJECT_DISABLE=0
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    local seen
+    seen=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-auth-env.jsonl")
+    [ "$(jq -r 'has("OPENCODE_CONFIG_CONTENT")' <<<"$seen")" = "false" ]
+    [ "$(jq -r '.OPENCODE_CONFIG_PROJECT_DISABLE' <<<"$seen")" = "1" ]
+    [ "$(jq -r '.OPENCODE_DISABLE_PROJECT_CONFIG' <<<"$seen")" = "1" ]
+}
+
+@test "check-status: a missing opencode names the OpenCode CLI as what to install" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    rm "$FAKE_BIN_DIR/opencode"
+    run bash -c "export PATH='$(path_without_dir_of opencode)'; bash '$SCRIPT'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"install the OpenCode CLI (opencode)"* ]]
+}
+
 @test "check-status: a missing cursor-agent names the binary to install" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     rm "$FAKE_BIN_DIR/cursor-agent"
@@ -407,10 +445,10 @@ plain_output() {
     plain=$(plain_output)
     [[ "$plain" == *"OpenAI        ✗  Inference blocked (HTTP 429)"*"fix: check the account's billing or credits"* ]]
     # Only OpenAI's body carries OpenAI's marker; the other three read it as a
-    # plain 429. Perplexity, OpenRouter and the eight CLIs stay available.
+    # plain 429. Perplexity, OpenRouter and the nine CLIs stay available.
     [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked' || true)" -eq 1 ]
     [ "$(printf '%s\n' "$plain" | grep -c 'Rate limited (HTTP 429)' || true)" -eq 3 ]
-    [[ "$plain" == *"10/14 providers available"* ]]
+    [[ "$plain" == *"11/15 providers available"* ]]
 }
 
 @test "check-status: OpenAI credit_balance_exhausted reports inference blocked" {
@@ -458,7 +496,7 @@ plain_output() {
     plain=$(plain_output)
     [ "$(printf '%s\n' "$plain" | grep -c 'Inference blocked (HTTP 402)' || true)" -eq 4 ]
     [[ "$plain" == *"Perplexity    ✓  Connected"* ]]
-    [[ "$plain" == *"10/14 providers available"* ]]
+    [[ "$plain" == *"11/15 providers available"* ]]
 }
 
 @test "check-status: an inference answer the probe does not recognise reads Connected, inference unverified" {
@@ -472,7 +510,7 @@ plain_output() {
     # The key works, so the provider still counts; the row says what is unproven.
     [ "$(printf '%s\n' "$plain" | grep -c 'Connected .*inference unverified (HTTP 400)' || true)" -eq 4 ]
     [[ "$plain" == *"OpenAI        ✓  Connected ("*"ms)"*"· inference unverified (HTTP 400)"* ]]
-    [[ "$plain" == *"14/14 providers available"* ]]
+    [[ "$plain" == *"15/15 providers available"* ]]
     [[ "$plain" != *"Inference blocked"* ]]
 }
 

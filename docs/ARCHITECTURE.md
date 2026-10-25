@@ -139,7 +139,9 @@ ENV:    scrubbed by provider_env_scrub (lib/providers.sh) in the subshell
         that execs the script: base, proxy/CA and Windows variables,
         COUNCIL_*, the provider's vendor prefixes and exact names (claude-cli
         keeps CLAUDE_CODE_OAUTH_TOKEN and CLAUDE_CONFIG_DIR; copilot-cli keeps
-        COPILOT_GITHUB_TOKEN and COPILOT_HOME, not GH_TOKEN or GITHUB_TOKEN), and COUNCIL_PASS_ENV
+        COPILOT_GITHUB_TOKEN and COPILOT_HOME, not GH_TOKEN or GITHUB_TOKEN;
+        opencode keeps OPENCODE_MODEL, OPENCODE_CONFIG and OPENCODE_CONFIG_DIR,
+        no other OPENCODE_* name and no vendor key), and COUNCIL_PASS_ENV
         names stay; every other exported variable is unset. Nothing goes
         on an env -i argv, where ps would show a key.
 ```
@@ -209,6 +211,34 @@ Two flavors share the interface:
   prompt would spend a premium request. `get_model` reports `COPILOT_CLI_MODEL`
   or `default`, never the `settings.json` model, which a headless run did not
   use. It has no API sibling.
+- **`opencode`** runs the OpenCode CLI (`opencode run --standalone --format
+  json`) on whichever provider the user logged it in to, with the prompt on
+  stdin. Discovery never seats it: each question bills that provider, so it
+  joins only when named. `--standalone` gives the run a private server rather
+  than the user's background service, which holds the environment and config
+  it started with. An empty `OPENCODE_CONFIG_DIR`, with `OPENCODE_CONFIG`
+  unset, keeps the user's global config, plugins and MCP servers out, `OPENCODE_DISABLE_PROJECT_CONFIG=1`
+  and `OPENCODE_CONFIG_PROJECT_DISABLE=1` (the CLI reads the second first, so
+  an inherited `0` would win) keep the working directory's `opencode.json` and
+  `AGENTS.md` out, and an
+  inline `OPENCODE_CONFIG_CONTENT` that denies every permission sends the model
+  no tool. The CLI saves every run in its session history and no flag stops
+  that, so the exit trap deletes the run's session with `opencode session
+  delete --standalone`; a delete that fails leaves it. A provider error exits 1 with stderr
+  empty and arrives as an `error` event on stdout, which is what the seat
+  reports. Its scrubbed environment keeps `OPENCODE_MODEL`, `OPENCODE_CONFIG`
+  and `OPENCODE_CONFIG_DIR`, which `get_model` reads, and drops every other
+  `OPENCODE_*` name and every vendor key, so it runs on the logins in
+  `auth.json` under `XDG_DATA_HOME`. `check-status.sh` probes `opencode auth
+  list --standalone` under that environment, the same empty config dir and
+  project-disable pair, with `OPENCODE_CONFIG` and `OPENCODE_CONFIG_CONTENT`
+  unset, and reads `No authenticated
+  integrations` as logged out. The empty config dir hides the user's model
+  too, so `get_model` reads it before the seat swaps the dir in, and the seat
+  passes it as `-m`: `OPENCODE_MODEL`, else `.model` from an `OPENCODE_CONFIG`
+  file, else from `opencode.json` or `opencode.jsonc` in `OPENCODE_CONFIG_DIR`
+  or `${XDG_CONFIG_HOME:-~/.config}/opencode`, else `default` and no `-m`.
+  It has no API sibling.
 - **`ollama`**, also gated on the binary being on `PATH`, but local and keyless:
   it shadows nothing, has no API sibling, and costs nothing per call.
 
@@ -216,7 +246,7 @@ Environment-based configuration:
 - `{PROVIDER}_API_KEY` - Required authentication for API providers
 - `{PROVIDER}_MODEL` - Model override (also applies to CLI providers via
   `CODEX_MODEL` / `ANTIGRAVITY_MODEL` / `GROK_CLI_MODEL` / `KIMI_CLI_MODEL` / `CURSOR_CLI_MODEL` /
-  `CLAUDE_CLI_MODEL` / `COPILOT_CLI_MODEL`)
+  `CLAUDE_CLI_MODEL` / `COPILOT_CLI_MODEL` / `OPENCODE_MODEL`)
 - `COUNCIL_MAX_TOKENS` - Response length limit (API providers only; `ollama`
   raises its own base to 4096)
 - `COUNCIL_DEBUG` - Enable verbose logging
@@ -239,8 +269,8 @@ Per-provider disposition when an image is attached:
   kimi-cli→kimi — with the image. The route is taken only when the sibling is
   itself vision-capable, its key is set and it is not already a selected
   provider; otherwise the CLI answers text-only, prefixed with
-  `(answered without the image)`. **cursor-cli**, **claude-cli** and
-  **copilot-cli** have no sibling and answer text-only.
+  `(answered without the image)`. **cursor-cli**, **claude-cli**,
+  **copilot-cli** and **opencode** have no sibling and answer text-only.
 - **openrouter** accepts an image on its curated default, which is
   vision-capable. An `OPENROUTER_MODEL` override names one of hundreds of routed
   models whose modalities are not knowable from here, so it is treated as
@@ -352,7 +382,7 @@ script: a preferred-model exit 3 (see Provider Scripts below), or a cached
 verdict, retries once with the fallback. The substitution is reported on the
 response header, on stderr, and folded into the synthesis prompt.
 
-### The Empty Answer (every API provider, plus cursor-cli, claude-cli, copilot-cli, kimi-cli and ollama)
+### The Empty Answer (every API provider, plus cursor-cli, claude-cli, copilot-cli, opencode, kimi-cli and ollama)
 
 A provider that returns no visible text is an error even when HTTP says the
 call succeeded, so each of these seats asks whether the answer holds any
@@ -679,6 +709,7 @@ claude-council/
 │   │   ├── cursor-cli.sh        # CLI (subscription auth, no API sibling)
 │   │   ├── claude-cli.sh        # CLI (Claude subscription, seated only when named)
 │   │   ├── copilot-cli.sh       # CLI (Copilot plan, seated only when named)
+│   │   ├── opencode.sh          # CLI (the user's own provider login, seated only when named)
 │   │   └── ollama.sh            # Local (no key, no sibling)
 │   └── lib/
 │       ├── cache.sh             # Caching utilities
@@ -722,14 +753,14 @@ claude-council/
 │   │   ├── heads-up-e2e.expected.txt
 │   │   ├── heads-up-codex-e2e.sh  # One real check against the logged-in codex on a session you name; sends that session off the machine
 │   ├── fixtures/
-│   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/cursor-agent/claude/copilot/ollama binaries on PATH
+│   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/cursor-agent/claude/copilot/opencode/ollama binaries on PATH
 │   │   └── status-fakes.bash    # Recording curl + jq for the check-status tests
 │   ├── agent-analysis.bats
 │   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
 │   ├── cache.bats
 │   ├── check-status.bats
 │   ├── check-status-probe.bats  # The probes themselves: endpoints, --max-time, keys off the argv
-│   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli, kimi-cli, cursor-cli, claude-cli, copilot-cli, ollama)
+│   ├── cli-providers.bats       # CLI providers (codex, antigravity, grok-cli, kimi-cli, cursor-cli, claude-cli, copilot-cli, opencode, ollama)
 │   ├── deadline.bats            # run_with_deadline: stdin passthrough, own status, 143 at the deadline
 │   ├── display.bats
 │   ├── export.bats
@@ -788,6 +819,7 @@ claude-council/
 | `CURSOR_CLI_MODEL` | (unset) | Model passed to `cursor-agent --model`, only when set (else the model picked in the CLI). The CLI writes the passed model into its own config as the picked model, even when the plan rejects it |
 | `CLAUDE_CLI_MODEL` | (unset) | Model passed to `claude --model`, only when set (else the account's default model; the seat does not read `settings.json`) |
 | `COPILOT_CLI_MODEL` | (unset) | Model passed to `copilot --model`, only when set (else the CLI's automatic pick, which can change per question; a plan can reject every named model) |
+| `OPENCODE_MODEL` | (unset) | `provider/model` passed to `opencode run -m` (else the `model` from the user's `opencode.json`; with neither, no `-m` and the CLI's built-in default) |
 | `OPENROUTER_MODEL` | `anthropic/claude-fable-5.1` | Any id from openrouter.ai/models (single seat) |
 | `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
 | `OPENROUTER_<N>_MODEL` | (unset) | Overrides roster seat N's entry, as `<PROVIDER>_MODEL` does for any provider; the exit-3 degrade path sets it so a roster entry never resends the model that just failed |

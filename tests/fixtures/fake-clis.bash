@@ -1,4 +1,4 @@
-# ABOUTME: Installs fake codex/agy/grok/kimi/cursor-agent/claude/copilot/ollama CLI executables onto PATH for hermetic tests
+# ABOUTME: Installs fake codex/agy/grok/kimi/cursor-agent/claude/copilot/opencode/ollama CLI executables onto PATH for hermetic tests
 # ABOUTME: Behavior switches via COUNCIL_FAKE_BEHAVIOR; calls recorded as JSONL in COUNCIL_FAKE_STATE_DIR
 
 # Behaviors (COUNCIL_FAKE_BEHAVIOR):
@@ -13,7 +13,8 @@
 #   auth-failure   - login-required message on stderr, exit 1; claude answers
 #                    `auth status` with loggedIn:false and exit 1, unless an
 #                    ANTHROPIC_API_KEY is set, which the real CLI counts as
-#                    logged in; copilot prints the real CLI's logged-out text
+#                    logged in; copilot prints the real CLI's logged-out text;
+#                    opencode answers `auth list` with its no-logins line, exit 0
 #   slow           - sleep COUNCIL_FAKE_SLEEP (default 5s) then respond
 #   hang           - exec sleep COUNCIL_FAKE_SLEEP (default 300s); replaces the
 #                    process so the deadline watchdog's SIGTERM kills it cleanly
@@ -61,7 +62,7 @@ install_fake_clis() {
     export FAKE_BIN_DIR COUNCIL_FAKE_STATE_DIR
 
     local bin
-    for bin in codex agy grok kimi cursor-agent claude copilot ollama; do
+    for bin in codex agy grok kimi cursor-agent claude copilot opencode ollama; do
         write_fake_cli "$bin"
     done
     PATH="$FAKE_BIN_DIR:$PATH"
@@ -269,6 +270,63 @@ if [[ " \$* " == *" --output-format json "* ]]; then
                 "  • Run 'gh auth login' to authenticate with the GitHub CLI" >&2
             exit 1 ;;
     esac
+fi
+EOF
+    fi
+    if [[ "$bin" == "opencode" ]]; then
+        cat >> "$FAKE_BIN_DIR/$bin" <<EOF
+# The real CLI answers run --format json with one event per line, the answer
+# in a "text" event's .part.text. These are the events opencode 2.1.3 printed
+# for a one-word answer, ids shortened. With no message argument it reads the
+# prompt from stdin; keep a copy so a test can assert what reached the CLI and
+# that it never rode argv. Keep the OPENCODE_ variables too, and whether the
+# config dir it was handed was an empty directory, so a test can assert what
+# isolation the seat was given. Each run gets its own session id, kept in
+# opencode-session.txt, so a test can assert the seat deleted that session.
+if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
+    cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
+    SID="ses_fake\${RANDOM}\${RANDOM}"
+    echo "\$SID" > "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-session.txt"
+    CONFIG_EMPTY=false
+    [[ -d "\${OPENCODE_CONFIG_DIR:-}" && -z "\$(ls -A "\$OPENCODE_CONFIG_DIR")" ]] && CONFIG_EMPTY=true
+    jq -cn --argjson empty "\$CONFIG_EMPTY" \\
+        '{config_dir_empty: \$empty} + (env | with_entries(select(.key | startswith("OPENCODE_"))))' \\
+        >> "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-env.jsonl"
+    case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
+        valid|empty)
+            ANSWER="$marker: deterministic answer"
+            [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "empty" ]] && ANSWER=""
+            jq -cn --arg s "\$SID" '{type: "step_start", timestamp: 1, sessionID: \$s, part: {id: "prt_1", sessionID: \$s, messageID: "msg_1", type: "step-start", snapshot: "fake"}}'
+            jq -cn --arg s "\$SID" --arg a "\$ANSWER" '{type: "text", timestamp: 2, sessionID: \$s, part: {id: "prt_2", sessionID: \$s, messageID: "msg_1", type: "text", text: \$a, time: {start: 1, end: 2}}}'
+            exit 0 ;;
+        bad-model)
+            # The real CLI's unknown-model event on stdout, stderr empty, exit 1.
+            # Names the model it was actually handed, so a provider that drops
+            # -m on the floor cannot pass this case.
+            MODEL=""; PREV=""
+            for a in "\$@"; do [[ "\$PREV" == "-m" ]] && MODEL="\$a"; PREV="\$a"; done
+            jq -cn --arg s "\$SID" --arg m "Model unavailable: \${MODEL:-none}" '{type: "error", timestamp: 1, sessionID: \$s, error: {type: "provider.no-route", message: \$m}}'
+            exit 1 ;;
+    esac
+fi
+# The real CLI answers "opencode session delete <id>" with this line, exit 0.
+if [[ "\${1:-} \${2:-}" == "session delete" ]]; then
+    echo "Session \${*: -1} deleted"
+    exit 0
+fi
+# The real CLI answers "opencode auth list" with one row per stored login or
+# vendor key, exit 0; with none it prints "No authenticated integrations",
+# still exit 0. Keep the OPENCODE_ variables it saw, so a test can assert what
+# the status probe hands it.
+if [[ "\${1:-} \${2:-}" == "auth list" ]]; then
+    jq -cn 'env | with_entries(select(.key | startswith("OPENCODE_")))' \\
+        >> "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-auth-env.jsonl"
+    if [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "auth-failure" ]]; then
+        echo "No authenticated integrations"
+        exit 0
+    fi
+    echo "Example    OAuth    stored"
+    exit 0
 fi
 EOF
     fi
