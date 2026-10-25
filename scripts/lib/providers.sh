@@ -365,6 +365,16 @@ cli_config_model() {
         # and all ("Gemini 3.6 Flash (High)"). The key is absent until a model
         # has actually been selected, so a fresh install still reads as unset.
         antigravity) json_value "$HOME/.gemini/antigravity-cli/settings.json" .model ;;
+        # The CLI's own order: an OPENCODE_CONFIG file outranks the config dir,
+        # which XDG_CONFIG_HOME moves. jq cannot read comments, so a .jsonc
+        # with comments reads as unset.
+        opencode)
+            local dir="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" file model=""
+            for file in ${OPENCODE_CONFIG:+"$OPENCODE_CONFIG"} "$dir/opencode.json" "$dir/opencode.jsonc"; do
+                model=$(json_value "$file" .model)
+                [[ -n "$model" ]] && break
+            done
+            printf '%s\n' "$model" ;;
     esac
 }
 
@@ -412,8 +422,6 @@ get_model() {
         # No cli_config_model arm: a model saved in copilot's settings.json
         # left a headless run on the CLI's automatic pick.
         copilot-cli) cli_model copilot-cli "${COPILOT_CLI_MODEL:-}" ;;
-        # No cli_config_model arm: the seat runs with an empty
-        # OPENCODE_CONFIG_DIR, so the model in opencode.json is never what it uses.
         opencode)   cli_model opencode "${OPENCODE_MODEL:-}" ;;
         ollama)     echo "${OLLAMA_MODEL:-local}" ;;
         # Pinned rather than an alias for the reason stated above, and pinned to

@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -71,6 +72,12 @@ trap remove_run EXIT
 # The council's environment scrub keeps only the OPENCODE_ family here, so no
 # vendor's API key reaches the seat and it runs on the `opencode auth login`
 # credentials; COUNCIL_PASS_ENV names any key it should keep.
+# The empty config dir also hides the model the user picked, so get_model reads
+# it first and the seat passes it as -m below.
+# OPENCODE_CONFIG, a config file the CLI loads on top of any config dir, is
+# unset for the same reason as the empty dir.
+MODEL="$(get_model opencode)"
+unset OPENCODE_CONFIG
 export OPENCODE_CONFIG_DIR="$CONFIG_TMP"
 export OPENCODE_DISABLE_PROJECT_CONFIG=1
 export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny"}}'
@@ -84,10 +91,10 @@ export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny"}}'
 # No message argument: the prompt arrives on stdin, which keeps the whole
 # prompt off argv (see cursor-cli.sh for the argument limit this avoids).
 ARGS=(run --standalone --format json)
-# -m only on an explicit override, so an unset OPENCODE_MODEL defers to the
-# CLI's own choice (mirrors claude-cli.sh and copilot-cli.sh). The value is
-# provider/model, as the CLI names models.
-[[ -n "${OPENCODE_MODEL:-}" ]] && ARGS+=(-m "$OPENCODE_MODEL")
+# -m carries OPENCODE_MODEL, else the model in the user's own config; with
+# neither, get_model says "default" and the CLI picks its built-in model. The
+# value is provider/model, as the CLI names models.
+[[ "$MODEL" != default ]] && ARGS+=(-m "$MODEL")
 
 if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" opencode "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
 # Every event names the run's session; the first one is enough. Only a plain

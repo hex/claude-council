@@ -1083,18 +1083,68 @@ EOF
     [ -z "$output" ]
 }
 
-@test "get_model: opencode ignores the model in opencode.json, which the seat never loads" {
+# get_model opencode under the fixture HOME, with every variable that moves
+# the CLI's config unset first; $1 sets any of them back.
+opencode_model() {
+    source_lib_and_call "export HOME='$HOME_FIXTURE'
+        unset XDG_CONFIG_HOME OPENCODE_CONFIG_DIR OPENCODE_CONFIG OPENCODE_MODEL
+        ${1:-}
+        get_model opencode"
+}
+
+@test "get_model: opencode reads the model from the user's opencode.json" {
     empty_home
     mkdir -p "$HOME_FIXTURE/.config/opencode"
-    printf '%s\n' '{"model":"example/settings-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.json"
-    run source_lib_and_call "export HOME='$HOME_FIXTURE'; unset OPENCODE_MODEL; get_model opencode"
+    printf '%s\n' '{"$schema":"https://opencode.ai/config.json","model":"example/settings-model"}' \
+        > "$HOME_FIXTURE/.config/opencode/opencode.json"
+    run opencode_model
     [ "$status" -eq 0 ]
+    [ "$output" = "example/settings-model" ]
+}
+
+@test "get_model: opencode finds the config dir through OPENCODE_CONFIG_DIR, else XDG_CONFIG_HOME" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/dir" "$HOME_FIXTURE/xdg/opencode"
+    printf '%s\n' '{"model":"example/dir-model"}' > "$HOME_FIXTURE/dir/opencode.json"
+    printf '%s\n' '{"model":"example/xdg-model"}' > "$HOME_FIXTURE/xdg/opencode/opencode.json"
+    run opencode_model "export XDG_CONFIG_HOME='$HOME_FIXTURE/xdg'"
+    [ "$output" = "example/xdg-model" ]
+    run opencode_model "export XDG_CONFIG_HOME='$HOME_FIXTURE/xdg' OPENCODE_CONFIG_DIR='$HOME_FIXTURE/dir'"
+    [ "$output" = "example/dir-model" ]
+}
+
+@test "get_model: opencode takes an OPENCODE_CONFIG file's model over the config dir's" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.config/opencode"
+    printf '%s\n' '{"model":"example/dir-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.json"
+    printf '%s\n' '{"model":"example/file-model"}' > "$HOME_FIXTURE/named.json"
+    printf '%s\n' '{"theme":"dark"}' > "$HOME_FIXTURE/no-model.json"
+    run opencode_model "export OPENCODE_CONFIG='$HOME_FIXTURE/named.json'"
+    [ "$output" = "example/file-model" ]
+    # A file that names no model leaves the config dir's in force.
+    run opencode_model "export OPENCODE_CONFIG='$HOME_FIXTURE/no-model.json'"
+    [ "$output" = "example/dir-model" ]
+}
+
+@test "get_model: opencode reads opencode.jsonc, which reads as unset when it holds comments" {
+    empty_home
+    mkdir -p "$HOME_FIXTURE/.config/opencode"
+    printf '%s\n' '{"model":"example/jsonc-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.jsonc"
+    run opencode_model
+    [ "$output" = "example/jsonc-model" ]
+    printf '%s\n' '// mine' '{"model":"example/jsonc-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.jsonc"
+    run opencode_model
     [ "$output" = "default" ]
 }
 
-@test "get_model: opencode honours OPENCODE_MODEL" {
-    run source_lib_and_call "export OPENCODE_MODEL=example/example-model; get_model opencode"
+@test "get_model: opencode falls back to the label when unconfigured, and OPENCODE_MODEL outranks the config" {
+    empty_home
+    run opencode_model
     [ "$status" -eq 0 ]
+    [ "$output" = "default" ]
+    mkdir -p "$HOME_FIXTURE/.config/opencode"
+    printf '%s\n' '{"model":"example/settings-model"}' > "$HOME_FIXTURE/.config/opencode/opencode.json"
+    run opencode_model "export OPENCODE_MODEL=example/example-model"
     [ "$output" = "example/example-model" ]
 }
 

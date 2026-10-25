@@ -1217,6 +1217,10 @@ opencode_run_call() {
 @test "opencode.sh: runs a private server blind to the user's config, with every tool denied" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     unset OPENCODE_MODEL
+    # A user config that names no model, so no -m joins the argument list.
+    export OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR/unconfigured"
+    export OPENCODE_CONFIG="$BATS_TEST_TMPDIR/user-config.json"
+    printf '%s\n' '{"mcp":{"example":{"type":"local","command":["example"]}}}' > "$OPENCODE_CONFIG"
     run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
     [ "$status" -eq 0 ]
     # The whole argument list, so a flag lost in quoting fails here instead of
@@ -1229,6 +1233,7 @@ opencode_run_call() {
     [ "$(jq -r '.config_dir_empty' <<<"$seen")" = "true" ]
     [ "$(jq -r '.OPENCODE_DISABLE_PROJECT_CONFIG' <<<"$seen")" = "1" ]
     [ "$(jq -r '.OPENCODE_CONFIG_CONTENT' <<<"$seen")" = '{"permission":{"*":"deny"}}' ]
+    [ "$(jq -r 'has("OPENCODE_CONFIG")' <<<"$seen")" = "false" ]
     # The config dir goes with the run.
     [ ! -e "$(jq -r '.OPENCODE_CONFIG_DIR' <<<"$seen")" ]
 }
@@ -1243,12 +1248,31 @@ opencode_run_call() {
     [ "$(opencode_run_call | wc -c)" -lt 1000 ]
 }
 
-@test "opencode.sh: passes -m only when OPENCODE_MODEL is set" {
+@test "opencode.sh: passes the model from the user's opencode.json as -m" {
     export COUNCIL_FAKE_BEHAVIOR=valid
-    export OPENCODE_MODEL=example/example-model
+    unset OPENCODE_MODEL OPENCODE_CONFIG
+    export OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR/user-config"
+    mkdir -p "$OPENCODE_CONFIG_DIR"
+    printf '%s\n' '{"model":"example/config-model"}' > "$OPENCODE_CONFIG_DIR/opencode.json"
     run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
     [ "$status" -eq 0 ]
-    [ "$(opencode_run_call | jq -r '.args | index("-m") as $i | .[$i+1]')" = "example/example-model" ]
+    [ "$(opencode_run_call | jq -c '.args')" = \
+      '["run","--standalone","--format","json","-m","example/config-model"]' ]
+    # The model came from the user's config, not from a config the CLI loaded.
+    [ "$(jq -r '.config_dir_empty' <<<"$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-env.jsonl")")" = "true" ]
+}
+
+@test "opencode.sh: OPENCODE_MODEL is the -m it passes, over the model in the user's config" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    export OPENCODE_MODEL=example/example-model
+    unset OPENCODE_CONFIG
+    export OPENCODE_CONFIG_DIR="$BATS_TEST_TMPDIR/user-config"
+    mkdir -p "$OPENCODE_CONFIG_DIR"
+    printf '%s\n' '{"model":"example/config-model"}' > "$OPENCODE_CONFIG_DIR/opencode.json"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(opencode_run_call | jq -c '.args')" = \
+      '["run","--standalone","--format","json","-m","example/example-model"]' ]
 }
 
 @test "opencode.sh: deletes the run's session from the user's history afterwards" {
