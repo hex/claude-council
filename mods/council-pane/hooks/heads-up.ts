@@ -404,7 +404,7 @@ export function acknowledgePause(s: Session): Session {
 
 /** The red row above the prompt while the pause is not dismissed. */
 export function pausedLine(p: Paused): string {
-  return `heads-up paused · ${p.seat} is out of credits · ${p.detail}`
+  return `heads-up paused · ${p.seat}: ${p.detail}`
 }
 
 /** What turn.step carries that the rules read: the turn, and this request's position in it, from 0. */
@@ -616,7 +616,7 @@ export function checkLine(r: RunResult): string {
   if (r.kind === 'skipped') return `heads-up: skipped · ${r.detail}`
   if (r.kind === 'quota') {
     const ms = r.seats.reduce((total, seat) => total + seat.elapsedMs, 0)
-    return `heads-up: paused · ${r.seat} out of credits after ${seconds(ms)}: ${r.detail} · /${COMMAND} on resumes`
+    return `heads-up: paused · ${r.seat} after ${seconds(ms)}: ${r.detail} · /${COMMAND} on resumes`
   }
   const reasons = r.seats.map(seat => `${seat.seat} ${seat.outcome} after ${seconds(seat.elapsedMs)}${seat.detail ? `: ${seat.detail}` : ''}`)
   return `heads-up: failed · ${kilobytes(r.payloadBytes)} · ${reasons.join('; ')}`

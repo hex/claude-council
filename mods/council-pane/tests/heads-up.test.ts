@@ -130,7 +130,7 @@ test('dismissing the pause row acknowledges it and keeps the pause; with no paus
 
 test('the pause row names the seat and its own words', () => {
   expect(pausedLine({ seat: 'codex', detail: OUT_OF_CREDITS, acknowledged: false }))
-    .toBe('heads-up paused · codex is out of credits · Your workspace is out of credits. Add credits to continue.')
+    .toBe('heads-up paused · codex: Your workspace is out of credits. Add credits to continue.')
 })
 
 test('backoff spends one skipped check per cadence point and hands back the memory to write', () => {
@@ -166,7 +166,7 @@ test('a seat out of credits reads as quota, carrying the seat and its words; wit
   expect(parseRunResult('c1', JSON.stringify({ kind: 'quota', bytes: 900, seats: [{ seat: 'codex', outcome: 'error', ms: 3100, detail: 'exit 1' }] })).kind).toBe('failed')
   expect(parseRunResult('c1', JSON.stringify({ kind: 'quota', bytes: 900, seats: [{ seat: 'codex', outcome: 'quota', ms: 3100 }] })).kind).toBe('failed')
   expect(checkLine({ kind: 'quota', seat: 'codex', detail: OUT_OF_CREDITS, payloadBytes: 900, seats: [{ seat: 'codex', outcome: 'quota', elapsedMs: 3100, detail: OUT_OF_CREDITS }] }))
-    .toBe('heads-up: paused · codex out of credits after 3 s: Your workspace is out of credits. Add credits to continue. · /heads-up on resumes')
+    .toBe('heads-up: paused · codex after 3 s: Your workspace is out of credits. Add credits to continue. · /heads-up on resumes')
 })
 
 test('a check the runner skipped keeps its reason and asks for no band', () => {

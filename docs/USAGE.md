@@ -431,7 +431,7 @@ understood, dismiss, turned off and typed past. A sample line:
 When codex reports that its workspace is out of credits (or at its usage
 limit), the check pauses for the rest of the session instead of failing at
 every cadence point. A red row above the prompt reads
-`heads-up paused · codex is out of credits · <codex's own words>` with
+`heads-up paused · codex: <codex's own words>` with
 `0: Dismiss`, which hides the row and keeps the pause. While paused,
 `/heads-up status` adds the row `paused  codex out of credits this session ·
 /heads-up on to resume`. Only `/heads-up on` or a new session resumes the
