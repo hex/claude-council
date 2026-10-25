@@ -132,12 +132,12 @@ if [[ " $* " == *" --output-schema "* ]]; then
             [[ "$COUNCIL_FAKE_BEHAVIOR" == heads-up-slow-note ]] && sleep "${COUNCIL_FAKE_SLEEP:-5}"
             echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
             printf '%s\n' "$note" > "$OUT"
-            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            echo '{"type":"turn.completed","usage":{"input_tokens":32961,"cached_input_tokens":13568,"cache_write_input_tokens":1200,"output_tokens":467,"reasoning_output_tokens":314}}'
             exit 0 ;;
         heads-up-none)
             echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
             echo '{"none":true,"tag":"","topic":"","headline":"","title":"","points":[]}' > "$OUT"
-            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            echo '{"type":"turn.completed","usage":{"input_tokens":21000,"cached_input_tokens":9000,"cache_write_input_tokens":0,"output_tokens":120,"reasoning_output_tokens":80}}'
             exit 0 ;;
         heads-up-blank)
             echo '{"none":false,"tag":"Heads up","topic":"","headline":"","title":"","points":[]}' > "$OUT"

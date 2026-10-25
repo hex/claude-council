@@ -77,8 +77,9 @@ wait_done() {
     return 1
 }
 
+# $1 a jq program; -c first for compact JSON.
 result() {
-    jq -r "$1" "$RUN_DIR/result.json"
+    if [[ "$1" == -c ]]; then jq -c "$2" "$RUN_DIR/result.json"; else jq -r "$1" "$RUN_DIR/result.json"; fi
 }
 
 @test "heads-up: a seat name that is not a provider exits 1 before anything forks" {
@@ -131,6 +132,8 @@ result() {
     [ "$(result .tag)" = "Heads up" ]
     [ "$(result '.seats | length')" = "1" ]
     [ "$(result '.seats[0].seat + " " + .seats[0].outcome')" = "codex note" ]
+    # turn.completed's usage: cached_input_tokens is part of input_tokens, and so is the cache write.
+    [ "$(result -c '.seats[0].usage')" = '{"input":32961,"cached":13568,"output":467,"reasoning":314}' ]
     [ "$(jq -r .bin "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = "codex" ]
 }
 
@@ -200,6 +203,7 @@ result() {
     wait_done
     [ "$(result .kind)" = "none" ]
     [ "$(result '[.seats[] | .seat + " " + .outcome] | join(",")')" = "codex none" ]
+    [ "$(result -c '.seats[0].usage')" = '{"input":21000,"cached":9000,"output":120,"reasoning":80}' ]
     [ "$(result 'has("headline") or has("seat")')" = "false" ]
     [ "$(result .bytes)" = "$(wc -c < "$RUN_DIR/prompt.md" | tr -d ' ')" ]
 }
@@ -210,6 +214,16 @@ result() {
     wait_done
     [ "$(result .kind)" = "none" ]
     [ "$(result '[.seats[] | .seat + " " + .outcome] | join(",")')" = "antigravity none" ]
+    # antigravity's text output carries no token counts: no usage, never zeros.
+    [ "$(result '.seats[0] | has("usage")')" = "false" ]
+}
+
+@test "heads-up: a text seat that reports its tokens has them in its outcome" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-none
+    start_runner claude-cli
+    wait_done
+    [ "$(result '[.seats[] | .seat + " " + .outcome] | join(",")')" = "claude-cli none" ]
+    [ "$(result -c '.seats[0].usage')" = '{"input":6012,"cached":5200,"output":3,"reasoning":null}' ]
 }
 
 @test "heads-up: codex hangs past the seat deadline, the timeout is recorded and codex is ended" {
@@ -221,6 +235,7 @@ result() {
     [ "$(result .kind)" = "failed" ]
     [ "$(result '.seats | length')" = "1" ]
     [ "$(result '.seats[0] | .seat + " " + .outcome + " " + .detail')" = "codex timeout no answer in 2s" ]
+    [ "$(result '.seats[0] | has("usage")')" = "false" ]
     run ! pgrep -f "sleep 297"
 }
 

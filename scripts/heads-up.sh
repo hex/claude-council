@@ -11,10 +11,12 @@
 #   DIR/pid                           before the fork returns
 #   DIR/digest.md, DIR/prompt.md      what left the machine; kept until the mod removes the dir
 #   DIR/seat.{out,err,events}         the seat's raw output
+#   DIR/seat.usage.json               the tokens the seat's call used, when it reported them (lib/usage.sh)
 #   DIR/result.json                   {kind:note|none|quota|skipped|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
-#                                      seats:[{seat,outcome,ms,detail?}]}; seats holds the seat's outcome, none
+#                                      seats:[{seat,outcome,ms,detail?,usage?}]}; seats holds the seat's outcome, none
 #                                      when the run skipped or failed before asking it; quota is the seat out of
-#                                      credits, its words in seats[0].detail; written to a temp name and moved
+#                                      credits, its words in seats[0].detail; usage is {input,cached,output,reasoning},
+#                                      absent when the seat reported none; written to a temp name and moved
 #   DIR/.done                         last; the mod trusts result.json only after it
 # Env (COUNCIL_* so provider_env_scrub keeps them):
 #   COUNCIL_HEADS_UP_SEAT_SECONDS   the seat's deadline, default 60
@@ -28,6 +30,7 @@ source "${SCRIPT_DIR}/lib/providers.sh"
 source "${SCRIPT_DIR}/lib/clock.sh"
 source "${SCRIPT_DIR}/lib/cli-stderr.sh"
 source "${SCRIPT_DIR}/lib/count.sh"
+source "${SCRIPT_DIR}/lib/usage.sh"
 
 usage() {
     echo "Usage: heads-up.sh --run-dir DIR --session ID --seat NAME --avoid-file FILE [--model FILE]" >&2
@@ -168,6 +171,15 @@ turn_failure() {
     printf '%s' "${text:0:300}"
 }
 
+# codex's last turn.completed usage, into the seat's usage file. input_tokens
+# counts the cached tokens and cache writes, output_tokens the reasoning.
+codex_usage() {
+    COUNCIL_USAGE_FILE="${RUN_DIR}/seat.usage.json" emit_usage -nR \
+        '[inputs | fromjson? | objects | select(.type == "turn.completed")] | last | .usage
+         | {input: .input_tokens, cached: .cached_input_tokens, output: .output_tokens, reasoning: .reasoning_output_tokens}' \
+        "${RUN_DIR}/seat.events"
+}
+
 # codex: structured output. Success only on a "turn.completed" event, since
 # codex exits 0 on SIGTERM. Sets OUTCOME (none|note|error|timeout|quota), DETAIL and,
 # for a note, TAG, TOPIC, HEADLINE, TITLE and POINTS_JSON (a JSON array).
@@ -176,6 +188,7 @@ turn_failure() {
 ask_codex() {
     local limit="$1" answer="${RUN_DIR}/seat.out" rc=0
     run_with_deadline "$limit" codex_call || rc=$?
+    codex_usage
     if (( rc == 143 )); then
         OUTCOME=timeout DETAIL="no answer in ${limit}s"
         return 0
@@ -215,11 +228,13 @@ ask_codex() {
 
 # The provider's own deadline is a backstop five seconds past ours: a provider
 # script reports its deadline as exit 1, so were the two equal, whichever fired
-# first would decide whether the seat logs a timeout or an error.
+# first would decide whether the seat logs a timeout or an error. A provider
+# that reports its tokens writes them to COUNCIL_USAGE_FILE.
 text_call() {
     local limit="$1"
     ( provider_env_scrub "$SEAT"
-      COUNCIL_TIMEOUT="$(( limit + 5 ))" exec bash "${SCRIPT_DIR}/providers/${SEAT}.sh" --prompt-file "${RUN_DIR}/prompt.md" ) \
+      COUNCIL_TIMEOUT="$(( limit + 5 ))" COUNCIL_USAGE_FILE="${RUN_DIR}/seat.usage.json" \
+          exec bash "${SCRIPT_DIR}/providers/${SEAT}.sh" --prompt-file "${RUN_DIR}/prompt.md" ) \
         > "${RUN_DIR}/seat.out" 2> "${RUN_DIR}/seat.err"
 }
 
@@ -273,9 +288,14 @@ ask_text_seat() {
 
 SEATS_JSON='[]'
 
+# The seat's outcome, with the tokens its call used when it reported them. A
+# usage file off the record's shape is left out rather than failing the check.
 record_seat() {
-    SEATS_JSON=$(jq -c --arg seat "$1" --arg outcome "$2" --argjson ms "$3" --arg detail "$4" \
-        '. + [{seat: $seat, outcome: $outcome, ms: $ms} + (if $detail == "" then {} else {detail: $detail} end)]' \
+    local usage
+    usage=$(jq -c "$USAGE_SHAPE" "${RUN_DIR}/seat.usage.json" 2>/dev/null) || usage=""
+    SEATS_JSON=$(jq -c --arg seat "$1" --arg outcome "$2" --argjson ms "$3" --arg detail "$4" --argjson usage "${usage:-null}" \
+        '. + [{seat: $seat, outcome: $outcome, ms: $ms} + (if $detail == "" then {} else {detail: $detail} end)
+              + (if $usage == null then {} else {usage: $usage} end)]' \
         <<< "$SEATS_JSON")
 }
 
