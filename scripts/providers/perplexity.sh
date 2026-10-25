@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/providers.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -138,6 +139,11 @@ RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
     --config "$CURL_CFG" \
     -H "Content-Type: application/json" \
     --data-binary @"$PAYLOAD_FILE")
+
+# The Agent API's usage in the Responses shape, the details optional: cached
+# tokens part of input_tokens, reasoning tokens part of output_tokens.
+emit_usage '.usage | {input: .input_tokens, cached: .input_tokens_details.cached_tokens,
+    output: .output_tokens, reasoning: .output_tokens_details.reasoning_tokens}' <<<"$RESPONSE"
 
 if [[ -n "$DEBUG" ]]; then
     echo "=== DEBUG: Response metadata ===" >&2

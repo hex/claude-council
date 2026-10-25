@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -139,6 +140,9 @@ printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
 RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
     -H "Content-Type: application/json" \
     --data-binary @"$PAYLOAD_FILE")
+
+# The daemon reports no cached or reasoning split.
+emit_usage '.usage | {input: .prompt_tokens, cached: null, output: .completion_tokens, reasoning: null}' <<<"$RESPONSE"
 
 if [[ -n "$DEBUG" ]]; then
     echo "=== DEBUG: Response metadata ===" >&2

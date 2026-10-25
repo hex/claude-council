@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/providers.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -119,6 +120,10 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
         -H "Content-Type: application/json" \
         --data-binary @"$PAYLOAD_FILE")
 
+    # Cached tokens are part of input_tokens, reasoning tokens part of output_tokens.
+    emit_usage '.usage | {input: .input_tokens, cached: .input_tokens_details.cached_tokens,
+        output: .output_tokens, reasoning: .output_tokens_details.reasoning_tokens}' <<<"$RESPONSE"
+
     if [[ -n "$DEBUG" ]]; then
         echo "=== DEBUG: Response metadata ===" >&2
         echo "$RESPONSE" | jq '{
@@ -181,6 +186,10 @@ else
         --config "$CURL_CFG" \
         -H "Content-Type: application/json" \
         --data-binary @"$PAYLOAD_FILE")
+
+    # Cached tokens are part of prompt_tokens, reasoning tokens part of completion_tokens.
+    emit_usage '.usage | {input: .prompt_tokens, cached: .prompt_tokens_details.cached_tokens,
+        output: .completion_tokens, reasoning: .completion_tokens_details.reasoning_tokens}' <<<"$RESPONSE"
 
     # Extract text from chat completions format
     TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')

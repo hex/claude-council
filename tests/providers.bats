@@ -1203,6 +1203,136 @@ Raw response: <html>gateway</html>" ]
     [[ "$(jq -r '.temperature' "$DATA_FILE")" == "1" ]]
 }
 
+# ---- token usage: one record per call in COUNCIL_USAGE_FILE ----
+#
+# The record counts every prompt token in input (cached ones included) and
+# every generated token in output (reasoning included); cached and reasoning
+# are null when the vendor gave no split. Each body below gives every field a
+# distinct value, so a swapped or dropped field changes the record.
+
+USAGE_FILE_NAME="usage.json"
+
+# Usage: run_provider_for_usage <script> [ENVVAR=value ...]; the record lands in $USAGE_FILE
+run_provider_for_usage() {
+    local script="$1"; shift
+    USAGE_FILE="${BATS_TEST_TMPDIR}/${USAGE_FILE_NAME}"
+    run_provider "$script" "hi" COUNCIL_USAGE_FILE="$USAGE_FILE" "$@"
+}
+
+@test "gemini: the call's tokens land in COUNCIL_USAGE_FILE, thinking counted in output" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"GEM_OK"}]}}],"usageMetadata":{"promptTokenCount":1200,"cachedContentTokenCount":300,"candidatesTokenCount":45,"thoughtsTokenCount":67,"totalTokenCount":1312}}'
+    run_provider_for_usage gemini.sh GEMINI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "GEM_OK" ]
+    [ "$stderr" = "" ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":1200,"cached":300,"output":112,"reasoning":67}' ]
+}
+
+@test "gemini: a body with no usage writes no record, never zeros" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"GEM_OK"}]}}]}'
+    run_provider_for_usage gemini.sh GEMINI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "GEM_OK" ]
+    [ ! -e "$USAGE_FILE" ]
+}
+
+@test "gemini: a split the body leaves out is null, not 0" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"GEM_OK"}]}}],"usageMetadata":{"promptTokenCount":1200,"candidatesTokenCount":45}}'
+    run_provider_for_usage gemini.sh GEMINI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":1200,"cached":null,"output":45,"reasoning":null}' ]
+}
+
+@test "gemini: a billed 200 with no answer still records its tokens and still fails" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[]},"finishReason":"MAX_TOKENS"}],"usageMetadata":{"promptTokenCount":1200,"candidatesTokenCount":0,"thoughtsTokenCount":8000,"totalTokenCount":9200}}'
+    run_provider_for_usage gemini.sh GEMINI_API_KEY=k
+    [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":1200,"cached":null,"output":8000,"reasoning":8000}' ]
+}
+
+@test "gemini: a usage file that cannot be written changes neither the answer, stderr nor the exit" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"GEM_OK"}]}}],"usageMetadata":{"promptTokenCount":1200,"candidatesTokenCount":45}}'
+    run_provider gemini.sh "hi" GEMINI_API_KEY=k COUNCIL_USAGE_FILE="${BATS_TEST_TMPDIR}/no-such-dir/usage.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "GEM_OK" ]
+    [ "$stderr" = "" ]
+}
+
+@test "openai: a responses call's tokens land in COUNCIL_USAGE_FILE, reasoning inside output" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"text":"OAI_RESP"}]}],"usage":{"input_tokens":900,"input_tokens_details":{"cached_tokens":250},"output_tokens":80,"output_tokens_details":{"reasoning_tokens":30},"total_tokens":980}}'
+    run_provider_for_usage openai.sh OPENAI_API_KEY=k OPENAI_MODEL=gpt-6-astra
+    [ "$status" -eq 0 ]
+    [ "$output" = "OAI_RESP" ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":900,"cached":250,"output":80,"reasoning":30}' ]
+}
+
+@test "openai: a chat call's tokens land in COUNCIL_USAGE_FILE, reasoning inside completion" {
+    FAKE_BODY='{"choices":[{"message":{"content":"OAI_CHAT"}}],"usage":{"prompt_tokens":700,"prompt_tokens_details":{"cached_tokens":150},"completion_tokens":60,"completion_tokens_details":{"reasoning_tokens":20},"total_tokens":760}}'
+    run_provider_for_usage openai.sh OPENAI_API_KEY=k OPENAI_MODEL=gpt-5.1
+    [ "$status" -eq 0 ]
+    [ "$output" = "OAI_CHAT" ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":700,"cached":150,"output":60,"reasoning":20}' ]
+}
+
+@test "grok: the call's tokens land in COUNCIL_USAGE_FILE, reasoning counted apart from completion" {
+    FAKE_BODY='{"choices":[{"message":{"content":"GROK_OK"}}],"usage":{"prompt_tokens":800,"prompt_tokens_details":{"cached_tokens":120},"completion_tokens":50,"completion_tokens_details":{"reasoning_tokens":70},"total_tokens":920}}'
+    run_provider_for_usage grok.sh XAI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "GROK_OK" ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":800,"cached":120,"output":120,"reasoning":70}' ]
+}
+
+@test "kimi: the call's tokens land in COUNCIL_USAGE_FILE, cached from Moonshot's top-level count" {
+    FAKE_BODY='{"choices":[{"message":{"content":"KIMI_OK"}}],"usage":{"prompt_tokens":600,"completion_tokens":40,"total_tokens":640,"cached_tokens":90}}'
+    run_provider_for_usage kimi.sh KIMI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "KIMI_OK" ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":600,"cached":90,"output":40,"reasoning":null}' ]
+}
+
+@test "kimi: cached from the OpenAI-style details when the body puts it there" {
+    FAKE_BODY='{"choices":[{"message":{"content":"KIMI_OK"}}],"usage":{"prompt_tokens":600,"prompt_tokens_details":{"cached_tokens":95},"completion_tokens":40,"total_tokens":640}}'
+    run_provider_for_usage kimi.sh KIMI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":600,"cached":95,"output":40,"reasoning":null}' ]
+}
+
+@test "ollama: the call's tokens land in COUNCIL_USAGE_FILE with no splits" {
+    printf '#!/bin/bash\nexit 0\n' > "$FAKE_DIR/ollama"
+    chmod +x "$FAKE_DIR/ollama"
+    FAKE_BODY='{"choices":[{"message":{"content":"OLL_OK"}}],"usage":{"prompt_tokens":500,"completion_tokens":35,"total_tokens":535}}'
+    run_provider_for_usage ollama.sh OLLAMA_MODEL=llama3
+    [ "$status" -eq 0 ]
+    [ "$output" = "OLL_OK" ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":500,"cached":null,"output":35,"reasoning":null}' ]
+}
+
+@test "openrouter: the call's tokens land in COUNCIL_USAGE_FILE, reasoning inside completion" {
+    FAKE_BODY='{"choices":[{"message":{"content":"OR_OK"}}],"usage":{"prompt_tokens":1000,"prompt_tokens_details":{"cached_tokens":400},"completion_tokens":90,"completion_tokens_details":{"reasoning_tokens":25},"total_tokens":1090}}'
+    run_provider_for_usage openrouter.sh OPENROUTER_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "OR_OK" ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":1000,"cached":400,"output":90,"reasoning":25}' ]
+}
+
+@test "perplexity: the call's tokens land in COUNCIL_USAGE_FILE" {
+    FAKE_BODY='{"output":[{"type":"message","content":[{"type":"output_text","text":"PPX_OK"}]}],"usage":{"input_tokens":1100,"input_tokens_details":{"cached_tokens":210},"output_tokens":85,"output_tokens_details":{"reasoning_tokens":15},"total_tokens":1185}}'
+    run_provider_for_usage perplexity.sh PERPLEXITY_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "PPX_OK" ]
+    [ "$(cat "$USAGE_FILE")" = '{"input":1100,"cached":210,"output":85,"reasoning":15}' ]
+}
+
+@test "gemini: a usage block of another shape writes no record and nothing on stderr" {
+    FAKE_BODY='{"candidates":[{"content":{"parts":[{"text":"GEM_OK"}]}}],"usageMetadata":"unavailable"}'
+    run_provider_for_usage gemini.sh GEMINI_API_KEY=k
+    [ "$status" -eq 0 ]
+    [ "$output" = "GEM_OK" ]
+    [ "$stderr" = "" ]
+    [ ! -e "$USAGE_FILE" ]
+}
+
 # ============================================================================
 # Real-endpoint acceptance (gated — set COUNCIL_E2E=1 to run)
 #
