@@ -4,6 +4,14 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Changed
+- The pane mod asks `scripts/seat-info.sh` which seats exist, which model a seat runs and whether a name is a seat, in place of three inline `bash -c` scripts. Same answers, one named program with fixed arguments.
+
+### Documentation
+- README lists what the pane mod runs, reads, writes and sends: its programs, the two scripts that send anything off the machine, the one project file it writes, its two prompt calls, and the variable and setting it changes.
+
 ## 2026.10.12
 
 ### Added

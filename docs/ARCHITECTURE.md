@@ -690,6 +690,7 @@ claude-council/
 │   ├── stop-review-gate.sh      # Opt-in Stop hook reviewer
 │   ├── heads-up.sh              # Detached side-check runner: digest, one seat, result.json
 │   ├── heads-up.schema.json     # Codex answer contract for the side-check, passed as --output-schema
+│   ├── seat-info.sh             # The pane's seat questions: discover, a seat's model, allowlisted
 │   ├── session-transcript.sh    # Conversation id to transcript path, refusing ambiguity
 │   ├── transcript-digest.sh     # Session JSONL to a markdown digest for /advise and the side-check
 │   ├── validate-analysis.sh     # Executable mirror of the agent-analysis schema (test suite)
