@@ -49,6 +49,8 @@ const BAND_INDENT = 2
 const ACTION_COLUMNS = 2 + '[ cancel ]'.length
 // The heads-up runner forks and returns its pid; anything slower is a fault.
 const HEADS_UP_LAUNCH_MS = 10_000
+// A seat question reads the provider scripts and a config file or two.
+const SEAT_INFO_MS = 15_000
 
 // The heads-up side-check's session state is the host's (its contract is
 // types/index.d.ts), so a hot reload keeps a check in flight and a note on
@@ -160,7 +162,9 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
   const every = everyFromAnswer(everyAnswer)
   if ('why' in every) return { text: `Setup closed: ${every.why}; nothing changed.` }
   // The seat's model; codex also takes an effort, from its own catalog.
-  const current = (await seatInfo($, 'model', seat).catch(() => ({ stdout: '' }))).stdout.trim()
+  const lookup = await seatInfo($, 'model', seat)
+  if (lookup.exitCode !== 0) return { text: `Setup closed: reading ${seat}'s model exited ${lookup.exitCode}: ${lookup.stderr.trim()}; nothing changed.` }
+  const current = lookup.stdout.trim()
   const catalog = seat === 'codex' ? await readCatalog($) : undefined
   const slugs = catalog !== undefined && 'models' in catalog ? catalog.models.filter(m => m.listed).map(m => m.slug) : undefined
   const modelAnswer = await ask(MODEL_QUESTION(seat), modelOptions(current, slugs))
@@ -411,14 +415,16 @@ async function count($: EngineInterface, ...keys: (keyof Counts)[]): Promise<voi
 // The runner's seat questions, answered by its shipped script with fixed
 // subcommands, so the mod never hands bash an inline script.
 function seatInfo($: EngineInterface, ...args: ['discover'] | ['model' | 'allowlisted', string]) {
-  return $.process.run(['bash', `${$.plugin.root}/scripts/seat-info.sh`, ...args])
+  return $.process.run(['bash', `${$.plugin.root}/scripts/seat-info.sh`, ...args], { timeoutMs: SEAT_INFO_MS })
 }
 
 // The runner's own allowlist (a providers/<seat>.sh exists) decides what a
 // seat is, so no second list lives here; the refusal names the real ones.
+// Exit 1 is the refusal; any other failure is the check's own and says so.
 async function notASeat($: EngineInterface, seat: string): Promise<string | undefined> {
   const ok = await seatInfo($, 'allowlisted', seat)
   if (ok.exitCode === 0) return undefined
+  if (ok.exitCode !== 1) return `checking ${JSON.stringify(seat)} exited ${ok.exitCode}: ${ok.stderr.trim()}`
   const names = (await $.fs.list(`${$.plugin.root}/scripts/providers`)).map(entry => entry.name).filter(name => name.endsWith('.sh')).map(name => name.slice(0, -3)).sort()
   return `${JSON.stringify(seat)} is not a council seat; one of ${names.join(', ')}`
 }

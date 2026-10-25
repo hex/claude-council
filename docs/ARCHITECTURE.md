@@ -780,6 +780,7 @@ claude-council/
 │   ├── retry.bats
 │   ├── roles.bats
 │   ├── router-seats.bats        # OPENROUTER_MODELS -> openrouter-1..N, one script, many seats
+│   ├── seat-info.bats           # The pane's seat questions: discover, model, allowlisted exit codes, usage
 │   ├── session-transcript.bats  # Session id to transcript path
 │   ├── shards.bats              # Every bats file is named in a Windows shard list
 │   ├── stop-gate.bats

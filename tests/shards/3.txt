@@ -5,3 +5,4 @@ query-council.bats
 router-seats.bats
 tmpdir.bats
 heads-up.bats
+seat-info.bats

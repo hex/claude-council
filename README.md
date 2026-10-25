@@ -100,10 +100,9 @@ every call asks you first.
 
 ### What the mod runs, reads and sends
 
-The mod makes no network calls of its own. Anything that leaves the machine
-goes through the council's own scripts below. It runs each one as
-`bash <script>` with a fixed argument list, and never hands `bash -c` a
-script of its own:
+The mod makes no network calls of its own. It starts the programs below
+from an argument array, never a shell string, and never hands `bash -c` a
+script. Your text reaches model providers only through the first two:
 
 - `bash scripts/run-council.sh` when Claude calls the council tool and you
   choose `Send to the council`. It sends your question to the providers you
@@ -118,7 +117,8 @@ script of its own:
   `allowlisted <seat>` during `/heads-up setup` and `/heads-up on <seat>`.
   It checks which seats this machine can run and sends nothing.
 - `codex debug models` during `/heads-up setup` with the codex seat, to list
-  its models.
+  its models. That command belongs to codex, and so does any request it
+  makes.
 - `kill -0 <pid>` to check a council run is still alive. It sends no
   signal.
 - `rm -rf` and `mv -f` on its own run directories under
