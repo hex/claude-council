@@ -424,8 +424,20 @@ council runs, and drops a `model` picked for a different seat. `/heads-up` alone
 status`) says whether the
 check is on here and which switch set it, one aligned row per fact, then the counts kept on this machine
 and never sent anywhere: checks run, with how many found nothing, drew a note,
-repeated a topic already seen, or failed; and the presses, learn, tell, knew,
-understood, dismiss, turned off and typed past. Every `/heads-up` form runs at once, even while Claude is
+repeated a topic already seen, failed, or found the seat out of credits; and the presses, learn, tell, knew,
+understood, dismiss, turned off and typed past. A sample line:
+`checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331`.
+
+When codex reports that its workspace is out of credits (or at its usage
+limit), the check pauses for the rest of the session instead of failing at
+every cadence point. A red row above the prompt reads
+`heads-up paused · codex is out of credits · <codex's own words>` with
+`0: Dismiss`, which hides the row and keeps the pause. While paused,
+`/heads-up status` adds the row `paused  codex out of credits this session ·
+/heads-up on to resume`. Only `/heads-up on` or a new session resumes the
+check; `/heads-up off` leaves the pause in place. Any other failed turn shows
+codex's own reason, not its stderr, which can hold unrelated MCP server
+noise. Every `/heads-up` form runs at once, even while Claude is
 mid-turn, but Claude Code draws a command's reply only when the turn ends, so
 mid-turn the status also shows as a toast on one line for eight seconds. A check that found nothing leaves a dim receipt on the
 hint under the prompt, `heads-up: gemini read 8.3 KB in 11 s, nothing to flag`,

@@ -4,6 +4,14 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Changed
+- The heads-up side-check pauses for the rest of the session when codex reports its workspace is out of credits (or at its usage limit), instead of failing again at every cadence point. A red row above the prompt names the seat and codex's own words, with `0: Dismiss` to hide it; only `/heads-up on` or a new session resumes the check. `/heads-up status` shows a `paused` row while it lasts, and its counts add `out of credits` apart from `failed`.
+
+### Fixed
+- A heads-up check whose codex turn failed reports codex's own reason from its `turn.failed` event. It used to quote codex's stderr, which can hold unrelated MCP server errors and hid the cause.
+
 ## 2026.10.13
 
 ### Fixed
