@@ -27,8 +27,9 @@ export OPENAI_API_KEY="..."
 ```
 
 The `codex`, `agy` (Antigravity), `grok`, `kimi`, and `cursor-agent` CLIs use
-your existing subscriptions without an API key. A local `ollama` model needs
-no key or external network. With none of these, `--local` uses Claude
+your existing subscriptions without an API key. Claude Code itself, the
+Copilot CLI and OpenCode can sit too, when named in `--providers`. A local
+`ollama` model needs no key or external network. With none of these, `--local` uses Claude
 subagents. See [provider selection](docs/REFERENCE.md#choosing-providers) and
 [local councils](docs/USAGE.md#local-council---local).
 
