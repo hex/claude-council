@@ -6,6 +6,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Added
+- `/heads-up status` has a `tokens` row: what the heads-up checks used, summed on this machine, such as `45 latest checks, counted from this version on · 3 unreported · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out, 6.2k reasoning on 30 of 42 · 35.6k in and out per reported check`. Counting starts with this version, so the row covers fewer checks than the `checks` row. codex and every API seat report tokens, and so do claude-cli, cursor-cli, copilot-cli and opencode. grok-cli, kimi-cli and antigravity print no counts, so the row lists their checks as unreported. Each seat's tokens come from the response it already gets, and no extra request goes out.
+
 ### Changed
 - The heads-up side-check pauses for the rest of the session when codex reports its workspace is out of credits (or at its usage limit), instead of failing again at every cadence point. A red row above the prompt names the seat and codex's own words, with `0: Dismiss` to hide it; only `/heads-up on` or a new session resumes the check. `/heads-up status` shows a `paused` row while it lasts, and its counts add `out of credits` apart from `failed`.
 

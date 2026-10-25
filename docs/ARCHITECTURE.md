@@ -496,7 +496,10 @@ NOTE:, TAG:, TOPIC:, TITLE: and POINT: lines) -> result.json
 The pane polls .done, settles $.state (claude-council.headsUp),
 draws the band; a skipped check is logged once per reason, draws
 nothing and counts no outcome; the checks shown by /heads-up status
-are the outcomes added up, never stored. Seen/known topics
+are the outcomes added up, never stored. Each seat outcome may carry
+usage {input, cached, output, reasoning}, from codex's turn.completed
+or the COUNCIL_USAGE_FILE a provider writes (lib/usage.sh); the
+totals live in $.store under heads-up-tokens. Seen/known topics
 live in $.store under heads-up.
 Seat names pass provider_allowlisted (lib/providers.sh), the one
 list, derived from providers/<name>.sh; the stop gate uses it too.
@@ -733,6 +736,7 @@ claude-council/
 │       ├── retry.sh             # Retry with backoff + off-argv secret config
 │       ├── roles.sh             # Role management
 │       ├── tokens.sh            # Reasoning-model token-cap bumping
+│       ├── usage.sh             # emit_usage: a seat call's tokens, {input, cached, output, reasoning}, to COUNCIL_USAGE_FILE
 │       └── verbosity.sh         # Shared system prompt, inline-answer guard, verbosity directives
 ├── skills/
 │   ├── council-execution/
@@ -846,6 +850,7 @@ claude-council/
 | `COUNCIL_JOBS_DIR` | per-workspace under `$CLAUDE_PLUGIN_DATA` | Background job state location |
 | `COUNCIL_MAX_JOBS` | 20 | Terminal-status jobs kept before pruning |
 | `COUNCIL_PROMPTS_DIR` | prompts/ | Prompt template location |
+| `COUNCIL_USAGE_FILE` | - | A file a provider writes the tokens its call used to, as `{input, cached, output, reasoning}`, when the vendor reported them. The heads-up runner sets it per check; nothing else does |
 | `COUNCIL_PASS_ENV` | - | Comma-separated variable names every provider receives on top of its scrubbed environment (see `provider_env_scrub`) |
 | `COUNCIL_DEBUG` | - | Enable debug output |
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
