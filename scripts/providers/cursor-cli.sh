@@ -9,6 +9,8 @@ source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
 source "$SCRIPT_DIR/../lib/usage.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
+source "$SCRIPT_DIR/../lib/seat-isolation.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -49,10 +51,28 @@ ${PROMPT}"
 # only to land back on the command line, past the OS limit on Linux at about
 # 128 KiB per argument. Verified against the real CLI with a 300 KB prompt.
 ARGS=(-p --output-format json --mode ask --trust)
-# --model only on an explicit override, so an unset CURSOR_CLI_MODEL defers to
-# the model picked in the CLI (mirrors codex.sh and kimi-cli.sh). A free plan
-# rejects every named model, and the CLI's own message says so.
-[[ -n "${CURSOR_CLI_MODEL:-}" ]] && ARGS+=(--model "$CURSOR_CLI_MODEL")
+# The seat runs under a home of its own (lib/seat-isolation.sh): cursor-agent
+# loads skills from ~/.cursor, ~/.claude (plugins included), ~/.codex, ~/.grok
+# and ~/.agents, hooks from ~/.cursor/hooks.json and Claude's settings.json,
+# MCP servers from ~/.cursor/mcp.json, and every root resolves through HOME.
+# No flag or variable turns that off. The home holds only the login: macOS
+# keeps it in the login keychain, found through ~/Library/Keychains; Linux in
+# ${XDG_CONFIG_HOME:-~/.config}/cursor/auth.json (read from the CLI's bundle,
+# not run on Linux). The scratch working directory keeps out the project's
+# .cursor rules and MCP servers, AGENTS.md, CLAUDE.md and CLAUDE.local.md.
+# The model picked in the CLI lives in that home's ~/.cursor/cli-config.json,
+# so it is read here first and passed as --model; with no pick and no
+# CURSOR_CLI_MODEL, no --model at all: a free plan rejects every named model,
+# and the CLI's own message says so.
+MODEL="$(get_model cursor-cli)"
+[[ "$MODEL" != default ]] && ARGS+=(--model "$MODEL")
+case "$(seat_platform)" in
+    macos) SEAT_HOME=$(seat_home cursor-cli Library/Keychains "$HOME/Library/Keychains") || exit 1 ;;
+    linux) SEAT_HOME=$(seat_home cursor-cli .config/cursor "${XDG_CONFIG_HOME:-$HOME/.config}/cursor") || exit 1 ;;
+    windows) SEAT_HOME="$HOME" ;;
+esac
+export HOME="$SEAT_HOME"
+seat_enter_scratch || exit 1
 
 # Bound the CLI the way API providers are bounded by curl --max-time:
 # run_with_deadline ends it after COUNCIL_TIMEOUT seconds, surfacing as exit
