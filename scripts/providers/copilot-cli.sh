@@ -80,11 +80,18 @@ trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
 if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" copilot "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
 # One assistant.usage event per model request, summed. Its inputTokens count
-# the cache reads and writes; reasoningTokens are part of outputTokens.
+# the cache reads and writes; reasoningTokens are part of outputTokens. An
+# event that leaves its input or output count out makes that total null, which
+# emit_usage leaves unreported: the other events alone would sum to too small
+# a number.
 emit_usage -nR 'def total(f): [.[] | f | numbers] | add;
+    def counted(f): all(.[]; f | type == "number");
     [inputs | fromjson? | objects | select(.type == "assistant.usage") | .data | objects]
     | select(length > 0)
-    | {input: total(.inputTokens), cached: total(.cacheReadTokens), output: total(.outputTokens), reasoning: total(.reasoningTokens)}' "$OUT_TMP"
+    | {input: (if counted(.inputTokens) then total(.inputTokens) else null end),
+       cached: total(.cacheReadTokens),
+       output: (if counted(.outputTokens) then total(.outputTokens) else null end),
+       reasoning: total(.reasoningTokens)}' "$OUT_TMP"
 if [[ $rc -eq 0 ]]; then
     # One event per line, the last assistant message with content being the
     # answer. A line that is not a JSON object is skipped rather than aborting

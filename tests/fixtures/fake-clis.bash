@@ -327,22 +327,25 @@ EOF
 # events copilot 1.0.98 printed for a one-word prompt with every tool off,
 # its session.info notice included; deltas are left out. The two
 # assistant.usage events, one per model request, follow the shape the CLI's
-# event schema declares, input counting the cache reads and writes.
+# event schema declares, input counting the cache reads and writes;
+# usage-without-<field> leaves that count out of the first.
 # With no -p it reads the prompt from stdin; keep a copy so a test can assert
 # what reached the CLI and that it never rode argv.
 if [[ " \$* " == *" --output-format json "* ]]; then
     cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
     case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
-        valid|empty)
+        valid|empty|usage-without-inputTokens|usage-without-outputTokens)
             ANSWER="$marker: deterministic answer"
             [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "empty" ]] && ANSWER=""
+            LEFT_OUT=""
+            [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == usage-without-* ]] && LEFT_OUT="\${COUNCIL_FAKE_BEHAVIOR#usage-without-}"
             echo '{"type":"session.info","data":{"infoType":"configuration","message":"Unknown tool name in the tool allowlist: \"none\""}}'
             echo '{"type":"session.mcp_servers_loaded","data":{"servers":[{"name":"github-mcp-server","status":"disabled","source":"builtin"}]}}'
             echo '{"type":"session.auto_mode_resolved","data":{"chosenModel":"example-model","availableModels":["example-model"]}}'
             echo '{"type":"session.tools_updated","data":{"model":"example-model"}}'
             echo '{"type":"user.message","data":{"content":"prompt"}}'
             jq -cn --arg a "\$ANSWER" '{type: "assistant.message", data: {model: "example-model", content: \$a, toolRequests: [], phase: "final_answer"}}'
-            echo '{"type":"assistant.usage","ephemeral":true,"data":{"model":"example-model","inputTokens":1000,"outputTokens":50,"cacheReadTokens":600,"cacheWriteTokens":300,"reasoningTokens":20}}'
+            jq -cn --arg left_out "\$LEFT_OUT" '{type: "assistant.usage", ephemeral: true, data: {model: "example-model", inputTokens: 1000, outputTokens: 50, cacheReadTokens: 600, cacheWriteTokens: 300, reasoningTokens: 20}} | del(.data[\$left_out | select(. != "")])'
             echo '{"type":"assistant.usage","ephemeral":true,"data":{"model":"example-model","inputTokens":1500,"outputTokens":70,"cacheReadTokens":900,"cacheWriteTokens":0,"reasoningTokens":10}}'
             echo '{"type":"assistant.turn_end","data":{"turnId":"0"}}'
             echo '{"type":"result","sessionId":"fake","exitCode":0}'

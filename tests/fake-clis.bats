@@ -1179,6 +1179,19 @@ $off" ]
     [ "$output" = "FAKE-COPILOT-RESPONSE: deterministic answer" ]
     [ "$stderr" = "" ]
     [ "$(cat "$COUNCIL_USAGE_FILE")" = '{"input":2500,"cached":1500,"output":120,"reasoning":30}' ]
+    # An event with no input or no output count leaves the call unreported:
+    # summing the other events would record a total that is too small.
+    rm "$COUNCIL_USAGE_FILE"
+    export COUNCIL_FAKE_BEHAVIOR=usage-without-inputTokens
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-COPILOT-RESPONSE: deterministic answer" ]
+    [ ! -e "$COUNCIL_USAGE_FILE" ]
+    export COUNCIL_FAKE_BEHAVIOR=usage-without-outputTokens
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/copilot-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-COPILOT-RESPONSE: deterministic answer" ]
+    [ ! -e "$COUNCIL_USAGE_FILE" ]
 }
 
 @test "copilot-cli.sh: runs a headless session with no tools, instructions, GitHub MCP server or update" {
