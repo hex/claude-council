@@ -96,9 +96,9 @@ seat_home() {
     while [[ $# -ge 2 ]]; do
         rel="$1"
         if [[ "$rel" == */* ]]; then
-            # An earlier version may have linked the parent whole (grok's
-            # .docker); only this user can write in the home, so a link there
-            # is one of ours, and removing it leaves its target alone.
+            # Only this user can write in the home, so a link where a
+            # directory goes is one the seat made; replacing it with the
+            # directory leaves the link's target untouched.
             if [[ -L "${home}/${rel%/*}" ]]; then
                 rm -f "${home}/${rel%/*}" || return 1
             fi
