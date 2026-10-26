@@ -163,15 +163,20 @@ reproduce them.
 
 ## What a CLI seat loads
 
-Every CLI seat runs from an empty directory, `$TMPDIR/claude-council-seat`,
-and the `CLAUDE.md`, `AGENTS.md`, rules, skills, hooks and MCP servers of the
-project you ask from don't reach it. The directory doesn't limit what a seat
-can read: codex, for example, can still open any file by its full path.
+Every CLI seat runs from an empty directory, `$TMPDIR/claude-council-<uid>/seat`,
+where `<uid>` is your numeric user id. The `CLAUDE.md`, `AGENTS.md`, rules,
+skills, hooks and MCP servers of the project you ask from don't reach it. The
+directory doesn't limit what a seat can read: codex, for example, can still
+open any file by its full path.
+
+The directory is read-only, so one seat can't leave a file there for the next
+to load. A seat refuses to start when it finds anything in it, and names the
+path so you can look before you remove it.
 
 The seats below also run under a home of their own, in
-`$TMPDIR/claude-council-seat-home`. It links only to what the CLI needs to sign
-in and start. Both directories are mode 700, and a seat refuses to start when
-one of them belongs to another user or is a symlink.
+`$TMPDIR/claude-council-<uid>/seat-home`. It links only to what the CLI needs to
+sign in and start. Only you can open either directory, and a seat refuses to
+start when one of them belongs to another user or is a symlink.
 
 | Seat | No longer loads | Still loads |
 |---|---|---|

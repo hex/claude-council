@@ -249,7 +249,11 @@ servers, rules files, or the instruction files of the project the user asked
 from. Each provider script sets this up itself, after the orchestrator's
 environment scrub, so it binds the council run and the heads-up check alike.
 The shared mechanics live in `lib/seat-isolation.sh`:
-- Every CLI seat runs from `${TMPDIR:-/tmp}/claude-council-seat`, an empty
+- Both seat directories live under `${TMPDIR:-/tmp}/claude-council-<uid>`,
+  named by the numeric user id (`id -u`, which Git Bash has too). On a `/tmp`
+  shared between users, a fixed name would go to whoever ran a seat first, and
+  every other user's seats would fail the ownership check.
+- Every CLI seat runs from `${TMPDIR:-/tmp}/claude-council-<uid>/seat`, an empty
   directory outside any repository. It stays one fixed directory, not one per run,
   because cursor's `--trust`, grok's trusted folders, kimi's workspace list,
   agy's projects and copilot's trust list each record state per directory.
@@ -258,11 +262,31 @@ The shared mechanics live in `lib/seat-isolation.sh`:
   limit what a seat can read: codex's read-only sandbox, for one, reads any
   file by absolute path. A seat enters it with `seat_enter_scratch`, one line
   in each provider script.
+- That directory is mode 500 and must stay empty. Every seat of every run
+  shares it, and antigravity keeps live file tools (its `--sandbox` limits only
+  the terminal), so an `AGENTS.md`, `CLAUDE.md` or `.mcp.json` a prompt talked
+  one seat into writing there would load into later runs of the others. Real
+  runs of grok (`--cwd`), kimi, agy (`--sandbox`) and codex (`exec -s read-only`)
+  from a mode-500 directory each answered and wrote nothing there. No real run
+  of cursor, copilot, claude or opencode has checked that yet. Every temp,
+  spill and prompt file a provider script makes is an absolute path under
+  `TMPDIR` or the run directory, never the working one. On entry the seat
+  refuses a non-empty directory with an error naming it, before touching its
+  mode, so the user can look at what got in and delete it. The seat sets an
+  empty one with another mode to 500. Concurrent seats converge it to the same mode
+  and none widens it while another runs. Git Bash mounts without POSIX modes,
+  so on Windows the mode is not expected to stop a write (unmeasured); there
+  the emptiness check catches a planted file when the next seat starts.
 - A seat whose CLI finds the user's config through `HOME` runs under a home of
-  its own, `${TMPDIR:-/tmp}/claude-council-seat-home/<seat>`, also stable. It
+  its own, `${TMPDIR:-/tmp}/claude-council-<uid>/seat-home/<seat>`, also stable. It
   holds only links to where that CLI keeps its login; the CLI's caches and state
   stay there between runs. The seat links to the user's real home and never writes it.
-- The seat creates both with mode 700. A symlink at either path, or a directory another
+  That home stays writable, because the CLIs write their caches and state
+  there, so a file a prompt talks a seat into writing in its own home can
+  persist into that same seat's later runs. Other seats don't load it. Before
+  isolation the same seat wrote into the user's real home, so this reach is no
+  wider than before.
+- The seat creates the per-user directory and the homes with mode 700. A symlink at any of these paths, or a directory another
   user owns (a shared `/tmp` on Linux), stops the seat with an error naming
   the path. The seat keeps a link that already points right and replaces a wrong
   one; a real file or directory where a link goes is an error. Concurrent council
