@@ -1607,6 +1607,9 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     fake_platform Linux
     local home
     home=$(seat_home_dir grok-cli)
+    # A ~/.docker with no socket directory is not linked.
+    mkdir -p "$HOME/.docker"
+    printf '{}\n' > "$HOME/.docker/config.json"
     run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$(seat_saw grok .home)" = "$home" ]
@@ -1621,7 +1624,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     [ "$(seat_saw grok .env.GROK_HOME)" = "$BATS_TEST_TMPDIR/grok-elsewhere" ]
 }
 
-@test "seat isolation: grok-cli's home links the login keychain on macOS and ~/.docker when it exists, so the sandbox can resolve Docker's socket" {
+@test "seat isolation: grok-cli's home links the login keychain on macOS and ~/.docker/run when it exists, so the sandbox can resolve Docker's socket" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows
     fake_platform Darwin
@@ -1631,11 +1634,32 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$(readlink "$home/Library/Keychains")" = "$BATS_TEST_TMPDIR/user-home/Library/Keychains" ]
-    [ "$(readlink "$home/.docker")" = "$BATS_TEST_TMPDIR/user-home/.docker" ]
     [ "$(cd "$home" && ls -A | sort | tr '\n' ' ')" = ".docker Library " ]
+    # Only the socket's directory: ~/.docker/config.json can hold registry credentials.
+    [ -d "$home/.docker" ]
+    [ ! -L "$home/.docker" ]
+    [ "$(ls -A "$home/.docker")" = "run" ]
+    [ "$(readlink "$home/.docker/run")" = "$BATS_TEST_TMPDIR/user-home/.docker/run" ]
     # The sandbox flag reached grok, so no retry dropped it.
     [ "$(wc -l < "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | tr -d ' ')" = "1" ]
     [ "$(jq -r '.args | index("--sandbox") as $i | .[$i+1]' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = "read-only" ]
+}
+
+@test "seat isolation: a grok-cli home that linked ~/.docker whole is converged to a directory holding only the run link" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    fake_platform Linux
+    local home
+    home=$(seat_home_dir grok-cli)
+    mkdir -p "$HOME/.docker/run" "$home"
+    ln -s "$HOME/.docker" "$home/.docker"
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ ! -L "$home/.docker" ]
+    [ "$(ls -A "$home/.docker")" = "run" ]
+    [ "$(readlink "$home/.docker/run")" = "$BATS_TEST_TMPDIR/user-home/.docker/run" ]
+    [ "$(ls -A "$HOME/.docker")" = "run" ]
+    [ "$(ls -A "$HOME/.docker/run")" = "" ]
 }
 
 @test "seat isolation: opencode runs under an empty home of its own, its login and sessions on the real XDG_DATA_HOME" {

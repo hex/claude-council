@@ -78,14 +78,15 @@ done
 # --cwd too, keeps out the CLAUDE.md and AGENTS.md grok reads from a project.
 # The home links two things back, both measured with grok 1.0.62: on macOS
 # ~/Library/Keychains, since grok signed in through it with no auth.json in
-# either home; and ~/.docker when it exists, since Docker Desktop points
+# either home; and ~/.docker/run when it exists, since Docker Desktop points
 # /var/run/docker.sock into it and the read-only sandbox refuses to start on a
 # socket link it cannot resolve, so without it the retry below would drop the
-# sandbox on every run.
+# sandbox on every run. Only that directory: ~/.docker/config.json can hold
+# registry credentials.
 export GROK_HOME="${GROK_HOME:-$HOME/.grok}" GROK_MEMORY=0
 GROK_LINKS=()
 [[ "$(seat_platform)" == macos ]] && GROK_LINKS+=(Library/Keychains "$HOME/Library/Keychains")
-[[ -d "$HOME/.docker" ]] && GROK_LINKS+=(.docker "$HOME/.docker")
+[[ -d "$HOME/.docker/run" ]] && GROK_LINKS+=(.docker/run "$HOME/.docker/run")
 case "$(seat_platform)" in
     windows) ;;
     *) SEAT_HOME=$(seat_home grok-cli ${GROK_LINKS[@]+"${GROK_LINKS[@]}"}) || exit 1
