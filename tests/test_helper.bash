@@ -92,6 +92,16 @@ assert_blank() {
     [[ ! "$1" =~ [^[:space:]] ]]
 }
 
+# Helper: assert two strings are the same, printing both when they are not,
+# since bats shows only the failed line and a value that differs on one
+# platform (a path MSYS rewrote, a CRLF) is invisible without them.
+# Usage: assert_eq ACTUAL EXPECTED
+assert_eq() {
+    [[ "$1" == "$2" ]] && return 0
+    printf 'actual:   %q\nexpected: %q\n' "$1" "$2" >&2
+    return 1
+}
+
 # Helper: assert a string carries something a user could act on. A provider that
 # fails silently is worse than one that fails loudly — the council stores the
 # script's own output as the error text, so a blank one renders an empty slot.
