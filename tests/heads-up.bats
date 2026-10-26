@@ -24,6 +24,7 @@ setup() {
     export CODEX_HOME="${BATS_TEST_TMPDIR}/user-codex"
     mkdir -p "$CODEX_HOME"
     printf '%s\n' '{"auth_mode":"chatgpt","tokens":{"access_token":"fake-token"}}' > "$CODEX_HOME/auth.json"
+    export COUNCIL_FAKE_USER_LOGIN="$CODEX_HOME/auth.json"
     write_transcript
 }
 
@@ -419,6 +420,7 @@ EOF
     [ "$(result .kind)" = "note" ]
     [ "$(result .model)" = "gpt-user" ]
     [ "$(codex_saw home)" = "${RUN_DIR}/codex-home" ]
+    [ "$(codex_saw login)" = "user" ]
     [ "$RUN_DIR/codex-home/auth.json" -ef "$CODEX_HOME/auth.json" ]
     [ "$(codex_config)" = "model = \"gpt-user\"
 model_reasoning_effort = \"medium\"
