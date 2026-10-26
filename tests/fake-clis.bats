@@ -1463,7 +1463,7 @@ skip_on_windows() {
 # Every CLI seat's provider script, then the binary it runs.
 CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi cursor-cli.sh:cursor-agent claude-cli.sh:claude copilot-cli.sh:copilot opencode.sh:opencode"
 
-@test "seat isolation: every CLI seat runs from one owner-only scratch directory, not the caller's repository" {
+@test "seat isolation: every CLI seat runs from one read-only scratch directory, not the caller's repository" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     local repo="$BATS_TEST_TMPDIR/project" pair wrong=""
     mkdir -p "$repo"
@@ -1478,18 +1478,45 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     # Git Bash mounts without POSIX modes, so the mode is checked on macOS and Linux.
     if [[ "$OSTYPE" != msys* && "$OSTYPE" != cygwin* ]]; then
         [ "$(ls -ld "$TMPDIR/claude-council-$(id -u)" | cut -c1-10)" = "drwx------" ]
-        [ "$(ls -ld "$TMPDIR/claude-council-$(id -u)/seat" | cut -c1-10)" = "drwx------" ]
+        [ "$(ls -ld "$TMPDIR/claude-council-$(id -u)/seat" | cut -c1-10)" = "dr-x------" ]
     fi
     [ -z "$(ls -A "$TMPDIR/claude-council-$(id -u)/seat")" ]
 }
 
-@test "seat isolation: a scratch directory left with wider permissions is narrowed to the owner" {
+@test "seat isolation: a seat that tries to write into the scratch directory cannot, and still answers" {
+    export COUNCIL_FAKE_BEHAVIOR=valid COUNCIL_FAKE_WRITE_CWD=1
+    skip_on_windows
+    local pair wrong=""
+    for pair in $CLI_SEATS; do
+        "${PROVIDERS_DIR_REAL}/${pair%%:*}" "test prompt" > /dev/null || wrong+=" ${pair%%:*}(exit $?)"
+    done
+    [ "$wrong" = "" ]
+    [ "$(jq -sc 'map(select(.wrote)) | map(.bin)' "$COUNCIL_FAKE_STATE_DIR/cwd-write.jsonl")" = "[]" ]
+    [ "$(jq -sc 'map(.bin) | unique' "$COUNCIL_FAKE_STATE_DIR/cwd-write.jsonl")" = '["agy","claude","codex","copilot","cursor-agent","grok","kimi","opencode"]' ]
+    [ -z "$(ls -A "$(seat_root_dir)/seat")" ]
+}
+
+@test "seat isolation: an empty scratch directory the owner can write is made read-only" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows
-    mkdir -p -m 755 "$(seat_root_dir)/seat"
+    mkdir -p -m 700 "$(seat_root_dir)/seat"
     run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
-    [ "$(ls -ld "$(seat_root_dir)/seat" | cut -c1-10)" = "drwx------" ]
+    [ "$(ls -ld "$(seat_root_dir)/seat" | cut -c1-10)" = "dr-x------" ]
+}
+
+@test "seat isolation: a scratch directory with something in it is refused and left as found, and no CLI runs" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    mkdir -p -m 700 "$(seat_root_dir)/seat"
+    printf '%s\n' 'Planted by a seat.' > "$(seat_root_dir)/seat/AGENTS.md"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: $TMPDIR/claude-council-$(id -u)/seat is not empty; every CLI seat runs from it and it must stay empty, so something got in that should not have. Check what is there, remove it and retry." ]
+    [ "$(cat "$(seat_root_dir)/seat/AGENTS.md")" = "Planted by a seat." ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+    if [[ "$OSTYPE" != msys* && "$OSTYPE" != cygwin* ]]; then
+        [ "$(ls -ld "$(seat_root_dir)/seat" | cut -c1-10)" = "drwx------" ]
+    fi
 }
 
 @test "seat isolation: a symlink planted where the scratch directory goes is refused, and no CLI runs" {

@@ -62,6 +62,11 @@
 # so tests can assert exactly what the plugin sent to the CLI, and {bin, home,
 # cwd, env} to seat-env.jsonl: the HOME and working directory it started in,
 # cwd resolved through symlinks, and the isolation variables the seat set.
+#
+# With COUNCIL_FAKE_WRITE_CWD=1 a fake first tries to write an AGENTS.md into
+# its working directory, as a CLI with live file tools could when a prompt asks
+# it to, appends {bin, wrote} to cwd-write.jsonl, and then acts per its
+# behavior whether the write landed or not.
 
 # A HOME and TMPDIR of the test's own, for any test that runs a seat: the seat
 # reads the user's config from HOME and keeps its working directory and home
@@ -115,6 +120,12 @@ record_env() {
 jq -cn --arg bin "$bin" --arg home "\${HOME:-}" --arg cwd "\$(pwd -P)" \\
     '{bin: \$bin, home: \$home, cwd: \$cwd, env: (env | with_entries(select(.key | IN("GROK_HOME", "GROK_MEMORY", "XDG_DATA_HOME", "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS"))))}' \\
     >> "\${COUNCIL_FAKE_STATE_DIR:?}/seat-env.jsonl"
+if [[ "\${COUNCIL_FAKE_WRITE_CWD:-}" == 1 ]]; then
+    wrote=false
+    { printf '%s\\n' 'Planted by a seat.' > AGENTS.md; } 2>/dev/null && wrote=true
+    jq -cn --arg bin "$bin" --argjson wrote "\$wrote" '{bin: \$bin, wrote: \$wrote}' \\
+        >> "\${COUNCIL_FAKE_STATE_DIR:?}/cwd-write.jsonl"
+fi
 # Version probes succeed regardless of behavior, mirroring real CLIs where
 # --version works even when logged out
 if [[ "\${1:-}" == "--version" ]]; then

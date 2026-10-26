@@ -1,6 +1,6 @@
 #!/bin/bash
 # ABOUTME: Gives a CLI seat a working directory and a home of its own, so the user's agent config stays out of the seat
-# ABOUTME: Both are stable, owner-only directories under TMPDIR; the user's real home is only linked to, never written
+# ABOUTME: Both are stable, owner-only directories under TMPDIR, the working one read-only; the user's real home is only linked to, never written
 
 # Both directories are fixed names rather than one per run: cursor's --trust,
 # grok's trusted folders, kimi's workspace list, agy's projects and copilot's
@@ -18,13 +18,13 @@ seat_platform() {
     esac
 }
 
-# Creates DIR for this user alone, mode 700, and accepts it when it already
-# exists as such. On a shared /tmp another user can create the name first: a
-# directory of theirs is refused, and so is a symlink, checked first because a
-# link to a directory this user owns would pass the ownership test and put the
-# seat somewhere else, such as inside the user's home.
-# Usage: seat_private_dir DIR
-seat_private_dir() {
+# Creates DIR for this user alone and accepts it when it already exists as
+# such, leaving its mode to the caller. On a shared /tmp another user can
+# create the name first: a directory of theirs is refused, and so is a symlink,
+# checked first because a link to a directory this user owns would pass the
+# ownership test and put the seat somewhere else, such as inside the user's home.
+# Usage: seat_owned_dir DIR
+seat_owned_dir() {
     local dir="$1"
     if [[ -L "$dir" ]]; then
         echo "Error: ${dir} is a symlink; the council's seats need a directory of their own there. Remove it and retry." >&2
@@ -38,7 +38,14 @@ seat_private_dir() {
         echo "Error: ${dir} exists but is not a directory owned by $(id -un); the council's seats need one of their own there. Remove it or set TMPDIR elsewhere." >&2
         return 1
     fi
-    chmod 700 "$dir"
+}
+
+# Creates DIR for this user alone, mode 700, and accepts it when it already
+# exists as such.
+# Usage: seat_private_dir DIR
+seat_private_dir() {
+    seat_owned_dir "$1" || return 1
+    chmod 700 "$1"
 }
 
 # The directory holding this user's seat directories. Named by the numeric
@@ -57,12 +64,28 @@ seat_scratch_dir() {
     printf '%s\n' "$(seat_root)/seat"
 }
 
-# Changes into the seat's working directory, creating it on first use.
+# Changes into the seat's working directory, creating it on first use. Every
+# seat of every run shares it, and some seats keep live file tools (agy's
+# --sandbox limits only its terminal), so a file one seat was talked into
+# writing there would load into later runs of the others. The directory is
+# therefore read-only, mode 500, and must be empty. Anything found in it is
+# refused rather than removed, and before the mode is touched, so the user can
+# look at it and delete it. Concurrent seats enter together; each converges the
+# same directory to the same mode, and none ever widens it while another runs.
 seat_enter_scratch() {
-    local dir
+    local dir entries
     dir=$(seat_scratch_dir)
     seat_private_dir "$(seat_root)" || return 1
-    seat_private_dir "$dir" || return 1
+    seat_owned_dir "$dir" || return 1
+    if ! entries=$(ls -A "$dir"); then
+        echo "Error: could not list ${dir} to check that it is empty." >&2
+        return 1
+    fi
+    if [[ -n "$entries" ]]; then
+        echo "Error: ${dir} is not empty; every CLI seat runs from it and it must stay empty, so something got in that should not have. Check what is there, remove it and retry." >&2
+        return 1
+    fi
+    chmod 500 "$dir" || return 1
     cd "$dir" || return 1
 }
 
