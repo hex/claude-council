@@ -1519,6 +1519,30 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     fi
 }
 
+@test "seat isolation: an entry named only by a newline is refused like any other" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    mkdir -p -m 700 "$(seat_root_dir)/seat"
+    printf '%s\n' 'Planted by a seat.' > "$(seat_root_dir)/seat/"$'\n'
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: $TMPDIR/claude-council-$(id -u)/seat is not empty; every CLI seat runs from it and it must stay empty, so something got in that should not have. Check what is there, remove it and retry." ]
+    [ "$(cat "$(seat_root_dir)/seat/"$'\n')" = "Planted by a seat." ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+    [ "$(ls -ld "$(seat_root_dir)/seat" | cut -c1-10)" = "drwx------" ]
+}
+
+@test "seat isolation: a TMPDIR ending in a slash names the seat directory with one slash" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local tmp="$TMPDIR"
+    export TMPDIR="${tmp}/"
+    mkdir -p "${tmp}/claude-council-$(id -u)/seat"
+    : > "${tmp}/claude-council-$(id -u)/seat/AGENTS.md"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: ${tmp}/claude-council-$(id -u)/seat is not empty; every CLI seat runs from it and it must stay empty, so something got in that should not have. Check what is there, remove it and retry." ]
+}
+
 @test "seat isolation: a symlink planted where the scratch directory goes is refused, and no CLI runs" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows

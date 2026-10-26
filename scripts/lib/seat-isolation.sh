@@ -52,7 +52,8 @@ seat_private_dir() {
 # user id, so on a /tmp shared between users each one gets their own rather
 # than finding the first user's there and being refused.
 seat_root() {
-    printf '%s\n' "${TMPDIR:-/tmp}/claude-council-$(id -u)"
+    local tmp="${TMPDIR:-/tmp}"
+    printf '%s\n' "${tmp%/}/claude-council-$(id -u)"
 }
 
 # The working directory every CLI seat runs in: empty and outside any
@@ -77,7 +78,7 @@ seat_enter_scratch() {
     dir=$(seat_scratch_dir)
     seat_private_dir "$(seat_root)" || return 1
     seat_owned_dir "$dir" || return 1
-    if ! entries=$(ls -A "$dir"); then
+    if ! entries=$(find "$dir" -mindepth 1 -print -quit); then
         echo "Error: could not list ${dir} to check that it is empty." >&2
         return 1
     fi
