@@ -223,7 +223,7 @@ teardown() {
     [[ "$(echo "$call" | jq -r '.args[-1]')" == "IMPORTANT: Respond with your complete answer"* ]]
 }
 
-@test "antigravity.sh: passes no --model when ANTIGRAVITY_MODEL is unset, deferring to agy's own selection" {
+@test "antigravity.sh: passes the model selected in the app as --model, and none when nothing is selected" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     unset ANTIGRAVITY_MODEL
     run "${PROVIDERS_DIR_REAL}/antigravity.sh" "the user question"
@@ -231,9 +231,15 @@ teardown() {
     local call
     call=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
     assert_json_eq "$call" '.bin' "agy"
-    # A pinned --model overrides the model selected in the Antigravity app;
-    # omit it so the user's own selection decides.
+    # Nothing selected: no --model, so agy's own default decides.
     [[ "$(echo "$call" | jq -r '.args | index("--model")')" == "null" ]]
+    # The selection lives in the real home's settings, which a home of the
+    # seat's own does not hold, so the seat carries it over as --model.
+    mkdir -p "$HOME/.gemini/antigravity-cli"
+    printf '%s\n' '{"model": "Example Model (High)"}' > "$HOME/.gemini/antigravity-cli/settings.json"
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "the user question"
+    [ "$status" -eq 0 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("--model") as $i | .[$i+1]')" = "Example Model (High)" ]
 }
 
 @test "antigravity.sh: a hung CLI is bounded by COUNCIL_TIMEOUT and reports a timeout" {
@@ -1001,12 +1007,19 @@ $off" ]
     [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | wc -c)" -lt 1000 ]
 }
 
-@test "cursor-cli.sh: passes --model only when CURSOR_CLI_MODEL is set" {
+@test "cursor-cli.sh: passes --model only when CURSOR_CLI_MODEL or the CLI's own config names one" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     unset CURSOR_CLI_MODEL
     run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("--model") == null')" = "true" ]
+    # The model picked in the CLI lives in the real home's cli-config.json,
+    # which a home of the seat's own does not hold.
+    mkdir -p "$HOME/.cursor"
+    printf '%s\n' '{"model": {"modelId": "example-pick"}}' > "$HOME/.cursor/cli-config.json"
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("--model") as $i | .[$i+1]')" = "example-pick" ]
     export CURSOR_CLI_MODEL=composer-2.5
     run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
@@ -1411,4 +1424,279 @@ opencode_run_call() {
 
 @test "opencode.sh: a failure buried under a long stderr still reports its cause" {
     assert_cause_after_noise opencode.sh opencode
+}
+
+# ============================================================================
+# Seat isolation: the working directory and home every CLI seat runs under
+# ============================================================================
+
+# One field of what the fake <bin> saw as its last call started (seat-env.jsonl).
+seat_saw() {
+    jq -r --arg bin "$1" "select(.bin == \$bin) | $2" "$COUNCIL_FAKE_STATE_DIR/seat-env.jsonl" | tail -1
+}
+
+# The directories the seats share, as the fakes report them: through symlinks.
+scratch_dir() {
+    (cd "$TMPDIR/claude-council-seat" && pwd -P)
+}
+
+seat_home_dir() {
+    printf '%s\n' "$TMPDIR/claude-council-seat-home/$1"
+}
+
+# A uname that names another platform, for the branches the host does not take.
+fake_platform() {
+    printf '#!/bin/bash\necho %q\n' "$1" > "$FAKE_BIN_DIR/uname"
+    chmod +x "$FAKE_BIN_DIR/uname"
+}
+
+# Git Bash makes a symlink a copy, so the home's links exist on macOS and Linux only.
+skip_on_windows() {
+    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then skip "symlinked seat homes are macOS and Linux only"; fi
+}
+
+# Every CLI seat's provider script, then the binary it runs.
+CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi cursor-cli.sh:cursor-agent claude-cli.sh:claude copilot-cli.sh:copilot opencode.sh:opencode"
+
+@test "seat isolation: every CLI seat runs from one owner-only scratch directory, not the caller's repository" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local repo="$BATS_TEST_TMPDIR/project" pair wrong=""
+    mkdir -p "$repo"
+    git -C "$repo" init -q
+    cd "$repo"
+    for pair in $CLI_SEATS; do
+        "${PROVIDERS_DIR_REAL}/${pair%%:*}" "test prompt" > /dev/null || wrong+=" ${pair%%:*}(exit $?)"
+        [ "$(seat_saw "${pair#*:}" .cwd)" = "$(scratch_dir)" ] || wrong+=" ${pair%%:*}"
+    done
+    [ "$wrong" = "" ]
+    [ "$(scratch_dir)" = "$(cd "$TMPDIR" && pwd -P)/claude-council-seat" ]
+    [ "$(ls -ld "$TMPDIR/claude-council-seat" | cut -c1-10)" = "drwx------" ]
+    [ -z "$(ls -A "$TMPDIR/claude-council-seat")" ]
+}
+
+@test "seat isolation: a scratch directory left with wider permissions is narrowed to the owner" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    mkdir -m 755 "$TMPDIR/claude-council-seat"
+    run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(ls -ld "$TMPDIR/claude-council-seat" | cut -c1-10)" = "drwx------" ]
+}
+
+@test "seat isolation: a symlink planted where the scratch directory goes is refused, and no CLI runs" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    mkdir "$BATS_TEST_TMPDIR/elsewhere"
+    ln -s "$BATS_TEST_TMPDIR/elsewhere" "$TMPDIR/claude-council-seat"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: $TMPDIR/claude-council-seat is a symlink; the council's seats need a directory of their own there. Remove it and retry." ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "seat isolation: a directory another user owns is refused, naming it" {
+    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then skip "MSYS reports /usr as the user's own"; fi
+    run --separate-stderr bash -c "source '${LIB_DIR}/seat-isolation.sh'; seat_private_dir /usr"
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: /usr exists but is not a directory owned by $(id -un); the council's seats need one of their own there. Remove it or set TMPDIR elsewhere." ]
+}
+
+@test "seat isolation: cursor-cli on macOS runs under a home holding only a link to the login keychain" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    fake_platform Darwin
+    local home
+    home=$(seat_home_dir cursor-cli)
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw cursor-agent .home)" = "$home" ]
+    [ "$(readlink "$home/Library/Keychains")" = "$BATS_TEST_TMPDIR/user-home/Library/Keychains" ]
+    [ "$(ls -A "$home")" = "Library" ]
+    [ "$(ls -A "$home/Library")" = "Keychains" ]
+    [ "$(ls -ld "$home" | cut -c1-10)" = "drwx------" ]
+}
+
+@test "seat isolation: cursor-cli on Linux links only the CLI's login directory, under XDG_CONFIG_HOME when set" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    fake_platform Linux
+    local home
+    home=$(seat_home_dir cursor-cli)
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw cursor-agent .home)" = "$home" ]
+    [ "$(readlink "$home/.config/cursor")" = "$BATS_TEST_TMPDIR/user-home/.config/cursor" ]
+    [ "$(ls -A "$home")" = ".config" ]
+    export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/xdg-config"
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(readlink "$home/.config/cursor")" = "$BATS_TEST_TMPDIR/xdg-config/cursor" ]
+}
+
+@test "seat isolation: on Windows the seats keep the user's home, which the native CLIs find through USERPROFILE" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    fake_platform MINGW64_NT-10.0-26100
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw cursor-agent .home)" = "$BATS_TEST_TMPDIR/user-home" ]
+    [ "$(seat_saw cursor-agent .cwd)" = "$(scratch_dir)" ]
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw grok .home)" = "$BATS_TEST_TMPDIR/user-home" ]
+    [ ! -e "$TMPDIR/claude-council-seat-home" ]
+}
+
+@test "seat isolation: a link to the login that already points right is kept, one that points elsewhere is replaced" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    fake_platform Darwin
+    local home
+    home=$(seat_home_dir cursor-cli)
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    local inode
+    inode=$(ls -id "$home/Library/Keychains" | awk '{print $1}')
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(ls -id "$home/Library/Keychains" | awk '{print $1}')" = "$inode" ]
+    # A link pointing at a directory: replacing it must not drop the new link
+    # inside that directory.
+    mkdir "$BATS_TEST_TMPDIR/stale"
+    ln -sfn "$BATS_TEST_TMPDIR/stale" "$home/Library/Keychains"
+    run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(readlink "$home/Library/Keychains")" = "$BATS_TEST_TMPDIR/user-home/Library/Keychains" ]
+    [ -z "$(ls -A "$BATS_TEST_TMPDIR/stale")" ]
+}
+
+@test "seat isolation: a real directory where the login link goes is refused, never written into" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    fake_platform Darwin
+    local home
+    home=$(seat_home_dir cursor-cli)
+    mkdir -p "$home/Library/Keychains"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: $home/Library/Keychains is not a link; the seat's home holds only links to the user's login." ]
+    [ -z "$(ls -A "$home/Library/Keychains")" ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "seat isolation: concurrent seats building one home all start, with the one link" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    fake_platform Darwin
+    local i pids=() failed=0
+    for i in 1 2 3 4 5 6; do
+        "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt" > "$BATS_TEST_TMPDIR/out.$i" 2>&1 &
+        pids+=("$!")
+    done
+    for i in "${pids[@]}"; do wait "$i" || failed=$((failed + 1)); done
+    [ "$failed" -eq 0 ]
+    [ "$(wc -l < "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | tr -d ' ')" = "6" ]
+    [ "$(readlink "$(seat_home_dir cursor-cli)/Library/Keychains")" = "$BATS_TEST_TMPDIR/user-home/Library/Keychains" ]
+}
+
+@test "seat isolation: grok-cli runs under an empty home of its own, on the user's GROK_HOME, without memory" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    local home
+    home=$(seat_home_dir grok-cli)
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw grok .home)" = "$home" ]
+    [ -z "$(ls -A "$home")" ]
+    [ "$(seat_saw grok .env.GROK_HOME)" = "$BATS_TEST_TMPDIR/user-home/.grok" ]
+    [ "$(seat_saw grok .env.GROK_MEMORY)" = "0" ]
+    [ "$(tail -1 "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | jq -r '.args | index("--cwd") as $i | .[$i+1]')" = "$(scratch_dir)" ]
+    # A GROK_HOME the user set is the one kept.
+    export GROK_HOME="$BATS_TEST_TMPDIR/grok-elsewhere"
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw grok .env.GROK_HOME)" = "$BATS_TEST_TMPDIR/grok-elsewhere" ]
+}
+
+@test "seat isolation: opencode runs under an empty home of its own, its login and sessions on the real XDG_DATA_HOME" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    unset XDG_DATA_HOME
+    local home
+    home=$(seat_home_dir opencode)
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ -z "$(ls -A "$home")" ]
+    # Both the run and the session delete after it.
+    [ "$(jq -sc '[.[] | select(.bin == "opencode") | [.home, .env.XDG_DATA_HOME]] | unique' "$COUNCIL_FAKE_STATE_DIR/seat-env.jsonl")" = \
+      "$(jq -nc --arg h "$home" --arg d "$BATS_TEST_TMPDIR/user-home/.local/share" '[[$h, $d]]')" ]
+    [ "$(jq -sc '[.[] | select(.bin == "opencode")] | length' "$COUNCIL_FAKE_STATE_DIR/seat-env.jsonl")" = "2" ]
+    export XDG_DATA_HOME="$BATS_TEST_TMPDIR/xdg-data"
+    run "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw opencode .env.XDG_DATA_HOME)" = "$BATS_TEST_TMPDIR/xdg-data" ]
+}
+
+@test "seat isolation: antigravity on macOS runs under a home holding only a link to the login keychain, on Linux under the user's" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    fake_platform Darwin
+    local home
+    home=$(seat_home_dir antigravity)
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw agy .home)" = "$home" ]
+    [ "$(readlink "$home/Library/Keychains")" = "$BATS_TEST_TMPDIR/user-home/Library/Keychains" ]
+    [ "$(ls -A "$home")" = "Library" ]
+    fake_platform Linux
+    run "${PROVIDERS_DIR_REAL}/antigravity.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw agy .home)" = "$BATS_TEST_TMPDIR/user-home" ]
+    [ "$(seat_saw agy .cwd)" = "$(scratch_dir)" ]
+}
+
+@test "seat isolation: claude-cli runs without git instructions or status, on the user's home" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(seat_saw claude .env.CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS)" = "1" ]
+    [ "$(seat_saw claude .home)" = "$BATS_TEST_TMPDIR/user-home" ]
+}
+
+@test "seat isolation: codex runs under a home of its own for one run, linked to the user's login, and removes it after" {
+    export COUNCIL_FAKE_BEHAVIOR=stdin-echo
+    printf '%s\n' 'model = "gpt-user"' 'approval_policy = "never"' > "$HOME/.codex/config.toml"
+    printf '#!/bin/bash\n{ echo "home=$CODEX_HOME"; readlink "$CODEX_HOME/auth.json"; cat "$CODEX_HOME/config.toml"; } > %q\necho answer\n' \
+        "$BATS_TEST_TMPDIR/codex-saw.txt" > "$FAKE_BIN_DIR/codex"
+    chmod +x "$FAKE_BIN_DIR/codex"
+    run "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "answer" ]
+    local home
+    home=$(sed -n 's/^home=//p' "$BATS_TEST_TMPDIR/codex-saw.txt")
+    [[ "$home" == "$TMPDIR/council-codex-home."* ]]
+    [ ! -e "$home" ]
+    [ "$(sed -n 2p "$BATS_TEST_TMPDIR/codex-saw.txt")" = "$BATS_TEST_TMPDIR/user-home/.codex/auth.json" ]
+    [ "$(sed -n 3p "$BATS_TEST_TMPDIR/codex-saw.txt")" = 'model = "gpt-user"' ]
+    [ "$(grep -c 'approval_policy' "$BATS_TEST_TMPDIR/codex-saw.txt")" = "0" ]
+    [ "$(grep -c '^hooks = false$' "$BATS_TEST_TMPDIR/codex-saw.txt")" = "1" ]
+    [ "$(cat "$HOME/.codex/auth.json")" = '{"auth_mode":"chatgpt","tokens":{"access_token":"fake-token"}}' ]
+}
+
+@test "seat isolation: codex with neither a file login nor an API key fails naming both, and never runs" {
+    export COUNCIL_FAKE_BEHAVIOR=valid CODEX_API_KEY= OPENAI_API_KEY=
+    rm "$HOME/.codex/auth.json"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: codex: no auth.json in $HOME/.codex and no CODEX_API_KEY or OPENAI_API_KEY; the codex seat needs a file login or an API key" ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "seat isolation: no seat writes into the user's real home" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    mkdir -p "$HOME/Library/Keychains" "$HOME/.config/cursor" "$HOME/.grok" "$HOME/.local/share"
+    local before pair
+    before=$(cd "$HOME" && find . | sort)
+    for pair in $CLI_SEATS; do
+        "${PROVIDERS_DIR_REAL}/${pair%%:*}" "test prompt" > /dev/null
+    done
+    [ "$(cd "$HOME" && find . | sort)" = "$before" ]
 }
