@@ -4,7 +4,8 @@
 #
 # Usage: heads-up.sh --run-dir DIR --session ID --seat NAME --avoid-file FILE [--model FILE]
 #   --model FILE    JSON object {model?, effort?}, the seat's pick: the model goes to the seat's own
-#                   *_MODEL variable for its call; the effort to codex's -c model_reasoning_effort
+#                   *_MODEL variable for its call; for codex, the model and effort go to the
+#                   config.toml of its own home, over the user's
 #
 # Prints the detached worker's pid and exits 0 at once. Exit 1 before the fork
 # when the arguments are unusable (the mod logs stderr once). The worker writes:
@@ -12,6 +13,8 @@
 #   DIR/digest.md, DIR/prompt.md      what left the machine; kept until the mod removes the dir
 #   DIR/seat.{out,err,events}         the seat's raw output
 #   DIR/seat.usage.json               the tokens the seat's call used, when it reported them (lib/usage.sh)
+#   DIR/codex-home/                   codex's CODEX_HOME: config.toml and a link to the user's auth.json;
+#                                     codex keeps its session and logs there too
 #   DIR/result.json                   {kind:note|none|quota|skipped|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
 #                                      seats:[{seat,outcome,ms,detail?,usage?}]}; seats holds the seat's outcome, none
 #                                      when the run skipped or failed before asking it; quota is the seat out of
@@ -69,6 +72,8 @@ parse_args() {
     [[ -n "$SEAT" ]] || die "--seat is required."
     [[ -n "$AVOID_FILE" ]] || die "--avoid-file is required."
     [[ -d "$RUN_DIR" ]] || die "run dir not found: $RUN_DIR"
+    # Absolute, since codex is started inside it with paths that name it.
+    RUN_DIR=$(cd "$RUN_DIR" && pwd)
     [[ -f "$AVOID_FILE" ]] || die "avoid file not found: $AVOID_FILE"
     if [[ -n "$PICK_FILE" ]]; then
         [[ -f "$PICK_FILE" ]] || die "model file not found: $PICK_FILE"
@@ -146,12 +151,90 @@ apply_pick() {
     return 0
 }
 
+# One key of codex's config.toml, its value a TOML basic string: JSON's string
+# escapes are all valid there, DEL and the other control characters included.
+toml_line() {
+    printf '%s = %s\n' "$1" "$(jq -rn --arg v "$2" '$v | tojson')"
+}
+
+# Builds the home codex runs the check under, so none of the user's plugins,
+# hooks, AGENTS.md, skills, memories or MCP servers ride along: config.toml
+# holds the model and effort and switches the rest off. The model is the pick,
+# else the user's; the effort likewise; a key neither names is left out for
+# codex to choose. The login is linked in by link_login.
+# Usage: codex_home USER_HOME
+codex_home() {
+    local user_home="$1" home="${RUN_DIR}/codex-home" model effort
+    model="${CODEX_MODEL:-$(toml_value "${user_home}/config.toml" "" model)}"
+    effort="${PICK_EFFORT:-$(toml_value "${user_home}/config.toml" "" model_reasoning_effort)}"
+    mkdir -p "$home"
+    {
+        [[ -n "$model" ]] && toml_line model "$model"
+        [[ -n "$effort" ]] && toml_line model_reasoning_effort "$effort"
+        [[ -n "$model$effort" ]] && echo
+        cat <<'EOF'
+[skills]
+include_instructions = false
+
+[skills.bundled]
+enabled = false
+
+[features]
+plugins = false
+apps = false
+hooks = false
+memories = false
+EOF
+    } > "${home}/config.toml"
+}
+
+# Why the user's codex setup cannot be carried into the check's own home, on
+# one line; nothing when it can. Without a file login (the keyring store, or
+# not logged in) there is nothing to link to.
+# Usage: codex_home_refusal USER_HOME
+codex_home_refusal() {
+    local user_home="$1" config="${1}/config.toml" provider profile
+    if [[ ! -f "${user_home}/auth.json" ]]; then
+        printf "codex: no auth.json in %s; the heads-up seat needs codex's file credential store" "$user_home"
+        return 0
+    fi
+    # A custom provider's table can carry headers, an env key the scrub drops
+    # and nested tables, so it is refused rather than copied.
+    provider=$(toml_value "$config" "" model_provider)
+    if [[ -n "$provider" && "$provider" != openai ]]; then
+        printf "codex: %s sets model_provider \"%s\"; the heads-up seat runs codex's built-in openai provider only" "$config" "$provider"
+        return 0
+    fi
+    # A profile can name its own model, effort and provider; the home copies
+    # the root keys only, so it would run something other than the user's codex.
+    profile=$(toml_value "$config" "" profile)
+    if [[ -n "$profile" ]]; then
+        printf "codex: %s sets profile \"%s\"; the heads-up seat reads only the root model and effort" "$config" "$profile"
+    fi
+}
+
+# Links the user's auth.json into the check's home. codex refreshes its token
+# by rewriting auth.json in place, so through a link the refresh lands in the
+# user's login; in a copy it would vanish with the run dir. A hard link where a
+# symlink is refused (Windows without developer mode) or comes out as a copy
+# (as Git Bash can make one).
+# Usage: link_login USER_HOME
+link_login() {
+    local login="${1}/auth.json" link="${RUN_DIR}/codex-home/auth.json"
+    if ln -s "$login" "$link" 2> /dev/null && [[ "$link" -ef "$login" ]]; then
+        return 0
+    fi
+    rm -f "$link"
+    ln "$login" "$link" 2> "${RUN_DIR}/link.err"
+}
+
+# codex in the run dir, so no repository's AGENTS.md or skills load.
 codex_call() {
-    local args=(exec --json --skip-git-repo-check -s read-only)
-    [[ -n "${CODEX_MODEL:-}" ]] && args+=(-m "$CODEX_MODEL")
-    [[ -n "$PICK_EFFORT" ]] && args+=(-c "model_reasoning_effort=\"${PICK_EFFORT}\"")
-    args+=(--output-schema "${SCRIPT_DIR}/heads-up.schema.json" -o "${RUN_DIR}/seat.out" -)
-    ( provider_env_scrub codex; exec codex "${args[@]}" ) \
+    local args=(exec --json --skip-git-repo-check -s read-only
+        --output-schema "${SCRIPT_DIR}/heads-up.schema.json" -o "${RUN_DIR}/seat.out" -)
+    ( provider_env_scrub codex
+      cd "$RUN_DIR"
+      CODEX_HOME="${RUN_DIR}/codex-home" exec codex "${args[@]}" ) \
         < "${RUN_DIR}/prompt.md" > "${RUN_DIR}/seat.events" 2> "${RUN_DIR}/seat.err"
 }
 
@@ -186,7 +269,17 @@ codex_usage() {
 # A turn.failed message is the reason when codex gave one; its stderr can hold
 # unrelated noise (MCP servers it failed to reach), so it is only the fallback.
 ask_codex() {
-    local limit="$1" answer="${RUN_DIR}/seat.out" rc=0
+    local limit="$1" answer="${RUN_DIR}/seat.out" rc=0 user_home="${CODEX_HOME:-$HOME/.codex}"
+    DETAIL=$(codex_home_refusal "$user_home")
+    if [[ -n "$DETAIL" ]]; then
+        OUTCOME=error
+        return 0
+    fi
+    codex_home "$user_home"
+    if ! link_login "$user_home"; then
+        OUTCOME=error DETAIL="codex: could not link ${user_home}/auth.json into ${RUN_DIR}/codex-home: $(error_excerpt "${RUN_DIR}/link.err")"
+        return 0
+    fi
     run_with_deadline "$limit" codex_call || rc=$?
     codex_usage
     if (( rc == 143 )); then

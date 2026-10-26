@@ -20,8 +20,34 @@ setup() {
     AVOID="${BATS_TEST_TMPDIR}/avoid.txt"
     printf '%s\n' "flaky network test" > "$AVOID"
     export COUNCIL_HEADS_UP_SEAT_SECONDS=20
+    # The user's own codex home, a stand-in so no test reads or links the real ~/.codex.
+    export CODEX_HOME="${BATS_TEST_TMPDIR}/user-codex"
+    mkdir -p "$CODEX_HOME"
+    printf '%s\n' '{"auth_mode":"chatgpt","tokens":{"access_token":"fake-token"}}' > "$CODEX_HOME/auth.json"
     write_transcript
 }
+
+# The config.toml codex ran under, as the fake copied it out of its CODEX_HOME.
+codex_config() {
+    cat "$COUNCIL_FAKE_STATE_DIR/codex-config.toml"
+}
+
+# One field of what the fake saw of its CODEX_HOME and cwd.
+codex_saw() {
+    jq -r ".$1" "$COUNCIL_FAKE_STATE_DIR/codex-home.json"
+}
+
+TRIMMED_SECTIONS='[skills]
+include_instructions = false
+
+[skills.bundled]
+enabled = false
+
+[features]
+plugins = false
+apps = false
+hooks = false
+memories = false'
 
 # A forked worker must never outlive its test: bats would hold the file open
 # for it, and a later test would find its files.
@@ -360,18 +386,177 @@ result() {
     [ ! -f "$RUN_DIR/pid" ]
 }
 
-@test "heads-up: --model sets the seat's model through its own variable and codex's effort through -c" {
+@test "heads-up: --model sets codex's model and effort over the user's, and the band names the pick" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    printf '%s\n' 'model = "gpt-user"' 'model_reasoning_effort = "medium"' > "$CODEX_HOME/config.toml"
     printf '%s\n' '{"model": "gpt-test-pick", "effort": "high"}' > "$RUN_DIR/model.json"
     start_runner codex --model "$RUN_DIR/model.json"
     [ "$status" -eq 0 ]
     wait_done
     [ "$(result .kind)" = "note" ]
     [ "$(result .model)" = "gpt-test-pick" ]
-    local codex_args
-    codex_args=$(jq -c '.args' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")
-    [ "$(jq -r 'index("-m") as $i | .[$i + 1]' <<< "$codex_args")" = "gpt-test-pick" ]
-    [ "$(jq -r 'index("-c") as $i | .[$i + 1]' <<< "$codex_args")" = 'model_reasoning_effort="high"' ]
+    [ "$(codex_config)" = "model = \"gpt-test-pick\"
+model_reasoning_effort = \"high\"
+
+${TRIMMED_SECTIONS}" ]
+}
+
+@test "heads-up: codex runs in a home of its own, linked to the user's login, with the user's model and effort and nothing else of theirs" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    cat > "$CODEX_HOME/config.toml" <<'EOF'
+model = "gpt-user"
+model_reasoning_effort = "medium"
+approval_policy = "never"
+
+[features]
+hooks = true
+
+[mcp_servers.tracker]
+command = "tracker-mcp"
+EOF
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ "$(result .model)" = "gpt-user" ]
+    [ "$(codex_saw home)" = "${RUN_DIR}/codex-home" ]
+    [ "$RUN_DIR/codex-home/auth.json" -ef "$CODEX_HOME/auth.json" ]
+    [ "$(codex_config)" = "model = \"gpt-user\"
+model_reasoning_effort = \"medium\"
+
+${TRIMMED_SECTIONS}" ]
+}
+
+@test "heads-up: a user config naming no model or effort leaves both out of codex's" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    printf '%s\n' 'approval_policy = "never"' > "$CODEX_HOME/config.toml"
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ "$(result .model)" = "default" ]
+    [ "$(codex_config)" = "$TRIMMED_SECTIONS" ]
+}
+
+@test "heads-up: codex runs in the run dir, so no project's AGENTS.md reaches it" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    start_runner codex
+    wait_done
+    [ "$(codex_saw cwd)" = "$(cd "$RUN_DIR" && pwd -P)" ]
+}
+
+@test "heads-up: a user without auth.json is a failed check that names it, and codex is never run" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    rm "$CODEX_HOME/auth.json"
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "failed" ]
+    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex error" ]
+    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME}; the heads-up seat needs codex's file credential store" ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "heads-up: a user config on another model provider is a failed check that names it, and codex is never run" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    cat > "$CODEX_HOME/config.toml" <<'EOF'
+model = "llama-local"
+model_provider = "lab"
+
+[model_providers.lab]
+base_url = "http://lab.example.com/v1"
+EOF
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "failed" ]
+    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets model_provider \"lab\"; the heads-up seat runs codex's built-in openai provider only" ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "heads-up: a user config naming the openai provider itself runs as usual" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    printf '%s\n' 'model = "gpt-user"' 'model_provider = "openai"' > "$CODEX_HOME/config.toml"
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ "$(codex_config)" = "model = \"gpt-user\"
+
+${TRIMMED_SECTIONS}" ]
+}
+
+@test "heads-up: a user config selecting a profile is a failed check that names it, and codex is never run" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    cat > "$CODEX_HOME/config.toml" <<'EOF'
+model = "gpt-user"
+profile = "deep"
+
+[profiles.deep]
+model = "gpt-other"
+EOF
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "failed" ]
+    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets profile \"deep\"; the heads-up seat reads only the root model and effort" ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "heads-up: a model name with a quote in it reaches codex's config as one TOML string" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    printf '%s\n' '{"model": "gpt\" [x]"}' > "$RUN_DIR/model.json"
+    start_runner codex --model "$RUN_DIR/model.json"
+    wait_done
+    [ "$(codex_config)" = "model = \"gpt\\\" [x]\"
+
+${TRIMMED_SECTIONS}" ]
+}
+
+# A token refresh writes auth.json in place; it must land in the user's login.
+assert_login_shared() {
+    printf '%s\n' '{"refreshed":true}' > "$RUN_DIR/codex-home/auth.json"
+    [ "$(cat "$CODEX_HOME/auth.json")" = '{"refreshed":true}' ]
+    rm -rf "$RUN_DIR"
+    [ "$(cat "$CODEX_HOME/auth.json")" = '{"refreshed":true}' ]
+}
+
+@test "heads-up: codex's login is the user's own file, never a copy, and removing the run dir leaves it" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ -L "$RUN_DIR/codex-home/auth.json" ]
+    assert_login_shared
+}
+
+@test "heads-up: where a symlink is refused, as on Windows without developer mode, a hard link shares the login" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    printf '#!/bin/bash\n[[ "$1" != -s ]] || { echo "ln: Operation not permitted" >&2; exit 1; }\nexec %q "$@"\n' \
+        "$(command -v ln)" > "$FAKE_BIN_DIR/ln"
+    chmod +x "$FAKE_BIN_DIR/ln"
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ ! -L "$RUN_DIR/codex-home/auth.json" ]
+    assert_login_shared
+}
+
+@test "heads-up: where a symlink comes out as a copy, as Git Bash can make it, a hard link replaces it" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    printf '#!/bin/bash\n[[ "$1" != -s ]] || exec cp "$2" "$3"\nexec %q "$@"\n' \
+        "$(command -v ln)" > "$FAKE_BIN_DIR/ln"
+    chmod +x "$FAKE_BIN_DIR/ln"
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    assert_login_shared
+}
+
+@test "heads-up: a login that cannot be linked is a failed check that names it, and codex is never run" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    printf '#!/bin/bash\necho "ln: Invalid cross-device link" >&2\nexit 1\n' > "$FAKE_BIN_DIR/ln"
+    chmod +x "$FAKE_BIN_DIR/ln"
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "failed" ]
+    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex error" ]
+    [ "$(result '.seats[0].detail')" = "codex: could not link ${CODEX_HOME}/auth.json into ${RUN_DIR}/codex-home: ln: Invalid cross-device link" ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
 @test "heads-up: a --model effort that is not lowercase letters is refused before the fork" {
@@ -380,4 +565,14 @@ result() {
     [ "$status" -eq 1 ]
     [ "$output" = "Error: --model: effort must be lowercase letters, got: hi gh" ]
     [ ! -f "$RUN_DIR/pid" ]
+}
+
+@test "heads-up: a relative run dir still reaches codex as the run dir" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+    cd "$BATS_TEST_TMPDIR"
+    run "$HOST_BASH" "$RUNNER" --run-dir run --session "$SESSION_ID" --seat codex --avoid-file "$AVOID"
+    [ "$status" -eq 0 ]
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ "$(codex_saw cwd)" = "$(cd "$RUN_DIR" && pwd -P)" ]
 }
