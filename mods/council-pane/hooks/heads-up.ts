@@ -469,11 +469,19 @@ export function avoidList(m: Memory): string {
   return topics.map(topic => `${topic}\n`).join('')
 }
 
-export const FRESH_SESSION: Session = { offeredTurn: null, phase: { kind: 'idle' }, paused: null }
+export const FRESH_SESSION: Session = { offeredTurn: null, phase: { kind: 'idle' }, paused: null, resumes: 0 }
 
-/** The session as $.state holds it: one written without `paused` reads as not paused. */
-export function storedSession(stored: Omit<Session, 'paused'> & { readonly paused?: Paused | null }): Session {
-  return { ...stored, paused: stored.paused ?? null }
+type Checking = Extract<Phase, { kind: 'checking' }>
+type StoredSession = Omit<Session, 'paused' | 'resumes' | 'phase'> & {
+  readonly paused?: Paused | null
+  readonly resumes?: number
+  readonly phase: Exclude<Phase, Checking> | (Omit<Checking, 'resumes'> & { readonly resumes?: number })
+}
+
+/** The session as $.state holds it: one written without `paused` reads as not paused, and without `resumes`, session or check, as never resumed. */
+export function storedSession(stored: StoredSession): Session {
+  const { phase } = stored
+  return { ...stored, paused: stored.paused ?? null, resumes: stored.resumes ?? 0, phase: phase.kind === 'checking' ? { ...phase, resumes: phase.resumes ?? 0 } : phase }
 }
 
 /** The red row's Dismiss: the row goes, the pause stays. */
@@ -652,12 +660,13 @@ export function isRepeat(m: Memory, topic: string): boolean {
  * The poller's transition. A note stamps offeredTurn with the turn the check
  * was launched in, so one landing after its turn ended counts against the
  * right turn; a repeat, none or failed returns to idle; quota returns to idle
- * paused, the red row not yet dismissed. Not checking -> unchanged.
+ * paused, the red row not yet dismissed, unless /heads-up on resumed the
+ * session after the check launched. Not checking -> unchanged.
  */
 export function settle(s: Session, m: Memory, r: RunResult): Session {
   if (s.phase.kind !== 'checking') return s
   if (r.kind === 'note' && !isRepeat(m, r.note.topic)) return { ...s, offeredTurn: s.phase.turnId, phase: { kind: 'showing', note: r.note, expanded: false } }
-  if (r.kind === 'quota') return { ...s, phase: { kind: 'idle' }, paused: { seat: r.seat, detail: r.detail, acknowledged: false } }
+  if (r.kind === 'quota' && s.phase.resumes === s.resumes) return { ...s, phase: { kind: 'idle' }, paused: { seat: r.seat, detail: r.detail, acknowledged: false } }
   return { ...s, phase: { kind: 'idle' } }
 }
 

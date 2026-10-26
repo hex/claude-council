@@ -37,7 +37,7 @@ A check that found nothing logs one line (`heads-up: codex · none · 12.4 KB ·
  ✗ heads-up paused · codex: Your workspace is out of credits. Add credits to continue.   0: Dismiss
 ```
 
-One red line, the seat's words cut to fit. `0` dismisses the row and keeps the pause. No check launches while paused; `/heads-up on` and a fresh session are the only resumes, and `/heads-up off` leaves the pause. `/heads-up status` and its toast carry a `paused` row (`codex out of credits this session · /heads-up on to resume`), and the counts keep these checks apart: `checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331`. A transcript holding no prompt, typed or submitted by a mod on the person's behalf (a teammate pane, an SDK-driven session), is a skipped check: `heads-up: skipped · digest: nothing in the window to review`, logged once per reason, no band, no seat asked, not counted.
+One red line, the seat's words cut to fit. `0` dismisses the row and keeps the pause. No check launches while paused; `/heads-up on` and a fresh session are the only resumes, and `/heads-up off` leaves the pause. A check already running when `/heads-up on` resumes the session cannot pause it again: the counts still take its out-of-credits answer, but nothing logs it and the session stays on. `/heads-up status` and its toast carry a `paused` row (`codex out of credits this session · /heads-up on to resume`), and the counts keep these checks apart: `checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331`. A transcript holding no prompt, typed or submitted by a mod on the person's behalf (a teammate pane, an SDK-driven session), is a skipped check: `heads-up: skipped · digest: nothing in the window to review`, logged once per reason, no band, no seat asked, not counted.
 
 Call sites in `pane.tsx`, the whole shell:
 
@@ -64,7 +64,7 @@ Data first. Three owners and nothing else:
 | State | Owner | Where | Why |
 |---|---|---|---|
 | `Memory` {seen, known, typedPastInARow, looksToSkip} | `applyAnswer` | `$.store['heads-up']` | crosses sessions like the builtin; lists capped at 50, counters global like the builtin |
-| `Session` {offeredTurn, phase, paused} | pane shell via `decide` and `settle` | `$.state` (`PluginState['claude-council']['headsUp']`) | per session, survives hot reload; `phase` is a tagged union so "checking and showing at once" cannot be represented |
+| `Session` {offeredTurn, phase, paused, resumes} | pane shell via `decide` and `settle` | `$.state` (`PluginState['claude-council']['headsUp']`) | per session, survives hot reload; `phase` is a tagged union so "checking and showing at once" cannot be represented |
 | run files | `scripts/heads-up.sh` | `council-mod.<sid>/heads-up/<checkId>/` | detached worker output; `seat.usage.json` the seat's tokens when it reported them; `result.json` written to a temp name and moved, `.done` last |
 | `Tokens` {checks, input, cached, cachedChecks, output, reasoning, reasoningChecks, unreported} | `addedTokens` | `$.store['heads-up-tokens']` | adds amounts, so kept apart from the `heads-up-counts` bumps; read-add-write per check, a concurrent add can lose one check's tokens |
 

@@ -99,7 +99,7 @@ test('a cadence point is skipped while off, a note shows, a check runs, or the t
   expect(decide({ enabled: false }, FRESH_SESSION, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'disabled' })
   const showing: Session = { ...FRESH_SESSION, phase: { kind: 'showing', note, expanded: false } }
   expect(decide(on, showing, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'showing' })
-  const checking: Session = { ...FRESH_SESSION, phase: { kind: 'checking', turnId: 't1', checkId: 'c0', runDir: '/r/c0', startedMs: 1 } }
+  const checking: Session = { ...FRESH_SESSION, phase: { kind: 'checking', turnId: 't1', checkId: 'c0', runDir: '/r/c0', startedMs: 1, resumes: 0 } }
   expect(decide(on, checking, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'checking' })
   const offered: Session = { ...FRESH_SESSION, offeredTurn: 't1' }
   expect(decide(on, offered, EMPTY_MEMORY, step, 1000)).toEqual({ kind: 'skip', why: 'offered-this-turn' })
@@ -118,9 +118,14 @@ test('a paused session skips every cadence point, dismissed or not; off and off-
 
 test('a stored session without a pause field reads as not paused, and checks launch from it', () => {
   const stored = { offeredTurn: 't0', phase: { kind: 'idle' } } as const
-  expect(storedSession(stored)).toEqual({ offeredTurn: 't0', phase: { kind: 'idle' }, paused: null })
+  expect(storedSession(stored)).toEqual({ offeredTurn: 't0', phase: { kind: 'idle' }, paused: null, resumes: 0 })
   expect(decide(on, storedSession(stored), EMPTY_MEMORY, { turnId: 't1', index: 3 }, 1000)).toEqual({ kind: 'launch', checkId: 'check-1000' })
   expect(storedSession(paused)).toEqual(paused)
+})
+
+test('a stored session and its check in flight without a resume count read as never resumed', () => {
+  const stored = { offeredTurn: null, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1 } } as const
+  expect(storedSession(stored)).toEqual({ offeredTurn: null, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1, resumes: 0 }, paused: null, resumes: 0 })
 })
 
 test('dismissing the pause row acknowledges it and keeps the pause; with no pause nothing changes', () => {
@@ -238,7 +243,7 @@ test('a repeat is a topic already seen or known, trimmed and case-folded', () =>
   expect(isRepeat(m, 'Something else')).toBe(false)
 })
 
-const checking: Session = { ...FRESH_SESSION, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1 } }
+const checking: Session = { ...FRESH_SESSION, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1, resumes: 0 } }
 
 test('a note shows and stamps the turn its check was launched in', () => {
   expect(settle(checking, EMPTY_MEMORY, { kind: 'note', note, seats: [] })).toEqual({ ...checking, offeredTurn: 't1', phase: { kind: 'showing', note, expanded: false } })
@@ -255,6 +260,18 @@ test('a repeat, a none or a failure settles back to idle with the turn left free
 test('a seat out of credits settles to idle and pauses the session with its seat and words, not yet dismissed', () => {
   expect(settle(checking, EMPTY_MEMORY, { kind: 'quota', seat: 'codex', detail: OUT_OF_CREDITS, payloadBytes: 900, seats: [] }))
     .toEqual({ ...checking, phase: { kind: 'idle' }, paused: { seat: 'codex', detail: OUT_OF_CREDITS, acknowledged: false } })
+})
+
+test('a seat out of credits for a check launched before /heads-up on resumed the session leaves it unpaused', () => {
+  const launchedBefore: Session = { ...FRESH_SESSION, resumes: 1, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1, resumes: 0 } }
+  expect(settle(launchedBefore, EMPTY_MEMORY, { kind: 'quota', seat: 'codex', detail: OUT_OF_CREDITS, payloadBytes: 900, seats: [] }))
+    .toEqual({ offeredTurn: null, phase: { kind: 'idle' }, paused: null, resumes: 1 })
+})
+
+test('a seat out of credits for a check launched after the resume pauses the session again', () => {
+  const launchedAfter: Session = { ...FRESH_SESSION, resumes: 1, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1, resumes: 1 } }
+  expect(settle(launchedAfter, EMPTY_MEMORY, { kind: 'quota', seat: 'codex', detail: OUT_OF_CREDITS, payloadBytes: 900, seats: [] }))
+    .toEqual({ offeredTurn: null, phase: { kind: 'idle' }, paused: { seat: 'codex', detail: OUT_OF_CREDITS, acknowledged: false }, resumes: 1 })
 })
 
 test('a result with no check in flight changes nothing', () => {

@@ -483,7 +483,7 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
   // that vanished, and idle the session under the launch.
   const avoidFile = `${runDir}/avoid.txt`
   await $.fs.write(avoidFile, avoidList(memory))
-  const session: Session = { ...current, phase: { kind: 'checking', turnId: step.turnId, checkId: decision.checkId, runDir, startedMs: now } }
+  const session: Session = { ...current, phase: { kind: 'checking', turnId: step.turnId, checkId: decision.checkId, runDir, startedMs: now, resumes: current.resumes } }
   // A press or a poll wrote in between: this step's reading is stale, and
   // the next step decides again on the new session.
   const written = await $.state.set(HEADS_UP, session, { ifVersion: held.version })
@@ -546,7 +546,7 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
   else return
   // settle reads memory only to spot a repeated note.
   const memory = result.kind === 'note' ? await loadMemory($) : EMPTY_MEMORY
-  const settled = await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(s, memory, result) : s))
+  const settled = await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(storedSession(s), memory, result) : s))
   if (result.kind === 'failed') {
     $.ui.log(checkLine(result))
     state.headsUpFailure = { text: checkLine(result), untilMs: now + FINISH_NOTICE_MS, isFailure: true }
@@ -556,8 +556,9 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
     state.headsUpReceipt = receiptLine(result)
     $.ui.invalidate('ui.render')
   }
-  // Told once, here: the pause stops every later check, and its red row reads the session.
-  if (result.kind === 'quota') {
+  // Told once, here: the pause stops every later check, and its red row reads
+  // the session. A check launched before /heads-up on paused nothing, so it says nothing.
+  if (result.kind === 'quota' && settled.paused !== null) {
     $.ui.log(checkLine(result))
     $.ui.invalidate('ui.render')
   }
@@ -883,7 +884,12 @@ export const register: Register = (on, options) => {
       const file = await headsUpFile($)
       await $.fs.write(file.path, withEnabled(file.text, command.action === 'on', command.action === 'on' ? command.seat : undefined))
       // On is the one way to resume a session the seat's credits paused; off leaves the pause.
-      if (command.action === 'on') await update($, headsUp, s => ({ ...s, paused: null }))
+      if (command.action === 'on') {
+        await update($, headsUp, s => {
+          const current = storedSession(s)
+          return { ...current, paused: null, resumes: current.resumes + 1 }
+        })
+      }
       state.headsUpTip = ''
     }
     return { text: await headsUpReply($, state, settings.headsUp) }
