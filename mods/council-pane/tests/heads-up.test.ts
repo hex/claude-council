@@ -385,14 +385,16 @@ test('a token count is plain under a thousand, thousands with one decimal, milli
 })
 
 test('the tokens line says which checks it covers, how many lacked a count, and how many gave each split', () => {
-  expect(tokensLine(EMPTY_TOKENS)).toBe('none yet; counted from this version on')
-  expect(tokensLine({ ...EMPTY_TOKENS, unreported: 2 })).toBe('2 latest checks, counted from this version on · 2 unreported')
+  expect(tokensLine({ checks: 1, input: 33318, cached: 30720, cachedChecks: 1, output: 58, reasoning: 30, reasoningChecks: 1, unreported: 0 }))
+    .toBe('1 check since this version · 33.3k in, 30.7k cached · 58 out, 30 reasoning · 33.4k per check')
+  expect(tokensLine(EMPTY_TOKENS)).toBe('none since this version')
+  expect(tokensLine({ ...EMPTY_TOKENS, unreported: 2 })).toBe('0 of 2 checks reported since this version')
   const all: Tokens = { checks: 42, input: 1484200, cached: 820000, cachedChecks: 42, output: 9100, reasoning: 6200, reasoningChecks: 42, unreported: 0 }
-  expect(tokensLine(all)).toBe('42 latest checks, counted from this version on · 1.48M in, 820.0k cached · 9.1k out, 6.2k reasoning · 35.6k in and out per reported check')
+  expect(tokensLine(all)).toBe('42 checks since this version · 1.48M in, 820.0k cached · 9.1k out, 6.2k reasoning · 35.6k per check')
   expect(tokensLine({ ...all, cachedChecks: 40, reasoningChecks: 30, unreported: 3 }))
-    .toBe('45 latest checks, counted from this version on · 3 unreported · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out, 6.2k reasoning on 30 of 42 · 35.6k in and out per reported check')
+    .toBe('42 of 45 checks reported since this version · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out, 6.2k reasoning on 30 of 42 · 35.6k per check')
   expect(tokensLine({ ...all, cached: 0, cachedChecks: 0, reasoning: 0, reasoningChecks: 0 }))
-    .toBe('42 latest checks, counted from this version on · 1.48M in · 9.1k out · 35.6k in and out per reported check')
+    .toBe('42 checks since this version · 1.48M in · 9.1k out · 35.6k per check')
 })
 
 test('the heads-up command reads on with an optional seat, off and status, and refuses anything else', () => {
@@ -453,7 +455,7 @@ test('status names the effective state and which switch set it, then the counts,
     + '  seat     codex\n'
     + '  every    3 requests\n'
     + '  checks   checks 4 · none 3 · notes 1 · repeats 0 · failed 0 · out of credits 0\n'
-    + '  tokens   none yet; counted from this version on\n'
+    + '  tokens   none since this version\n'
     + '  presses  learn 1 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(statusText(headsUpStatus({ enabled: true, seat: 'codex', every: 3, model: { model: 'gpt-6.1-sol', effort: 'high' } }, true, undefined, EMPTY_COUNTS, EMPTY_TOKENS, null))).toBe(
     'Heads-up side-check: on for every project\n'
@@ -461,27 +463,27 @@ test('status names the effective state and which switch set it, then the counts,
     + '  seat     codex (gpt-6.1-sol, high)\n'
     + '  every    3 requests\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
-    + '  tokens   none yet; counted from this version on\n'
+    + '  tokens   none since this version\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(statusText(headsUpStatus({ enabled: false }, true, '{"enabled": false}', EMPTY_COUNTS, EMPTY_TOKENS, null))).toBe(
     'Heads-up side-check: off for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is on)\n'
     + '  turn on  /heads-up on [seat] turns it on here\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
-    + '  tokens   none yet; counted from this version on\n'
+    + '  tokens   none since this version\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(statusText(headsUpStatus({ enabled: false }, false, undefined, EMPTY_COUNTS, EMPTY_TOKENS, null))).toBe(
     'Heads-up side-check: off\n'
     + '  by       the /config row is off, no .claude/council-heads-up.json here\n'
     + '  turn on  /heads-up on [seat] for this project, the /config row "Heads-up side-check" for every project\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
-    + '  tokens   none yet; counted from this version on\n'
+    + '  tokens   none since this version\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(statusText(headsUpStatus({ enabled: false, problem: '.claude/council-heads-up.json is not valid JSON; heads-up is off' }, true, '{', EMPTY_COUNTS, EMPTY_TOKENS, null))).toBe(
     'Heads-up side-check: off\n'
     + '  problem  .claude/council-heads-up.json is not valid JSON; heads-up is off\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
-    + '  tokens   none yet; counted from this version on\n'
+    + '  tokens   none since this version\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
 })
 
@@ -495,7 +497,7 @@ test('status carries the tokens row after the checks row; the toast leaves it ou
     + '  seat     codex\n'
     + '  every    3 requests\n'
     + '  checks   checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331\n'
-    + '  tokens   3 latest checks, counted from this version on · 1 unreported · 39.0k in, 18.8k cached · 470 out, 314 reasoning on 1 of 2 · 19.7k in and out per reported check\n'
+    + '  tokens   2 of 3 checks reported since this version · 39.0k in, 18.8k cached · 470 out, 314 reasoning on 1 of 2 · 19.7k per check\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(toastLine(status)).toBe('Heads-up side-check: on for this project · codex · every 3 requests · checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331')
 })
@@ -509,7 +511,7 @@ test('status says while the session is paused, dismissed or not, and what resume
     + '  every    3 requests\n'
     + '  paused   codex out of credits this session · /heads-up on to resume\n'
     + '  checks   checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331\n'
-    + '  tokens   none yet; counted from this version on\n'
+    + '  tokens   none since this version\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
   expect(statusText(headsUpStatus({ enabled: false }, false, '{"enabled": false}', EMPTY_COUNTS, EMPTY_TOKENS, acknowledgePause(paused).paused))).toBe(
     'Heads-up side-check: off for this project\n'
@@ -517,7 +519,7 @@ test('status says while the session is paused, dismissed or not, and what resume
     + '  turn on  /heads-up on [seat] turns it on here\n'
     + '  paused   codex out of credits this session · /heads-up on to resume\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
-    + '  tokens   none yet; counted from this version on\n'
+    + '  tokens   none since this version\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
 })
 

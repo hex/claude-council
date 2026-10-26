@@ -173,21 +173,21 @@ export function tokenCount(n: number): string {
 }
 
 /**
- * "45 latest checks, counted from this version on · 3 unreported · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out,
- * 6.2k reasoning on 30 of 42 · 35.6k in and out per reported check". A split every reported check gave drops its
- * "on X of Y"; one none gave drops out.
+ * "42 of 45 checks reported since this version · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out, 6.2k reasoning
+ * on 30 of 42 · 35.6k per check", the average taken over the reported checks. With every check reported the head
+ * is "45 checks since this version". A split every reported check gave drops its "on X of Y"; one none gave drops out.
  */
 export function tokensLine(t: Tokens): string {
   const counted = t.checks + t.unreported
-  if (counted === 0) return 'none yet; counted from this version on'
-  const parts = [`${counted} latest checks, counted from this version on`]
-  if (t.unreported > 0) parts.push(`${t.unreported} unreported`)
+  if (counted === 0) return 'none since this version'
+  const checks = `${counted} ${counted === 1 ? 'check' : 'checks'}`
+  const parts = [t.unreported === 0 ? `${checks} since this version` : `${t.checks} of ${checks} reported since this version`]
   if (t.checks > 0) {
     const split = (amount: number, gave: number, name: string) => (gave === 0 ? '' : `, ${tokenCount(amount)} ${name}${gave < t.checks ? ` on ${gave} of ${t.checks}` : ''}`)
     parts.push(
       `${tokenCount(t.input)} in${split(t.cached, t.cachedChecks, 'cached')}`,
       `${tokenCount(t.output)} out${split(t.reasoning, t.reasoningChecks, 'reasoning')}`,
-      `${tokenCount(Math.round((t.input + t.output) / t.checks))} in and out per reported check`,
+      `${tokenCount(Math.round((t.input + t.output) / t.checks))} per check`,
     )
   }
   return parts.join(' \u00b7 ')

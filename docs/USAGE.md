@@ -429,10 +429,13 @@ understood, dismiss, turned off and typed past. A sample line:
 `checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331`.
 The `tokens` row adds up the tokens those checks used, as each seat's
 response reported them:
-`45 latest checks, counted from this version on · 3 unreported · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out, 6.2k reasoning on 30 of 42 · 35.6k in and out per reported check`.
+`42 of 45 checks reported since this version · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out, 6.2k reasoning on 30 of 42 · 35.6k per check`.
 It covers only the checks since the version that began counting, so fewer
-than the `checks` row. `in` includes cached tokens and `out` includes reasoning
-tokens. `on 40 of 42` says how many reported checks gave that split; a vendor
+than the `checks` row. When every check reported, it starts
+`45 checks since this version`. `in` includes cached tokens and `out`
+includes reasoning tokens. `per check` is in and out together, averaged
+over the reported checks.
+`on 40 of 42` says how many reported checks gave that split; a vendor
 that leaves out a zero count is among those that did not. A check goes
 unreported when its seat prints no counts (grok-cli, kimi-cli, antigravity),
 timed out, or failed before it answered. The toast leaves the row out.

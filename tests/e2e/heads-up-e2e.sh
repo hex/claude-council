@@ -188,7 +188,7 @@ wait_for "checks   $(printf '%s' "$C" | jq -r '"checks \(.none + .notes + .repea
 # was counted with them; none went unreported.
 T="$(cat "$OUT/tokens.json")"
 [ "$(jq -n --argjson c "$C" --argjson t "$T" '$t.checks == ($c.none + $c.notes + $c.repeats + $c.failed + $c.quota) and $t.unreported == 0')" = true ] || fail "tokens are $T for counts $C"
-wait_for "tokens   $(printf '%s' "$T" | jq -r '"\(.checks) latest checks, counted from this version on"')"
+wait_for "tokens   $(printf '%s' "$T" | jq -r '"\(.checks) \(if .checks == 1 then "check" else "checks" end) since this version"')"
 wait_for "presses  $(printf '%s' "$C" | jq -r '"learn \(.learn) · tell \(.tell) · knew \(.knew) · understood \(.understood) · dismiss \(.dismiss) · turned off \(.turnOff) · typed past \(.typedPast)"')"
 echo "   counts: $(printf '%s' "$C" | jq -c 'del(.repeats)') and every check settled"
 
