@@ -8,6 +8,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
+source "$SCRIPT_DIR/../lib/codex-home.sh"
+source "$SCRIPT_DIR/../lib/seat-isolation.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -54,8 +57,30 @@ ARGS+=("$FULL_PROMPT")
 # docs/ARCHITECTURE.md for why the two defaults differ.
 COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
 
+# codex runs under a CODEX_HOME of its own (lib/codex-home.sh), so none of
+# the user's plugins, hooks, AGENTS.md, skills, memories or MCP servers ride
+# along, with their login linked in and their model and effort copied. One
+# home per run, removed with it: codex saves each session there, and the
+# prompt can carry --file contents. The scratch working directory
+# (lib/seat-isolation.sh) keeps a project's AGENTS.md and skills out too.
+USER_CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+REFUSAL=$(codex_home_refusal "$USER_CODEX_HOME")
+if [[ -n "$REFUSAL" ]]; then
+    echo "Error: $REFUSAL" >&2
+    exit 1
+fi
+
 ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-codex-err.XXXXXX")
-trap 'rm -f "$ERR_TMP"' EXIT
+SEAT_CODEX_HOME=$(mktemp -d "${TMPDIR:-/tmp}/council-codex-home.XXXXXX")
+trap 'rm -rf "$ERR_TMP" "$SEAT_CODEX_HOME"' EXIT
+
+codex_home "$SEAT_CODEX_HOME" "$USER_CODEX_HOME"
+if [[ -f "${USER_CODEX_HOME}/auth.json" ]] && ! link_login "$SEAT_CODEX_HOME" "$USER_CODEX_HOME" "$ERR_TMP"; then
+    echo "Error: codex: could not link ${USER_CODEX_HOME}/auth.json into ${SEAT_CODEX_HOME}: $(stderr_excerpt "$ERR_TMP")" >&2
+    exit 1
+fi
+export CODEX_HOME="$SEAT_CODEX_HOME"
+seat_enter_scratch || exit 1
 
 # The prompt rides argv, and `codex exec` reads stdin whenever it is not a
 # TTY: launched from a shell whose stdin stays open it would wait on it until
