@@ -215,9 +215,10 @@ codex_home_refusal() {
     fi
 }
 
-# Links the user's auth.json into the check's home. codex refreshes its token
-# by rewriting auth.json in place, so through a link the refresh lands in the
-# user's login; in a copy it would vanish with the run dir. A hard link where a
+# Links the user's auth.json into the check's home. codex-cli 0.164.0 refreshes
+# its token by rewriting auth.json in place (read from its source, not a
+# promise codex makes), so through a link the refresh lands in the user's
+# login; in a copy it would vanish with the run dir. A hard link where a
 # symlink is refused (Windows without developer mode) or comes out as a copy
 # (as Git Bash can make one).
 # Usage: link_login USER_HOME
