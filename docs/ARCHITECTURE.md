@@ -274,7 +274,10 @@ The shared mechanics live in `lib/seat-isolation.sh`:
   refuses a non-empty directory with an error naming it, before touching its
   mode, so the user can look at what got in and delete it. The seat sets an
   empty one with another mode to 500. Concurrent seats converge it to the same mode
-  and none widens it while another runs. Git Bash mounts without POSIX modes,
+  and none widens it while another runs. Mode 500 stops a plain write, not a
+  seat running as the same user that runs `chmod u+w` first. The next seat to
+  enter then refuses with "is not empty", so a file planted across runs is
+  caught, but a seat already running when it lands is not protected. Git Bash mounts without POSIX modes,
   so on Windows the mode is not expected to stop a write (unmeasured); there
   the emptiness check catches a planted file when the next seat starts.
 - A seat whose CLI finds the user's config through `HOME` runs under a home of

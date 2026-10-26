@@ -169,9 +169,11 @@ skills, hooks and MCP servers of the project you ask from don't reach it. The
 directory doesn't limit what a seat can read: codex, for example, can still
 open any file by its full path.
 
-The directory is read-only, so one seat can't leave a file there for the next
-to load. A seat refuses to start when it finds anything in it, and names the
-path so you can look before you remove it.
+The directory is read-only. That stops a seat writing a file there, but not a
+seat that changes the mode first. A seat also refuses to start when it finds
+anything in it, and names the path so you can look before you remove it. A file
+that lands while other seats are running can reach them; the next seat to start
+refuses.
 
 The seats below also run under a home of their own, in
 `$TMPDIR/claude-council-<uid>/seat-home`. It links only to what the CLI needs to
