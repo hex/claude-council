@@ -52,7 +52,9 @@ link_login() {
 # own: codex 0.164.0 names the keyring entry after a hash of the CODEX_HOME
 # path (compute_store_key in its login/src/auth/storage.rs). An exported API
 # key does not stand in for it, since in that home the key would sign codex
-# in, on API billing, in place of the login the user chose. Returns 1 otherwise.
+# in, on API billing, in place of the login the user chose. A missing store
+# line means file storage, codex 0.164.0's default (a login into an empty
+# CODEX_HOME with no config writes auth.json). Returns 1 otherwise.
 # Usage: keyring_store USER_HOME
 keyring_store() {
     local store
