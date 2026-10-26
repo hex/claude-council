@@ -452,7 +452,7 @@ ${TRIMMED_SECTIONS}" ]
     wait_done
     [ "$(result .kind)" = "failed" ]
     [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex error" ]
-    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME} and no CODEX_API_KEY or OPENAI_API_KEY; the heads-up seat needs a file login or an API key" ]
+    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME} and no CODEX_API_KEY or OPENAI_API_KEY; the codex seat needs a file login or an API key" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
@@ -490,7 +490,7 @@ EOF
     start_runner codex
     wait_done
     [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets model_provider \"lab\"; the heads-up seat runs codex's built-in openai provider only" ]
+    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets model_provider \"lab\"; the codex seat runs codex's built-in openai provider only" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
@@ -517,7 +517,7 @@ EOF
     start_runner codex
     wait_done
     [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets profile \"deep\"; the heads-up seat reads only the root model and effort" ]
+    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets profile \"deep\"; the codex seat reads only the root model and effort" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
