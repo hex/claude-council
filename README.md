@@ -175,7 +175,7 @@ refuses to start when one belongs to another user or is a symlink.
 
 | Seat | No longer loads | Still loads |
 |---|---|---|
-| `cursor-cli` | Skills and plugins from `~/.cursor`, `~/.claude`, `~/.codex`, `~/.grok` and `~/.agents`, Cursor and Claude hooks, `~/.cursor/mcp.json` | Team commands from your Cursor dashboard |
+| `cursor-cli` | Skills and plugins from `~/.cursor`, `~/.claude`, `~/.codex`, `~/.grok` and `~/.agents`, Cursor and Claude hooks, `~/.cursor/mcp.json` | Team commands from your Cursor dashboard (read from the CLI's bundle, not seen in a run) |
 | `grok-cli` | Claude plugins, `~/.agents` skills, grok's cross-session memory | Links to your login keychain (macOS) and `~/.docker`, for Docker Desktop's socket. Your `~/.grok` config and the hooks in `~/.grok/hooks`; no grok setting turns those off |
 | `antigravity` | On macOS: your `~/.gemini` rules, skills, MCP servers and saved conversations | On Linux: everything under `~/.gemini`, since nobody has confirmed where agy keeps its login there |
 | `opencode` | The `~/.claude` and `~/.agents` skills, agents and `CLAUDE.md` | Your login and session history in `~/.local/share/opencode` |

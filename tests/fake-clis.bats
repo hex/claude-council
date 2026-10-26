@@ -1470,12 +1470,16 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     done
     [ "$wrong" = "" ]
     [ "$(scratch_dir)" = "$(cd "$TMPDIR" && pwd -P)/claude-council-seat" ]
-    [ "$(ls -ld "$TMPDIR/claude-council-seat" | cut -c1-10)" = "drwx------" ]
+    # Git Bash mounts without POSIX modes, so the mode is checked on macOS and Linux.
+    if [[ "$OSTYPE" != msys* && "$OSTYPE" != cygwin* ]]; then
+        [ "$(ls -ld "$TMPDIR/claude-council-seat" | cut -c1-10)" = "drwx------" ]
+    fi
     [ -z "$(ls -A "$TMPDIR/claude-council-seat")" ]
 }
 
 @test "seat isolation: a scratch directory left with wider permissions is narrowed to the owner" {
     export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
     mkdir -m 755 "$TMPDIR/claude-council-seat"
     run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
@@ -1682,7 +1686,8 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
 @test "seat isolation: codex runs under a home of its own for one run, linked to the user's login, and removes it after" {
     export COUNCIL_FAKE_BEHAVIOR=stdin-echo
     printf '%s\n' 'model = "gpt-user"' 'approval_policy = "never"' > "$HOME/.codex/config.toml"
-    printf '#!/bin/bash\n{ echo "home=$CODEX_HOME"; readlink "$CODEX_HOME/auth.json"; cat "$CODEX_HOME/config.toml"; } > %q\necho answer\n' \
+    # Whether its auth.json is the user's own file, a symlink or (on Git Bash) a hard link.
+    printf '#!/bin/bash\n{ echo "home=$CODEX_HOME"; [[ "$CODEX_HOME/auth.json" -ef "$HOME/.codex/auth.json" ]] && echo user || echo other; cat "$CODEX_HOME/config.toml"; } > %q\necho answer\n' \
         "$BATS_TEST_TMPDIR/codex-saw.txt" > "$FAKE_BIN_DIR/codex"
     chmod +x "$FAKE_BIN_DIR/codex"
     run "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
@@ -1692,7 +1697,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     home=$(sed -n 's/^home=//p' "$BATS_TEST_TMPDIR/codex-saw.txt")
     [[ "$home" == "$TMPDIR/council-codex-home."* ]]
     [ ! -e "$home" ]
-    [ "$(sed -n 2p "$BATS_TEST_TMPDIR/codex-saw.txt")" = "$BATS_TEST_TMPDIR/user-home/.codex/auth.json" ]
+    [ "$(sed -n 2p "$BATS_TEST_TMPDIR/codex-saw.txt")" = "user" ]
     [ "$(sed -n 3p "$BATS_TEST_TMPDIR/codex-saw.txt")" = 'model = "gpt-user"' ]
     [ "$(grep -c 'approval_policy' "$BATS_TEST_TMPDIR/codex-saw.txt")" = "0" ]
     [ "$(grep -c '^hooks = false$' "$BATS_TEST_TMPDIR/codex-saw.txt")" = "1" ]
