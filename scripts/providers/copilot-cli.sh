@@ -58,7 +58,7 @@ ${PROMPT}"
 # GitHub CLI's, which copilot reads by running gh from PATH.
 ARGS=(--output-format json --no-auto-update --no-custom-instructions --disable-builtin-mcps --available-tools=none)
 # --model only on an explicit override, so an unset COPILOT_CLI_MODEL defers to
-# the CLI's own choice (mirrors claude-cli.sh and cursor-cli.sh). A plan may
+# the CLI's own choice (mirrors claude-cli.sh). A plan may
 # offer no model by name, and the CLI's own message then says so.
 [[ -n "${COPILOT_CLI_MODEL:-}" ]] && ARGS+=(--model "$COPILOT_CLI_MODEL")
 # The scratch working directory (lib/seat-isolation.sh) keeps out the

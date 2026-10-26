@@ -52,7 +52,7 @@ ${PROMPT}"
 # (see cursor-cli.sh for the argument limit this avoids).
 ARGS=(-p --safe-mode --setting-sources "" --tools "" --no-session-persistence --output-format json)
 # --model only on an explicit override, so an unset CLAUDE_CLI_MODEL defers to
-# the account's default model (mirrors codex.sh and cursor-cli.sh).
+# the account's default model (mirrors codex.sh).
 [[ -n "${CLAUDE_CLI_MODEL:-}" ]] && ARGS+=(--model "$CLAUDE_CLI_MODEL")
 # -p skips the workspace trust check, so in a repository the CLI adds its
 # branch, status, recent commits and git user to the prompt, with its commit

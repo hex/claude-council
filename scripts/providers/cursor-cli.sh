@@ -60,7 +60,7 @@ ARGS=(-p --output-format json --mode ask --trust)
 # ${XDG_CONFIG_HOME:-~/.config}/cursor/auth.json (read from the CLI's bundle,
 # not run on Linux). The scratch working directory keeps out the project's
 # .cursor rules and MCP servers, AGENTS.md, CLAUDE.md and CLAUDE.local.md.
-# The model picked in the CLI lives in that home's ~/.cursor/cli-config.json,
+# The model picked in the CLI lives in the real home's ~/.cursor/cli-config.json,
 # so it is read here first and passed as --model; with no pick and no
 # CURSOR_CLI_MODEL, no --model at all: a free plan rejects every named model,
 # and the CLI's own message says so.
