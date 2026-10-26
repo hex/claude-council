@@ -178,7 +178,7 @@ result() {
     [ "$(result '.points | join("|")')" = "Each retry fires at once.|Add a growing delay." ]
     [ "$(result '[.seats[] | .seat + " " + .outcome] | join(",")')" = "antigravity note" ]
     # From the council's scratch directory, as in a council run, so no project's files reach it.
-    [ "$(jq -r 'select(.bin == "agy") | .cwd' "$COUNCIL_FAKE_STATE_DIR/seat-env.jsonl")" = "$(cd "$TMPDIR/claude-council-$(id -u)/seat" && pwd -P)" ]
+    assert_eq "$(jq -r 'select(.bin == "agy") | .cwd' "$COUNCIL_FAKE_STATE_DIR/seat-env.jsonl")" "$(cd "$TMPDIR/claude-council-$(id -u)/seat" && pwd -P)"
 }
 
 @test "heads-up: codex is asked through the schema with the prompt on stdin" {

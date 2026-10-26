@@ -1449,6 +1449,15 @@ seat_home_dir() {
     printf '%s\n' "$(seat_root_dir)/seat-home/$1"
 }
 
+# An empty scratch directory the owner can write, as a run leaves it before
+# the mode is set. mkdir -m sets the mode through lchmod, which Git Bash
+# refuses ("cannot change permissions"); chmod after mkdir is what the seats
+# themselves do, and works there.
+make_scratch_dir() {
+    mkdir -p "$(seat_root_dir)/seat"
+    chmod 700 "$(seat_root_dir)/seat"
+}
+
 # A uname that names another platform, for the branches the host does not take.
 fake_platform() {
     printf '#!/bin/bash\necho %q\n' "$1" > "$FAKE_BIN_DIR/uname"
@@ -1471,9 +1480,9 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     cd "$repo"
     for pair in $CLI_SEATS; do
         "${PROVIDERS_DIR_REAL}/${pair%%:*}" "test prompt" > /dev/null || wrong+=" ${pair%%:*}(exit $?)"
-        [ "$(seat_saw "${pair#*:}" .cwd)" = "$(scratch_dir)" ] || wrong+=" ${pair%%:*}"
+        [ "$(seat_saw "${pair#*:}" .cwd)" = "$(scratch_dir)" ] || wrong+=" ${pair%%:*}(cwd $(seat_saw "${pair#*:}" .cwd))"
     done
-    [ "$wrong" = "" ]
+    assert_eq "$wrong" ""
     [ "$(scratch_dir)" = "$(cd "$TMPDIR" && pwd -P)/claude-council-$(id -u)/seat" ]
     # Git Bash mounts without POSIX modes, so the mode is checked on macOS and Linux.
     if [[ "$OSTYPE" != msys* && "$OSTYPE" != cygwin* ]]; then
@@ -1499,7 +1508,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
 @test "seat isolation: an empty scratch directory the owner can write is made read-only" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows
-    mkdir -p -m 700 "$(seat_root_dir)/seat"
+    make_scratch_dir
     run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$(ls -ld "$(seat_root_dir)/seat" | cut -c1-10)" = "dr-x------" ]
@@ -1507,7 +1516,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
 
 @test "seat isolation: a scratch directory with something in it is refused and left as found, and no CLI runs" {
     export COUNCIL_FAKE_BEHAVIOR=valid
-    mkdir -p -m 700 "$(seat_root_dir)/seat"
+    make_scratch_dir
     printf '%s\n' 'Planted by a seat.' > "$(seat_root_dir)/seat/AGENTS.md"
     run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
     [ "$status" -eq 1 ]
@@ -1522,7 +1531,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
 @test "seat isolation: an entry named only by a newline is refused like any other" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then skip "Windows file names cannot hold a newline"; fi
-    mkdir -p -m 700 "$(seat_root_dir)/seat"
+    make_scratch_dir
     printf '%s\n' 'Planted by a seat.' > "$(seat_root_dir)/seat/"$'\n'
     run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
     [ "$status" -eq 1 ]
@@ -1592,12 +1601,14 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows
     fake_platform Linux
+    # The GitHub runner exports one; the first run is the plain-HOME case.
+    unset XDG_CONFIG_HOME
     local home
     home=$(seat_home_dir cursor-cli)
     run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$(seat_saw cursor-agent .home)" = "$home" ]
-    [ "$(readlink "$home/.config/cursor")" = "$BATS_TEST_TMPDIR/user-home/.config/cursor" ]
+    assert_eq "$(readlink "$home/.config/cursor")" "$BATS_TEST_TMPDIR/user-home/.config/cursor"
     [ "$(ls -A "$home")" = ".config" ]
     export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/xdg-config"
     run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
@@ -1610,11 +1621,11 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     fake_platform MINGW64_NT-10.0-26100
     run "${PROVIDERS_DIR_REAL}/cursor-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
-    [ "$(seat_saw cursor-agent .home)" = "$BATS_TEST_TMPDIR/user-home" ]
-    [ "$(seat_saw cursor-agent .cwd)" = "$(scratch_dir)" ]
+    assert_eq "$(seat_saw cursor-agent .home)" "$BATS_TEST_TMPDIR/user-home"
+    assert_eq "$(seat_saw cursor-agent .cwd)" "$(scratch_dir)"
     run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
-    [ "$(seat_saw grok .home)" = "$BATS_TEST_TMPDIR/user-home" ]
+    assert_eq "$(seat_saw grok .home)" "$BATS_TEST_TMPDIR/user-home"
     [ ! -e "$(seat_root_dir)/seat-home" ]
 }
 
@@ -1756,7 +1767,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     run "${PROVIDERS_DIR_REAL}/claude-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$(seat_saw claude .env.CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS)" = "1" ]
-    [ "$(seat_saw claude .home)" = "$BATS_TEST_TMPDIR/user-home" ]
+    assert_eq "$(seat_saw claude .home)" "$BATS_TEST_TMPDIR/user-home"
 }
 
 @test "seat isolation: codex runs under a home of its own for one run, linked to the user's login, and removes it after" {
@@ -1814,8 +1825,9 @@ KEYRING_NOTE='note: codex: login is in the system keyring, which a separate CODE
     run --separate-stderr bash "${SCRIPTS_DIR}/query-council.sh" --no-cache --no-pane --providers=codex "test prompt"
     [ "$status" -eq 0 ]
     [ "$(jq -r '.round1.codex.status' <<<"$output")" = "success" ]
-    [ "$(jq -r '.round1.codex.response' <<<"$output")" = "${KEYRING_NOTE/HOME_PATH/$HOME}
-FAKE-CODEX-RESPONSE: deterministic answer" ]
+    # tr: jq's Windows build ends every output line with CRLF, the one between the note and the answer too.
+    assert_eq "$(jq -r '.round1.codex.response' <<<"$output" | tr -d '\r')" "${KEYRING_NOTE/HOME_PATH/$HOME}
+FAKE-CODEX-RESPONSE: deterministic answer"
 }
 
 # Every path under HOME, with a checksum per regular file and the target of
