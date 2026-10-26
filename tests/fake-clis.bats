@@ -42,6 +42,7 @@ granted_dir() {
 setup() {
     mkdir -p "$TEST_TMP_DIR" "$TEST_CACHE_DIR"
     install_fake_clis
+    isolate_seat_dirs
 }
 
 teardown() {

@@ -12,6 +12,7 @@ SESSION_ID="0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
 setup() {
     mkdir -p "$TEST_TMP_DIR" "$TEST_CACHE_DIR"
     install_fake_clis
+    isolate_seat_dirs
     export CLAUDE_CONFIG_DIR="${BATS_TEST_TMPDIR}/claude-config"
     TRANSCRIPT="${CLAUDE_CONFIG_DIR}/projects/-tmp-example/${SESSION_ID}.jsonl"
     mkdir -p "$(dirname "$TRANSCRIPT")"

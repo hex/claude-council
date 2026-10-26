@@ -11,6 +11,7 @@ GATE="${SCRIPTS_DIR}/stop-review-gate.sh"
 setup() {
     mkdir -p "$TEST_TMP_DIR" "$TEST_CACHE_DIR"
     install_fake_clis
+    isolate_seat_dirs
     export COUNCIL_JOBS_DIR="${BATS_TEST_TMPDIR}/jobs"
     # Isolated git repo so diff content is under test control
     REPO="${BATS_TEST_TMPDIR}/repo"

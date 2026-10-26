@@ -59,7 +59,21 @@
 #                    carries a NOTE: further along
 #
 # Every invocation appends {bin, args} to $COUNCIL_FAKE_STATE_DIR/calls.jsonl
-# so tests can assert exactly what the plugin sent to the CLI.
+# so tests can assert exactly what the plugin sent to the CLI, and {bin, home,
+# cwd, env} to seat-env.jsonl: the HOME and working directory it started in,
+# cwd resolved through symlinks, and the isolation variables the seat set.
+
+# A HOME and TMPDIR of the test's own, for any test that runs a seat: the seat
+# reads the user's config from HOME and keeps its working directory and home
+# under TMPDIR, so the developer's real ones would decide what it does and
+# would be written to. The home holds a codex file login, as a codex seat
+# needs one (or an API key) to sign in from a home of its own.
+isolate_seat_dirs() {
+    export HOME="${BATS_TEST_TMPDIR}/user-home" TMPDIR="${BATS_TEST_TMPDIR}/tmp"
+    unset CODEX_HOME
+    mkdir -p "$HOME/.codex" "$TMPDIR"
+    printf '%s\n' '{"auth_mode":"chatgpt","tokens":{"access_token":"fake-token"}}' > "$HOME/.codex/auth.json"
+}
 
 install_fake_clis() {
     FAKE_BIN_DIR="${BATS_TEST_TMPDIR}/fakebin"
@@ -98,6 +112,9 @@ record_env() {
     jq -cn --arg p "\$1" --argjson extra "\${3:-null}" \\
         '(\$extra // {}) + (env | with_entries(select(.key | startswith(\$p))))' >> "\$2"
 }
+jq -cn --arg bin "$bin" --arg home "\${HOME:-}" --arg cwd "\$(pwd -P)" \\
+    '{bin: \$bin, home: \$home, cwd: \$cwd, env: (env | with_entries(select(.key | IN("GROK_HOME", "GROK_MEMORY", "XDG_DATA_HOME", "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS"))))}' \\
+    >> "\${COUNCIL_FAKE_STATE_DIR:?}/seat-env.jsonl"
 # Version probes succeed regardless of behavior, mirroring real CLIs where
 # --version works even when logged out
 if [[ "\${1:-}" == "--version" ]]; then

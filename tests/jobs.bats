@@ -12,6 +12,7 @@ JOBS_LIB="${LIB_DIR}/jobs.sh"
 setup() {
     mkdir -p "$TEST_TMP_DIR" "$TEST_CACHE_DIR"
     install_fake_clis
+    isolate_seat_dirs
     export COUNCIL_JOBS_DIR="${BATS_TEST_TMPDIR}/jobs"
     unset_provider_keys
     # run-council writes its outfile relative to CWD
