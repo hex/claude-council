@@ -117,11 +117,6 @@ record_env() {
     jq -cn --arg p "\$1" --argjson extra "\${3:-null}" \\
         '(\$extra // {}) + (env | with_entries(select(.key | startswith(\$p))))' >> "\$2"
 }
-# The home and cwd reach jq on stdin: MSYS rewrites a POSIX path in a native
-# binary's argv to C:/..., and stdin alone is left as is.
-printf '%s\\n' "\${HOME:-}" "\$(pwd -P)" | jq -Rcn --arg bin "$bin" \\
-    '[inputs] | {bin: \$bin, home: .[0], cwd: .[1], env: (env | with_entries(select(.key | IN("GROK_HOME", "GROK_MEMORY", "XDG_DATA_HOME", "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS"))))}' \\
-    >> "\${COUNCIL_FAKE_STATE_DIR:?}/seat-env.jsonl"
 if [[ "\${COUNCIL_FAKE_WRITE_CWD:-}" == 1 ]]; then
     wrote=false
     { printf '%s\\n' 'Planted by a seat.' > AGENTS.md; } 2>/dev/null && wrote=true
@@ -134,6 +129,11 @@ if [[ "\${1:-}" == "--version" ]]; then
     echo "fake-$bin 0.0.1"
     exit 0
 fi
+# The home and cwd reach jq on stdin: MSYS rewrites a POSIX path in a native
+# binary's argv to C:/..., and stdin alone is left as is.
+printf '%s\\n' "\${HOME:-}" "\$(pwd -P)" | jq -Rcn --arg bin "$bin" \\
+    '[inputs] | {bin: \$bin, home: .[0], cwd: .[1], env: (env | with_entries(select(.key | IN("GROK_HOME", "GROK_MEMORY", "XDG_DATA_HOME", "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS"))))}' \\
+    >> "\${COUNCIL_FAKE_STATE_DIR:?}/seat-env.jsonl"
 EOF
     if [[ "$bin" == "agy" ]]; then
         cat >> "$FAKE_BIN_DIR/$bin" <<EOF

@@ -3,6 +3,7 @@
 # ABOUTME: Covers lib/providers.sh discovery + filter, plus query-council.sh wiring
 
 load test_helper
+load fixtures/fake-clis
 bats_require_minimum_version 1.5.0
 
 SCRIPT="${SCRIPTS_DIR}/query-council.sh"
@@ -11,6 +12,7 @@ PROVIDERS_DIR_REAL="${SCRIPTS_DIR}/providers"
 
 setup() {
     mkdir -p "$TEST_CACHE_DIR"
+    isolate_seat_dirs
     unset_provider_keys
 }
 
