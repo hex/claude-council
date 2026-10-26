@@ -67,8 +67,9 @@ ARGS=(--sandbox)
 # default.
 MODEL="$(get_model antigravity)"
 [[ "$MODEL" != default ]] && ARGS+=(--model "$MODEL")
-if [[ "$(seat_platform)" == macos ]]; then
-    SEAT_HOME=$(seat_home antigravity Library/Keychains "$HOME/Library/Keychains") || exit 1
+PLATFORM=$(seat_platform)
+if [[ "$PLATFORM" == macos ]]; then
+    SEAT_HOME=$(seat_home "$PLATFORM" antigravity Library/Keychains "$HOME/Library/Keychains") || exit 1
     export HOME="$SEAT_HOME"
 fi
 seat_enter_scratch || exit 1

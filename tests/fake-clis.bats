@@ -1464,9 +1464,14 @@ fake_platform() {
     chmod +x "$FAKE_BIN_DIR/uname"
 }
 
+# Git Bash, MSYS or Cygwin.
+is_windows() {
+    [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]
+}
+
 # Git Bash makes a symlink a copy, so the home's links exist on macOS and Linux only.
 skip_on_windows() {
-    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then skip "symlinked seat homes are macOS and Linux only"; fi
+    if is_windows; then skip "${1:-symlinked seat homes are macOS and Linux only}"; fi
 }
 
 # Every CLI seat's provider script, then the binary it runs.
@@ -1485,7 +1490,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     assert_eq "$wrong" ""
     [ "$(scratch_dir)" = "$(cd "$TMPDIR" && pwd -P)/claude-council-$(id -u)/seat" ]
     # Git Bash mounts without POSIX modes, so the mode is checked on macOS and Linux.
-    if [[ "$OSTYPE" != msys* && "$OSTYPE" != cygwin* ]]; then
+    if ! is_windows; then
         [ "$(ls -ld "$TMPDIR/claude-council-$(id -u)" | cut -c1-10)" = "drwx------" ]
         [ "$(ls -ld "$TMPDIR/claude-council-$(id -u)/seat" | cut -c1-10)" = "dr-x------" ]
     fi
@@ -1523,14 +1528,14 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     [ "$stderr" = "Error: $TMPDIR/claude-council-$(id -u)/seat is not empty; every CLI seat runs from it and it must stay empty, so something got in that should not have. Check what is there, remove it and retry." ]
     [ "$(cat "$(seat_root_dir)/seat/AGENTS.md")" = "Planted by a seat." ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
-    if [[ "$OSTYPE" != msys* && "$OSTYPE" != cygwin* ]]; then
+    if ! is_windows; then
         [ "$(ls -ld "$(seat_root_dir)/seat" | cut -c1-10)" = "drwx------" ]
     fi
 }
 
 @test "seat isolation: an entry named only by a newline is refused like any other" {
     export COUNCIL_FAKE_BEHAVIOR=valid
-    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then skip "Windows file names cannot hold a newline"; fi
+    skip_on_windows "Windows file names cannot hold a newline"
     make_scratch_dir
     printf '%s\n' 'Planted by a seat.' > "$(seat_root_dir)/seat/"$'\n'
     run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
@@ -1576,7 +1581,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
 }
 
 @test "seat isolation: a directory another user owns is refused, naming it" {
-    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then skip "MSYS reports /usr as the user's own"; fi
+    skip_on_windows "MSYS reports /usr as the user's own"
     run --separate-stderr bash -c "source '${LIB_DIR}/seat-isolation.sh'; seat_private_dir /usr"
     [ "$status" -eq 1 ]
     [ "$stderr" = "Error: /usr exists but is not a directory owned by $(id -un); the council's seats need one of their own there. Remove it or set TMPDIR elsewhere." ]

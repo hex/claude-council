@@ -84,14 +84,12 @@ done
 # sandbox on every run. Only that directory: ~/.docker/config.json can hold
 # registry credentials.
 export GROK_HOME="${GROK_HOME:-$HOME/.grok}" GROK_MEMORY=0
+PLATFORM=$(seat_platform)
 GROK_LINKS=()
-[[ "$(seat_platform)" == macos ]] && GROK_LINKS+=(Library/Keychains "$HOME/Library/Keychains")
+[[ "$PLATFORM" == macos ]] && GROK_LINKS+=(Library/Keychains "$HOME/Library/Keychains")
 [[ -d "$HOME/.docker/run" ]] && GROK_LINKS+=(.docker/run "$HOME/.docker/run")
-case "$(seat_platform)" in
-    windows) ;;
-    *) SEAT_HOME=$(seat_home grok-cli ${GROK_LINKS[@]+"${GROK_LINKS[@]}"}) || exit 1
-       export HOME="$SEAT_HOME" ;;
-esac
+SEAT_HOME=$(seat_home "$PLATFORM" grok-cli ${GROK_LINKS[@]+"${GROK_LINKS[@]}"}) || exit 1
+export HOME="$SEAT_HOME"
 seat_enter_scratch || exit 1
 ARGS+=(--cwd "$(pwd -P)")
 # -m only on an explicit override: the CLI's default model differs by auth

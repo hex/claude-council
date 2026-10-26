@@ -30,7 +30,7 @@ seat_owned_dir() {
         echo "Error: ${dir} is a symlink; the council's seats need a directory of their own there. Remove it and retry." >&2
         return 1
     fi
-    if ! (umask 077 && mkdir -p "$dir"); then
+    if [[ ! -d "$dir" ]] && ! (umask 077 && mkdir -p "$dir"); then
         echo "Error: could not create ${dir} for the council's seats." >&2
         return 1
     fi
@@ -53,7 +53,7 @@ seat_private_dir() {
 # than finding the first user's there and being refused.
 seat_root() {
     local tmp="${TMPDIR:-/tmp}"
-    printf '%s\n' "${tmp%/}/claude-council-$(id -u)"
+    printf '%s\n' "${tmp%/}/claude-council-${UID}"
 }
 
 # The working directory every CLI seat runs in: empty and outside any
@@ -61,10 +61,6 @@ seat_root() {
 # load, and claude adds no git status to its prompt. The seat's prompt and
 # files all travel as absolute paths, so leaving the caller's directory loses
 # nothing.
-seat_scratch_dir() {
-    printf '%s\n' "$(seat_root)/seat"
-}
-
 # Changes into the seat's working directory, creating it on first use. Every
 # seat of every run shares it, and some seats keep live file tools (agy's
 # --sandbox limits only its terminal), so a file one seat was talked into
@@ -74,9 +70,10 @@ seat_scratch_dir() {
 # look at it and delete it. Concurrent seats enter together; each converges the
 # same directory to the same mode, and none ever widens it while another runs.
 seat_enter_scratch() {
-    local dir entry
-    dir=$(seat_scratch_dir)
-    seat_private_dir "$(seat_root)" || return 1
+    local root dir entry
+    root=$(seat_root)
+    dir="${root}/seat"
+    seat_private_dir "$root" || return 1
     seat_owned_dir "$dir" || return 1
     if ! entry=$(find "$dir" -mindepth 1 -print -quit); then
         echo "Error: could not list ${dir} to check that it is empty." >&2
@@ -118,13 +115,19 @@ seat_link() {
 # login. Everything else the CLI looks for under HOME (the user's skills,
 # plugins, hooks, rules and MCP servers, its own and other vendors') is absent.
 # The CLI writes caches and state of its own there, which stay between runs.
-# Usage: seat_home SEAT [RELATIVE TARGET]...
+# PLATFORM is what seat_platform printed, read once by the seat and passed
+# down; on windows this prints the user's own home and makes nothing.
+# Usage: seat_home PLATFORM SEAT [RELATIVE TARGET]...
 seat_home() {
     local root homes home rel
+    if [[ "$1" == windows ]]; then
+        printf '%s\n' "$HOME"
+        return 0
+    fi
     root=$(seat_root)
     homes="${root}/seat-home"
-    home="${homes}/$1"
-    shift
+    home="${homes}/$2"
+    shift 2
     seat_private_dir "$root" || return 1
     seat_private_dir "$homes" || return 1
     seat_private_dir "$home" || return 1

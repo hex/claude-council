@@ -84,11 +84,8 @@ export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny"}}'
 # remove_run reads the same place. The scratch working directory keeps the
 # project out as well.
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
-case "$(seat_platform)" in
-    windows) ;;
-    *) SEAT_HOME=$(seat_home opencode) || exit 1
-       export HOME="$SEAT_HOME" ;;
-esac
+SEAT_HOME=$(seat_home "$(seat_platform)" opencode) || exit 1
+export HOME="$SEAT_HOME"
 seat_enter_scratch || exit 1
 
 # --standalone: a private server for this run. Without it the run goes to the

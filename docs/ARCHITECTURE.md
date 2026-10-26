@@ -250,7 +250,7 @@ from. Each provider script sets this up itself, after the orchestrator's
 environment scrub, so it binds the council run and the heads-up check alike.
 The shared mechanics live in `lib/seat-isolation.sh`:
 - Both seat directories live under `${TMPDIR:-/tmp}/claude-council-<uid>`,
-  named by the numeric user id (`id -u`, which Git Bash has too). On a `/tmp`
+  named by the numeric user id (bash's `$UID`, which Git Bash has too). On a `/tmp`
   shared between users, a fixed name would go to whoever ran a seat first, and
   every other user's seats would fail the ownership check.
 - Every CLI seat runs from `${TMPDIR:-/tmp}/claude-council-<uid>/seat`, an empty
@@ -300,7 +300,8 @@ The shared mechanics live in `lib/seat-isolation.sh`:
   when the user's config names one or the `*_MODEL` override is set.
 - On Windows (`uname -s` reads `MINGW*`, `MSYS*` or `CYGWIN*`) the seats keep the
   user's home: the native CLIs resolve it from `USERPROFILE`, so a `HOME` swap
-  would change nothing. The scratch directory still applies.
+  would change nothing, and `seat_home` hands back that home without making
+  one. The scratch directory still applies.
 
 Per seat:
 

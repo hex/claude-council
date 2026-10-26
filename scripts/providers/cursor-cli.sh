@@ -66,10 +66,10 @@ ARGS=(-p --output-format json --mode ask --trust)
 # and the CLI's own message says so.
 MODEL="$(get_model cursor-cli)"
 [[ "$MODEL" != default ]] && ARGS+=(--model "$MODEL")
-case "$(seat_platform)" in
-    macos) SEAT_HOME=$(seat_home cursor-cli Library/Keychains "$HOME/Library/Keychains") || exit 1 ;;
-    linux) SEAT_HOME=$(seat_home cursor-cli .config/cursor "${XDG_CONFIG_HOME:-$HOME/.config}/cursor") || exit 1 ;;
-    windows) SEAT_HOME="$HOME" ;;
+PLATFORM=$(seat_platform)
+case "$PLATFORM" in
+    macos) SEAT_HOME=$(seat_home "$PLATFORM" cursor-cli Library/Keychains "$HOME/Library/Keychains") || exit 1 ;;
+    *) SEAT_HOME=$(seat_home "$PLATFORM" cursor-cli .config/cursor "${XDG_CONFIG_HOME:-$HOME/.config}/cursor") || exit 1 ;;
 esac
 export HOME="$SEAT_HOME"
 seat_enter_scratch || exit 1
