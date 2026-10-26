@@ -112,7 +112,11 @@ script. Your text reaches model providers only through the first two:
   results of 2,000 characters each) and sends that digest to one seat,
   `codex` unless you pick another. The run directory keeps `digest.md` and
   `prompt.md`, exactly what left the machine, until the mod reads the result
-  and removes it.
+  and removes it. The codex seat runs in that directory under a codex home
+  of its own: your model and effort, a link to your `auth.json` so a token
+  refresh reaches your login (without one, your `CODEX_API_KEY` or
+  `OPENAI_API_KEY` signs codex in), and none of your plugins, hooks,
+  `AGENTS.md`, skills or MCP servers.
 - `bash scripts/seat-info.sh discover`, `model <seat>` or
   `allowlisted <seat>` during `/heads-up setup` and `/heads-up on <seat>`.
   It checks which seats this machine can run and sends nothing.

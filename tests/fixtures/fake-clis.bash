@@ -121,11 +121,29 @@ EOF
         cat >> "$FAKE_BIN_DIR/$bin" <<'EOF'
 # The heads-up runner's structured call: codex exec --json ... --output-schema
 # SCHEMA -o FILE -. The prompt arrives on stdin (kept for inspection), the
-# answer goes to the -o file and the JSONL events to stdout. The real CLI exits
+# answer goes to the -o file and the JSONL events to stdout. What it saw of
+# CODEX_HOME and its cwd goes to codex-home.json, and the config.toml there to
+# codex-config.toml. Its login field says what $CODEX_HOME/auth.json was as
+# codex started: "user" when it is the file COUNCIL_FAKE_USER_LOGIN names,
+# "other" for any other file, "none" when there is none. The real CLI exits
 # 0 on SIGTERM, so only a turn.completed event says the turn finished.
 if [[ " $* " == *" --output-schema "* ]]; then
     OUT=$(flag_value -o "$@")
     cat > "${COUNCIL_FAKE_STATE_DIR:?}/codex-stdin.txt"
+    login=none
+    if [[ -e "${CODEX_HOME:-}/auth.json" ]]; then
+        login=other
+        [[ "${CODEX_HOME}/auth.json" -ef "${COUNCIL_FAKE_USER_LOGIN:-}" ]] && login=user
+    fi
+    # The home and directory codex was started in, for the runner's isolation
+    # tests. Both reach jq on stdin: MSYS rewrites a POSIX path in a native
+    # binary's argv to C:/..., and stdin alone is left as is.
+    printf '%s\n' "${CODEX_HOME:-}" "$(pwd -P)" \
+        | jq -Rcn --arg login "$login" '[inputs] | {home: .[0], cwd: .[1], login: $login}' \
+        > "${COUNCIL_FAKE_STATE_DIR}/codex-home.json"
+    if [[ -f "${CODEX_HOME:-}/config.toml" ]]; then
+        cp "${CODEX_HOME}/config.toml" "${COUNCIL_FAKE_STATE_DIR}/codex-config.toml"
+    fi
     note='{"none":false,"tag":"Heads up","topic":"backfill never ran","headline":"The migration test used an empty fixture, so the backfill path never ran.","title":"The backfill path never ran","points":["The fixture had no rows, so the loop had nothing to do.","Seed one row in C:\\fixtures\\empty.db and rerun the migration test."]}'
     case "${COUNCIL_FAKE_BEHAVIOR:-valid}" in
         heads-up-note|heads-up-slow-note)
