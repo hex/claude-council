@@ -74,15 +74,15 @@ seat_scratch_dir() {
 # look at it and delete it. Concurrent seats enter together; each converges the
 # same directory to the same mode, and none ever widens it while another runs.
 seat_enter_scratch() {
-    local dir entries
+    local dir entry
     dir=$(seat_scratch_dir)
     seat_private_dir "$(seat_root)" || return 1
     seat_owned_dir "$dir" || return 1
-    if ! entries=$(find "$dir" -mindepth 1 -print -quit); then
+    if ! entry=$(find "$dir" -mindepth 1 -print -quit); then
         echo "Error: could not list ${dir} to check that it is empty." >&2
         return 1
     fi
-    if [[ -n "$entries" ]]; then
+    if [[ -n "$entry" ]]; then
         echo "Error: ${dir} is not empty; every CLI seat runs from it and it must stay empty, so something got in that should not have. Check what is there, remove it and retry." >&2
         return 1
     fi

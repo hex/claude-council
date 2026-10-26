@@ -1521,7 +1521,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
 
 @test "seat isolation: an entry named only by a newline is refused like any other" {
     export COUNCIL_FAKE_BEHAVIOR=valid
-    skip_on_windows
+    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then skip "Windows file names cannot hold a newline"; fi
     mkdir -p -m 700 "$(seat_root_dir)/seat"
     printf '%s\n' 'Planted by a seat.' > "$(seat_root_dir)/seat/"$'\n'
     run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
