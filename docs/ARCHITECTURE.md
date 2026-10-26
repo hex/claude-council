@@ -243,6 +243,78 @@ Two flavors share the interface:
 - **`ollama`**, also gated on the binary being on `PATH`, but local and keyless:
   it shadows nothing, has no API sibling, and costs nothing per call.
 
+**Seat isolation.** A CLI seat answers the prompt every other seat gets, so
+none of the user's own agent setup may ride along: skills, plugins, hooks, MCP
+servers, rules files, or the instruction files of the project the user asked
+from. Each provider script sets this up itself, after the orchestrator's
+environment scrub, so it binds the council run and the heads-up check alike.
+The shared mechanics live in `lib/seat-isolation.sh`:
+- Both seat directories live under `${TMPDIR:-/tmp}/claude-council-<uid>`,
+  named by the numeric user id (`id -u`, which Git Bash has too). On a `/tmp`
+  shared between users, a fixed name would go to whoever ran a seat first, and
+  every other user's seats would fail the ownership check.
+- Every CLI seat runs from `${TMPDIR:-/tmp}/claude-council-<uid>/seat`, an empty
+  directory outside any repository. It stays one fixed directory, not one per run,
+  because cursor's `--trust`, grok's trusted folders, kimi's workspace list,
+  agy's projects and copilot's trust list each record state per directory.
+  The directory keeps a project's config files (`AGENTS.md`, `CLAUDE.md`,
+  `CLAUDE.local.md`, `.cursor/mcp.json` and the like) from loading. It does not
+  limit what a seat can read: codex's read-only sandbox, for one, reads any
+  file by absolute path. A seat enters it with `seat_enter_scratch`, one line
+  in each provider script.
+- That directory is mode 500 and must stay empty. Every seat of every run
+  shares it, and antigravity keeps live file tools (its `--sandbox` limits only
+  the terminal), so an `AGENTS.md`, `CLAUDE.md` or `.mcp.json` a prompt talked
+  one seat into writing there would load into later runs of the others. Real
+  runs of grok (`--cwd`), kimi, agy (`--sandbox`) and codex (`exec -s read-only`)
+  from a mode-500 directory each answered and wrote nothing there. No real run
+  of cursor, copilot, claude or opencode has checked that yet. Every temp,
+  spill and prompt file a provider script makes is an absolute path under
+  `TMPDIR` or the run directory, never the working one. On entry the seat
+  refuses a non-empty directory with an error naming it, before touching its
+  mode, so the user can look at what got in and delete it. The seat sets an
+  empty one with another mode to 500. Concurrent seats converge it to the same mode
+  and none widens it while another runs. Mode 500 stops a plain write, not a
+  seat running as the same user that runs `chmod u+w` first. The next seat to
+  enter then refuses with "is not empty", so a file planted across runs is
+  caught, but a seat already running when it lands is not protected. Git Bash mounts without POSIX modes,
+  so on Windows the mode is not expected to stop a write (unmeasured); there
+  the emptiness check catches a planted file when the next seat starts.
+- A seat whose CLI finds the user's config through `HOME` runs under a home of
+  its own, `${TMPDIR:-/tmp}/claude-council-<uid>/seat-home/<seat>`, also stable. It
+  holds only links to where that CLI keeps its login; the CLI's caches and state
+  stay there between runs. The seat links to the user's real home and never writes it.
+  That home stays writable, because the CLIs write their caches and state
+  there, so a file a prompt talks a seat into writing in its own home can
+  persist into that same seat's later runs. Other seats don't load it. Before
+  isolation the same seat wrote into the user's real home, so this reach is no
+  wider than before.
+- The seat creates the per-user directory and the homes with mode 700. A symlink at any of these paths, or a directory another
+  user owns (a shared `/tmp` on Linux), stops the seat with an error naming
+  the path. The seat keeps a link that already points right and replaces a wrong
+  one; a real file or directory where a link goes is an error. Concurrent council
+  runs build the same home safely.
+- A seat under a home of its own would fall back to its CLI's built-in model,
+  so where that model lives in the real home (cursor, antigravity) the script
+  reads it first, through `get_model`, and passes it as the model flag only
+  when the user's config names one or the `*_MODEL` override is set.
+- On Windows (`uname -s` reads `MINGW*`, `MSYS*` or `CYGWIN*`) the seats keep the
+  user's home: the native CLIs resolve it from `USERPROFILE`, so a `HOME` swap
+  would change nothing. The scratch directory still applies.
+
+Per seat:
+
+| Seat | Runs under | No longer loads | Still loads |
+|---|---|---|---|
+| `cursor-cli` | A home holding `Library/Keychains` (macOS, where the login is a keychain item) or `.config/cursor` from `${XDG_CONFIG_HOME:-~/.config}` (Linux, the login file; read from the CLI's bundle, not run on Linux) | Skills from `~/.cursor`, `~/.claude` (plugins too), `~/.codex`, `~/.grok` and `~/.agents`; hooks from `~/.cursor/hooks.json` and Claude's `settings.json`; `~/.cursor/mcp.json`; the project's `.cursor` rules and MCP servers, `AGENTS.md`, `CLAUDE.md`, `CLAUDE.local.md` | Team commands from the Cursor dashboard (read from the CLI's bundle, not seen in a run) |
+| `grok-cli` | A home holding `Library/Keychains` on macOS (grok signed in through it with no `auth.json`) and `.docker/run` when `~/.docker/run` exists (Docker Desktop points `/var/run/docker.sock` into it, and the read-only sandbox refuses to start on a socket link it cannot resolve); `GROK_HOME` on the user's `~/.grok`, `GROK_MEMORY=0`, `--cwd` the scratch directory | Claude plugins (their hooks, MCP servers and agents), `~/.agents` skills, cross-session memory, the project's `CLAUDE.md` and `AGENTS.md`; the `GROK_{CLAUDE,CURSOR}_*_ENABLED=0` variables already drop Claude's and Cursor's own hooks, rules, skills and MCP servers | `~/.grok`: its config, and the hooks in `~/.grok/hooks`. `GROK_CONFIG` only overlays a few tables (models, features, toolset) on that config, and grok 1.0.62 lists a `hooks` overlay as "set but ignored", so no setting drops them. The model comes from that config, so the seat passes no `-m` |
+| `antigravity` | A home holding `Library/Keychains` on macOS; the user's home on Linux, where agy keeps its login in the OS keyring or in a file nobody has located yet | (macOS) `~/.gemini` rules, skills, MCP servers (`agy mcp list` lists none), plugins and saved conversations; everywhere, the project's `GEMINI.md`, `AGENTS.md` and `.agents` skills | (Linux) everything under `~/.gemini` |
+| `opencode` | An empty home, `XDG_DATA_HOME` on the real one (`~/.local/share` when unset), where the login and session history live | The `~/.claude` and `~/.agents` config roots, with their skills, agents and `CLAUDE.md`, which the empty config dir leaves in | Nothing of the user's beyond the login |
+| `codex` | A `CODEX_HOME` of its own per run (`lib/codex-home.sh`), removed with the run: the user's model and effort, a link to their `auth.json`, plugins, apps, hooks, memories and skills instructions off | Everything in `~/.codex` beyond those, and the project's `AGENTS.md` and skills | The login. A custom `model_provider` or a `profile`, or no login at all, stops the seat with the reason, as in the heads-up check. A login kept only in the system keyring (`cli_auth_credentials_store` `keyring` or `auto`, no `auth.json`, no `CODEX_API_KEY` or `OPENAI_API_KEY`) cannot follow: codex 0.164.0 names the keyring entry after a hash of the `CODEX_HOME` path. That seat runs under the user's own codex home, as before isolation, and prints a `note: codex: login is in the system keyring ...` line on stderr, which the council shows above the answer and the stop-gate drops. The heads-up check refuses that case |
+| `claude-cli` | The user's home, `CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS=1` | The git status block and commit and PR instructions a repository would add | Admin policy and an organisation's server-side instructions, as before |
+| `kimi-cli` | The user's home | A project's `.mcp.json` servers (its agent file already keeps `AGENTS.md`, skills and the directory listing out) | The hooks in `~/.kimi-code/config.toml`, which also holds the login |
+| `copilot-cli` | The user's home | The project's skills, hooks and `.github` files | Skills under `~/.copilot` and `~/.agents`, and servers in the user's `mcp-config.json` (started, never handed to the model) |
+
 Environment-based configuration:
 - `{PROVIDER}_API_KEY` - Required authentication for API providers
 - `{PROVIDER}_MODEL` - Model override (also applies to CLI providers via
@@ -722,6 +794,7 @@ claude-council/
 │       ├── cli-stderr.sh        # The error line a CLI provider reports on a timeout or failure (the end of its stderr, colour codes removed)
 │       ├── clock.sh             # Millisecond clock shared by the scripts that time a seat or a run
 │       ├── count.sh             # require_count: a count argument must be a whole number of 1 or more, read base-10
+│       ├── codex-home.sh        # The CODEX_HOME a codex seat runs under, for the council seat and the heads-up check
 │       ├── deadline.sh          # Wall-clock bound for a command (no GNU timeout on macOS or Git Bash) + process-tree signalling
 │       ├── display.sh           # Streaming tmux pane + iTerm2 lifecycle
 │       ├── export.sh            # Markdown export
@@ -736,6 +809,7 @@ claude-council/
 │       ├── render.py            # Council-tuned Rich markdown renderer
 │       ├── retry.sh             # Retry with backoff + off-argv secret config
 │       ├── roles.sh             # Role management
+│       ├── seat-isolation.sh    # The scratch working directory and the home of its own each CLI seat runs under
 │       ├── tokens.sh            # Reasoning-model token-cap bumping
 │       ├── usage.sh             # emit_usage: a seat call's tokens, {input, cached, output, reasoning}, to COUNCIL_USAGE_FILE
 │       └── verbosity.sh         # Shared system prompt, inline-answer guard, verbosity directives
@@ -821,10 +895,10 @@ claude-council/
 | `MOONSHOT_API_KEY` | - | Read as a fallback by `kimi.sh`, but does not satisfy discovery |
 | `{PROVIDER}_MODEL` | varies | Model override (API providers) |
 | `CODEX_MODEL` | (unset) | Model passed to `codex exec -m`, only when set (else the codex CLI's own configured model) |
-| `ANTIGRAVITY_MODEL` | (unset) | Model passed to `agy --model`, only when set (else the model selected in the Antigravity app) |
+| `ANTIGRAVITY_MODEL` | (unset) | Model passed to `agy --model` (else the model selected in the Antigravity app, read from the real home's settings and passed the same way; with neither, no `--model`) |
 | `GROK_CLI_MODEL` | (unset) | Model passed to `grok -m`, only when set (else the grok CLI's own default) |
 | `KIMI_CLI_MODEL` | (unset) | Model passed to `kimi -m`, only when set (else the kimi CLI's own configured model) |
-| `CURSOR_CLI_MODEL` | (unset) | Model passed to `cursor-agent --model`, only when set (else the model picked in the CLI). The CLI writes the passed model into its own config as the picked model, even when the plan rejects it |
+| `CURSOR_CLI_MODEL` | (unset) | Model passed to `cursor-agent --model` (else the model picked in the CLI, read from the real home's `cli-config.json` and passed the same way; with neither, no `--model`, since a free plan rejects every named model). The CLI writes the passed model as its picked model into the `.cursor/cli-config.json` of the home it runs under, which is the seat's own on macOS and Linux and the user's on Windows, even when the plan rejects it (a run showed the write in the user's home; that it goes to the seat's home under the swapped `HOME` is an inference, not seen in a run) |
 | `CLAUDE_CLI_MODEL` | (unset) | Model passed to `claude --model`, only when set (else the account's default model; the seat does not read `settings.json`) |
 | `COPILOT_CLI_MODEL` | (unset) | Model passed to `copilot --model`, only when set (else the CLI's automatic pick, which can change per question; a plan can reject every named model) |
 | `OPENCODE_MODEL` | (unset) | `provider/model` passed to `opencode run -m` (else the `model` from the user's `opencode.json`; with neither, no `-m` and the CLI's built-in default) |

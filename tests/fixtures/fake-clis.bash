@@ -59,7 +59,26 @@
 #                    carries a NOTE: further along
 #
 # Every invocation appends {bin, args} to $COUNCIL_FAKE_STATE_DIR/calls.jsonl
-# so tests can assert exactly what the plugin sent to the CLI.
+# so tests can assert exactly what the plugin sent to the CLI, and {bin, home,
+# cwd, env} to seat-env.jsonl: the HOME and working directory it started in,
+# cwd resolved through symlinks, and the isolation variables the seat set.
+#
+# With COUNCIL_FAKE_WRITE_CWD=1 a fake first tries to write an AGENTS.md into
+# its working directory, as a CLI with live file tools could when a prompt asks
+# it to, appends {bin, wrote} to cwd-write.jsonl, and then acts per its
+# behavior whether the write landed or not.
+
+# A HOME and TMPDIR of the test's own, for any test that runs a seat: the seat
+# reads the user's config from HOME and keeps its working directory and home
+# under TMPDIR, so the developer's real ones would decide what it does and
+# would be written to. The home holds a codex file login, as a codex seat
+# needs one (or an API key) to sign in from a home of its own.
+isolate_seat_dirs() {
+    export HOME="${BATS_TEST_TMPDIR}/user-home" TMPDIR="${BATS_TEST_TMPDIR}/tmp"
+    unset CODEX_HOME
+    mkdir -p "$HOME/.codex" "$TMPDIR"
+    printf '%s\n' '{"auth_mode":"chatgpt","tokens":{"access_token":"fake-token"}}' > "$HOME/.codex/auth.json"
+}
 
 install_fake_clis() {
     FAKE_BIN_DIR="${BATS_TEST_TMPDIR}/fakebin"
@@ -98,6 +117,17 @@ record_env() {
     jq -cn --arg p "\$1" --argjson extra "\${3:-null}" \\
         '(\$extra // {}) + (env | with_entries(select(.key | startswith(\$p))))' >> "\$2"
 }
+# The home and cwd reach jq on stdin: MSYS rewrites a POSIX path in a native
+# binary's argv to C:/..., and stdin alone is left as is.
+printf '%s\\n' "\${HOME:-}" "\$(pwd -P)" | jq -Rcn --arg bin "$bin" \\
+    '[inputs] | {bin: \$bin, home: .[0], cwd: .[1], env: (env | with_entries(select(.key | IN("GROK_HOME", "GROK_MEMORY", "XDG_DATA_HOME", "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS"))))}' \\
+    >> "\${COUNCIL_FAKE_STATE_DIR:?}/seat-env.jsonl"
+if [[ "\${COUNCIL_FAKE_WRITE_CWD:-}" == 1 ]]; then
+    wrote=false
+    { printf '%s\\n' 'Planted by a seat.' > AGENTS.md; } 2>/dev/null && wrote=true
+    jq -cn --arg bin "$bin" --argjson wrote "\$wrote" '{bin: \$bin, wrote: \$wrote}' \\
+        >> "\${COUNCIL_FAKE_STATE_DIR:?}/cwd-write.jsonl"
+fi
 # Version probes succeed regardless of behavior, mirroring real CLIs where
 # --version works even when logged out
 if [[ "\${1:-}" == "--version" ]]; then

@@ -30,6 +30,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/prompts.sh"
 source "${SCRIPT_DIR}/lib/providers.sh"
+source "${SCRIPT_DIR}/lib/codex-home.sh"
 source "${SCRIPT_DIR}/lib/clock.sh"
 source "${SCRIPT_DIR}/lib/cli-stderr.sh"
 source "${SCRIPT_DIR}/lib/count.sh"
@@ -151,86 +152,6 @@ apply_pick() {
     return 0
 }
 
-# One key of codex's config.toml, its value a TOML basic string: JSON's string
-# escapes are all valid there, DEL and the other control characters included.
-toml_line() {
-    printf '%s = %s\n' "$1" "$(jq -rn --arg v "$2" '$v | tojson')"
-}
-
-# Builds the home codex runs the check under, so none of the user's plugins,
-# hooks, AGENTS.md, skills, memories or MCP servers ride along: config.toml
-# holds the model and effort and switches the rest off. The model is the pick,
-# else the user's; the effort likewise; a key neither names is left out for
-# codex to choose. A file login is linked in by link_login; an API key
-# reaches codex through the environment.
-# Usage: codex_home USER_HOME
-codex_home() {
-    local user_home="$1" home="${RUN_DIR}/codex-home" model effort
-    model="${CODEX_MODEL:-$(toml_value "${user_home}/config.toml" "" model)}"
-    effort="${PICK_EFFORT:-$(toml_value "${user_home}/config.toml" "" model_reasoning_effort)}"
-    mkdir -p "$home"
-    {
-        [[ -n "$model" ]] && toml_line model "$model"
-        [[ -n "$effort" ]] && toml_line model_reasoning_effort "$effort"
-        [[ -n "$model$effort" ]] && echo
-        cat <<'EOF'
-[skills]
-include_instructions = false
-
-[skills.bundled]
-enabled = false
-
-[features]
-plugins = false
-apps = false
-hooks = false
-memories = false
-EOF
-    } > "${home}/config.toml"
-}
-
-# Why the user's codex setup cannot be carried into the check's own home, on
-# one line; nothing when it can. With neither a file login to link nor
-# CODEX_API_KEY or OPENAI_API_KEY set (the keyring store, or not logged in),
-# codex has nothing to sign in with there.
-# Usage: codex_home_refusal USER_HOME
-codex_home_refusal() {
-    local user_home="$1" config="${1}/config.toml" provider profile
-    if [[ ! -f "${user_home}/auth.json" && -z "${CODEX_API_KEY:-}${OPENAI_API_KEY:-}" ]]; then
-        printf "codex: no auth.json in %s and no CODEX_API_KEY or OPENAI_API_KEY; the heads-up seat needs a file login or an API key" "$user_home"
-        return 0
-    fi
-    # A custom provider's table can carry headers, an env key the scrub drops
-    # and nested tables, so it is refused rather than copied.
-    provider=$(toml_value "$config" "" model_provider)
-    if [[ -n "$provider" && "$provider" != openai ]]; then
-        printf "codex: %s sets model_provider \"%s\"; the heads-up seat runs codex's built-in openai provider only" "$config" "$provider"
-        return 0
-    fi
-    # A profile can name its own model, effort and provider; the home copies
-    # the root keys only, so it would run something other than the user's codex.
-    profile=$(toml_value "$config" "" profile)
-    if [[ -n "$profile" ]]; then
-        printf "codex: %s sets profile \"%s\"; the heads-up seat reads only the root model and effort" "$config" "$profile"
-    fi
-}
-
-# Links the user's auth.json into the check's home. codex-cli 0.164.0 refreshes
-# its token by rewriting auth.json in place (read from its source, not a
-# promise codex makes), so through a link the refresh lands in the user's
-# login; in a copy it would vanish with the run dir. A hard link where a
-# symlink is refused (Windows without developer mode) or comes out as a copy
-# (as Git Bash can make one).
-# Usage: link_login USER_HOME
-link_login() {
-    local login="${1}/auth.json" link="${RUN_DIR}/codex-home/auth.json"
-    if ln -s "$login" "$link" 2> /dev/null && [[ "$link" -ef "$login" ]]; then
-        return 0
-    fi
-    rm -f "$link"
-    ln "$login" "$link" 2> "${RUN_DIR}/link.err"
-}
-
 # codex in the run dir, so no repository's AGENTS.md or skills load.
 codex_call() {
     local args=(exec --json --skip-git-repo-check -s read-only
@@ -278,8 +199,8 @@ ask_codex() {
         OUTCOME=error
         return 0
     fi
-    codex_home "$user_home"
-    if [[ -f "${user_home}/auth.json" ]] && ! link_login "$user_home"; then
+    codex_home "${RUN_DIR}/codex-home" "$user_home" "$PICK_EFFORT"
+    if [[ -f "${user_home}/auth.json" ]] && ! link_login "${RUN_DIR}/codex-home" "$user_home" "${RUN_DIR}/link.err"; then
         OUTCOME=error DETAIL="codex: could not link ${user_home}/auth.json into ${RUN_DIR}/codex-home: $(error_excerpt "${RUN_DIR}/link.err")"
         return 0
     fi

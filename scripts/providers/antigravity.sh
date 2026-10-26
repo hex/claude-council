@@ -8,6 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
+source "$SCRIPT_DIR/../lib/seat-isolation.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -51,10 +53,25 @@ ${PROMPT}"
 # folded into the prompt text. --sandbox restricts terminal access as
 # defense-in-depth alongside the guard.
 ARGS=(--sandbox)
-# --model only on an explicit override: a pinned label would override the
-# model selected in the Antigravity app, so an unset ANTIGRAVITY_MODEL defers
-# to agy's own selection (mirrors codex.sh and grok-cli.sh).
-[[ -n "${ANTIGRAVITY_MODEL:-}" ]] && ARGS+=(--model "$ANTIGRAVITY_MODEL")
+# On macOS the seat runs under a home of its own (lib/seat-isolation.sh)
+# holding only ~/Library/Keychains, where agy keeps its login: the user's
+# ~/.gemini rules (GEMINI.md, AGENTS.md), skills, MCP servers, plugins and
+# saved conversations stay out. `agy mcp list` there reports no servers where
+# the real home lists the user's, and `agy models` still signs in. Linux keeps
+# the real home: agy keeps its login in the OS keyring or a file whose place
+# is unverified, so a home of its own could sign it out. The scratch working
+# directory keeps out a project's GEMINI.md, AGENTS.md and .agents skills.
+# The model selected in the Antigravity app lives in the real home's
+# settings.json, so it is read here first and passed as --model; with no
+# selection and no ANTIGRAVITY_MODEL, no --model at all, leaving agy its own
+# default.
+MODEL="$(get_model antigravity)"
+[[ "$MODEL" != default ]] && ARGS+=(--model "$MODEL")
+if [[ "$(seat_platform)" == macos ]]; then
+    SEAT_HOME=$(seat_home antigravity Library/Keychains "$HOME/Library/Keychains") || exit 1
+    export HOME="$SEAT_HOME"
+fi
+seat_enter_scratch || exit 1
 
 ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-antigravity-err.XXXXXX")
 SPILL_DIR=""

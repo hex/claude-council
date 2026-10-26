@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
 source "$SCRIPT_DIR/../lib/usage.sh"
 source "$SCRIPT_DIR/../lib/providers.sh"
+source "$SCRIPT_DIR/../lib/seat-isolation.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -74,6 +75,21 @@ opencode_blind_env "$CONFIG_TMP"
 # asks for a tool anyway fails (Gemini answers UNEXPECTED_TOOL_CALL), and that
 # arrives as an error event, reported below.
 export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny"}}'
+# The blind config still lets the CLI add ~/.claude and ~/.agents as config
+# roots, found through HOME, and with them the user's skills, agents and
+# CLAUDE.md; OPENCODE_DISABLE_CLAUDE_CODE drops the first and nothing drops
+# the second. So the seat runs under an empty home of its own
+# (lib/seat-isolation.sh) with XDG_DATA_HOME on the real one, where the login
+# (opencode/auth.json) and the session history live: the session delete in
+# remove_run reads the same place. The scratch working directory keeps the
+# project out as well.
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+case "$(seat_platform)" in
+    windows) ;;
+    *) SEAT_HOME=$(seat_home opencode) || exit 1
+       export HOME="$SEAT_HOME" ;;
+esac
+seat_enter_scratch || exit 1
 
 # --standalone: a private server for this run. Without it the run goes to the
 # user's background service, which holds the environment and config it was

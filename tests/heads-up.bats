@@ -12,6 +12,7 @@ SESSION_ID="0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
 setup() {
     mkdir -p "$TEST_TMP_DIR" "$TEST_CACHE_DIR"
     install_fake_clis
+    isolate_seat_dirs
     export CLAUDE_CONFIG_DIR="${BATS_TEST_TMPDIR}/claude-config"
     TRANSCRIPT="${CLAUDE_CONFIG_DIR}/projects/-tmp-example/${SESSION_ID}.jsonl"
     mkdir -p "$(dirname "$TRANSCRIPT")"
@@ -176,6 +177,8 @@ result() {
     [ "$(result .title)" = "Retries without backoff" ]
     [ "$(result '.points | join("|")')" = "Each retry fires at once.|Add a growing delay." ]
     [ "$(result '[.seats[] | .seat + " " + .outcome] | join(",")')" = "antigravity note" ]
+    # From the council's scratch directory, as in a council run, so no project's files reach it.
+    assert_eq "$(jq -r 'select(.bin == "agy") | .cwd' "$COUNCIL_FAKE_STATE_DIR/seat-env.jsonl")" "$(cd "$TMPDIR/claude-council-$(id -u)/seat" && pwd -P)"
 }
 
 @test "heads-up: codex is asked through the schema with the prompt on stdin" {
@@ -452,7 +455,7 @@ ${TRIMMED_SECTIONS}" ]
     wait_done
     [ "$(result .kind)" = "failed" ]
     [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex error" ]
-    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME} and no CODEX_API_KEY or OPENAI_API_KEY; the heads-up seat needs a file login or an API key" ]
+    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME} and no CODEX_API_KEY or OPENAI_API_KEY; the codex seat needs a file login or an API key" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
@@ -490,7 +493,7 @@ EOF
     start_runner codex
     wait_done
     [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets model_provider \"lab\"; the heads-up seat runs codex's built-in openai provider only" ]
+    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets model_provider \"lab\"; the codex seat runs codex's built-in openai provider only" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
@@ -517,7 +520,7 @@ EOF
     start_runner codex
     wait_done
     [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets profile \"deep\"; the heads-up seat reads only the root model and effort" ]
+    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets profile \"deep\"; the codex seat reads only the root model and effort" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 

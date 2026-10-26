@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
+source "$SCRIPT_DIR/../lib/seat-isolation.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -66,6 +67,33 @@ for vendor in CLAUDE CURSOR; do
         export "GROK_${vendor}_${surface}_ENABLED=0"
     done
 done
+# Those variables leave out Claude's plugins (their hooks, MCP servers and
+# agents) and the skills in ~/.agents, which grok finds through HOME, so the
+# seat runs under an empty home of its own (lib/seat-isolation.sh). GROK_HOME
+# keeps grok on the user's ~/.grok, where its login, model and settings live;
+# the hooks in ~/.grok/hooks load with it, and no setting can drop them:
+# GROK_CONFIG only overlays a few tables on that config, never hooks (grok
+# 1.0.62 lists such an overlay as "set but ignored"). GROK_MEMORY=0 keeps the
+# user's cross-session memory out. The scratch working directory, passed as
+# --cwd too, keeps out the CLAUDE.md and AGENTS.md grok reads from a project.
+# The home links two things back: on macOS ~/Library/Keychains, since grok
+# 1.0.62 signed in through it with no auth.json in either home; and
+# ~/.docker/run when it exists, since Docker Desktop points
+# /var/run/docker.sock into it and the read-only sandbox refuses to start on a
+# socket link it cannot resolve, so without it the retry below would drop the
+# sandbox on every run. Only that directory: ~/.docker/config.json can hold
+# registry credentials.
+export GROK_HOME="${GROK_HOME:-$HOME/.grok}" GROK_MEMORY=0
+GROK_LINKS=()
+[[ "$(seat_platform)" == macos ]] && GROK_LINKS+=(Library/Keychains "$HOME/Library/Keychains")
+[[ -d "$HOME/.docker/run" ]] && GROK_LINKS+=(.docker/run "$HOME/.docker/run")
+case "$(seat_platform)" in
+    windows) ;;
+    *) SEAT_HOME=$(seat_home grok-cli ${GROK_LINKS[@]+"${GROK_LINKS[@]}"}) || exit 1
+       export HOME="$SEAT_HOME" ;;
+esac
+seat_enter_scratch || exit 1
+ARGS+=(--cwd "$(pwd -P)")
 # -m only on an explicit override: the CLI's default model differs by auth
 # mode, and a pinned id is rejected ("unknown model id") under XAI_API_KEY
 # env auth, so an unset GROK_CLI_MODEL defers to the CLI's own default.

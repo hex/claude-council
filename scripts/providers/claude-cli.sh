@@ -9,6 +9,7 @@ source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
 source "$SCRIPT_DIR/../lib/usage.sh"
+source "$SCRIPT_DIR/../lib/seat-isolation.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -51,8 +52,17 @@ ${PROMPT}"
 # (see cursor-cli.sh for the argument limit this avoids).
 ARGS=(-p --safe-mode --setting-sources "" --tools "" --no-session-persistence --output-format json)
 # --model only on an explicit override, so an unset CLAUDE_CLI_MODEL defers to
-# the account's default model (mirrors codex.sh and cursor-cli.sh).
+# the account's default model (mirrors codex.sh).
 [[ -n "${CLAUDE_CLI_MODEL:-}" ]] && ARGS+=(--model "$CLAUDE_CLI_MODEL")
+# -p skips the workspace trust check, so in a repository the CLI adds its
+# branch, status, recent commits and git user to the prompt, with its commit
+# and PR instructions. CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS turns off both
+# (claude 2.1.310 gates the status read on it too, read from its bundle), and
+# the scratch working directory (lib/seat-isolation.sh), outside any
+# repository, leaves no status to read. Exported after the council's
+# environment scrub, so it reaches the CLI.
+export CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS=1
+seat_enter_scratch || exit 1
 
 # Bound the CLI the way API providers are bounded by curl --max-time:
 # run_with_deadline ends it after COUNCIL_TIMEOUT seconds, surfacing as exit

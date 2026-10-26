@@ -9,6 +9,7 @@ source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
 source "$SCRIPT_DIR/../lib/usage.sh"
+source "$SCRIPT_DIR/../lib/seat-isolation.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -57,9 +58,14 @@ ${PROMPT}"
 # GitHub CLI's, which copilot reads by running gh from PATH.
 ARGS=(--output-format json --no-auto-update --no-custom-instructions --disable-builtin-mcps --available-tools=none)
 # --model only on an explicit override, so an unset COPILOT_CLI_MODEL defers to
-# the CLI's own choice (mirrors claude-cli.sh and cursor-cli.sh). A plan may
+# the CLI's own choice (mirrors claude-cli.sh). A plan may
 # offer no model by name, and the CLI's own message then says so.
 [[ -n "${COPILOT_CLI_MODEL:-}" ]] && ARGS+=(--model "$COPILOT_CLI_MODEL")
+# The scratch working directory (lib/seat-isolation.sh) keeps out the
+# project's skills, hooks and .github files, which --no-custom-instructions
+# leaves in. The skills under the user's ~/.copilot and ~/.agents still load
+# (see above for why the seat keeps the user's home).
+seat_enter_scratch || exit 1
 
 # Bound the CLI the way API providers are bounded by curl --max-time:
 # run_with_deadline ends it after COUNCIL_TIMEOUT seconds, surfacing as exit
