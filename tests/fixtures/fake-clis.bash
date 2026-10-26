@@ -372,7 +372,8 @@ EOF
 # opencode-session.txt, so a test can assert the seat deleted that session.
 # Each model request ends in a step_finish event carrying its tokens: input
 # without the cache, output without the reasoning. The fake answers in two
-# requests, so a seat that kept one step's tokens would show it.
+# requests, so a seat that kept one step's tokens would show it;
+# step-without-<field> leaves that count out of the first.
 if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
     cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
     SID="ses_fake\${RANDOM}\${RANDOM}"
@@ -381,11 +382,13 @@ if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
     [[ -d "\${OPENCODE_CONFIG_DIR:-}" && -z "\$(ls -A "\$OPENCODE_CONFIG_DIR")" ]] && CONFIG_EMPTY=true
     record_env OPENCODE_ "\${COUNCIL_FAKE_STATE_DIR:?}/opencode-env.jsonl" "{\"config_dir_empty\":\$CONFIG_EMPTY}"
     case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
-        valid|empty)
+        valid|empty|step-without-input|step-without-output)
             ANSWER="$marker: deterministic answer"
             [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "empty" ]] && ANSWER=""
+            LEFT_OUT=""
+            [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == step-without-* ]] && LEFT_OUT="\${COUNCIL_FAKE_BEHAVIOR#step-without-}"
             jq -cn --arg s "\$SID" '{type: "step_start", timestamp: 1, sessionID: \$s, part: {id: "prt_1", sessionID: \$s, messageID: "msg_1", type: "step-start", snapshot: "fake"}}'
-            jq -cn --arg s "\$SID" '{type: "step_finish", timestamp: 2, sessionID: \$s, part: {id: "prt_2", sessionID: \$s, messageID: "msg_1", type: "step-finish", reason: "stop", cost: 0, tokens: {input: 200, output: 40, reasoning: 15, cache: {read: 3000, write: 100}}}}'
+            jq -cn --arg s "\$SID" --arg left_out "\$LEFT_OUT" '{type: "step_finish", timestamp: 2, sessionID: \$s, part: {id: "prt_2", sessionID: \$s, messageID: "msg_1", type: "step-finish", reason: "stop", cost: 0, tokens: {input: 200, output: 40, reasoning: 15, cache: {read: 3000, write: 100}}}} | del(.part.tokens[\$left_out | select(. != "")])'
             jq -cn --arg s "\$SID" --arg a "\$ANSWER" '{type: "text", timestamp: 3, sessionID: \$s, part: {id: "prt_3", sessionID: \$s, messageID: "msg_2", type: "text", text: \$a, time: {start: 2, end: 3}}}'
             jq -cn --arg s "\$SID" '{type: "step_finish", timestamp: 4, sessionID: \$s, part: {id: "prt_4", sessionID: \$s, messageID: "msg_2", type: "step-finish", reason: "stop", cost: 0, tokens: {input: 50, output: 10, reasoning: 5, cache: {read: 3300, write: 0}}}}'
             exit 0 ;;

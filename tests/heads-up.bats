@@ -459,6 +459,18 @@ ${TRIMMED_SECTIONS}" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
+@test "heads-up: a keyring login is a failed check that names the store, even with an API key exported, and codex is never run" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note CODEX_API_KEY= OPENAI_API_KEY=sk-fake-openai
+    rm "$CODEX_HOME/auth.json"
+    printf '%s\n' 'cli_auth_credentials_store = "auto"' > "$CODEX_HOME/config.toml"
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "failed" ]
+    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex error" ]
+    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME} and cli_auth_credentials_store = \"auto\", so the login is in the system keyring, which a home of codex's own cannot read; set it to \"file\" and run codex login again" ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
 @test "heads-up: a user with CODEX_API_KEY and no auth.json runs codex in its own home with no login file" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note CODEX_API_KEY=sk-fake-codex OPENAI_API_KEY=
     rm "$CODEX_HOME/auth.json"

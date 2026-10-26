@@ -3,7 +3,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderChildren, Timer } from 'claude-code'
 import {
-  applyAnswer, avoidList, bandView, checkLine, CONFIG_FILE, decide, onCadence, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
+  applyAnswer, avoidList, promptBand, checkLine, CONFIG_FILE, decide, onCadence, FRESH_SESSION, mergeMemory, parseConfig, parseMemory, parseRunResult, pressed, settle, STORE_KEY, tellClaudeDraft, typedPast,
   addedTokens, bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, TOKENS_KEY, parseTokens, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, headsUpStatus, statusText, withEnabled, type Counts, type HeadsUpStatus,
   seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEAT_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
   tagMark, toastLine, type Answer, type BandView, type Memory, type RunResult,
@@ -982,11 +982,11 @@ export const register: Register = (on, options) => {
     // A note is one row and time-sensitive: the progress band waits for its
     // answer. Reading the session here subscribes the band to its changes.
     const session = await readSession($)
-    if (session.paused !== null && !session.paused.acknowledged) return pausedRow($.ui.resolve(e), session.paused, () => dismissPause($, state))
-    const band = bandView(session.phase)
-    if (band) return headsUpRow($.ui.resolve(e), band, headsUpPresses($, state, band.id), state.headsUpTurnOffArmed === band.id)
     const view = state.view
     const progress = view ? progressBand(view, state.runStartedMs, state.nowMs, state.frame) : undefined
+    const shown = promptBand(session, progress !== undefined)
+    if (shown.kind === 'paused') return pausedRow($.ui.resolve(e), shown.paused, () => dismissPause($, state))
+    if (shown.kind === 'note') return headsUpRow($.ui.resolve(e), shown.band, headsUpPresses($, state, shown.band.id), state.headsUpTurnOffArmed === shown.band.id)
     if (!view || !progress) return next(e)
     const ui = $.ui.resolve(e)
     return (

@@ -68,17 +68,11 @@ ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-codex-err.XXXXXX")
 SEAT_CODEX_HOME=""
 trap 'rm -rf "$ERR_TMP" ${SEAT_CODEX_HOME:+"$SEAT_CODEX_HOME"}' EXIT
 
-# A login in the system keyring cannot follow codex into a home of its own:
-# codex 0.164.0 names the keyring entry after a hash of the CODEX_HOME path
-# (compute_store_key in its login/src/auth/storage.rs). With no file login and
-# no API key to carry over, such a seat runs under the user's own home, as it
-# did before seats were isolated, and says so on stderr, which the council
-# shows above the answer. Any other missing login is refused below.
-STORE=""
-if [[ ! -f "${USER_CODEX_HOME}/auth.json" && -z "${CODEX_API_KEY:-}${OPENAI_API_KEY:-}" ]]; then
-    STORE=$(toml_value "${USER_CODEX_HOME}/config.toml" "" cli_auth_credentials_store)
-fi
-if [[ "$STORE" == keyring || "$STORE" == auto ]]; then
+# A login in the system keyring cannot follow codex into a home of its own
+# (keyring_store says why), so that seat runs under the user's own home, where
+# codex reads it, and says so on stderr, which the council shows above the
+# answer. Any other missing login is refused below.
+if keyring_store "$USER_CODEX_HOME" > /dev/null; then
     echo "note: codex: login is in the system keyring, which a separate CODEX_HOME cannot read; running under your own ${USER_CODEX_HOME} (personal config loads, more tokens). Set cli_auth_credentials_store = \"file\" and run codex login again to isolate this seat." >&2
 else
     SEAT_CODEX_HOME=$(mktemp -d "${TMPDIR:-/tmp}/council-codex-home.XXXXXX")

@@ -1271,6 +1271,19 @@ opencode_run_call() {
     [ "$output" = "FAKE-OPENCODE-RESPONSE: deterministic answer" ]
     [ "$stderr" = "" ]
     [ "$(cat "$COUNCIL_USAGE_FILE")" = '{"input":6650,"cached":6300,"output":70,"reasoning":20}' ]
+    # A step with no input or no output count leaves the call unreported:
+    # summing the other steps would record a total that is too small.
+    rm "$COUNCIL_USAGE_FILE"
+    export COUNCIL_FAKE_BEHAVIOR=step-without-input
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-OPENCODE-RESPONSE: deterministic answer" ]
+    [ ! -e "$COUNCIL_USAGE_FILE" ]
+    export COUNCIL_FAKE_BEHAVIOR=step-without-output
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "FAKE-OPENCODE-RESPONSE: deterministic answer" ]
+    [ ! -e "$COUNCIL_USAGE_FILE" ]
 }
 
 @test "opencode.sh: runs a private server blind to the user's config, with every tool denied" {
@@ -1808,7 +1821,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
 
 KEYRING_NOTE='note: codex: login is in the system keyring, which a separate CODEX_HOME cannot read; running under your own HOME_PATH/.codex (personal config loads, more tokens). Set cli_auth_credentials_store = "file" and run codex login again to isolate this seat.'
 
-@test "seat isolation: codex with only a keyring login runs under the user's own home, and says so" {
+@test "seat isolation: codex with a keyring login runs under the user's own home, an API key exported or not, and says so" {
     export COUNCIL_FAKE_BEHAVIOR=valid CODEX_API_KEY= OPENAI_API_KEY=
     rm "$HOME/.codex/auth.json"
     printf '%s\n' 'cli_auth_credentials_store = "keyring"' > "$HOME/.codex/config.toml"
@@ -1820,6 +1833,32 @@ KEYRING_NOTE='note: codex: login is in the system keyring, which a separate CODE
     [ "$stderr" = "${KEYRING_NOTE/HOME_PATH/$HOME}" ]
     [ "$(cat "$BATS_TEST_TMPDIR/codex-saw.txt")" = "unset" ]
     [ -z "$(find "$TMPDIR" -maxdepth 1 -name 'council-codex-home.*')" ]
+    # The README asks for OPENAI_API_KEY for the openai seat; in a home of
+    # its own it would sign codex in on API billing in place of the login.
+    rm "$BATS_TEST_TMPDIR/codex-saw.txt"
+    export OPENAI_API_KEY=sk-fake-openai
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "answer" ]
+    [ "$stderr" = "${KEYRING_NOTE/HOME_PATH/$HOME}" ]
+    [ "$(cat "$BATS_TEST_TMPDIR/codex-saw.txt")" = "unset" ]
+    [ -z "$(find "$TMPDIR" -maxdepth 1 -name 'council-codex-home.*')" ]
+}
+
+@test "seat isolation: codex with an API key and neither auth.json nor a keyring store runs on the key in a home of its own" {
+    export COUNCIL_FAKE_BEHAVIOR=valid CODEX_API_KEY= OPENAI_API_KEY=sk-fake-openai
+    rm "$HOME/.codex/auth.json"
+    printf '%s\n' 'model = "gpt-user"' > "$HOME/.codex/config.toml"
+    printf '#!/bin/bash\n{ echo "$CODEX_HOME"; echo "$OPENAI_API_KEY"; ls -A "$CODEX_HOME"; } > %q\necho answer\n' \
+        "$BATS_TEST_TMPDIR/codex-saw.txt" > "$FAKE_BIN_DIR/codex"
+    chmod +x "$FAKE_BIN_DIR/codex"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "answer" ]
+    [ "$stderr" = "" ]
+    [[ "$(sed -n 1p "$BATS_TEST_TMPDIR/codex-saw.txt")" == "$TMPDIR/council-codex-home."* ]]
+    [ "$(sed -n 2p "$BATS_TEST_TMPDIR/codex-saw.txt")" = "sk-fake-openai" ]
+    [ "$(sed -n '3,$p' "$BATS_TEST_TMPDIR/codex-saw.txt")" = "config.toml" ]
 }
 
 @test "seat isolation: the council shows the keyring note above codex's answer" {

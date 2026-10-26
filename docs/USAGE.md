@@ -422,9 +422,11 @@ else the `model` and `model_reasoning_effort` from your `~/.codex/config.toml`
 (`$CODEX_HOME` moves it), a link to your `auth.json`, and none of your plugins,
 hooks, `AGENTS.md`, skills, memories or MCP servers. It needs codex's file
 login or an API key: with no `auth.json`, a `CODEX_API_KEY` or `OPENAI_API_KEY`
-in the environment signs codex in instead. With neither (a keyring login), or
-with a config that sets a `model_provider` other than `openai` or a `profile`,
-each check fails and says why. A file with a `seats` list or
+in the environment signs codex in instead, unless your config sets
+`cli_auth_credentials_store` to `keyring` or `auto`. With that keyring login,
+API key exported or not, with no login at all, or with a config that sets a
+`model_provider` other than `openai` or a `profile`, each check fails and says
+why. A file with a `seats` list or
 a `models` map keeps the check off, and the reason names the key. `/heads-up on`, `/heads-up off` and setup drop both keys when they write, so the file reads again. A seat name that is not a council provider (no `scripts/providers/<seat>.sh`) is refused by `/heads-up on` and by setup before anything is written, with the real names listed; a check that fails to start, for instance on a seat typed by hand into the file, shows the red failure row and counts as failed. The seat gets 60 seconds per check (`COUNCIL_HEADS_UP_SEAT_SECONDS`), so a slow CLI such as antigravity, which the council itself allows twenty minutes, times out here; pick codex, gemini or another fast seat. `/heads-up on`
 and `/heads-up off` write the project file for you, keeping its seat and
 cadence; `/heads-up on gemini` names the seat to ask, any one provider the

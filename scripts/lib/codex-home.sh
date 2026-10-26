@@ -46,6 +46,22 @@ link_login() {
     ln "$login" "$link" 2> "$3"
 }
 
+# Prints the user's cli_auth_credentials_store and returns 0 when their login
+# can only be in the system keyring: no auth.json in USER_HOME and the store
+# set to keyring or auto. Such a login cannot follow codex into a home of its
+# own: codex 0.164.0 names the keyring entry after a hash of the CODEX_HOME
+# path (compute_store_key in its login/src/auth/storage.rs). An exported API
+# key does not stand in for it, since in that home the key would sign codex
+# in, on API billing, in place of the login the user chose. Returns 1 otherwise.
+# Usage: keyring_store USER_HOME
+keyring_store() {
+    local store
+    [[ -f "${1}/auth.json" ]] && return 1
+    store=$(toml_value "${1}/config.toml" "" cli_auth_credentials_store)
+    [[ "$store" == keyring || "$store" == auto ]] || return 1
+    printf '%s' "$store"
+}
+
 # Builds HOME_DIR, the CODEX_HOME a codex seat runs under, from the user's
 # codex home USER_HOME: its config.toml (codex_home) with the model,
 # CODEX_MODEL else the user's, and the effort, EFFORT else the user's, then
@@ -55,9 +71,13 @@ link_login() {
 # ERR_FILE for that line.
 # Usage: codex_seat_home HOME_DIR USER_HOME ERR_FILE EXCERPT [EFFORT]
 codex_seat_home() {
-    local home="$1" user_home="$2" err="$3" excerpt="$4" config="${2}/config.toml" model effort provider profile
+    local home="$1" user_home="$2" err="$3" excerpt="$4" config="${2}/config.toml" model effort provider profile store
+    if store=$(keyring_store "$user_home"); then
+        printf "codex: no auth.json in %s and cli_auth_credentials_store = \"%s\", so the login is in the system keyring, which a home of codex's own cannot read; set it to \"file\" and run codex login again" "$user_home" "$store"
+        return 1
+    fi
     # With neither a file login to link nor CODEX_API_KEY or OPENAI_API_KEY set
-    # (the keyring store, or not logged in), codex has nothing to sign in with.
+    # (not logged in, or an ephemeral store), codex has nothing to sign in with.
     if [[ ! -f "${user_home}/auth.json" && -z "${CODEX_API_KEY:-}${OPENAI_API_KEY:-}" ]]; then
         printf "codex: no auth.json in %s and no CODEX_API_KEY or OPENAI_API_KEY; the codex seat needs a file login or an API key" "$user_home"
         return 1

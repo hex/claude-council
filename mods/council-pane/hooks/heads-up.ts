@@ -120,13 +120,13 @@ export function pressesLine(c: Counts): string {
  * by every session, kept apart from Counts because a check adds amounts here,
  * not one. Each check reads, adds and writes, so two sessions adding at once
  * can lose one check's tokens; the totals guide a decision, they are not
- * billing. Kept from the version that began counting them, so they cover
- * fewer checks than Counts: `checks + unreported` is every check counted
- * since. `checks` reported usage; `unreported` did not (a seat whose output
- * carries no counts, a timeout, a check that failed before its seat
- * answered). cached and reasoning sum only the checks that gave that split,
- * which cachedChecks and reasoningChecks count; a vendor that leaves a zero
- * split out is among those that did not.
+ * billing. Every finished check adds to both stores, but each counts from its
+ * own first write, so these totals can cover fewer checks than Counts:
+ * `checks + unreported` is every check they cover. `checks` reported usage;
+ * `unreported` did not (a seat whose output carries no counts, a timeout, a
+ * check that failed before its seat answered). cached and reasoning sum only
+ * the checks that gave that split, which cachedChecks and reasoningChecks
+ * count; a vendor that leaves a zero split out is among those that did not.
  */
 export type Tokens = {
   readonly checks: number
@@ -484,6 +484,28 @@ export function acknowledgePause(s: Session): Session {
 /** The red row above the prompt while the pause is not dismissed. */
 export function pausedLine(p: Paused): string {
   return `heads-up paused · ${p.seat}: ${p.detail}`
+}
+
+/** The row above the prompt that the heads-up session and a council run contend for. */
+export type PromptBand =
+  | { readonly kind: 'note'; readonly band: BandView }
+  | { readonly kind: 'paused'; readonly paused: Paused }
+  | { readonly kind: 'progress' }
+  | { readonly kind: 'none' }
+
+/**
+ * Which one the band draws. A note goes first: it is one row, time-sensitive,
+ * and leaves once answered or typed past. A running council's progress comes
+ * next, so its bar and cancel stay in view. A pause not yet dismissed waits
+ * for no run to be drawing: its row stays until Dismiss, and would hide the
+ * run for as long as it stayed.
+ */
+export function promptBand(s: Session, councilRunning: boolean): PromptBand {
+  const band = bandView(s.phase)
+  if (band) return { kind: 'note', band }
+  if (councilRunning) return { kind: 'progress' }
+  if (s.paused !== null && !s.paused.acknowledged) return { kind: 'paused', paused: s.paused }
+  return { kind: 'none' }
 }
 
 /** What turn.step carries that the rules read: the turn, and this request's position in it, from 0. */

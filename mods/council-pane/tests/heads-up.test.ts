@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { acknowledgePause, pausedLine, storedSession, applyAnswer, avoidList, bandView, tagMark, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, headsUpStatus, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION, EMPTY_TOKENS, parseTokens, addedTokens, tokensLine, tokenCount, type RunResult, type Tokens } from '../hooks/heads-up'
+import { acknowledgePause, pausedLine, promptBand, storedSession, applyAnswer, avoidList, bandView, tagMark, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, headsUpStatus, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION, EMPTY_TOKENS, parseTokens, addedTokens, tokensLine, tokenCount, type RunResult, type Tokens } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -136,6 +136,20 @@ test('dismissing the pause row acknowledges it and keeps the pause; with no paus
 test('the pause row names the seat and its own words', () => {
   expect(pausedLine({ seat: 'codex', detail: OUT_OF_CREDITS, acknowledged: false }))
     .toBe('heads-up paused · codex: Your workspace is out of credits. Add credits to continue.')
+})
+
+test('a running council keeps its progress band above the prompt while a pause waits; the pause row shows once no run is drawing', () => {
+  expect(promptBand(paused, true)).toEqual({ kind: 'progress' })
+  expect(promptBand(paused, false)).toEqual({ kind: 'paused', paused: { seat: 'codex', detail: OUT_OF_CREDITS, acknowledged: false } })
+  expect(promptBand(acknowledgePause(paused), true)).toEqual({ kind: 'progress' })
+  expect(promptBand(acknowledgePause(paused), false)).toEqual({ kind: 'none' })
+  expect(promptBand(FRESH_SESSION, false)).toEqual({ kind: 'none' })
+})
+
+test('a note waiting for its answer takes the band above the prompt, a running council or not', () => {
+  const showing: Session = { ...FRESH_SESSION, phase: { kind: 'showing', note, expanded: false } }
+  expect(promptBand(showing, true).kind).toBe('note')
+  expect(promptBand(showing, false).kind).toBe('note')
 })
 
 test('backoff spends one skipped check per cadence point and hands back the memory to write', () => {
