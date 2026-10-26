@@ -20,8 +20,8 @@ from render import THEMES, render
 ROOT = Path(__file__).resolve().parents[2]
 CAPTURE = ROOT / "assets/capture"
 TMUX = shutil.which("tmux")
-KEYS = {"heads-up", "heads-up-counts", "heads-up-tokens", "heads-up-intro-shown", "pane_host",
-        "specialist-runs", "specialists-latest", "specialists-intro-shown"}
+HEADS_UP_KEYS = ("heads-up", "heads-up-counts", "heads-up-tokens", "heads-up-intro-shown")
+KEYS = {*HEADS_UP_KEYS, "pane_host", "specialist-runs", "specialists-latest", "specialists-intro-shown"}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 ROSTERS = {
     "real": "codex,antigravity,gemini,openai,kimi-cli",
@@ -258,7 +258,7 @@ class Capture:
         else:
             for path in self.stores.glob("claude-council_inline-*.json"):
                 data = json.loads(path.read_text())
-                for key in ("heads-up", "heads-up-counts", "heads-up-tokens", "heads-up-intro-shown"):
+                for key in HEADS_UP_KEYS:
                     data.pop(key, None)
                 data["pane_host"] = "mod"
                 path.write_text(json.dumps(data, indent=2) + "\n")
