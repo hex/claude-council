@@ -1645,23 +1645,6 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     [ "$(jq -r '.args | index("--sandbox") as $i | .[$i+1]' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = "read-only" ]
 }
 
-@test "seat isolation: a grok-cli home that linked ~/.docker whole is converged to a directory holding only the run link" {
-    export COUNCIL_FAKE_BEHAVIOR=valid
-    skip_on_windows
-    fake_platform Linux
-    local home
-    home=$(seat_home_dir grok-cli)
-    mkdir -p "$HOME/.docker/run" "$home"
-    ln -s "$HOME/.docker" "$home/.docker"
-    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
-    [ "$status" -eq 0 ]
-    [ ! -L "$home/.docker" ]
-    [ "$(ls -A "$home/.docker")" = "run" ]
-    [ "$(readlink "$home/.docker/run")" = "$BATS_TEST_TMPDIR/user-home/.docker/run" ]
-    [ "$(ls -A "$HOME/.docker")" = "run" ]
-    [ "$(ls -A "$HOME/.docker/run")" = "" ]
-}
-
 @test "seat isolation: opencode runs under an empty home of its own, its login and sessions on the real XDG_DATA_HOME" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows

@@ -96,12 +96,6 @@ seat_home() {
     while [[ $# -ge 2 ]]; do
         rel="$1"
         if [[ "$rel" == */* ]]; then
-            # Only this user can write in the home, so a link where a
-            # directory goes is one the seat made; replacing it with the
-            # directory leaves the link's target untouched.
-            if [[ -L "${home}/${rel%/*}" ]]; then
-                rm -f "${home}/${rel%/*}" || return 1
-            fi
             seat_private_dir "${home}/${rel%/*}" || return 1
         fi
         seat_link "$2" "${home}/${rel}" || return 1
