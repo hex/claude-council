@@ -1766,13 +1766,31 @@ KEYRING_NOTE='note: codex: login is in the system keyring, which a separate CODE
 FAKE-CODEX-RESPONSE: deterministic answer" ]
 }
 
+# Every path under HOME, with a checksum per regular file and the target of
+# each symlink, so an overwrite or a repointed link shows as well as a new file.
+home_manifest() {
+    local path
+    (cd "$HOME" && find . | sort | while IFS= read -r path; do
+        if [[ -L "$path" ]]; then
+            printf '%s -> %s\n' "$path" "$(readlink "$path")"
+        elif [[ -f "$path" ]]; then
+            printf '%s %s\n' "$path" "$(cksum < "$path")"
+        else
+            printf '%s\n' "$path"
+        fi
+    done)
+}
+
 @test "seat isolation: no seat writes into the user's real home" {
     export COUNCIL_FAKE_BEHAVIOR=valid
-    mkdir -p "$HOME/Library/Keychains" "$HOME/.config/cursor" "$HOME/.grok" "$HOME/.local/share"
-    local before pair
-    before=$(cd "$HOME" && find . | sort)
+    local dir before pair
+    for dir in Library/Keychains .config/cursor .grok .local/share; do
+        mkdir -p "$HOME/$dir"
+        printf 'before\n' > "$HOME/$dir/existing"
+    done
+    before=$(home_manifest)
     for pair in $CLI_SEATS; do
         "${PROVIDERS_DIR_REAL}/${pair%%:*}" "test prompt" > /dev/null
     done
-    [ "$(cd "$HOME" && find . | sort)" = "$before" ]
+    [ "$(home_manifest)" = "$before" ]
 }
