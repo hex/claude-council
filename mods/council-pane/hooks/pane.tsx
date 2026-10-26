@@ -7,7 +7,7 @@ import {
   addedTokens, bumped, COMMAND as HEADS_UP_COMMAND, COUNTS_KEY, TOKENS_KEY, parseTokens, headsUpCommand, INTRO_KEY as HEADS_UP_INTRO_KEY, introTail, parseCounts, headsUpStatus, statusText, withEnabled, type Counts, type HeadsUpStatus,
   seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, SCOPE_QUESTION, SEAT_QUESTION, EVERY_QUESTION, EVERY_LABELS, receiptLine, modelFile, type HeadsUpConfig, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, type SeatPick,
   tagMark, toastLine, type Answer, type BandView, type Memory, type RunResult,
-  EMPTY_MEMORY, acknowledgePause, pausedLine, storedSession,
+  EMPTY_MEMORY, acknowledgePause, countedAs, pausedLine, storedSession,
 } from './heads-up'
 import type { Note, Paused, Session } from '../types'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
@@ -575,14 +575,15 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
   }
   // Told once, here: the pause stops every later check, and its red row reads
   // the session. A check launched before /heads-up on paused nothing, so it says nothing.
-  if (result.kind === 'quota' && settled.paused !== null) {
+  if ((result.kind === 'quota' || result.kind === 'refused') && settled.paused !== null) {
     $.ui.log(checkLine(result))
     $.ui.invalidate('ui.render')
   }
   // Nobody to warn is not a fault: one log line per reason, no band, no outcome counted.
   logOnChange($, state, 'headsUpSkipped', result.kind === 'skipped' ? checkLine(result) : '')
   const drawn = settled.phase.kind === 'showing' && settled.phase.note.id === checkId
-  if (result.kind !== 'skipped') await recordCheck($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats', result)
+  const counted = countedAs(result, drawn)
+  if (counted !== null) await recordCheck($, counted, result)
   await $.process.run(['rm', '-rf', runDir])
 }
 

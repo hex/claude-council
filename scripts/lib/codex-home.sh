@@ -62,40 +62,54 @@ keyring_store() {
     printf '%s' "$store"
 }
 
-# Builds HOME_DIR, the CODEX_HOME a codex seat runs under, from the user's
-# codex home USER_HOME: its config.toml (codex_home) with the model,
-# CODEX_MODEL else the user's, and the effort, EFFORT else the user's, then
-# their login (link_login). When the user's setup cannot be carried into a home
-# of codex's own, or the login cannot be linked, prints why on one line and
-# returns 1; EXCERPT names the function that shortens ln's complaint in
-# ERR_FILE for that line.
-# Usage: codex_seat_home HOME_DIR USER_HOME ERR_FILE EXCERPT [EFFORT]
-codex_seat_home() {
-    local home="$1" user_home="$2" err="$3" excerpt="$4" config="${2}/config.toml" model effort provider profile store
+# Prints, on one line and without naming codex, why the user's codex setup in
+# USER_HOME can never run in a home of codex's own, and returns 0; returns 1
+# when it can. Each reason holds until the user changes their codex setup, so
+# the heads-up check pauses on it rather than failing at every cadence point.
+# Usage: codex_refusal USER_HOME
+codex_refusal() {
+    local user_home="$1" config="${1}/config.toml" store provider profile
     if store=$(keyring_store "$user_home"); then
-        printf "codex: no auth.json in %s and cli_auth_credentials_store = \"%s\", so the login is in the system keyring, which a home of codex's own cannot read; set it to \"file\" and run codex login again" "$user_home" "$store"
-        return 1
+        printf "no auth.json in %s and cli_auth_credentials_store = \"%s\", so the login is in the system keyring, which a home of codex's own cannot read; set it to \"file\" and run codex login again" "$user_home" "$store"
+        return 0
     fi
     # With neither a file login to link nor CODEX_API_KEY or OPENAI_API_KEY set
     # (not logged in, or an ephemeral store), codex has nothing to sign in with.
     if [[ ! -f "${user_home}/auth.json" && -z "${CODEX_API_KEY:-}${OPENAI_API_KEY:-}" ]]; then
-        printf "codex: no auth.json in %s and no CODEX_API_KEY or OPENAI_API_KEY; the codex seat needs a file login or an API key" "$user_home"
-        return 1
+        printf "no auth.json in %s and no CODEX_API_KEY or OPENAI_API_KEY; the codex seat needs a file login or an API key" "$user_home"
+        return 0
     fi
-    { IFS= read -r model; IFS= read -r effort; IFS= read -r provider; IFS= read -r profile; } \
-        <<< "$(toml_value "$config" "" model model_reasoning_effort model_provider profile)" || true
+    { IFS= read -r provider; IFS= read -r profile; } <<< "$(toml_value "$config" "" model_provider profile)" || true
     # A custom provider's table can carry headers, an env key the scrub drops
     # and nested tables, so it is refused rather than copied.
     if [[ -n "$provider" && "$provider" != openai ]]; then
-        printf "codex: %s sets model_provider \"%s\"; the codex seat runs codex's built-in openai provider only" "$config" "$provider"
-        return 1
+        printf "%s sets model_provider \"%s\"; the codex seat runs codex's built-in openai provider only" "$config" "$provider"
+        return 0
     fi
     # A profile can name its own model, effort and provider; the home copies
     # the root keys only, so it would run something other than the user's codex.
     if [[ -n "$profile" ]]; then
-        printf "codex: %s sets profile \"%s\"; the codex seat reads only the root model and effort" "$config" "$profile"
+        printf "%s sets profile \"%s\"; the codex seat reads only the root model and effort" "$config" "$profile"
+        return 0
+    fi
+    return 1
+}
+
+# Builds HOME_DIR, the CODEX_HOME a codex seat runs under, from the user's
+# codex home USER_HOME: its config.toml (codex_home) with the model,
+# CODEX_MODEL else the user's, and the effort, EFFORT else the user's, then
+# their login (link_login). When codex_refusal refuses the user's setup, or the
+# login cannot be linked, prints why on one line and returns 1; EXCERPT names
+# the function that shortens ln's complaint in ERR_FILE for that line.
+# Usage: codex_seat_home HOME_DIR USER_HOME ERR_FILE EXCERPT [EFFORT]
+codex_seat_home() {
+    local home="$1" user_home="$2" err="$3" excerpt="$4" model effort reason
+    if reason=$(codex_refusal "$user_home"); then
+        printf 'codex: %s' "$reason"
         return 1
     fi
+    { IFS= read -r model; IFS= read -r effort; } \
+        <<< "$(toml_value "${user_home}/config.toml" "" model model_reasoning_effort)" || true
     codex_home "$home" "${CODEX_MODEL:-$model}" "${5:-$effort}"
     if ! link_login "$home" "$user_home" "$err"; then
         printf 'codex: could not link %s/auth.json into %s: %s' "$user_home" "$home" "$("$excerpt" "$err")"

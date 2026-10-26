@@ -448,26 +448,26 @@ ${TRIMMED_SECTIONS}" ]
     assert_eq "$(codex_saw cwd)" "$(cd "$RUN_DIR" && pwd -P)"
 }
 
-@test "heads-up: a user with neither auth.json nor an API key is a failed check that names both, and codex is never run" {
+@test "heads-up: a user with neither auth.json nor an API key is a refused check that names both, and codex is never run" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note CODEX_API_KEY= OPENAI_API_KEY=
     rm "$CODEX_HOME/auth.json"
     start_runner codex
     wait_done
-    [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex error" ]
-    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME} and no CODEX_API_KEY or OPENAI_API_KEY; the codex seat needs a file login or an API key" ]
+    [ "$(result .kind)" = "refused" ]
+    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex refused" ]
+    [ "$(result '.seats[0].detail')" = "no auth.json in ${CODEX_HOME} and no CODEX_API_KEY or OPENAI_API_KEY; the codex seat needs a file login or an API key" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
-@test "heads-up: a keyring login is a failed check that names the store, even with an API key exported, and codex is never run" {
+@test "heads-up: a keyring login is a refused check that names the store, even with an API key exported, and codex is never run" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note CODEX_API_KEY= OPENAI_API_KEY=sk-fake-openai
     rm "$CODEX_HOME/auth.json"
     printf '%s\n' 'cli_auth_credentials_store = "auto"' > "$CODEX_HOME/config.toml"
     start_runner codex
     wait_done
-    [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex error" ]
-    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME} and cli_auth_credentials_store = \"auto\", so the login is in the system keyring, which a home of codex's own cannot read; set it to \"file\" and run codex login again" ]
+    [ "$(result .kind)" = "refused" ]
+    [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex refused" ]
+    [ "$(result '.seats[0].detail')" = "no auth.json in ${CODEX_HOME} and cli_auth_credentials_store = \"auto\", so the login is in the system keyring, which a home of codex's own cannot read; set it to \"file\" and run codex login again" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
@@ -493,7 +493,7 @@ ${TRIMMED_SECTIONS}" ]
     [ "$(codex_config)" = "$TRIMMED_SECTIONS" ]
 }
 
-@test "heads-up: a user config on another model provider is a failed check that names it, and codex is never run" {
+@test "heads-up: a user config on another model provider is a refused check that names it, and codex is never run" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note
     cat > "$CODEX_HOME/config.toml" <<'EOF'
 model = "llama-local"
@@ -504,8 +504,9 @@ base_url = "http://lab.example.com/v1"
 EOF
     start_runner codex
     wait_done
-    [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets model_provider \"lab\"; the codex seat runs codex's built-in openai provider only" ]
+    [ "$(result .kind)" = "refused" ]
+    [ "$(result '.seats[0].outcome')" = "refused" ]
+    [ "$(result '.seats[0].detail')" = "${CODEX_HOME}/config.toml sets model_provider \"lab\"; the codex seat runs codex's built-in openai provider only" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
@@ -520,7 +521,7 @@ EOF
 ${TRIMMED_SECTIONS}" ]
 }
 
-@test "heads-up: a user config selecting a profile is a failed check that names it, and codex is never run" {
+@test "heads-up: a user config selecting a profile is a refused check that names it, and codex is never run" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note
     cat > "$CODEX_HOME/config.toml" <<'EOF'
 model = "gpt-user"
@@ -531,8 +532,9 @@ model = "gpt-other"
 EOF
     start_runner codex
     wait_done
-    [ "$(result .kind)" = "failed" ]
-    [ "$(result '.seats[0].detail')" = "codex: ${CODEX_HOME}/config.toml sets profile \"deep\"; the codex seat reads only the root model and effort" ]
+    [ "$(result .kind)" = "refused" ]
+    [ "$(result '.seats[0].outcome')" = "refused" ]
+    [ "$(result '.seats[0].detail')" = "${CODEX_HOME}/config.toml sets profile \"deep\"; the codex seat reads only the root model and effort" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 

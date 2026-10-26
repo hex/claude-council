@@ -15,10 +15,11 @@
 #   DIR/seat.usage.json               the tokens the seat's call used, when it reported them (lib/usage.sh)
 #   DIR/codex-home/                   codex's CODEX_HOME: config.toml and a link to the user's auth.json, when
 #                                     they have one; codex keeps its session and logs there too
-#   DIR/result.json                   {kind:note|none|quota|skipped|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
+#   DIR/result.json                   {kind:note|none|quota|refused|skipped|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
 #                                      seats:[{seat,outcome,ms,detail?,usage?}]}; seats holds the seat's outcome, none
 #                                      when the run skipped or failed before asking it; quota is the seat out of
-#                                      credits, its words in seats[0].detail; usage is {input,cached,output,reasoning},
+#                                      credits, its words in seats[0].detail; refused is a codex setup no check can
+#                                      run under, the reason in seats[0].detail; usage is {input,cached,output,reasoning},
 #                                      absent when the seat reported none; written to a temp name and moved
 #   DIR/.done                         last; the mod trusts result.json only after it
 # Env (COUNCIL_* so provider_env_scrub keeps them):
@@ -188,12 +189,18 @@ codex_usage() {
 }
 
 # codex: structured output. Success only on a "turn.completed" event, since
-# codex exits 0 on SIGTERM. Sets OUTCOME (none|note|error|timeout|quota), DETAIL and,
+# codex exits 0 on SIGTERM. Sets OUTCOME (none|note|error|timeout|quota|refused), DETAIL and,
 # for a note, TAG, TOPIC, HEADLINE, TITLE and POINTS_JSON (a JSON array).
 # A turn.failed message is the reason when codex gave one; its stderr can hold
 # unrelated noise (MCP servers it failed to reach), so it is only the fallback.
+# refused is a codex setup no check can run under (codex_refusal), so codex
+# never starts.
 ask_codex() {
     local limit="$1" answer="${RUN_DIR}/seat.out" rc=0
+    if DETAIL=$(codex_refusal "${CODEX_HOME:-$HOME/.codex}"); then
+        OUTCOME=refused
+        return 0
+    fi
     if ! DETAIL=$(codex_seat_home "${RUN_DIR}/codex-home" "${CODEX_HOME:-$HOME/.codex}" "${RUN_DIR}/link.err" error_excerpt "$PICK_EFFORT"); then
         OUTCOME=error
         return 0
@@ -360,6 +367,7 @@ worker() {
             ;;
         none) write_result none ;;
         quota) write_result quota ;;
+        refused) write_result refused ;;
         *) write_result failed ;;
     esac
 }

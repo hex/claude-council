@@ -425,8 +425,9 @@ login or an API key: with no `auth.json`, a `CODEX_API_KEY` or `OPENAI_API_KEY`
 in the environment signs codex in instead, unless your config sets
 `cli_auth_credentials_store` to `keyring` or `auto`. With that keyring login,
 API key exported or not, with no login at all, or with a config that sets a
-`model_provider` other than `openai` or a `profile`, each check fails and says
-why. A file with a `seats` list or
+`model_provider` other than `openai` or a `profile`, the check pauses for the
+session and its red row says why, as below for credits; fix the setup, then
+`/heads-up on`. Such a check counts under `failed`. A file with a `seats` list or
 a `models` map keeps the check off, and the reason names the key. `/heads-up on`, `/heads-up off` and setup drop both keys when they write, so the file reads again. A seat name that is not a council provider (no `scripts/providers/<seat>.sh`) is refused by `/heads-up on` and by setup before anything is written, with the real names listed; a check that fails to start, for instance on a seat typed by hand into the file, shows the red failure row and counts as failed. The seat gets 60 seconds per check (`COUNCIL_HEADS_UP_SEAT_SECONDS`), so a slow CLI such as antigravity, which the council itself allows twenty minutes, times out here; pick codex, gemini or another fast seat. `/heads-up on`
 and `/heads-up off` write the project file for you, keeping its seat and
 cadence; `/heads-up on gemini` names the seat to ask, any one provider the
@@ -455,8 +456,8 @@ limit), the check pauses for the rest of the session instead of failing at
 every cadence point. A red row above the prompt reads
 `heads-up paused · codex: <codex's own words>` with
 `0: Dismiss`, which hides the row and keeps the pause. While paused,
-`/heads-up status` adds the row `paused  codex out of credits this session ·
-/heads-up on to resume`. Only `/heads-up on` or a new session resumes the
+`/heads-up status` adds the row `paused  codex: <codex's own words> ·
+/heads-up on resumes this session`. Only `/heads-up on` or a new session resumes the
 check; `/heads-up off` leaves the pause in place. Any other failed turn shows
 codex's own reason, not its stderr, which can hold unrelated MCP server
 noise. Every `/heads-up` form runs at once, even while Claude is

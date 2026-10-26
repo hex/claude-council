@@ -566,9 +566,13 @@ the one seat (codex: codex exec --output-schema from the run dir,
 under a CODEX_HOME there holding the model, the effort and a link
 to the user's auth.json when there is one, gated on turn.completed; others: providers/<seat>.sh, first-line NONE or
 NOTE:, TAG:, TOPIC:, TITLE: and POINT: lines) -> result.json
-{kind: note|none|skipped|failed, ...} (temp name, mv) -> .done.
+{kind: note|none|quota|refused|skipped|failed, ...} (temp name, mv)
+-> .done. A codex setup no check can run under (codex_refusal in
+lib/codex-home.sh) is refused before codex starts.
 The pane polls .done, settles $.state (claude-council.headsUp),
-draws the band; a skipped check is logged once per reason, draws
+draws the band; quota and refused pause the session with the seat's
+words until /heads-up on or a new session, a check launched before
+that /heads-up on excepted, and refused counts under failed; a skipped check is logged once per reason, draws
 nothing and counts no outcome; the checks shown by /heads-up status
 are the outcomes added up, never stored. Each seat outcome may carry
 usage {input, cached, output, reasoning}, from codex's turn.completed

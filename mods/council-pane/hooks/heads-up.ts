@@ -280,7 +280,7 @@ export function headsUpStatus(config: HeadsUpConfig, rowOn: boolean, fileText: s
     state = 'off'
     rows.push(['by', `the /config row is off, ${fileNote}`], ['turn on', `/${COMMAND} on [seat] for this project, the /config row "Heads-up side-check" for every project`])
   }
-  if (paused !== null) rows.push(['paused', `${paused.seat} out of credits this session · /${COMMAND} on to resume`])
+  if (paused !== null) rows.push(['paused', `${paused.seat}: ${paused.detail} · /${COMMAND} on resumes this session`])
   rows.push(['checks', countsLine(counts)], ['tokens', tokensLine(tokens)], ['presses', pressesLine(counts)])
   return { state, rows }
 }
@@ -550,7 +550,7 @@ export type Usage = { readonly input: number; readonly cached: number | null; re
 
 export type SeatOutcome = {
   readonly seat: string
-  readonly outcome: 'none' | 'note' | 'error' | 'timeout' | 'quota'
+  readonly outcome: 'none' | 'note' | 'error' | 'timeout' | 'quota' | 'refused'
   readonly elapsedMs: number
   readonly detail?: string
   /** Absent when the seat reported none. */
@@ -563,6 +563,8 @@ export type RunResult =
   | { kind: 'none'; payloadBytes: number; seats: readonly SeatOutcome[] }
   /** The seat is out of credits; `seat` and `detail` are those of its quota outcome. */
   | { kind: 'quota'; seat: string; detail: string; payloadBytes: number; seats: readonly SeatOutcome[] }
+  /** The seat's setup can never run a check (codex_refusal); `seat` and `detail` are those of its refused outcome. */
+  | { kind: 'refused'; seat: string; detail: string; payloadBytes: number; seats: readonly SeatOutcome[] }
   /** The runner found nobody to warn (a transcript holding no prompt) and asked no seat. */
   | { kind: 'skipped'; detail: string }
   | { kind: 'failed'; payloadBytes: number; seats: readonly SeatOutcome[] }
@@ -570,7 +572,7 @@ export type RunResult =
 /**
  * Wire shape: {kind, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?, seats:[{seat,outcome,ms,detail?,usage?}]}.
  * A skipped check carries only its detail: no seat ran and nothing left the machine.
- * A quota check carries its seat and words in the seat outcome marked quota.
+ * A quota or refused check carries its seat and words in the seat outcome of that name.
  * A text that does not parse to it is `failed` naming the text, so a runner
  * change can never read as "no note". A headline is cut to HEADLINE_CHARS, one line.
  */
@@ -589,10 +591,11 @@ export function parseRunResult(checkId: string, text: string): RunResult {
   const seats = raw.seats.map(seatOutcome)
   if (!seats.every((seat): seat is SeatOutcome => seat !== undefined)) return unread
   if (raw.kind === 'none') return { kind: 'none', payloadBytes: raw.bytes, seats }
-  if (raw.kind === 'quota') {
-    const out = seats.find(seat => seat.outcome === 'quota')
+  if (raw.kind === 'quota' || raw.kind === 'refused') {
+    const kind = raw.kind
+    const out = seats.find(seat => seat.outcome === kind)
     if (out?.detail === undefined || out.detail === '') return unread
-    return { kind: 'quota', seat: out.seat, detail: out.detail, payloadBytes: raw.bytes, seats }
+    return { kind, seat: out.seat, detail: out.detail, payloadBytes: raw.bytes, seats }
   }
   // A failure or skip before any seat ran names its reason at the top level.
   const detail = typeof raw.detail === 'string' && raw.detail !== '' ? raw.detail : undefined
@@ -641,7 +644,7 @@ function isCount(value: unknown): value is number {
 // A stored counter off its shape reads as 0.
 const countOr0 = (value: unknown): number => (isCount(value) ? value : 0)
 
-const OUTCOMES: readonly SeatOutcome['outcome'][] = ['none', 'note', 'error', 'timeout', 'quota']
+const OUTCOMES: readonly SeatOutcome['outcome'][] = ['none', 'note', 'error', 'timeout', 'quota', 'refused']
 
 // A seat outcome off its shape, usage included, makes the whole result
 // unreadable: the runner checks usage before writing it, so a bad one is a
@@ -673,15 +676,27 @@ export function isRepeat(m: Memory, topic: string): boolean {
 /**
  * The poller's transition. A note stamps offeredTurn with the turn the check
  * was launched in, so one landing after its turn ended counts against the
- * right turn; a repeat, none or failed returns to idle; quota returns to idle
- * paused, the red row not yet dismissed, unless /heads-up on resumed the
- * session after the check launched. Not checking -> unchanged.
+ * right turn; a repeat, none or failed returns to idle; quota or refused
+ * returns to idle paused, the red row not yet dismissed, unless /heads-up on
+ * resumed the session after the check launched: every later check would stop
+ * the same way. Not checking -> unchanged.
  */
 export function settle(s: Session, m: Memory, r: RunResult): Session {
   if (s.phase.kind !== 'checking') return s
   if (r.kind === 'note' && !isRepeat(m, r.note.topic)) return { ...s, offeredTurn: s.phase.turnId, phase: { kind: 'showing', note: r.note, expanded: false } }
-  if (r.kind === 'quota' && s.phase.resumes === s.resumes) return { ...s, phase: { kind: 'idle' }, paused: { seat: r.seat, detail: r.detail, acknowledged: false } }
+  if ((r.kind === 'quota' || r.kind === 'refused') && s.phase.resumes === s.resumes) return { ...s, phase: { kind: 'idle' }, paused: { seat: r.seat, detail: r.detail, acknowledged: false } }
   return { ...s, phase: { kind: 'idle' } }
+}
+
+/**
+ * The count a finished check adds to: a note by whether the band drew it, a
+ * refusal under failed (quota counts credits only), a skip under none.
+ */
+export function countedAs(r: RunResult, drawn: boolean): keyof Counts | null {
+  if (r.kind === 'skipped') return null
+  if (r.kind === 'note') return drawn ? 'notes' : 'repeats'
+  if (r.kind === 'refused') return 'failed'
+  return r.kind
 }
 
 /** A person's own prompt while a note shows: the note goes; the caller records typed-past in memory. */
@@ -739,6 +754,7 @@ export function checkLine(r: RunResult): string {
   if (r.kind === 'none') return `heads-up: ${r.seats.map(seat => seat.seat).join(', ')} · none · ${kilobytes(r.payloadBytes)} · ${seconds(totalMs(r.seats))}`
   if (r.kind === 'skipped') return `heads-up: skipped · ${r.detail}`
   if (r.kind === 'quota') return `heads-up: paused · ${r.seat} after ${seconds(totalMs(r.seats))}: ${r.detail} · /${COMMAND} on resumes`
+  if (r.kind === 'refused') return `heads-up: paused · ${r.seat}: ${r.detail} · /${COMMAND} on resumes`
   const reasons = r.seats.map(seat => `${seat.seat} ${seat.outcome} after ${seconds(seat.elapsedMs)}${seat.detail ? `: ${seat.detail}` : ''}`)
   return `heads-up: failed · ${kilobytes(r.payloadBytes)} · ${reasons.join('; ')}`
 }

@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the heads-up side-check's pure rules: config, memory, cadence, the runner's result and the band's words
 // ABOUTME: Expected values are literals; none is rebuilt from the functions under test
 import { test, expect } from 'bun:test'
-import { acknowledgePause, pausedLine, promptBand, storedSession, applyAnswer, avoidList, bandView, tagMark, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, headsUpStatus, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION, EMPTY_TOKENS, parseTokens, addedTokens, tokensLine, tokenCount, type RunResult, type Tokens } from '../hooks/heads-up'
+import { acknowledgePause, countedAs, pausedLine, promptBand, storedSession, applyAnswer, avoidList, bandView, tagMark, checkLine, kilobytes, tellClaudeDraft, decide, isRepeat, parseRunResult, pressed, settle, typedPast, EMPTY_MEMORY, FRESH_SESSION, type HeadsUpConfig, mergeMemory, parseConfig, parseMemory, type Memory, EMPTY_COUNTS, parseCounts, bumped, countsLine, pressesLine, headsUpCommand, withEnabled, headsUpStatus, statusText, toastLine, introTail, seatsFromDiscovery, seatOptions, seatFromAnswer, everyFromAnswer, SCOPE, EVERY_LABELS, receiptLine, modelFile, modelOptions, modelFromAnswer, effortOptions, effortFromAnswer, MODEL_QUESTION, EFFORT_QUESTION, SEAT_QUESTION, EMPTY_TOKENS, parseTokens, addedTokens, tokensLine, tokenCount, type RunResult, type Tokens } from '../hooks/heads-up'
 import type { Note, Session } from '../types'
 
 test('with the row off, only a file saying enabled true turns it on; it takes the defaults: codex, every 3', () => {
@@ -188,6 +188,18 @@ test('a seat out of credits reads as quota, carrying the seat and its words; wit
     .toBe('heads-up: paused · codex after 3 s: Your workspace is out of credits. Add credits to continue. · /heads-up on resumes')
 })
 
+const KEYRING_REFUSAL = 'no auth.json in /home/example/.codex and cli_auth_credentials_store = "keyring", so the login is in the system keyring, which a home of codex\'s own cannot read; set it to "file" and run codex login again'
+const refused: RunResult = { kind: 'refused', seat: 'codex', detail: KEYRING_REFUSAL, payloadBytes: 900, seats: [{ seat: 'codex', outcome: 'refused', elapsedMs: 40, detail: KEYRING_REFUSAL }] }
+
+test('a codex setup no check can run under reads as refused, carrying the seat and the reason; without them it does not read', () => {
+  const text = JSON.stringify({ kind: 'refused', bytes: 900, seats: [{ seat: 'codex', outcome: 'refused', ms: 40, detail: KEYRING_REFUSAL }] })
+  expect(parseRunResult('c1', text)).toEqual(refused)
+  expect(parseRunResult('c1', JSON.stringify({ kind: 'refused', bytes: 900, seats: [{ seat: 'codex', outcome: 'error', ms: 40, detail: 'exit 1' }] })).kind).toBe('failed')
+  expect(parseRunResult('c1', JSON.stringify({ kind: 'refused', bytes: 900, seats: [{ seat: 'codex', outcome: 'refused', ms: 40 }] })).kind).toBe('failed')
+  expect(checkLine(refused))
+    .toBe('heads-up: paused · codex: no auth.json in /home/example/.codex and cli_auth_credentials_store = "keyring", so the login is in the system keyring, which a home of codex\'s own cannot read; set it to "file" and run codex login again · /heads-up on resumes')
+})
+
 test('a seat outcome keeps the tokens its call used, null where the vendor gave no split', () => {
   const usage = { input: 32961, cached: 13568, output: 467, reasoning: 314 }
   expect(parseRunResult('c1', JSON.stringify({ kind: 'none', bytes: 900, seats: [{ ...codexNone, usage }] })))
@@ -286,6 +298,33 @@ test('a seat out of credits for a check launched after the resume pauses the ses
   const launchedAfter: Session = { ...FRESH_SESSION, resumes: 1, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1, resumes: 1 } }
   expect(settle(launchedAfter, EMPTY_MEMORY, { kind: 'quota', seat: 'codex', detail: OUT_OF_CREDITS, payloadBytes: 900, seats: [] }))
     .toEqual({ offeredTurn: null, phase: { kind: 'idle' }, paused: { seat: 'codex', detail: OUT_OF_CREDITS, acknowledged: false }, resumes: 1 })
+})
+
+test('a refused codex setup pauses the session with its seat and reason, and no check launches until it resumes', () => {
+  const settled = settle(checking, EMPTY_MEMORY, refused)
+  expect(settled).toEqual({ ...checking, phase: { kind: 'idle' }, paused: { seat: 'codex', detail: KEYRING_REFUSAL, acknowledged: false } })
+  expect(decide(on, settled, EMPTY_MEMORY, { turnId: 't2', index: 3 }, 2000)).toEqual({ kind: 'skip', why: 'paused' })
+  expect(pausedLine(settled.paused!))
+    .toBe('heads-up paused · codex: no auth.json in /home/example/.codex and cli_auth_credentials_store = "keyring", so the login is in the system keyring, which a home of codex\'s own cannot read; set it to "file" and run codex login again')
+})
+
+test('a refusal from a check launched before /heads-up on resumed the session leaves it unpaused; one launched after pauses it again', () => {
+  const launchedBefore: Session = { ...FRESH_SESSION, resumes: 1, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1, resumes: 0 } }
+  expect(settle(launchedBefore, EMPTY_MEMORY, refused)).toEqual({ offeredTurn: null, phase: { kind: 'idle' }, paused: null, resumes: 1 })
+  const launchedAfter: Session = { ...FRESH_SESSION, resumes: 1, phase: { kind: 'checking', turnId: 't1', checkId: 'c1', runDir: '/r/c1', startedMs: 1, resumes: 1 } }
+  expect(settle(launchedAfter, EMPTY_MEMORY, refused))
+    .toEqual({ offeredTurn: null, phase: { kind: 'idle' }, paused: { seat: 'codex', detail: KEYRING_REFUSAL, acknowledged: false }, resumes: 1 })
+})
+
+test('each finished check counts under one outcome: a refusal under failed, never out of credits; a skip under none of them', () => {
+  expect(countedAs(refused, false)).toBe('failed')
+  expect(countedAs({ kind: 'quota', seat: 'codex', detail: OUT_OF_CREDITS, payloadBytes: 900, seats: [] }, false)).toBe('quota')
+  expect(countedAs({ kind: 'failed', payloadBytes: 1, seats: [] }, false)).toBe('failed')
+  expect(countedAs({ kind: 'none', payloadBytes: 1, seats: [] }, false)).toBe('none')
+  expect(countedAs({ kind: 'note', note, seats: [] }, true)).toBe('notes')
+  expect(countedAs({ kind: 'note', note, seats: [] }, false)).toBe('repeats')
+  expect(countedAs({ kind: 'skipped', detail: 'digest: nothing in the window to review' }, false)).toBe(null)
+  expect(countsLine(bumped(EMPTY_COUNTS, 'failed'))).toBe('checks 1 · none 0 · notes 0 · repeats 0 · failed 1 · out of credits 0')
 })
 
 test('a result with no check in flight changes nothing', () => {
@@ -458,7 +497,7 @@ test('the toast is the status on one line: state, seat, cadence and the checks, 
   expect(toastLine(headsUpStatus({ enabled: false, seat: 'codex', every: 3 }, false, undefined, EMPTY_COUNTS, EMPTY_TOKENS, null)))
     .toBe('Heads-up side-check: off · checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0')
   expect(toastLine(headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, false, '{"enabled": true}', { ...EMPTY_COUNTS, quota: 1 }, EMPTY_TOKENS, paused.paused)))
-    .toBe('Heads-up side-check: on for this project · codex · every 3 requests · codex out of credits this session · /heads-up on to resume · checks 1 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 1')
+    .toBe('Heads-up side-check: on for this project · codex · every 3 requests · codex: Your workspace is out of credits. Add credits to continue. · /heads-up on resumes this session · checks 1 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 1')
 })
 
 test('status names the effective state and which switch set it, then the counts, one aligned row per fact', () => {
@@ -523,7 +562,7 @@ test('status says while the session is paused, dismissed or not, and what resume
     + '  by       .claude/council-heads-up.json (the /config row is off)\n'
     + '  seat     codex\n'
     + '  every    3 requests\n'
-    + '  paused   codex out of credits this session · /heads-up on to resume\n'
+    + '  paused   codex: Your workspace is out of credits. Add credits to continue. · /heads-up on resumes this session\n'
     + '  checks   checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331\n'
     + '  tokens   none since this version\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
@@ -531,10 +570,16 @@ test('status says while the session is paused, dismissed or not, and what resume
     'Heads-up side-check: off for this project\n'
     + '  by       .claude/council-heads-up.json (the /config row is off)\n'
     + '  turn on  /heads-up on [seat] turns it on here\n'
-    + '  paused   codex out of credits this session · /heads-up on to resume\n'
+    + '  paused   codex: Your workspace is out of credits. Add credits to continue. · /heads-up on resumes this session\n'
     + '  checks   checks 0 · none 0 · notes 0 · repeats 0 · failed 0 · out of credits 0\n'
     + '  tokens   none since this version\n'
     + '  presses  learn 0 · tell 0 · knew 0 · understood 0 · dismiss 0 · turned off 0 · typed past 0')
+})
+
+test('status names a refusal pause by its reason, never as out of credits', () => {
+  const pausedByRefusal = settle(checking, EMPTY_MEMORY, refused).paused
+  const row = headsUpStatus({ enabled: true, seat: 'codex', every: 3 }, true, undefined, EMPTY_COUNTS, EMPTY_TOKENS, pausedByRefusal).rows.find(([label]) => label === 'paused')
+  expect(row).toEqual(['paused', 'codex: no auth.json in /home/example/.codex and cli_auth_credentials_store = "keyring", so the login is in the system keyring, which a home of codex\'s own cannot read; set it to "file" and run codex login again · /heads-up on resumes this session'])
 })
 
 test('the one-time intro is a tail on the prompt hint, once per install, only while the check is off', () => {
