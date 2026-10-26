@@ -1435,13 +1435,18 @@ seat_saw() {
     jq -r --arg bin "$1" "select(.bin == \$bin) | $2" "$COUNCIL_FAKE_STATE_DIR/seat-env.jsonl" | tail -1
 }
 
-# The directories the seats share, as the fakes report them: through symlinks.
+# This user's directory of seat directories, named by the numeric user id.
+seat_root_dir() {
+    printf '%s\n' "$TMPDIR/claude-council-$(id -u)"
+}
+
+# The directory the seats share, as the fakes report it: through symlinks.
 scratch_dir() {
-    (cd "$TMPDIR/claude-council-seat" && pwd -P)
+    (cd "$(seat_root_dir)/seat" && pwd -P)
 }
 
 seat_home_dir() {
-    printf '%s\n' "$TMPDIR/claude-council-seat-home/$1"
+    printf '%s\n' "$(seat_root_dir)/seat-home/$1"
 }
 
 # A uname that names another platform, for the branches the host does not take.
@@ -1469,31 +1474,44 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
         [ "$(seat_saw "${pair#*:}" .cwd)" = "$(scratch_dir)" ] || wrong+=" ${pair%%:*}"
     done
     [ "$wrong" = "" ]
-    [ "$(scratch_dir)" = "$(cd "$TMPDIR" && pwd -P)/claude-council-seat" ]
+    [ "$(scratch_dir)" = "$(cd "$TMPDIR" && pwd -P)/claude-council-$(id -u)/seat" ]
     # Git Bash mounts without POSIX modes, so the mode is checked on macOS and Linux.
     if [[ "$OSTYPE" != msys* && "$OSTYPE" != cygwin* ]]; then
-        [ "$(ls -ld "$TMPDIR/claude-council-seat" | cut -c1-10)" = "drwx------" ]
+        [ "$(ls -ld "$TMPDIR/claude-council-$(id -u)" | cut -c1-10)" = "drwx------" ]
+        [ "$(ls -ld "$TMPDIR/claude-council-$(id -u)/seat" | cut -c1-10)" = "drwx------" ]
     fi
-    [ -z "$(ls -A "$TMPDIR/claude-council-seat")" ]
+    [ -z "$(ls -A "$TMPDIR/claude-council-$(id -u)/seat")" ]
 }
 
 @test "seat isolation: a scratch directory left with wider permissions is narrowed to the owner" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows
-    mkdir -m 755 "$TMPDIR/claude-council-seat"
+    mkdir -p -m 755 "$(seat_root_dir)/seat"
     run "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
-    [ "$(ls -ld "$TMPDIR/claude-council-seat" | cut -c1-10)" = "drwx------" ]
+    [ "$(ls -ld "$(seat_root_dir)/seat" | cut -c1-10)" = "drwx------" ]
 }
 
 @test "seat isolation: a symlink planted where the scratch directory goes is refused, and no CLI runs" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows
-    mkdir "$BATS_TEST_TMPDIR/elsewhere"
-    ln -s "$BATS_TEST_TMPDIR/elsewhere" "$TMPDIR/claude-council-seat"
+    mkdir "$BATS_TEST_TMPDIR/elsewhere" "$(seat_root_dir)"
+    ln -s "$BATS_TEST_TMPDIR/elsewhere" "$(seat_root_dir)/seat"
     run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
     [ "$status" -eq 1 ]
-    [ "$stderr" = "Error: $TMPDIR/claude-council-seat is a symlink; the council's seats need a directory of their own there. Remove it and retry." ]
+    [ "$stderr" = "Error: $TMPDIR/claude-council-$(id -u)/seat is a symlink; the council's seats need a directory of their own there. Remove it and retry." ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "seat isolation: a symlink planted where this user's seat directories go is refused, and no CLI runs" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    mkdir "$BATS_TEST_TMPDIR/elsewhere"
+    ln -s "$BATS_TEST_TMPDIR/elsewhere" "$(seat_root_dir)"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: $TMPDIR/claude-council-$(id -u) is a symlink; the council's seats need a directory of their own there. Remove it and retry." ]
+    [ -z "$(ls -A "$BATS_TEST_TMPDIR/elsewhere")" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
@@ -1546,7 +1564,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$(seat_saw grok .home)" = "$BATS_TEST_TMPDIR/user-home" ]
-    [ ! -e "$TMPDIR/claude-council-seat-home" ]
+    [ ! -e "$(seat_root_dir)/seat-home" ]
 }
 
 @test "seat isolation: a link to the login that already points right is kept, one that points elsewhere is replaced" {

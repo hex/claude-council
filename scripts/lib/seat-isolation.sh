@@ -41,19 +41,27 @@ seat_private_dir() {
     chmod 700 "$dir"
 }
 
+# The directory holding this user's seat directories. Named by the numeric
+# user id, so on a /tmp shared between users each one gets their own rather
+# than finding the first user's there and being refused.
+seat_root() {
+    printf '%s\n' "${TMPDIR:-/tmp}/claude-council-$(id -u)"
+}
+
 # The working directory every CLI seat runs in: empty and outside any
 # repository, so no project's instruction files, skills, hooks or MCP servers
 # load, and claude adds no git status to its prompt. The seat's prompt and
 # files all travel as absolute paths, so leaving the caller's directory loses
 # nothing.
 seat_scratch_dir() {
-    printf '%s\n' "${TMPDIR:-/tmp}/claude-council-seat"
+    printf '%s\n' "$(seat_root)/seat"
 }
 
 # Changes into the seat's working directory, creating it on first use.
 seat_enter_scratch() {
     local dir
     dir=$(seat_scratch_dir)
+    seat_private_dir "$(seat_root)" || return 1
     seat_private_dir "$dir" || return 1
     cd "$dir" || return 1
 }
@@ -88,10 +96,13 @@ seat_link() {
 # The CLI writes caches and state of its own there, which stay between runs.
 # Usage: seat_home SEAT [RELATIVE TARGET]...
 seat_home() {
-    local root="${TMPDIR:-/tmp}/claude-council-seat-home" home rel
-    home="${root}/$1"
+    local root homes home rel
+    root=$(seat_root)
+    homes="${root}/seat-home"
+    home="${homes}/$1"
     shift
     seat_private_dir "$root" || return 1
+    seat_private_dir "$homes" || return 1
     seat_private_dir "$home" || return 1
     while [[ $# -ge 2 ]]; do
         rel="$1"
