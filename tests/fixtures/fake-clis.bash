@@ -163,8 +163,11 @@ if [[ " $* " == *" --output-schema "* ]]; then
         login=other
         [[ "${CODEX_HOME}/auth.json" -ef "${COUNCIL_FAKE_USER_LOGIN:-}" ]] && login=user
     fi
-    # The home and directory codex was started in, for the runner's isolation tests.
-    jq -cn --arg home "${CODEX_HOME:-}" --arg cwd "$(pwd -P)" --arg login "$login" '{home: $home, cwd: $cwd, login: $login}' \
+    # The home and directory codex was started in, for the runner's isolation
+    # tests. Both reach jq on stdin: MSYS rewrites a POSIX path in a native
+    # binary's argv to C:/..., and stdin alone is left as is.
+    printf '%s\n' "${CODEX_HOME:-}" "$(pwd -P)" \
+        | jq -Rcn --arg login "$login" '[inputs] | {home: .[0], cwd: .[1], login: $login}' \
         > "${COUNCIL_FAKE_STATE_DIR}/codex-home.json"
     if [[ -f "${CODEX_HOME:-}/config.toml" ]]; then
         cp "${CODEX_HOME}/config.toml" "${COUNCIL_FAKE_STATE_DIR}/codex-config.toml"

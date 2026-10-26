@@ -422,7 +422,7 @@ EOF
     wait_done
     [ "$(result .kind)" = "note" ]
     [ "$(result .model)" = "gpt-user" ]
-    [ "$(codex_saw home)" = "${RUN_DIR}/codex-home" ]
+    assert_eq "$(codex_saw home)" "${RUN_DIR}/codex-home"
     [ "$(codex_saw login)" = "user" ]
     [ "$RUN_DIR/codex-home/auth.json" -ef "$CODEX_HOME/auth.json" ]
     [ "$(codex_config)" = "model = \"gpt-user\"
@@ -445,7 +445,7 @@ ${TRIMMED_SECTIONS}" ]
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note
     start_runner codex
     wait_done
-    [ "$(codex_saw cwd)" = "$(cd "$RUN_DIR" && pwd -P)" ]
+    assert_eq "$(codex_saw cwd)" "$(cd "$RUN_DIR" && pwd -P)"
 }
 
 @test "heads-up: a user with neither auth.json nor an API key is a failed check that names both, and codex is never run" {
@@ -465,7 +465,7 @@ ${TRIMMED_SECTIONS}" ]
     start_runner codex
     wait_done
     [ "$(result .kind)" = "note" ]
-    [ "$(codex_saw home)" = "${RUN_DIR}/codex-home" ]
+    assert_eq "$(codex_saw home)" "${RUN_DIR}/codex-home"
     [ "$(codex_saw login)" = "none" ]
     [ "$(codex_config)" = "$TRIMMED_SECTIONS" ]
 }
@@ -476,7 +476,7 @@ ${TRIMMED_SECTIONS}" ]
     start_runner codex
     wait_done
     [ "$(result .kind)" = "note" ]
-    [ "$(codex_saw home)" = "${RUN_DIR}/codex-home" ]
+    assert_eq "$(codex_saw home)" "${RUN_DIR}/codex-home"
     [ "$(codex_saw login)" = "none" ]
     [ "$(codex_config)" = "$TRIMMED_SECTIONS" ]
 }
@@ -542,12 +542,24 @@ assert_login_shared() {
     [ "$(cat "$CODEX_HOME/auth.json")" = '{"refreshed":true}' ]
 }
 
+# Whether this host makes a symlink: Git Bash without developer mode refuses
+# one or makes a copy, and the runner then shares the login by a hard link.
+host_symlinks() {
+    ln -s "$BATS_TEST_TMPDIR/avoid.txt" "$BATS_TEST_TMPDIR/symlink-probe" 2>/dev/null || true
+    [[ -L "$BATS_TEST_TMPDIR/symlink-probe" ]]
+}
+
 @test "heads-up: codex's login is the user's own file, never a copy, and removing the run dir leaves it" {
     export COUNCIL_FAKE_BEHAVIOR=heads-up-note
     start_runner codex
     wait_done
     [ "$(result .kind)" = "note" ]
-    [ -L "$RUN_DIR/codex-home/auth.json" ]
+    if host_symlinks; then
+        [ -L "$RUN_DIR/codex-home/auth.json" ]
+    else
+        [ ! -L "$RUN_DIR/codex-home/auth.json" ]
+    fi
+    [ "$RUN_DIR/codex-home/auth.json" -ef "$CODEX_HOME/auth.json" ]
     assert_login_shared
 }
 
@@ -601,5 +613,5 @@ assert_login_shared() {
     [ "$status" -eq 0 ]
     wait_done
     [ "$(result .kind)" = "note" ]
-    [ "$(codex_saw cwd)" = "$(cd "$RUN_DIR" && pwd -P)" ]
+    assert_eq "$(codex_saw cwd)" "$(cd "$RUN_DIR" && pwd -P)"
 }
