@@ -11,6 +11,7 @@ source "$SCRIPT_DIR/../lib/keys.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/providers.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -122,6 +123,11 @@ RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
     --config "$CURL_CFG" \
     -H "Content-Type: application/json" \
     --data-binary @"$PAYLOAD_FILE")
+
+# xAI counts reasoning tokens apart from completion_tokens; cached ones are part of prompt_tokens.
+emit_usage '.usage | {input: .prompt_tokens, cached: .prompt_tokens_details.cached_tokens,
+    output: (if .completion_tokens == null then null else .completion_tokens + (.completion_tokens_details.reasoning_tokens // 0) end),
+    reasoning: .completion_tokens_details.reasoning_tokens}' <<<"$RESPONSE"
 
 # Extract text from response
 TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')

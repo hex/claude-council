@@ -424,8 +424,32 @@ council runs, and drops a `model` picked for a different seat. `/heads-up` alone
 status`) says whether the
 check is on here and which switch set it, one aligned row per fact, then the counts kept on this machine
 and never sent anywhere: checks run, with how many found nothing, drew a note,
-repeated a topic already seen, or failed; and the presses, learn, tell, knew,
-understood, dismiss, turned off and typed past. Every `/heads-up` form runs at once, even while Claude is
+repeated a topic already seen, failed, or found the seat out of credits; and the presses, learn, tell, knew,
+understood, dismiss, turned off and typed past. A sample line:
+`checks 1721 · none 1305 · notes 56 · repeats 0 · failed 29 · out of credits 331`.
+The `tokens` row adds up the tokens those checks used, as each seat's
+response reported them:
+`42 of 45 checks reported since this version · 1.48M in, 820.0k cached on 40 of 42 · 9.1k out, 6.2k reasoning on 30 of 42 · 35.6k per check`.
+It covers only the checks since the version that began counting, so fewer
+than the `checks` row. When every check reported, it starts
+`45 checks since this version`. `in` includes cached tokens and `out`
+includes reasoning tokens. `per check` is in and out together, averaged
+over the reported checks.
+`on 40 of 42` says how many reported checks gave that split; a vendor
+that leaves out a zero count is among those that did not. A check goes
+unreported when its seat prints no counts (grok-cli, kimi-cli, antigravity),
+timed out, or failed before it answered. The toast leaves the row out.
+
+When codex reports that its workspace is out of credits (or at its usage
+limit), the check pauses for the rest of the session instead of failing at
+every cadence point. A red row above the prompt reads
+`heads-up paused · codex: <codex's own words>` with
+`0: Dismiss`, which hides the row and keeps the pause. While paused,
+`/heads-up status` adds the row `paused  codex out of credits this session ·
+/heads-up on to resume`. Only `/heads-up on` or a new session resumes the
+check; `/heads-up off` leaves the pause in place. Any other failed turn shows
+codex's own reason, not its stderr, which can hold unrelated MCP server
+noise. Every `/heads-up` form runs at once, even while Claude is
 mid-turn, but Claude Code draws a command's reply only when the turn ends, so
 mid-turn the status also shows as a toast on one line for eight seconds. A check that found nothing leaves a dim receipt on the
 hint under the prompt, `heads-up: gemini read 8.3 KB in 11 s, nothing to flag`,

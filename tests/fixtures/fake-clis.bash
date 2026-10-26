@@ -49,6 +49,12 @@
 #                    an answer that fits the schema and says nothing
 #   heads-up-no-turn - codex only: writes a note, exits 0, but its events hold
 #                    no turn.completed, as codex looks after a SIGTERM
+#   heads-up-quota - codex only: the workspace is out of credits; its events
+#                    end in error and turn.failed naming that, stderr holds
+#                    unrelated MCP noise, exit 1
+#   heads-up-turn-failed - codex only: turn.failed with a message that is not
+#                    about credits, a line that is not JSON ahead of it, the
+#                    same stderr noise, exit 1
 #   off-contract   - a reply that neither starts NONE nor NOTE:, though it
 #                    carries a NOTE: further along
 #
@@ -126,12 +132,12 @@ if [[ " $* " == *" --output-schema "* ]]; then
             [[ "$COUNCIL_FAKE_BEHAVIOR" == heads-up-slow-note ]] && sleep "${COUNCIL_FAKE_SLEEP:-5}"
             echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
             printf '%s\n' "$note" > "$OUT"
-            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            echo '{"type":"turn.completed","usage":{"input_tokens":32961,"cached_input_tokens":13568,"cache_write_input_tokens":1200,"output_tokens":467,"reasoning_output_tokens":314}}'
             exit 0 ;;
         heads-up-none)
             echo '{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}'
             echo '{"none":true,"tag":"","topic":"","headline":"","title":"","points":[]}' > "$OUT"
-            echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            echo '{"type":"turn.completed","usage":{"input_tokens":21000,"cached_input_tokens":9000,"cache_write_input_tokens":0,"output_tokens":120,"reasoning_output_tokens":80}}'
             exit 0 ;;
         heads-up-blank)
             echo '{"none":false,"tag":"Heads up","topic":"","headline":"","title":"","points":[]}' > "$OUT"
@@ -142,6 +148,19 @@ if [[ " $* " == *" --output-schema "* ]]; then
             printf '%s\n' "$note" > "$OUT"
             echo "codex: interrupted" >&2
             exit 0 ;;
+        heads-up-quota)
+            echo 'ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer" })' >&2
+            echo '{"type":"turn.started"}'
+            echo '{"type":"error","message":"Your workspace is out of credits. Add credits to continue."}'
+            echo '{"type":"turn.failed","error":{"message":"Your workspace is out of credits. Add credits to continue."}}'
+            exit 1 ;;
+        heads-up-turn-failed)
+            echo 'ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer" })' >&2
+            echo '{"type":"turn.started"}'
+            echo 'not json: a stray line the CLI printed'
+            echo '{"type":"error","message":"stream disconnected before completion"}'
+            echo '{"type":"turn.failed","error":{"message":"stream disconnected before completion"}}'
+            exit 1 ;;
     esac
 fi
 EOF
@@ -181,8 +200,9 @@ EOF
     if [[ "$bin" == "cursor-agent" ]]; then
         cat >> "$FAKE_BIN_DIR/$bin" <<EOF
 # The real Cursor CLI answers --output-format json with one object whose
-# .result carries the whole answer. A failure emits no JSON at all: the
-# message goes to stderr and the exit is non-zero.
+# .result carries the whole answer and .usage the tokens, its input count
+# leaving out the cached ones. A failure emits no JSON at all: the message
+# goes to stderr and the exit is non-zero.
 if [[ " \$* " == *" --output-format json "* ]]; then
     # A bare -p reads the prompt from stdin; keep a copy so a test can assert
     # what reached the CLI and that it never rode argv.
@@ -191,7 +211,7 @@ if [[ " \$* " == *" --output-format json "* ]]; then
     fi
     case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
         valid)
-            echo '{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"$marker: deterministic answer","session_id":"fake"}'
+            echo '{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"$marker: deterministic answer","session_id":"fake","usage":{"inputTokens":20,"outputTokens":65,"cacheReadTokens":3000,"cacheWriteTokens":400}}'
             exit 0 ;;
         empty)
             echo '{"type":"result","subtype":"success","is_error":false,"result":"","session_id":"fake"}'
@@ -220,18 +240,22 @@ if [[ " \$* " == *" -p "* ]]; then
     cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
 fi
 # The real CLI answers -p --output-format json with a JSON array of events;
-# the last, type "result", carries the answer, is_error and subtype. An API
-# error or a reached usage limit still exits 0, with is_error true.
+# the last, type "result", carries the answer, is_error, subtype and usage,
+# whose input_tokens leave out the cache reads and writes. An API error or a
+# reached usage limit still exits 0, with is_error true.
 if [[ " \$* " == *" --output-format json "* ]]; then
     case "\${COUNCIL_FAKE_BEHAVIOR:-valid}" in
         valid)
-            echo '[{"type":"system","subtype":"init"},{"type":"assistant"},{"type":"result","subtype":"success","is_error":false,"result":"$marker: deterministic answer"}]'
+            echo '[{"type":"system","subtype":"init"},{"type":"assistant"},{"type":"result","subtype":"success","is_error":false,"result":"$marker: deterministic answer","usage":{"input_tokens":30,"cache_creation_input_tokens":500,"cache_read_input_tokens":4000,"output_tokens":75}}]'
             exit 0 ;;
         empty)
             echo '[{"type":"system","subtype":"init"},{"type":"result","subtype":"success","is_error":false,"result":""}]'
             exit 0 ;;
         error-result)
-            echo '[{"type":"system","subtype":"init"},{"type":"result","subtype":"success","is_error":true,"result":"API Error: 529 Overloaded"}]'
+            echo '[{"type":"system","subtype":"init"},{"type":"result","subtype":"success","is_error":true,"result":"API Error: 529 Overloaded","usage":{"input_tokens":31,"cache_creation_input_tokens":0,"cache_read_input_tokens":4100,"output_tokens":0}}]'
+            exit 0 ;;
+        heads-up-none)
+            echo '[{"type":"system","subtype":"init"},{"type":"result","subtype":"success","is_error":false,"result":"NONE.","usage":{"input_tokens":12,"cache_creation_input_tokens":800,"cache_read_input_tokens":5200,"output_tokens":3}}]'
             exit 0 ;;
     esac
 fi
@@ -253,7 +277,9 @@ EOF
 # The real CLI answers --output-format json with JSONL, one event per line,
 # the answer in an assistant.message event's .data.content. These are the
 # events copilot 1.0.98 printed for a one-word prompt with every tool off,
-# its session.info notice included; deltas and usage events are left out.
+# its session.info notice included; deltas are left out. The two
+# assistant.usage events, one per model request, follow the shape the CLI's
+# event schema declares, input counting the cache reads and writes.
 # With no -p it reads the prompt from stdin; keep a copy so a test can assert
 # what reached the CLI and that it never rode argv.
 if [[ " \$* " == *" --output-format json "* ]]; then
@@ -268,6 +294,8 @@ if [[ " \$* " == *" --output-format json "* ]]; then
             echo '{"type":"session.tools_updated","data":{"model":"example-model"}}'
             echo '{"type":"user.message","data":{"content":"prompt"}}'
             jq -cn --arg a "\$ANSWER" '{type: "assistant.message", data: {model: "example-model", content: \$a, toolRequests: [], phase: "final_answer"}}'
+            echo '{"type":"assistant.usage","ephemeral":true,"data":{"model":"example-model","inputTokens":1000,"outputTokens":50,"cacheReadTokens":600,"cacheWriteTokens":300,"reasoningTokens":20}}'
+            echo '{"type":"assistant.usage","ephemeral":true,"data":{"model":"example-model","inputTokens":1500,"outputTokens":70,"cacheReadTokens":900,"cacheWriteTokens":0,"reasoningTokens":10}}'
             echo '{"type":"assistant.turn_end","data":{"turnId":"0"}}'
             echo '{"type":"result","sessionId":"fake","exitCode":0}'
             exit 0 ;;
@@ -294,6 +322,9 @@ EOF
 # config dir it was handed was an empty directory, so a test can assert what
 # isolation the seat was given. Each run gets its own session id, kept in
 # opencode-session.txt, so a test can assert the seat deleted that session.
+# Each model request ends in a step_finish event carrying its tokens: input
+# without the cache, output without the reasoning. The fake answers in two
+# requests, so a seat that kept one step's tokens would show it.
 if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
     cat > "\${COUNCIL_FAKE_STATE_DIR:?}/stdin.txt"
     SID="ses_fake\${RANDOM}\${RANDOM}"
@@ -306,7 +337,9 @@ if [[ "\${1:-}" == "run" && " \$* " == *" --format json "* ]]; then
             ANSWER="$marker: deterministic answer"
             [[ "\${COUNCIL_FAKE_BEHAVIOR:-valid}" == "empty" ]] && ANSWER=""
             jq -cn --arg s "\$SID" '{type: "step_start", timestamp: 1, sessionID: \$s, part: {id: "prt_1", sessionID: \$s, messageID: "msg_1", type: "step-start", snapshot: "fake"}}'
-            jq -cn --arg s "\$SID" --arg a "\$ANSWER" '{type: "text", timestamp: 2, sessionID: \$s, part: {id: "prt_2", sessionID: \$s, messageID: "msg_1", type: "text", text: \$a, time: {start: 1, end: 2}}}'
+            jq -cn --arg s "\$SID" '{type: "step_finish", timestamp: 2, sessionID: \$s, part: {id: "prt_2", sessionID: \$s, messageID: "msg_1", type: "step-finish", reason: "stop", cost: 0, tokens: {input: 200, output: 40, reasoning: 15, cache: {read: 3000, write: 100}}}}'
+            jq -cn --arg s "\$SID" --arg a "\$ANSWER" '{type: "text", timestamp: 3, sessionID: \$s, part: {id: "prt_3", sessionID: \$s, messageID: "msg_2", type: "text", text: \$a, time: {start: 2, end: 3}}}'
+            jq -cn --arg s "\$SID" '{type: "step_finish", timestamp: 4, sessionID: \$s, part: {id: "prt_4", sessionID: \$s, messageID: "msg_2", type: "step-finish", reason: "stop", cost: 0, tokens: {input: 50, output: 10, reasoning: 5, cache: {read: 3300, write: 0}}}}'
             exit 0 ;;
         bad-model)
             # The real CLI's unknown-model event on stdout, stderr empty, exit 1.

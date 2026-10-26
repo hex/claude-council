@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -65,6 +66,12 @@ OUT_TMP=$(mktemp "${TMPDIR:-/tmp}/council-claude-cli-out.XXXXXX")
 trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
 
 if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" claude "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
+# The last result event's usage, an error result's included: it was billed.
+# input_tokens leave out the cache reads and writes, which are input too.
+emit_usage '[if type == "array" then .[] else . end | objects | select(.type == "result")] | last | .usage
+    | select(.input_tokens != null)
+    | {input: (.input_tokens + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)),
+       cached: .cache_read_input_tokens, output: .output_tokens, reasoning: null}' "$OUT_TMP"
 if [[ $rc -eq 0 ]]; then
     # The last result event, from an array or a lone object. Unparseable
     # output reads as no answer rather than aborting under set -e.

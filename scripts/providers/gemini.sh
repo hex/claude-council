@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/../lib/retry.sh"
 source "$SCRIPT_DIR/../lib/tokens.sh"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/providers.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -125,6 +126,10 @@ RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
     --config "$CURL_CFG" \
     -H "Content-Type: application/json" \
     --data-binary @"$PAYLOAD_FILE")
+
+# Thoughts are counted apart from candidates; cached content is part of the prompt.
+emit_usage '.usageMetadata | {input: .promptTokenCount, cached: .cachedContentTokenCount,
+    output: ((.candidatesTokenCount // 0) + (.thoughtsTokenCount // 0)), reasoning: .thoughtsTokenCount}' <<<"$RESPONSE"
 
 # Extract text from response. Join every text part rather than assuming the
 # answer sits in parts[0] — a thought-signature part can precede it.

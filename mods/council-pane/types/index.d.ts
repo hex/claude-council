@@ -6,12 +6,25 @@ export type Session = {
   /** The turn a note was offered in; at most one note per turn. */
   readonly offeredTurn: string | null
   readonly phase: Phase
+  /** The seat ran out of credits: no check launches until /heads-up on or a fresh session. */
+  readonly paused: Paused | null
+  /** How many times /heads-up on resumed this session; a check stamps it at launch. */
+  readonly resumes: number
+}
+
+export type Paused = {
+  readonly seat: string
+  /** The seat's own words for why. */
+  readonly detail: string
+  /** The person dismissed the red row; the pause holds. */
+  readonly acknowledged: boolean
 }
 
 /** A check in flight and a note on screen cannot both be true: the union says so. */
 export type Phase =
   | { kind: 'idle' }
-  | { kind: 'checking'; turnId: string; checkId: string; runDir: string; startedMs: number }
+  /** `resumes` is the session's count at launch: a quota answer pauses only when no /heads-up on came since. */
+  | { kind: 'checking'; turnId: string; checkId: string; runDir: string; startedMs: number; resumes: number }
   | { kind: 'showing'; note: Note; expanded: boolean }
 
 /** The builtin's two tags: a concept that matters, or this session's own work. */
