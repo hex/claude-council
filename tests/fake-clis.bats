@@ -1600,6 +1600,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
 @test "seat isolation: grok-cli runs under an empty home of its own, on the user's GROK_HOME, without memory" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows
+    fake_platform Linux
     local home
     home=$(seat_home_dir grok-cli)
     run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
@@ -1614,6 +1615,23 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
     [ "$status" -eq 0 ]
     [ "$(seat_saw grok .env.GROK_HOME)" = "$BATS_TEST_TMPDIR/grok-elsewhere" ]
+}
+
+@test "seat isolation: grok-cli's home links the login keychain on macOS and ~/.docker when it exists, so the sandbox can resolve Docker's socket" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows
+    fake_platform Darwin
+    local home
+    home=$(seat_home_dir grok-cli)
+    mkdir -p "$HOME/.docker/run"
+    run "${PROVIDERS_DIR_REAL}/grok-cli.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(readlink "$home/Library/Keychains")" = "$BATS_TEST_TMPDIR/user-home/Library/Keychains" ]
+    [ "$(readlink "$home/.docker")" = "$BATS_TEST_TMPDIR/user-home/.docker" ]
+    [ "$(cd "$home" && ls -A | sort | tr '\n' ' ')" = ".docker Library " ]
+    # The sandbox flag reached grok, so no retry dropped it.
+    [ "$(wc -l < "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" | tr -d ' ')" = "1" ]
+    [ "$(jq -r '.args | index("--sandbox") as $i | .[$i+1]' "$COUNCIL_FAKE_STATE_DIR/calls.jsonl")" = "read-only" ]
 }
 
 @test "seat isolation: opencode runs under an empty home of its own, its login and sessions on the real XDG_DATA_HOME" {
@@ -1684,10 +1702,39 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
 @test "seat isolation: codex with neither a file login nor an API key fails naming both, and never runs" {
     export COUNCIL_FAKE_BEHAVIOR=valid CODEX_API_KEY= OPENAI_API_KEY=
     rm "$HOME/.codex/auth.json"
+    printf '%s\n' 'cli_auth_credentials_store = "file"' > "$HOME/.codex/config.toml"
     run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
     [ "$status" -eq 1 ]
     [ "$stderr" = "Error: codex: no auth.json in $HOME/.codex and no CODEX_API_KEY or OPENAI_API_KEY; the codex seat needs a file login or an API key" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+KEYRING_NOTE='note: codex: login is in the system keyring, which a separate CODEX_HOME cannot read; running under your own HOME_PATH/.codex (personal config loads, more tokens). Set cli_auth_credentials_store = "file" and run codex login again to isolate this seat.'
+
+@test "seat isolation: codex with only a keyring login runs under the user's own home, and says so" {
+    export COUNCIL_FAKE_BEHAVIOR=valid CODEX_API_KEY= OPENAI_API_KEY=
+    rm "$HOME/.codex/auth.json"
+    printf '%s\n' 'cli_auth_credentials_store = "keyring"' > "$HOME/.codex/config.toml"
+    printf '#!/bin/bash\necho "${CODEX_HOME:-unset}" > %q\necho answer\n' "$BATS_TEST_TMPDIR/codex-saw.txt" > "$FAKE_BIN_DIR/codex"
+    chmod +x "$FAKE_BIN_DIR/codex"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/codex.sh" "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "answer" ]
+    [ "$stderr" = "${KEYRING_NOTE/HOME_PATH/$HOME}" ]
+    [ "$(cat "$BATS_TEST_TMPDIR/codex-saw.txt")" = "unset" ]
+    [ -z "$(find "$TMPDIR" -maxdepth 1 -name 'council-codex-home.*')" ]
+}
+
+@test "seat isolation: the council shows the keyring note above codex's answer" {
+    export COUNCIL_FAKE_BEHAVIOR=valid CODEX_API_KEY= OPENAI_API_KEY=
+    unset_provider_keys
+    rm "$HOME/.codex/auth.json"
+    printf '%s\n' 'cli_auth_credentials_store = "auto"' > "$HOME/.codex/config.toml"
+    run --separate-stderr bash "${SCRIPTS_DIR}/query-council.sh" --no-cache --no-pane --providers=codex "test prompt"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.round1.codex.status' <<<"$output")" = "success" ]
+    [ "$(jq -r '.round1.codex.response' <<<"$output")" = "${KEYRING_NOTE/HOME_PATH/$HOME}
+FAKE-CODEX-RESPONSE: deterministic answer" ]
 }
 
 @test "seat isolation: no seat writes into the user's real home" {

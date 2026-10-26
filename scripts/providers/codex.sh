@@ -64,22 +64,34 @@ COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
 # prompt can carry --file contents. The scratch working directory
 # (lib/seat-isolation.sh) keeps a project's AGENTS.md and skills out too.
 USER_CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-REFUSAL=$(codex_home_refusal "$USER_CODEX_HOME")
-if [[ -n "$REFUSAL" ]]; then
-    echo "Error: $REFUSAL" >&2
-    exit 1
-fi
-
 ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-codex-err.XXXXXX")
-SEAT_CODEX_HOME=$(mktemp -d "${TMPDIR:-/tmp}/council-codex-home.XXXXXX")
-trap 'rm -rf "$ERR_TMP" "$SEAT_CODEX_HOME"' EXIT
+SEAT_CODEX_HOME=""
+trap 'rm -rf "$ERR_TMP" ${SEAT_CODEX_HOME:+"$SEAT_CODEX_HOME"}' EXIT
 
-codex_home "$SEAT_CODEX_HOME" "$USER_CODEX_HOME"
-if [[ -f "${USER_CODEX_HOME}/auth.json" ]] && ! link_login "$SEAT_CODEX_HOME" "$USER_CODEX_HOME" "$ERR_TMP"; then
-    echo "Error: codex: could not link ${USER_CODEX_HOME}/auth.json into ${SEAT_CODEX_HOME}: $(stderr_excerpt "$ERR_TMP")" >&2
-    exit 1
+# A login in the system keyring cannot follow codex into a home of its own:
+# codex 0.164.0 names the keyring entry after a hash of the CODEX_HOME path
+# (compute_store_key in its login/src/auth/storage.rs). With no file login and
+# no API key to carry over, such a seat runs under the user's own home, as it
+# did before seats were isolated, and says so on stderr, which the council
+# shows above the answer. Any other missing login is refused below.
+STORE=$(toml_value "${USER_CODEX_HOME}/config.toml" "" cli_auth_credentials_store)
+if [[ ! -f "${USER_CODEX_HOME}/auth.json" && -z "${CODEX_API_KEY:-}${OPENAI_API_KEY:-}" \
+      && ( "$STORE" == keyring || "$STORE" == auto ) ]]; then
+    echo "note: codex: login is in the system keyring, which a separate CODEX_HOME cannot read; running under your own ${USER_CODEX_HOME} (personal config loads, more tokens). Set cli_auth_credentials_store = \"file\" and run codex login again to isolate this seat." >&2
+else
+    REFUSAL=$(codex_home_refusal "$USER_CODEX_HOME")
+    if [[ -n "$REFUSAL" ]]; then
+        echo "Error: $REFUSAL" >&2
+        exit 1
+    fi
+    SEAT_CODEX_HOME=$(mktemp -d "${TMPDIR:-/tmp}/council-codex-home.XXXXXX")
+    codex_home "$SEAT_CODEX_HOME" "$USER_CODEX_HOME"
+    if [[ -f "${USER_CODEX_HOME}/auth.json" ]] && ! link_login "$SEAT_CODEX_HOME" "$USER_CODEX_HOME" "$ERR_TMP"; then
+        echo "Error: codex: could not link ${USER_CODEX_HOME}/auth.json into ${SEAT_CODEX_HOME}: $(stderr_excerpt "$ERR_TMP")" >&2
+        exit 1
+    fi
+    export CODEX_HOME="$SEAT_CODEX_HOME"
 fi
-export CODEX_HOME="$SEAT_CODEX_HOME"
 seat_enter_scratch || exit 1
 
 # The prompt rides argv, and `codex exec` reads stdin whenever it is not a
