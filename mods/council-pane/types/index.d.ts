@@ -12,6 +12,17 @@ export type Session = {
   readonly resumes: number
 }
 
+/**
+ * The session as $.state may hold it: one written without `paused` or
+ * `resumes`, session or check, lacks them. storedSession (heads-up.ts) reads
+ * it as a Session.
+ */
+export type StoredSession = Omit<Session, 'paused' | 'resumes' | 'phase'> & {
+  readonly paused?: Paused | null
+  readonly resumes?: number
+  readonly phase: Exclude<Phase, { kind: 'checking' }> | (Omit<Extract<Phase, { kind: 'checking' }>, 'resumes'> & { readonly resumes?: number })
+}
+
 export type Paused = {
   readonly seat: string
   /** The seat's own words for why. */
@@ -52,6 +63,6 @@ export type Note = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'claude-council': { headsUp: Session }
+    'claude-council': { headsUp: StoredSession }
   }
 }

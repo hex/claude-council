@@ -58,6 +58,18 @@ const SEAT_INFO_MS = 15_000
 const HEADS_UP = { plugin: 'claude-council', key: 'headsUp' } as const
 const headsUp = atom(HEADS_UP, FRESH_SESSION)
 
+// The heads-up session, every field present however it was stored. Read while
+// a ui.render hook draws, it subscribes the drawing to the session's changes.
+async function readSession($: EngineInterface): Promise<Session> {
+  return storedSession(await read($, headsUp))
+}
+
+// Writes CHANGE of the heads-up session, read with every field present, and
+// resolves what it wrote.
+async function updateSession($: EngineInterface, change: (s: Session) => Session): Promise<Session> {
+  return storedSession(await update($, headsUp, s => change(storedSession(s))))
+}
+
 type PaneState = {
   root: string
   runDir?: string
@@ -189,7 +201,7 @@ async function setupHeadsUp($: EngineInterface, state: PaneState, settings: Pane
 // What /heads-up status prints, from the project file as it stands.
 async function readHeadsUpStatus($: EngineInterface, rowOn: boolean): Promise<HeadsUpStatus> {
   const { text } = await headsUpFile($)
-  return headsUpStatus(parseConfig(text, rowOn), rowOn, text, parseCounts(await $.store.get(COUNTS_KEY)), parseTokens(await $.store.get(TOKENS_KEY)), storedSession(await read($, headsUp)).paused)
+  return headsUpStatus(parseConfig(text, rowOn), rowOn, text, parseCounts(await $.store.get(COUNTS_KEY)), parseTokens(await $.store.get(TOKENS_KEY)), (await readSession($)).paused)
 }
 
 // The status as the command's reply; mid-turn the reply waits for the turn to
@@ -417,6 +429,12 @@ async function tallyTokens($: EngineInterface, result: RunResult): Promise<void>
   await $.store.set(TOKENS_KEY, addedTokens(parseTokens(await $.store.get(TOKENS_KEY)), result))
 }
 
+// A finished check, launched or not: its outcome counted and its tokens added.
+// The two touch different store keys, so neither waits on the other.
+async function recordCheck($: EngineInterface, outcome: keyof Counts, result: RunResult): Promise<void> {
+  await Promise.all([count($, outcome), tallyTokens($, result)])
+}
+
 // The runner's seat questions, answered by its shipped script with fixed
 // subcommands, so the mod never hands bash an inline script.
 function seatInfo($: EngineInterface, ...args: ['discover'] | ['model' | 'allowlisted', string]) {
@@ -495,12 +513,11 @@ async function stepHeadsUp($: EngineInterface, state: PaneState, settings: PaneO
   try {
     await launchHeadsUp($, config, runDir, avoidFile)
   } catch (error) {
-    await update($, headsUp, (s): Session => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))
+    await updateSession($, s => (s.phase.kind === 'checking' && s.phase.checkId === decision.checkId ? { ...s, phase: { kind: 'idle' } } : s))
     // A check that never started is a failed check to the person: red above the prompt, counted as one, and logged by the caller.
     state.headsUpFailure = { text: `heads-up: failed · ${String(error)}`, untilMs: now + FINISH_NOTICE_MS, isFailure: true }
     $.ui.invalidate('ui.render')
-    await count($, 'failed')
-    await tallyTokens($, { kind: 'failed', payloadBytes: 0, seats: [] })
+    await recordCheck($, 'failed', { kind: 'failed', payloadBytes: 0, seats: [] })
     throw error
   }
 }
@@ -523,7 +540,7 @@ async function headsUpTick($: EngineInterface, state: PaneState): Promise<void> 
       state.headsUpFailure = undefined
       $.ui.invalidate('ui.render')
     }
-    const phase = (await read($, headsUp)).phase
+    const phase = (await readSession($)).phase
     if (phase.kind === 'checking') await pollHeadsUp($, state, phase, now)
     else if (!state.headsUpFailure) {
       state.headsUpTimer?.cancel()
@@ -546,7 +563,7 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
   else return
   // settle reads memory only to spot a repeated note.
   const memory = result.kind === 'note' ? await loadMemory($) : EMPTY_MEMORY
-  const settled = await update($, headsUp, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(storedSession(s), memory, result) : s))
+  const settled = await updateSession($, s => (s.phase.kind === 'checking' && s.phase.checkId === checkId ? settle(s, memory, result) : s))
   if (result.kind === 'failed') {
     $.ui.log(checkLine(result))
     state.headsUpFailure = { text: checkLine(result), untilMs: now + FINISH_NOTICE_MS, isFailure: true }
@@ -565,10 +582,7 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
   // Nobody to warn is not a fault: one log line per reason, no band, no outcome counted.
   logOnChange($, state, 'headsUpSkipped', result.kind === 'skipped' ? checkLine(result) : '')
   const drawn = settled.phase.kind === 'showing' && settled.phase.note.id === checkId
-  if (result.kind !== 'skipped') {
-    await count($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats')
-    await tallyTokens($, result)
-  }
+  if (result.kind !== 'skipped') await recordCheck($, result.kind !== 'note' ? result.kind : drawn ? 'notes' : 'repeats', result)
   await $.process.run(['rm', '-rf', runDir])
 }
 
@@ -579,7 +593,7 @@ async function pollHeadsUp($: EngineInterface, state: PaneState, phase: Extract<
 // reported once, since the note is gone by then.
 async function pressHeadsUp($: EngineInterface, answer: Exclude<Answer, 'typed-past'>): Promise<void> {
   const shown: { note?: Note } = {}
-  await update($, headsUp, s => {
+  await updateSession($, s => {
     shown.note = s.phase.kind === 'showing' ? s.phase.note : undefined
     return pressed(s, answer)
   })
@@ -599,7 +613,7 @@ async function pressHeadsUp($: EngineInterface, answer: Exclude<Answer, 'typed-p
 // The person's own prompt while a note shows: it is typed past.
 async function personSubmitted($: EngineInterface): Promise<void> {
   const seen: { topic?: string } = {}
-  await update($, headsUp, s => {
+  await updateSession($, s => {
     seen.topic = s.phase.kind === 'showing' ? s.phase.note.topic : undefined
     return typedPast(s)
   })
@@ -609,7 +623,7 @@ async function personSubmitted($: EngineInterface): Promise<void> {
 // The pause row's Dismiss: the row goes, the session stays paused.
 function dismissPause($: EngineInterface, state: PaneState): void {
   void logFailure($, state, async () => {
-    await update($, headsUp, s => acknowledgePause(storedSession(s)))
+    await updateSession($, acknowledgePause)
   })
 }
 
@@ -783,7 +797,7 @@ export const register: Register = (on, options) => {
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     void logFailure($, state, () => introduceHeadsUp($, state, settings))
     // A reload drops the heads-up timer; a check still in flight needs it back.
-    if ((await read($, headsUp)).phase.kind === 'checking') watchHeadsUp($, state)
+    if ((await readSession($)).phase.kind === 'checking') watchHeadsUp($, state)
     // Nothing after depends on these, so the request is not held up for them.
     void Promise.all(SPECIALIST_STORE_KEYS.map(key => $.store.delete(key))).catch((err: unknown) => $.ui.log(`store cleanup: ${String(err)}`))
     return next(e)
@@ -885,10 +899,7 @@ export const register: Register = (on, options) => {
       await $.fs.write(file.path, withEnabled(file.text, command.action === 'on', command.action === 'on' ? command.seat : undefined))
       // On is the one way to resume a session the seat's credits paused; off leaves the pause.
       if (command.action === 'on') {
-        await update($, headsUp, s => {
-          const current = storedSession(s)
-          return { ...current, paused: null, resumes: current.resumes + 1 }
-        })
+        await updateSession($, s => ({ ...s, paused: null, resumes: s.resumes + 1 }))
       }
       state.headsUpTip = ''
     }
@@ -970,7 +981,7 @@ export const register: Register = (on, options) => {
     }
     // A note is one row and time-sensitive: the progress band waits for its
     // answer. Reading the session here subscribes the band to its changes.
-    const session = storedSession(await read($, headsUp))
+    const session = await readSession($)
     if (session.paused !== null && !session.paused.acknowledged) return pausedRow($.ui.resolve(e), session.paused, () => dismissPause($, state))
     const band = bandView(session.phase)
     if (band) return headsUpRow($.ui.resolve(e), band, headsUpPresses($, state, band.id), state.headsUpTurnOffArmed === band.id)

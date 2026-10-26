@@ -1,7 +1,7 @@
 // ABOUTME: Pure policy for the heads-up side-check: cadence, backoff, memory, the runner's result and the band's words
 // ABOUTME: No engine calls, so every rule runs under bun test; pane.tsx is the shell that feeds events in
 
-import type { Note, Paused, Phase, Session, Tag } from '../types'
+import type { Note, Paused, Phase, Session, StoredSession, Tag } from '../types'
 import { isRecord } from './json'
 
 /** Fire when the message index within the turn is a positive multiple of this; the builtin's number. */
@@ -373,8 +373,7 @@ export function effortFromAnswer(answer: string): { effort?: string } | { why: s
 
 /** What a check that found nothing leaves on the prompt hint: "heads-up: gemini read 8.5 KB in 11 s, nothing to flag". */
 export function receiptLine(r: Extract<RunResult, { kind: 'none' }>): string {
-  const ms = r.seats.reduce((total, seat) => total + seat.elapsedMs, 0)
-  return `heads-up: ${r.seats.map(seat => seat.seat).join(', ')} read ${kilobytes(r.payloadBytes)} in ${seconds(ms)}, nothing to flag`
+  return `heads-up: ${r.seats.map(seat => seat.seat).join(', ')} read ${kilobytes(r.payloadBytes)} in ${seconds(totalMs(r.seats))}, nothing to flag`
 }
 
 /** "codex (gpt-6.1-sol, high)", "gemini (gemini-2.5-pro)", or the bare name. */
@@ -470,13 +469,6 @@ export function avoidList(m: Memory): string {
 }
 
 export const FRESH_SESSION: Session = { offeredTurn: null, phase: { kind: 'idle' }, paused: null, resumes: 0 }
-
-type Checking = Extract<Phase, { kind: 'checking' }>
-type StoredSession = Omit<Session, 'paused' | 'resumes' | 'phase'> & {
-  readonly paused?: Paused | null
-  readonly resumes?: number
-  readonly phase: Exclude<Phase, Checking> | (Omit<Checking, 'resumes'> & { readonly resumes?: number })
-}
 
 /** The session as $.state holds it: one written without `paused` reads as not paused, and without `resumes`, session or check, as never resumed. */
 export function storedSession(stored: StoredSession): Session {
@@ -717,18 +709,14 @@ export function bandView(p: Phase): BandView | null {
 
 const seconds = (ms: number) => `${Math.round(ms / 1000)} s`
 
+const totalMs = (seats: readonly SeatOutcome[]) => seats.reduce((total, seat) => total + seat.elapsedMs, 0)
+
 /** One line per finished check, drawn or not: "heads-up: codex · none · 12.4 KB · 27 s". */
 export function checkLine(r: RunResult): string {
   if (r.kind === 'note') return `heads-up: ${r.note.seat} · note · ${kilobytes(r.note.payloadBytes)} · ${seconds(r.note.elapsedMs)}`
-  if (r.kind === 'none') {
-    const ms = r.seats.reduce((total, seat) => total + seat.elapsedMs, 0)
-    return `heads-up: ${r.seats.map(seat => seat.seat).join(', ')} · none · ${kilobytes(r.payloadBytes)} · ${seconds(ms)}`
-  }
+  if (r.kind === 'none') return `heads-up: ${r.seats.map(seat => seat.seat).join(', ')} · none · ${kilobytes(r.payloadBytes)} · ${seconds(totalMs(r.seats))}`
   if (r.kind === 'skipped') return `heads-up: skipped · ${r.detail}`
-  if (r.kind === 'quota') {
-    const ms = r.seats.reduce((total, seat) => total + seat.elapsedMs, 0)
-    return `heads-up: paused · ${r.seat} after ${seconds(ms)}: ${r.detail} · /${COMMAND} on resumes`
-  }
+  if (r.kind === 'quota') return `heads-up: paused · ${r.seat} after ${seconds(totalMs(r.seats))}: ${r.detail} · /${COMMAND} on resumes`
   const reasons = r.seats.map(seat => `${seat.seat} ${seat.outcome} after ${seconds(seat.elapsedMs)}${seat.detail ? `: ${seat.detail}` : ''}`)
   return `heads-up: failed · ${kilobytes(r.payloadBytes)} · ${reasons.join('; ')}`
 }
