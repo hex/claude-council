@@ -140,10 +140,8 @@ RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
     -H "Content-Type: application/json" \
     --data-binary @"$PAYLOAD_FILE")
 
-# The Agent API's usage in the Responses shape, the details optional: cached
-# tokens part of input_tokens, reasoning tokens part of output_tokens.
-emit_usage '.usage | {input: .input_tokens, cached: .input_tokens_details.cached_tokens,
-    output: .output_tokens, reasoning: .output_tokens_details.reasoning_tokens}' <<<"$RESPONSE"
+# The Agent API reports its usage in the Responses shape.
+emit_usage "$USAGE_RESPONSES" <<<"$RESPONSE"
 
 if [[ -n "$DEBUG" ]]; then
     echo "=== DEBUG: Response metadata ===" >&2

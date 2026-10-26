@@ -120,9 +120,7 @@ if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-*
         -H "Content-Type: application/json" \
         --data-binary @"$PAYLOAD_FILE")
 
-    # Cached tokens are part of input_tokens, reasoning tokens part of output_tokens.
-    emit_usage '.usage | {input: .input_tokens, cached: .input_tokens_details.cached_tokens,
-        output: .output_tokens, reasoning: .output_tokens_details.reasoning_tokens}' <<<"$RESPONSE"
+    emit_usage "$USAGE_RESPONSES" <<<"$RESPONSE"
 
     if [[ -n "$DEBUG" ]]; then
         echo "=== DEBUG: Response metadata ===" >&2
@@ -187,9 +185,7 @@ else
         -H "Content-Type: application/json" \
         --data-binary @"$PAYLOAD_FILE")
 
-    # Cached tokens are part of prompt_tokens, reasoning tokens part of completion_tokens.
-    emit_usage '.usage | {input: .prompt_tokens, cached: .prompt_tokens_details.cached_tokens,
-        output: .completion_tokens, reasoning: .completion_tokens_details.reasoning_tokens}' <<<"$RESPONSE"
+    emit_usage "$USAGE_CHAT" <<<"$RESPONSE"
 
     # Extract text from chat completions format
     TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')

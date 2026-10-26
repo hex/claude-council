@@ -141,8 +141,8 @@ RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
     -H "Content-Type: application/json" \
     --data-binary @"$PAYLOAD_FILE")
 
-# The daemon reports no cached or reasoning split.
-emit_usage '.usage | {input: .prompt_tokens, cached: null, output: .completion_tokens, reasoning: null}' <<<"$RESPONSE"
+# The daemon reports no cached or reasoning split, so both read null.
+emit_usage "$USAGE_CHAT" <<<"$RESPONSE"
 
 if [[ -n "$DEBUG" ]]; then
     echo "=== DEBUG: Response metadata ===" >&2

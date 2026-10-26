@@ -15,6 +15,20 @@ USAGE_SHAPE='def count: type == "number" and . >= 0 and . == floor;
         and (.cached // 0) <= .input and (.reasoning // 0) <= .output)
     | {input, cached, output, reasoning}'
 
+# The usage of a chat-completions body: cached tokens part of prompt_tokens,
+# reasoning tokens part of completion_tokens, either split null when the vendor
+# leaves out its details object. Linted on its own, this file shows no reader
+# of either shape: the providers that pass them to emit_usage are out of view.
+# shellcheck disable=SC2034
+USAGE_CHAT='.usage | {input: .prompt_tokens, cached: .prompt_tokens_details.cached_tokens,
+    output: .completion_tokens, reasoning: .completion_tokens_details.reasoning_tokens}'
+
+# The usage of a Responses API body: cached tokens part of input_tokens,
+# reasoning tokens part of output_tokens, the details optional.
+# shellcheck disable=SC2034
+USAGE_RESPONSES='.usage | {input: .input_tokens, cached: .input_tokens_details.cached_tokens,
+    output: .output_tokens, reasoning: .output_tokens_details.reasoning_tokens}'
+
 # Usage: emit_usage JQ_ARG...
 #   The jq program and its input as jq takes them; the program maps the
 #   vendor's own fields into one record. No record, or more than one, writes

@@ -161,9 +161,7 @@ RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
     -H "Content-Type: application/json" \
     --data-binary @"$PAYLOAD_FILE")
 
-# Cached tokens are part of prompt_tokens, reasoning tokens part of completion_tokens.
-emit_usage '.usage | {input: .prompt_tokens, cached: .prompt_tokens_details.cached_tokens,
-    output: .completion_tokens, reasoning: .completion_tokens_details.reasoning_tokens}' <<<"$RESPONSE"
+emit_usage "$USAGE_CHAT" <<<"$RESPONSE"
 
 # The id the router actually served is reported in .model and the upstream
 # vendor in .provider, both of which can differ from the id we asked for. It is
