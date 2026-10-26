@@ -13,8 +13,8 @@
 #   DIR/digest.md, DIR/prompt.md      what left the machine; kept until the mod removes the dir
 #   DIR/seat.{out,err,events}         the seat's raw output
 #   DIR/seat.usage.json               the tokens the seat's call used, when it reported them (lib/usage.sh)
-#   DIR/codex-home/                   codex's CODEX_HOME: config.toml and a link to the user's auth.json;
-#                                     codex keeps its session and logs there too
+#   DIR/codex-home/                   codex's CODEX_HOME: config.toml and a link to the user's auth.json, when
+#                                     they have one; codex keeps its session and logs there too
 #   DIR/result.json                   {kind:note|none|quota|skipped|failed, bytes, seat?, model?, ms?, tag?, topic?, headline?, title?, points?, detail?,
 #                                      seats:[{seat,outcome,ms,detail?,usage?}]}; seats holds the seat's outcome, none
 #                                      when the run skipped or failed before asking it; quota is the seat out of
@@ -161,7 +161,8 @@ toml_line() {
 # hooks, AGENTS.md, skills, memories or MCP servers ride along: config.toml
 # holds the model and effort and switches the rest off. The model is the pick,
 # else the user's; the effort likewise; a key neither names is left out for
-# codex to choose. The login is linked in by link_login.
+# codex to choose. A file login is linked in by link_login; an API key
+# reaches codex through the environment.
 # Usage: codex_home USER_HOME
 codex_home() {
     local user_home="$1" home="${RUN_DIR}/codex-home" model effort
@@ -189,13 +190,14 @@ EOF
 }
 
 # Why the user's codex setup cannot be carried into the check's own home, on
-# one line; nothing when it can. Without a file login (the keyring store, or
-# not logged in) there is nothing to link to.
+# one line; nothing when it can. With neither a file login to link nor
+# CODEX_API_KEY or OPENAI_API_KEY set (the keyring store, or not logged in),
+# codex has nothing to sign in with there.
 # Usage: codex_home_refusal USER_HOME
 codex_home_refusal() {
     local user_home="$1" config="${1}/config.toml" provider profile
-    if [[ ! -f "${user_home}/auth.json" ]]; then
-        printf "codex: no auth.json in %s; the heads-up seat needs codex's file credential store" "$user_home"
+    if [[ ! -f "${user_home}/auth.json" && -z "${CODEX_API_KEY:-}${OPENAI_API_KEY:-}" ]]; then
+        printf "codex: no auth.json in %s and no CODEX_API_KEY or OPENAI_API_KEY; the heads-up seat needs a file login or an API key" "$user_home"
         return 0
     fi
     # A custom provider's table can carry headers, an env key the scrub drops
@@ -276,7 +278,7 @@ ask_codex() {
         return 0
     fi
     codex_home "$user_home"
-    if ! link_login "$user_home"; then
+    if [[ -f "${user_home}/auth.json" ]] && ! link_login "$user_home"; then
         OUTCOME=error DETAIL="codex: could not link ${user_home}/auth.json into ${RUN_DIR}/codex-home: $(error_excerpt "${RUN_DIR}/link.err")"
         return 0
     fi

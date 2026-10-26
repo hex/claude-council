@@ -445,15 +445,37 @@ ${TRIMMED_SECTIONS}" ]
     [ "$(codex_saw cwd)" = "$(cd "$RUN_DIR" && pwd -P)" ]
 }
 
-@test "heads-up: a user without auth.json is a failed check that names it, and codex is never run" {
-    export COUNCIL_FAKE_BEHAVIOR=heads-up-note
+@test "heads-up: a user with neither auth.json nor an API key is a failed check that names both, and codex is never run" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note CODEX_API_KEY= OPENAI_API_KEY=
     rm "$CODEX_HOME/auth.json"
     start_runner codex
     wait_done
     [ "$(result .kind)" = "failed" ]
     [ "$(result '.seats[0] | .seat + " " + .outcome')" = "codex error" ]
-    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME}; the heads-up seat needs codex's file credential store" ]
+    [ "$(result '.seats[0].detail')" = "codex: no auth.json in ${CODEX_HOME} and no CODEX_API_KEY or OPENAI_API_KEY; the heads-up seat needs a file login or an API key" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "heads-up: a user with CODEX_API_KEY and no auth.json runs codex in its own home with no login file" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note CODEX_API_KEY=sk-fake-codex OPENAI_API_KEY=
+    rm "$CODEX_HOME/auth.json"
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ "$(codex_saw home)" = "${RUN_DIR}/codex-home" ]
+    [ "$(codex_saw login)" = "none" ]
+    [ "$(codex_config)" = "$TRIMMED_SECTIONS" ]
+}
+
+@test "heads-up: a user with OPENAI_API_KEY and no auth.json runs codex in its own home with no login file" {
+    export COUNCIL_FAKE_BEHAVIOR=heads-up-note CODEX_API_KEY= OPENAI_API_KEY=sk-fake-openai
+    rm "$CODEX_HOME/auth.json"
+    start_runner codex
+    wait_done
+    [ "$(result .kind)" = "note" ]
+    [ "$(codex_saw home)" = "${RUN_DIR}/codex-home" ]
+    [ "$(codex_saw login)" = "none" ]
+    [ "$(codex_config)" = "$TRIMMED_SECTIONS" ]
 }
 
 @test "heads-up: a user config on another model provider is a failed check that names it, and codex is never run" {

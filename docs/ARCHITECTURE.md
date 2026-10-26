@@ -491,7 +491,7 @@ to warn, no seat asked, nothing leaves the machine) ->
 prompts/heads-up.md ->
 the one seat (codex: codex exec --output-schema from the run dir,
 under a CODEX_HOME there holding the model, the effort and a link
-to the user's auth.json, gated on turn.completed; others: providers/<seat>.sh, first-line NONE or
+to the user's auth.json when there is one, gated on turn.completed; others: providers/<seat>.sh, first-line NONE or
 NOTE:, TAG:, TOPIC:, TITLE: and POINT: lines) -> result.json
 {kind: note|none|skipped|failed, ...} (temp name, mv) -> .done.
 The pane polls .done, settles $.state (claude-council.headsUp),
