@@ -449,7 +449,8 @@ over the reported checks.
 `on 40 of 42` says how many reported checks gave that split; a vendor
 that leaves out a zero count is among those that did not. A check goes
 unreported when its seat prints no counts (grok-cli, kimi-cli, antigravity),
-timed out, or failed before it answered. The toast leaves the row out.
+left out an input or output count for part of the call (copilot-cli,
+opencode), timed out, or failed before it answered. The toast leaves the row out.
 
 When codex reports that its workspace is out of credits (or at its usage
 limit), the check pauses for the rest of the session instead of failing at
