@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/verbosity.sh"
 source "$SCRIPT_DIR/../lib/deadline.sh"
 source "$SCRIPT_DIR/../lib/cli-stderr.sh"
+source "$SCRIPT_DIR/../lib/seat-isolation.sh"
 
 verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
 
@@ -56,6 +57,12 @@ ARGS=(-p "$FULL_PROMPT" --output-format stream-json --agent-file "$AGENT_FILE")
 # -m only on an explicit override, so an unset KIMI_CLI_MODEL defers to the
 # CLI's own default_model in config.toml (mirrors codex.sh and grok-cli.sh).
 [[ -n "${KIMI_CLI_MODEL:-}" ]] && ARGS+=(-m "$KIMI_CLI_MODEL")
+# The agent file is the whole system prompt, so no AGENTS.md, skill or
+# directory listing reaches it; the scratch working directory
+# (lib/seat-isolation.sh) still keeps a project's .mcp.json servers from
+# starting. The hooks in the user's ~/.kimi-code/config.toml still run: that
+# file also holds the login, so the seat keeps the user's home.
+seat_enter_scratch || exit 1
 
 # Bound the CLI the way API providers are bounded by curl --max-time:
 # run_with_deadline ends it after COUNCIL_TIMEOUT seconds, surfacing as exit
