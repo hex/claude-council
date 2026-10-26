@@ -74,20 +74,16 @@ trap 'rm -rf "$ERR_TMP" ${SEAT_CODEX_HOME:+"$SEAT_CODEX_HOME"}' EXIT
 # no API key to carry over, such a seat runs under the user's own home, as it
 # did before seats were isolated, and says so on stderr, which the council
 # shows above the answer. Any other missing login is refused below.
-STORE=$(toml_value "${USER_CODEX_HOME}/config.toml" "" cli_auth_credentials_store)
-if [[ ! -f "${USER_CODEX_HOME}/auth.json" && -z "${CODEX_API_KEY:-}${OPENAI_API_KEY:-}" \
-      && ( "$STORE" == keyring || "$STORE" == auto ) ]]; then
+STORE=""
+if [[ ! -f "${USER_CODEX_HOME}/auth.json" && -z "${CODEX_API_KEY:-}${OPENAI_API_KEY:-}" ]]; then
+    STORE=$(toml_value "${USER_CODEX_HOME}/config.toml" "" cli_auth_credentials_store)
+fi
+if [[ "$STORE" == keyring || "$STORE" == auto ]]; then
     echo "note: codex: login is in the system keyring, which a separate CODEX_HOME cannot read; running under your own ${USER_CODEX_HOME} (personal config loads, more tokens). Set cli_auth_credentials_store = \"file\" and run codex login again to isolate this seat." >&2
 else
-    REFUSAL=$(codex_home_refusal "$USER_CODEX_HOME")
-    if [[ -n "$REFUSAL" ]]; then
-        echo "Error: $REFUSAL" >&2
-        exit 1
-    fi
     SEAT_CODEX_HOME=$(mktemp -d "${TMPDIR:-/tmp}/council-codex-home.XXXXXX")
-    codex_home "$SEAT_CODEX_HOME" "$USER_CODEX_HOME"
-    if [[ -f "${USER_CODEX_HOME}/auth.json" ]] && ! link_login "$SEAT_CODEX_HOME" "$USER_CODEX_HOME" "$ERR_TMP"; then
-        echo "Error: codex: could not link ${USER_CODEX_HOME}/auth.json into ${SEAT_CODEX_HOME}: $(stderr_excerpt "$ERR_TMP")" >&2
+    if ! REASON=$(codex_seat_home "$SEAT_CODEX_HOME" "$USER_CODEX_HOME" "$ERR_TMP" stderr_excerpt); then
+        echo "Error: $REASON" >&2
         exit 1
     fi
     export CODEX_HOME="$SEAT_CODEX_HOME"

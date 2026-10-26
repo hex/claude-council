@@ -193,15 +193,9 @@ codex_usage() {
 # A turn.failed message is the reason when codex gave one; its stderr can hold
 # unrelated noise (MCP servers it failed to reach), so it is only the fallback.
 ask_codex() {
-    local limit="$1" answer="${RUN_DIR}/seat.out" rc=0 user_home="${CODEX_HOME:-$HOME/.codex}"
-    DETAIL=$(codex_home_refusal "$user_home")
-    if [[ -n "$DETAIL" ]]; then
+    local limit="$1" answer="${RUN_DIR}/seat.out" rc=0
+    if ! DETAIL=$(codex_seat_home "${RUN_DIR}/codex-home" "${CODEX_HOME:-$HOME/.codex}" "${RUN_DIR}/link.err" error_excerpt "$PICK_EFFORT"); then
         OUTCOME=error
-        return 0
-    fi
-    codex_home "${RUN_DIR}/codex-home" "$user_home" "$PICK_EFFORT"
-    if [[ -f "${user_home}/auth.json" ]] && ! link_login "${RUN_DIR}/codex-home" "$user_home" "${RUN_DIR}/link.err"; then
-        OUTCOME=error DETAIL="codex: could not link ${user_home}/auth.json into ${RUN_DIR}/codex-home: $(error_excerpt "${RUN_DIR}/link.err")"
         return 0
     fi
     run_with_deadline "$limit" codex_call || rc=$?

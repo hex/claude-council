@@ -297,13 +297,18 @@ provider_script_path() {
     fi
 }
 
-# Reads one bare key from a TOML file — the root table when $2 is empty, the
-# named table otherwise. Deliberately minimal: enough for the three CLI configs
-# below, with no arrays, no multi-line values and no dotted keys. Returns
-# nothing when the file, table or key is absent, so callers fall back.
+# Reads bare keys from a TOML file — the root table when $2 is empty, the
+# named table otherwise — and prints each key's value on a line of its own, in
+# the order asked. Deliberately minimal: enough for the CLI configs below and
+# codex's seat home, with no arrays, no multi-line values and no dotted keys.
+# A key that is absent prints an empty line, and a missing file prints
+# nothing, so callers fall back.
+# Usage: toml_value FILE TABLE KEY...
 toml_value() {
-    local file="$1" table="$2" key="$3"
+    local file="$1" table="$2" keys
+    shift 2
     [[ -f "$file" ]] || return 0
+    printf -v keys '%s ' "$@"
     # Errors are swallowed and the read reports nothing, so a corrupt config
     # degrades to the "default" label. Neither half is optional: awk's
     # complaint would otherwise be stored as the provider's error text, and
@@ -313,7 +318,8 @@ toml_value() {
     # loosely on a leading "[" would take "[models] # mine" as a table named
     # "models] # mine" — losing the whole table — and would let any bracketed
     # line inside a multi-line value masquerade as a header.
-    awk -v want="$table" -v key="$key" -v q="'" '
+    awk -v want="$table" -v keys="$keys" -v q="'" '
+        BEGIN { n = split(keys, key, " ") }
         # Multi-line values are skipped wholesale. Their bodies are arbitrary
         # text, and a line reading "[models]" inside one is a valid table
         # header by shape alone — no pattern can tell it from the real thing,
@@ -331,14 +337,18 @@ toml_value() {
             }
             next
         }
-        cur == want && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
-            # Basic strings first, then TOML literal strings; both are valid
-            # for these keys and users write either.
-            if (match($0, /"[^"]*"/) || match($0, q "[^" q "]*" q)) {
-                print substr($0, RSTART + 1, RLENGTH - 2)
-                exit
+        cur == want {
+            for (i = 1; i <= n; i++) {
+                if ((i in value) || $0 !~ "^[[:space:]]*" key[i] "[[:space:]]*=") continue
+                # Basic strings first, then TOML literal strings; both are valid
+                # for these keys and users write either. The first one wins.
+                if (match($0, /"[^"]*"/) || match($0, q "[^" q "]*" q)) {
+                    value[i] = substr($0, RSTART + 1, RLENGTH - 2)
+                    if (++found == n) exit
+                }
             }
         }
+        END { for (i = 1; i <= n; i++) print value[i] }
     ' "$file" 2>/dev/null || true
 }
 
