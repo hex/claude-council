@@ -161,6 +161,31 @@ fixture. The heads-up animation uses a fake seat and a real Claude Code host.
 [Capture scripts and raw frames](assets/capture/README.md) record how to
 reproduce them.
 
+## What a CLI seat loads
+
+A CLI seat answers the question every other seat gets. Your own agent setup
+stays out of it. Every CLI seat runs from an empty directory,
+`$TMPDIR/claude-council-seat`, so no project's `CLAUDE.md`, `AGENTS.md`,
+rules, skills, hooks or MCP servers reach it. The seats below also run under
+a home of their own in `$TMPDIR/claude-council-seat-home`, which links only to
+the CLI's login. Both directories are yours alone (mode 700), and a seat
+refuses to start when one belongs to another user or is a symlink.
+
+| Seat | No longer loads | Still loads |
+|---|---|---|
+| `cursor-cli` | Skills and plugins from `~/.cursor`, `~/.claude`, `~/.codex`, `~/.grok` and `~/.agents`, Cursor and Claude hooks, `~/.cursor/mcp.json` | Team commands from your Cursor dashboard |
+| `grok-cli` | Claude plugins, `~/.agents` skills, grok's cross-session memory | Your `~/.grok` config and the hooks in `~/.grok/hooks`; no grok setting turns those off |
+| `antigravity` | On macOS: your `~/.gemini` rules, skills, MCP servers and saved conversations | On Linux: everything under `~/.gemini`, since nobody has confirmed where agy keeps its login there |
+| `opencode` | The `~/.claude` and `~/.agents` skills, agents and `CLAUDE.md` | Your login and session history in `~/.local/share/opencode` |
+| `codex` | Your plugins, hooks, skills, memories and MCP servers; it runs under a codex home of its own for each question, with your model, effort and a link to `auth.json` | Nothing else. Without `auth.json`, `CODEX_API_KEY` or `OPENAI_API_KEY`, the seat stops and says so |
+| `claude-cli` | The git status and commit instructions a repository adds | Admin policy and your organisation's instructions |
+| `kimi-cli`, `copilot-cli` | The project's files | Your home: kimi's hooks in `~/.kimi-code/config.toml`, copilot's skills in `~/.copilot` and `~/.agents` |
+
+Cursor and Antigravity keep the model you picked in their own config. The
+seat reads it from your real home and passes it on. On Windows the seats keep
+your home, because the native CLIs find it through `USERPROFILE`. See
+[seat isolation](docs/ARCHITECTURE.md) for each seat's details.
+
 ## Troubleshooting
 
 | Problem | Fix |
