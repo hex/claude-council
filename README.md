@@ -163,30 +163,30 @@ reproduce them.
 
 ## What a CLI seat loads
 
-A CLI seat answers the question every other seat gets. Your own agent setup
-stays out of it. Every CLI seat runs from an empty directory,
-`$TMPDIR/claude-council-seat`, so no project's `CLAUDE.md`, `AGENTS.md`,
-rules, skills, hooks or MCP servers reach it. The directory does not limit
-which files a seat can read: codex, for one, can read any file by its full
-path. The seats below also run under
-a home of their own in `$TMPDIR/claude-council-seat-home`, which links only to
-what the CLI needs to sign in and start. Both directories are yours alone (mode 700), and a seat
-refuses to start when one belongs to another user or is a symlink.
+Every CLI seat runs from an empty directory, `$TMPDIR/claude-council-seat`,
+and the `CLAUDE.md`, `AGENTS.md`, rules, skills, hooks and MCP servers of the
+project you ask from don't reach it. The directory doesn't limit what a seat
+can read: codex, for example, can still open any file by its full path.
+
+The seats below also run under a home of their own, in
+`$TMPDIR/claude-council-seat-home`. It links only to what the CLI needs to sign
+in and start. Both directories are mode 700, and a seat refuses to start when
+one of them belongs to another user or is a symlink.
 
 | Seat | No longer loads | Still loads |
 |---|---|---|
 | `cursor-cli` | Skills and plugins from `~/.cursor`, `~/.claude`, `~/.codex`, `~/.grok` and `~/.agents`, Cursor and Claude hooks, `~/.cursor/mcp.json` | Team commands from your Cursor dashboard (read from the CLI's bundle, not seen in a run) |
-| `grok-cli` | Claude plugins, `~/.agents` skills, grok's cross-session memory | Links to your login keychain (macOS) and `~/.docker`, for Docker Desktop's socket. Your `~/.grok` config and the hooks in `~/.grok/hooks`; no grok setting turns those off |
-| `antigravity` | On macOS: your `~/.gemini` rules, skills, MCP servers and saved conversations | On Linux: everything under `~/.gemini`, since nobody has confirmed where agy keeps its login there |
+| `grok-cli` | Claude plugins, `~/.agents` skills, grok's memory across sessions | Your `~/.grok` config and the hooks in `~/.grok/hooks`, since no grok setting turns them off. The seat home links your login keychain (macOS) and `~/.docker/run`, for Docker Desktop's socket |
+| `antigravity` | On macOS: your `~/.gemini` rules, skills, MCP servers and saved conversations | On Linux: everything under `~/.gemini`, because where agy keeps its login there is not confirmed |
 | `opencode` | The `~/.claude` and `~/.agents` skills, agents and `CLAUDE.md` | Your login and session history in `~/.local/share/opencode` |
-| `codex` | Your plugins, hooks, skills, memories and MCP servers; it runs under a codex home of its own for each question, with your model, effort and a link to `auth.json` | Nothing else. A login kept only in the system keyring cannot follow codex into that home, so the seat runs under your own codex home and the answer opens with a note saying so; set `cli_auth_credentials_store = "file"` and run `codex login` again to isolate it. With no login at all, the seat stops and says so |
+| `codex` | Your plugins, hooks, skills, memories and MCP servers. Each question gets its own codex home with your model, your effort and a link to `auth.json` | Nothing. codex can't read a login kept only in the system keyring from another home, so then the seat runs under your own codex home and the answer starts with a note. Set `cli_auth_credentials_store = "file"` and run `codex login` again to isolate it. With no login at all, the seat stops and says so |
 | `claude-cli` | The git status and commit instructions a repository adds | Admin policy and your organisation's instructions |
 | `kimi-cli`, `copilot-cli` | The project's files | Your home: kimi's hooks in `~/.kimi-code/config.toml`, copilot's skills in `~/.copilot` and `~/.agents` |
 
-Cursor and Antigravity keep the model you picked in their own config. The
-seat reads it from your real home and passes it on. On Windows the seats keep
-your home, because the native CLIs find it through `USERPROFILE`. See
-[seat isolation](docs/ARCHITECTURE.md) for each seat's details.
+Cursor and Antigravity keep the model you picked in their own config: the seat
+reads it from your real home and passes it on. On Windows the seats keep your
+home, because the native CLIs find it through `USERPROFILE`.
+[Seat isolation](docs/ARCHITECTURE.md) has each seat's details.
 
 ## Troubleshooting
 
