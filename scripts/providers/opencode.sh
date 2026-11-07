@@ -72,9 +72,11 @@ opencode_blind_env "$CONFIG_TMP"
 # carry --file contents or another seat's answer, so the seat gets nothing to
 # act on them with. Every permission is denied, which drops those tools from the
 # request, except read, which is set to ask: OpenCode's free models answer a
-# request without the read tool with "Free usage limit reached" (2.1.3), and a
-# headless run rejects every ask, so each read the model tries fails ("cannot
-# ask the user for permission") and it answers without it. OPENCODE_PERMISSION
+# request without the read tool with "Free usage limit reached" (2.1.3). A read
+# outside the working directory fails on the denied external_directory
+# permission, and one inside it on the ask, which a headless run rejects
+# ("cannot ask the user for permission"), so the model answers without it. The
+# run must not get --auto, which approves every ask. OPENCODE_PERMISSION
 # is ignored by 2.1.3, so the rules ride the inline config instead. A model that
 # asks for a denied tool anyway fails (Gemini answers UNEXPECTED_TOOL_CALL), and
 # that arrives as an error event, reported below.

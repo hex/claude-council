@@ -7,7 +7,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Fixed
-- The opencode seat answers on OpenCode's free models. Every free model answered the seat with `Free usage limit reached`, because the seat removed every tool from the request and the free models refuse one without the read tool. The seat now keeps `read` in the request, set to ask, and a headless run rejects every ask, so the model still can't read a file.
+- The opencode seat answers on OpenCode's free models. They answered the seat with `Free usage limit reached`, because the seat removed every tool from the request and the free models refuse one without the read tool. The seat now keeps `read` in the request, set to ask. A headless run rejects every ask, and the seat denies any read outside its empty working directory, so the model still can't read a file.
 
 ## 2026.10.14
 

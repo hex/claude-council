@@ -225,7 +225,10 @@ Two flavors share the interface:
   inline `OPENCODE_CONFIG_CONTENT` leaves the model no tool it can use: it
   denies every permission but `read`, which it sets to ask. OpenCode's free
   models answer a request without the read tool with `Free usage limit
-  reached`, and a headless run rejects every ask, so each read fails. The CLI saves every run in its session history and no flag stops
+  reached`. A read outside the working directory fails on the denied
+  `external_directory` permission, and one inside it on the ask, which a
+  headless run rejects; the seat never passes `--auto`, which would approve
+  it. The CLI saves every run in its session history and no flag stops
   that, so the exit trap deletes the run's session with `opencode session
   delete --standalone`; a delete that fails leaves it. A provider error exits 1 with stderr
   empty and arrives as an `error` event on stdout, which is what the seat
