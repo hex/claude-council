@@ -1583,6 +1583,41 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     [ "$stderr" = "Error: ${tmp}/claude-council-$(id -u)/seat is not empty; every CLI seat runs from it and it must stay empty, so something got in that should not have. Check what is there, remove it and retry." ]
 }
 
+@test "seat isolation: a TMPDIR inside a git repository is refused, naming the repository, and no CLI runs" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local repo kind
+    for kind in directory file; do
+        repo="$BATS_TEST_TMPDIR/repo-$kind"
+        mkdir -p "$repo/build/tmp"
+        if [[ "$kind" == directory ]]; then
+            mkdir "$repo/.git"
+        else
+            printf '%s\n' 'gitdir: /elsewhere/.git/worktrees/repo' > "$repo/.git"
+        fi
+        repo=$(cd "$repo" && pwd -P)
+        export TMPDIR="$repo/build/tmp"
+        run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
+        [ "$status" -eq 1 ]
+        [ "$stderr" = "Error: $TMPDIR/claude-council-$(id -u) is inside the git repository at $repo, and a CLI seat must run outside every repository: the CLI would take the whole repository as the seat's project. Set TMPDIR to a directory outside it and retry." ]
+        [ ! -e "$TMPDIR/claude-council-$(id -u)" ]
+    done
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "seat isolation: a TMPDIR that links into a git repository is refused like one inside it" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    skip_on_windows "Git Bash makes a symlink a copy"
+    local repo="$BATS_TEST_TMPDIR/repo"
+    mkdir -p "$repo/.git" "$repo/tmp"
+    repo=$(cd "$repo" && pwd -P)
+    ln -s "$repo/tmp" "$BATS_TEST_TMPDIR/tmp-link"
+    export TMPDIR="$BATS_TEST_TMPDIR/tmp-link"
+    run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+    [ "$status" -eq 1 ]
+    [ "$stderr" = "Error: $TMPDIR/claude-council-$(id -u) is inside the git repository at $repo, and a CLI seat must run outside every repository: the CLI would take the whole repository as the seat's project. Set TMPDIR to a directory outside it and retry." ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
 @test "seat isolation: a symlink planted where the scratch directory goes is refused, and no CLI runs" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     skip_on_windows
