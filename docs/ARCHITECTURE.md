@@ -222,8 +222,10 @@ Two flavors share the interface:
   `0` would win) and `OPENCODE_DISABLE_PROJECT_CONFIG=1` (the name the CLI's docs
   give) keep the working directory's `opencode.json` and `AGENTS.md`
   out, all set by `opencode_blind_env`, which the status probe shares, and an
-  inline `OPENCODE_CONFIG_CONTENT` that denies every permission sends the model
-  no tool. The CLI saves every run in its session history and no flag stops
+  inline `OPENCODE_CONFIG_CONTENT` leaves the model no tool it can use: it
+  denies every permission but `read`, which it sets to ask. OpenCode's free
+  models answer a request without the read tool with `Free usage limit
+  reached`, and a headless run rejects every ask, so each read fails. The CLI saves every run in its session history and no flag stops
   that, so the exit trap deletes the run's session with `opencode session
   delete --standalone`; a delete that fails leaves it. A provider error exits 1 with stderr
   empty and arrives as an `error` event on stdout, which is what the seat

@@ -1299,7 +1299,7 @@ opencode_run_call() {
     [ ! -e "$COUNCIL_USAGE_FILE" ]
 }
 
-@test "opencode.sh: runs a private server blind to the user's config, with every tool denied" {
+@test "opencode.sh: runs a private server blind to the user's config, with every tool denied but read, set to ask" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     unset OPENCODE_MODEL
     # A user config that names no model, so no -m joins the argument list.
@@ -1317,7 +1317,7 @@ opencode_run_call() {
     seen=$(tail -1 "$COUNCIL_FAKE_STATE_DIR/opencode-env.jsonl")
     [ "$(jq -r '.config_dir_empty' <<<"$seen")" = "true" ]
     [ "$(jq -r '.OPENCODE_DISABLE_PROJECT_CONFIG' <<<"$seen")" = "1" ]
-    [ "$(jq -r '.OPENCODE_CONFIG_CONTENT' <<<"$seen")" = '{"permission":{"*":"deny"}}' ]
+    [ "$(jq -r '.OPENCODE_CONFIG_CONTENT' <<<"$seen")" = '{"permission":{"*":"deny","read":"ask"}}' ]
     [ "$(jq -r 'has("OPENCODE_CONFIG")' <<<"$seen")" = "false" ]
     # The config dir goes with the run.
     [ ! -e "$(jq -r '.OPENCODE_CONFIG_DIR' <<<"$seen")" ]
