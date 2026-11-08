@@ -268,8 +268,8 @@ The shared mechanics live in `lib/seat-isolation.sh`:
   file by absolute path. A seat enters it with `seat_enter_scratch`, one line
   in each provider script. `seat_make_root`, which both `seat_enter_scratch`
   and `seat_home` call to create the per-user root, refuses a `TMPDIR` whose
-  physical path has a `.git` directory or file in it or any directory above
-  it, before it creates anything: opencode takes the whole repository as the
+  physical path has a `.git` directory or file in the root or any directory
+  above it, before it creates the root: opencode takes the whole repository as the
   seat's project there, so its `external_directory` deny no longer covers the
   repository, and a read permission the user saved for that project would
   lift the seat's `read` ask.

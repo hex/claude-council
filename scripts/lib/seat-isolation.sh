@@ -56,27 +56,38 @@ seat_root() {
     printf '%s\n' "${tmp%/}/claude-council-${UID}"
 }
 
-# Creates this user's seat root, refusing one inside a git work tree, found by
-# a .git directory, or a worktree's .git file, in the root's directory or any
-# directory above it. A CLI takes the whole repository as the seat's project
-# there: opencode then lets the model read anywhere in it under a permission
-# the user saved for that repository. Checked on the physical path, so a
-# TMPDIR that links into a repository counts, and before anything is created.
+# Creates this user's seat root and prints its absolute path, refusing one
+# inside a git work tree, found by a .git directory, or a worktree's .git file,
+# in the root or any directory above it. A CLI takes the whole repository as
+# the seat's project there: opencode then lets the model read anywhere in it
+# under a permission the user saved for that repository. The check runs before
+# the root is created and on the physical path, resolved from the deepest
+# directory that exists, so a TMPDIR that links into a repository counts even
+# when the directories below the link are still to be made.
 seat_make_root() {
-    local root parent dir
+    local root probe dir missing=""
     root=$(seat_root)
-    parent="${root%/*}"
-    parent="${parent:-/}"
-    dir=$(cd "$parent" 2>/dev/null && pwd -P) || dir="$parent"
+    [[ "$root" == /* || "$root" == [A-Za-z]:* ]] || root="${PWD}/${root}"
+    probe="$root"
+    while [[ ! -d "$probe" && "$probe" == */* ]]; do
+        missing="/${probe##*/}${missing}"
+        probe="${probe%/*}"
+    done
+    if ! dir=$(CDPATH='' cd -- "${probe:-/}" 2>/dev/null && pwd -P); then
+        echo "Error: could not resolve ${probe:-/} to check that ${root} is outside every git repository." >&2
+        return 1
+    fi
+    dir="${dir%/}${missing}"
     while :; do
         if [[ -e "${dir}/.git" ]]; then
             echo "Error: ${root} is inside the git repository at ${dir:-/}, and a CLI seat must run outside every repository: the CLI would take the whole repository as the seat's project. Set TMPDIR to a directory outside it and retry." >&2
             return 1
         fi
-        [[ -z "$dir" || "$dir" == / ]] && break
+        [[ "$dir" == */* ]] || break
         dir="${dir%/*}"
     done
-    seat_private_dir "$root"
+    seat_private_dir "$root" || return 1
+    printf '%s\n' "$root"
 }
 
 # The working directory every CLI seat runs in: empty and outside any
@@ -94,8 +105,7 @@ seat_make_root() {
 # same directory to the same mode, and none ever widens it while another runs.
 seat_enter_scratch() {
     local root dir entry
-    seat_make_root || return 1
-    root=$(seat_root)
+    root=$(seat_make_root) || return 1
     dir="${root}/seat"
     seat_owned_dir "$dir" || return 1
     if ! entry=$(find "$dir" -mindepth 1 -print -quit); then
@@ -147,8 +157,7 @@ seat_home() {
         printf '%s\n' "$HOME"
         return 0
     fi
-    seat_make_root || return 1
-    root=$(seat_root)
+    root=$(seat_make_root) || return 1
     homes="${root}/seat-home"
     home="${homes}/$2"
     shift 2

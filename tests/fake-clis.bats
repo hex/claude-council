@@ -1616,11 +1616,36 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     mkdir -p "$repo/.git" "$repo/tmp"
     repo=$(cd "$repo" && pwd -P)
     ln -s "$repo/tmp" "$BATS_TEST_TMPDIR/tmp-link"
-    export TMPDIR="$BATS_TEST_TMPDIR/tmp-link"
+    # The link itself, then a path below it whose directories do not exist yet.
+    for TMPDIR in "$BATS_TEST_TMPDIR/tmp-link" "$BATS_TEST_TMPDIR/tmp-link/new/tmp"; do
+        export TMPDIR
+        run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
+        [ "$status" -eq 1 ]
+        [ "$stderr" = "$(repository_refusal "$repo")" ]
+        [ ! -e "$(seat_root_dir)" ]
+    done
+    [ ! -e "$repo/tmp/new" ]
+    [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "seat isolation: a .git in the seat directories themselves is refused, naming them" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    mkdir -p "$(seat_root_dir)/.git"
+    local root
+    root=$(cd "$(seat_root_dir)" && pwd -P)
     run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
     [ "$status" -eq 1 ]
-    [ "$stderr" = "$(repository_refusal "$repo")" ]
+    [ "$stderr" = "$(repository_refusal "$root")" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
+}
+
+@test "seat isolation: a relative TMPDIR whose directories do not exist yet gets its seat directories" {
+    mkdir "$BATS_TEST_TMPDIR/work"
+    cd "$BATS_TEST_TMPDIR/work"
+    run --separate-stderr bash -c "source '${LIB_DIR}/seat-isolation.sh'; TMPDIR=new/tmp seat_make_root"
+    [ "$status" -eq 0 ]
+    [ "$stderr" = "" ]
+    [ -d "$BATS_TEST_TMPDIR/work/new/tmp/claude-council-$(id -u)" ]
 }
 
 @test "seat isolation: a symlink planted where the scratch directory goes is refused, and no CLI runs" {
