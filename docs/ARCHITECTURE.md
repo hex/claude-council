@@ -729,6 +729,7 @@ claude-council/
 ├── .github/
 │   ├── dependabot.yml           # Weekly bumps for the pinned GitHub Actions
 │   └── workflows/
+│       ├── announce-release.yml # On a published release, starts the private marketplace's sync so claude.ai picks it up
 │       ├── hol-plugin-scanner.yml  # HOL plugin scanner; fails on a high finding or a score under 80
 │       ├── stale.yml            # Closes idle issues and PRs
 │       └── tests.yml            # bats on ubuntu, macos and 4 windows shards; shellcheck blocks a merge
