@@ -1,0 +1,21 @@
+# ABOUTME: Tells the private marketplace about a published release, so claude.ai picks up the new version
+# ABOUTME: A release changes no catalog file, and only a push to that repo fires the webhook claude.ai listens on
+
+name: Announce the release to claude.ai
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Start the private marketplace's sync
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_SYNC_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh api -X POST repos/hex/claude-marketplace-private/actions/workflows/sync.yml/dispatches -f ref=main -f "inputs[release]=claude-council@${TAG}"
