@@ -68,13 +68,19 @@ trap remove_run EXIT
 # COUNCIL_PASS_ENV names any key it should keep.
 MODEL="$(get_model opencode)"
 opencode_blind_env "$CONFIG_TMP"
-# An inline config denying every permission: the CLI then sends the model no
-# tool at all, and the prompt can carry --file contents or another seat's
-# answer, so the seat gets no tool to act on them with. OPENCODE_PERMISSION is
-# ignored by 2.1.3, so the deny rides the inline config instead. A model that
-# asks for a tool anyway fails (Gemini answers UNEXPECTED_TOOL_CALL), and that
-# arrives as an error event, reported below.
-export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny"}}'
+# An inline config that leaves the model no tool it can use: the prompt can
+# carry --file contents or another seat's answer, so the seat gets nothing to
+# act on them with. Every permission is denied, which drops those tools from the
+# request, except read, which is set to ask: OpenCode's free models answer a
+# request without the read tool with "Free usage limit reached" (2.1.3). A read
+# outside the working directory fails on the denied external_directory
+# permission, and one inside it on the ask, which a headless run rejects
+# ("cannot ask the user for permission"), so the model answers without it. The
+# run must not get --auto, which approves every ask. OPENCODE_PERMISSION
+# is ignored by 2.1.3, so the rules ride the inline config instead. A model that
+# asks for a denied tool anyway fails (Gemini answers UNEXPECTED_TOOL_CALL), and
+# that arrives as an error event, reported below.
+export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny","read":"ask"}}'
 # The blind config still lets the CLI add ~/.claude and ~/.agents as config
 # roots, found through HOME, and with them the user's skills, agents and
 # CLAUDE.md; OPENCODE_DISABLE_CLAUDE_CODE drops the first and nothing drops

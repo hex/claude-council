@@ -4,6 +4,12 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Fixed
+- The opencode seat answers on OpenCode's free models. They answered the seat with `Free usage limit reached`, because the seat removed every tool from the request and the free models refuse one without the read tool. The seat now keeps `read` in the request, set to ask. A headless run rejects every ask, and the seat denies any read outside its empty working directory, so the model still can't read a file.
+- Every CLI seat refuses to start when `TMPDIR` sits inside a git repository, and names the repository. A CLI takes the whole repository as the seat's project there, so opencode would let the model read any file in it under a read permission you saved for that repository.
+
 ## 2026.10.14
 
 ### Added

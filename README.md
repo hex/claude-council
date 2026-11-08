@@ -173,7 +173,9 @@ The directory is read-only. That stops a seat writing a file there, but not a
 seat that changes the mode first. A seat also refuses to start when it finds
 anything in it, and names the path so you can look before you remove it. A file
 that lands while other seats are running can reach them; the next seat to start
-refuses.
+refuses. A seat also refuses to start when `TMPDIR` sits inside a git
+repository, and names it: a CLI would take the whole repository as the seat's
+project.
 
 The seats below also run under a home of their own, in
 `$TMPDIR/claude-council-<uid>/seat-home`. It links only to what the CLI needs to

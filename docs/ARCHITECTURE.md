@@ -222,8 +222,13 @@ Two flavors share the interface:
   `0` would win) and `OPENCODE_DISABLE_PROJECT_CONFIG=1` (the name the CLI's docs
   give) keep the working directory's `opencode.json` and `AGENTS.md`
   out, all set by `opencode_blind_env`, which the status probe shares, and an
-  inline `OPENCODE_CONFIG_CONTENT` that denies every permission sends the model
-  no tool. The CLI saves every run in its session history and no flag stops
+  inline `OPENCODE_CONFIG_CONTENT` leaves the model no tool it can use: it
+  denies every permission but `read`, which it sets to ask. OpenCode's free
+  models answer a request without the read tool with `Free usage limit
+  reached`. A read outside the working directory fails on the denied
+  `external_directory` permission, and one inside it on the ask, which a
+  headless run rejects; the seat never passes `--auto`, which would approve
+  it. The CLI saves every run in its session history and no flag stops
   that, so the exit trap deletes the run's session with `opencode session
   delete --standalone`; a delete that fails leaves it. A provider error exits 1 with stderr
   empty and arrives as an `error` event on stdout, which is what the seat
@@ -261,7 +266,12 @@ The shared mechanics live in `lib/seat-isolation.sh`:
   `CLAUDE.local.md`, `.cursor/mcp.json` and the like) from loading. It does not
   limit what a seat can read: codex's read-only sandbox, for one, reads any
   file by absolute path. A seat enters it with `seat_enter_scratch`, one line
-  in each provider script.
+  in each provider script. `seat_outside_repository` refuses a `TMPDIR` whose
+  physical path has a `.git` directory or file in it or any directory above
+  it, before it creates anything: opencode takes the whole repository as the
+  seat's project there, so its `external_directory` deny no longer covers the
+  repository, and a read permission the user saved for that project would
+  lift the seat's `read` ask. `seat_home` runs the same check.
 - That directory is mode 500 and must stay empty. Every seat of every run
   shares it, and antigravity keeps live file tools (its `--sandbox` limits only
   the terminal), so an `AGENTS.md`, `CLAUDE.md` or `.mcp.json` a prompt talked
