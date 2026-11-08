@@ -56,22 +56,27 @@ seat_root() {
     printf '%s\n' "${tmp%/}/claude-council-${UID}"
 }
 
-# Refuses a seat root inside a git work tree, found by a .git directory, or a
-# worktree's .git file, in TMPDIR or any directory above it. A CLI takes the
-# whole repository as the seat's project there: opencode then lets the model
-# read anywhere in it under a permission the user saved for that repository.
-# Checked on the physical path, so a TMPDIR that links into a repository counts.
-seat_outside_repository() {
-    local tmp="${TMPDIR:-/tmp}" dir
-    dir=$(cd "$tmp" 2>/dev/null && pwd -P) || dir="${tmp%/}"
+# Creates this user's seat root, refusing one inside a git work tree, found by
+# a .git directory, or a worktree's .git file, in the root's directory or any
+# directory above it. A CLI takes the whole repository as the seat's project
+# there: opencode then lets the model read anywhere in it under a permission
+# the user saved for that repository. Checked on the physical path, so a
+# TMPDIR that links into a repository counts, and before anything is created.
+seat_make_root() {
+    local root parent dir
+    root=$(seat_root)
+    parent="${root%/*}"
+    parent="${parent:-/}"
+    dir=$(cd "$parent" 2>/dev/null && pwd -P) || dir="$parent"
     while :; do
         if [[ -e "${dir}/.git" ]]; then
-            echo "Error: $(seat_root) is inside the git repository at ${dir:-/}, and a CLI seat must run outside every repository: the CLI would take the whole repository as the seat's project. Set TMPDIR to a directory outside it and retry." >&2
+            echo "Error: ${root} is inside the git repository at ${dir:-/}, and a CLI seat must run outside every repository: the CLI would take the whole repository as the seat's project. Set TMPDIR to a directory outside it and retry." >&2
             return 1
         fi
-        [[ -z "$dir" || "$dir" == / ]] && return 0
+        [[ -z "$dir" || "$dir" == / ]] && break
         dir="${dir%/*}"
     done
+    seat_private_dir "$root"
 }
 
 # The working directory every CLI seat runs in: empty and outside any
@@ -89,10 +94,9 @@ seat_outside_repository() {
 # same directory to the same mode, and none ever widens it while another runs.
 seat_enter_scratch() {
     local root dir entry
-    seat_outside_repository || return 1
+    seat_make_root || return 1
     root=$(seat_root)
     dir="${root}/seat"
-    seat_private_dir "$root" || return 1
     seat_owned_dir "$dir" || return 1
     if ! entry=$(find "$dir" -mindepth 1 -print -quit); then
         echo "Error: could not list ${dir} to check that it is empty." >&2
@@ -143,12 +147,11 @@ seat_home() {
         printf '%s\n' "$HOME"
         return 0
     fi
-    seat_outside_repository || return 1
+    seat_make_root || return 1
     root=$(seat_root)
     homes="${root}/seat-home"
     home="${homes}/$2"
     shift 2
-    seat_private_dir "$root" || return 1
     seat_private_dir "$homes" || return 1
     seat_private_dir "$home" || return 1
     while [[ $# -ge 2 ]]; do

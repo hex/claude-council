@@ -266,12 +266,13 @@ The shared mechanics live in `lib/seat-isolation.sh`:
   `CLAUDE.local.md`, `.cursor/mcp.json` and the like) from loading. It does not
   limit what a seat can read: codex's read-only sandbox, for one, reads any
   file by absolute path. A seat enters it with `seat_enter_scratch`, one line
-  in each provider script. `seat_outside_repository` refuses a `TMPDIR` whose
+  in each provider script. `seat_make_root`, which both `seat_enter_scratch`
+  and `seat_home` call to create the per-user root, refuses a `TMPDIR` whose
   physical path has a `.git` directory or file in it or any directory above
   it, before it creates anything: opencode takes the whole repository as the
   seat's project there, so its `external_directory` deny no longer covers the
   repository, and a read permission the user saved for that project would
-  lift the seat's `read` ask. `seat_home` runs the same check.
+  lift the seat's `read` ask.
 - That directory is mode 500 and must stay empty. Every seat of every run
   shares it, and antigravity keeps live file tools (its `--sandbox` limits only
   the terminal), so an `AGENTS.md`, `CLAUDE.md` or `.mcp.json` a prompt talked

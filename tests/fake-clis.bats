@@ -1484,6 +1484,11 @@ make_scratch_dir() {
     chmod 700 "$(seat_root_dir)/seat"
 }
 
+# The error a seat stops with when TMPDIR sits inside the repository at $1.
+repository_refusal() {
+    printf '%s\n' "Error: $(seat_root_dir) is inside the git repository at $1, and a CLI seat must run outside every repository: the CLI would take the whole repository as the seat's project. Set TMPDIR to a directory outside it and retry."
+}
+
 # A uname that names another platform, for the branches the host does not take.
 fake_platform() {
     printf '#!/bin/bash\necho %q\n' "$1" > "$FAKE_BIN_DIR/uname"
@@ -1598,8 +1603,8 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
         export TMPDIR="$repo/build/tmp"
         run --separate-stderr "${PROVIDERS_DIR_REAL}/opencode.sh" "test prompt"
         [ "$status" -eq 1 ]
-        [ "$stderr" = "Error: $TMPDIR/claude-council-$(id -u) is inside the git repository at $repo, and a CLI seat must run outside every repository: the CLI would take the whole repository as the seat's project. Set TMPDIR to a directory outside it and retry." ]
-        [ ! -e "$TMPDIR/claude-council-$(id -u)" ]
+        [ "$stderr" = "$(repository_refusal "$repo")" ]
+        [ ! -e "$(seat_root_dir)" ]
     done
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
@@ -1614,7 +1619,7 @@ CLI_SEATS="codex.sh:codex antigravity.sh:agy grok-cli.sh:grok kimi-cli.sh:kimi c
     export TMPDIR="$BATS_TEST_TMPDIR/tmp-link"
     run --separate-stderr "${PROVIDERS_DIR_REAL}/kimi-cli.sh" "test prompt"
     [ "$status" -eq 1 ]
-    [ "$stderr" = "Error: $TMPDIR/claude-council-$(id -u) is inside the git repository at $repo, and a CLI seat must run outside every repository: the CLI would take the whole repository as the seat's project. Set TMPDIR to a directory outside it and retry." ]
+    [ "$stderr" = "$(repository_refusal "$repo")" ]
     [ ! -f "$COUNCIL_FAKE_STATE_DIR/calls.jsonl" ]
 }
 
