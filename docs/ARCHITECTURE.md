@@ -234,8 +234,8 @@ Two flavors share the interface:
   empty and arrives as an `error` event on stdout, which is what the seat
   reports. Its scrubbed environment keeps `OPENCODE_MODEL`, `OPENCODE_CONFIG`
   and `OPENCODE_CONFIG_DIR`, which `get_model` reads, and drops every other
-  `OPENCODE_*` name and every vendor key, so it runs on the logins in
-  `auth.json` under `XDG_DATA_HOME`. `check-status.sh` probes `opencode auth
+  `OPENCODE_*` name and every vendor key, so it runs on the logins
+  `opencode auth login` stores under `XDG_DATA_HOME/opencode`. `check-status.sh` probes `opencode auth
   list --standalone` under that environment, the same empty config dir and
   project-disable pair, with `OPENCODE_CONFIG` and `OPENCODE_CONFIG_CONTENT`
   unset, and reads `No authenticated

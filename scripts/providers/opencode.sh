@@ -86,7 +86,7 @@ export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"deny","read":"ask"}}'
 # CLAUDE.md; OPENCODE_DISABLE_CLAUDE_CODE drops the first and nothing drops
 # the second. So the seat runs under an empty home of its own
 # (lib/seat-isolation.sh) with XDG_DATA_HOME on the real one, where the login
-# (opencode/auth.json) and the session history live: the session delete in
+# and the session history live (opencode/opencode.db): the session delete in
 # remove_run reads the same place. The scratch working directory keeps the
 # project out as well.
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"

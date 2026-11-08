@@ -400,7 +400,7 @@ cli_config_model() {
 # Hides the user's OpenCode setup from a run, for the seat and the status probe
 # alike, so this is the one place the two stay in step. An empty config dir
 # keeps their global config, plugins, MCP servers, agents and commands out; the
-# login in auth.json lives under XDG_DATA_HOME, so it stays. An OPENCODE_CONFIG
+# login lives under XDG_DATA_HOME, so it stays. An OPENCODE_CONFIG
 # file would load in full beside the empty dir, and an inline
 # OPENCODE_CONFIG_CONTENT can start MCP servers, so both go. Project config
 # (opencode.json, AGENTS.md) is off under both names: 2.1.3 reads
