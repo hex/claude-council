@@ -16,7 +16,7 @@ export type StoredKey = { variable: KeyVariable; value: string }
 
 export function storedKeys(options: Record<string, unknown>): StoredKey[] {
   return PROVIDER_KEYS.flatMap(({ option, variable }) => {
-    const value = options[option]
-    return typeof value === 'string' && value.trim() !== '' ? [{ variable, value }] : []
+    const value = typeof options[option] === 'string' ? options[option].trim() : ''
+    return value !== '' ? [{ variable, value }] : []
   })
 }

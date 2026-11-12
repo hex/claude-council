@@ -29,6 +29,10 @@ test('each stored key becomes its provider variable, in table order', () => {
   ])
 })
 
+test('a key pasted with surrounding whitespace is handed on without it', () => {
+  expect(storedKeys({ openai_api_key: '  example-openai\n' })).toEqual([{ variable: 'OPENAI_API_KEY', value: 'example-openai' }])
+})
+
 test('an empty, blank or non-string value is not a key, and other options are ignored', () => {
   expect(storedKeys({ gemini_api_key: '', openai_api_key: '   ', xai_api_key: true, kimi_api_key: 42, pane_host: 'tmux', heads_up: true })).toEqual([])
 })
