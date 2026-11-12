@@ -43,7 +43,8 @@
 #     tool list and panel pages come out byte for byte as with no key
 #  saved model choices
 #   - the state directory: under an absolute XDG_CONFIG_HOME, else under ~/.config
-#   - a malformed models file: runs use the defaults, and the settings text says the file was ignored
+#   - a malformed or partly invalid models file: runs use the defaults, and the council_ask
+#     answer, council_status and the settings text each say the file could not be read
 #   - a bad model id on save: refused naming the provider, the file left as it was
 #   - a model id with a `..`, `.` or empty part (gemini.sh puts the id in a URL path): refused,
 #     while real ids with slashes, colons and a leading tilde save
@@ -405,13 +406,17 @@ result_seats() {
     assert_eq "$(cat "$COUNCIL_FAKE_SENT_MODELS")" "$(env -u OPENROUTER_MODEL bash -c 'source "$1"; get_model openrouter' _ "${LIB_DIR}/providers.sh")"
 }
 
-@test "extension: a malformed models file is ignored for runs" {
+@test "extension: a malformed models file is ignored for runs, and the answer and the status say so" {
     install_fake_curl answer
-    export OPENROUTER_API_KEY="$SENTINEL_KEY"
-    save_choices '{"openrouter":"vendor/not-a-list"}'
-    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')"
+    export OPENROUTER_API_KEY="$SENTINEL_KEY" COUNCIL_FAKE_BEHAVIOR=valid
+    save_choices '{"openai":"gpt-test-1","openrouter":"vendor/not-a-list"}'
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')" "$(call 2 council_status)"
     assert_eq "$(result_error 1)" false
     assert_eq "$(cat "$COUNCIL_FAKE_SENT_MODELS")" "$(bash -c 'source "$1"; get_model openrouter' _ "${LIB_DIR}/providers.sh")"
+    local notice="The saved model choices in ${STATE_DIR}/models.json could not be read (OpenRouter: expected a list of model ids, got \"vendor/not-a-list\"), so every provider uses its default model."
+    assert_eq "$(result_text 1 | head -1)" "$notice"
+    [[ "$(result_text 1)" == *"answer from "* ]]
+    assert_eq "$(result_text 2 | tail -2 | head -1)" "$notice"
 }
 
 @test "extension: under Desktop's minimal PATH a CLI seat in ~/.local/bin is still found" {
@@ -605,7 +610,7 @@ Change them in the panel shown with this result; a change applies to the next co
     mcp '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"plain","version":"0"}}}' \
         "$(call 1 council_settings)"
     assert_eq "$(reply 0 | jq -r '.result.protocolVersion')" 2025-06-18
-    assert_eq "$(result_text 1 | sed -n '9,$p')" "The saved choices in ${STATE_DIR}/models.json were ignored because Gemini: [\"not\",\"a\",\"string\"] is not a model id; the defaults apply.
+    assert_eq "$(result_text 1 | sed -n '9,$p')" "The saved model choices in ${STATE_DIR}/models.json could not be read (Gemini: [\"not\",\"a\",\"string\"] is not a model id), so every provider uses its default model.
 This app does not show the settings panel, so these models cannot be changed here."
     assert_eq "$(result_text 1 | sed -n 2p)" "Gemini: $(script_default gemini) (default, no key)"
 }

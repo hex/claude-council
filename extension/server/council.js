@@ -120,23 +120,29 @@ function choicesFile() {
   return path.join(stateDirectory(), 'models.json')
 }
 
-// The saved choices, or why the file was ignored.
+// The saved choices, or the defaults with a notice saying why the file was
+// ignored: a run on defaults the user did not choose may cost more, so every
+// tool that reads the choices passes the notice on.
 function readChoices() {
+  const ignored = problem => ({
+    choices: noChoices(),
+    notice: `The saved model choices in ${choicesFile()} could not be read (${problem}), so every provider uses its default model.`,
+  })
   let text
   try {
     text = fs.readFileSync(choicesFile(), 'utf8')
   } catch (err) {
-    if (err.code === 'ENOENT') return { choices: noChoices() }
-    return { choices: noChoices(), problem: `could not read it (${err.code})` }
+    if (err.code === 'ENOENT') return { choices: noChoices(), notice: '' }
+    return ignored(`the file could not be opened: ${err.code}`)
   }
   let parsed
   try {
     parsed = JSON.parse(text)
   } catch {
-    return { choices: noChoices(), problem: 'it is not JSON' }
+    return ignored('the file is not JSON')
   }
   const result = parseChoices(parsed)
-  return result.problem ? { choices: noChoices(), problem: result.problem } : result
+  return result.problem ? ignored(result.problem) : { choices: result.choices, notice: '' }
 }
 
 // Written to a private temporary file and renamed over the old one, so a
@@ -210,6 +216,11 @@ function seatIndex(name) {
 
 function refused(text) {
   return { text, isError: true }
+}
+
+// The text with readChoices' notice, when there is one, as its first paragraph.
+function withNotice(notice, text) {
+  return notice ? `${notice}\n\n${text}` : text
 }
 
 // The council as one object over a plugin root and what readKeys made of
@@ -309,14 +320,15 @@ function openCouncil({ root, keys, tooShort }) {
   async function ask(input) {
     const request = await parseAsk(input)
     if (request.refusal) return refused(request.refusal)
-    const { choices } = readChoices()
+    const { choices, notice } = readChoices()
     const roster = choices.openrouter
     const pastRoster = (request.providers ?? []).find(name => seatIndex(name) > roster.length)
     if (pastRoster !== undefined) {
       const saved = roster.length === 0 ? 'no OpenRouter seats are saved' : `the saved OpenRouter roster has ${roster.length} model${roster.length === 1 ? '' : 's'}`
-      return refused(`${pastRoster} is not a seat: ${saved}. Choose OpenRouter models with the council_settings tool.`)
+      return refused(withNotice(notice, `${pastRoster} is not a seat: ${saved}. Choose OpenRouter models with the council_settings tool.`))
     }
-    return runAsk(request, choices)
+    const outcome = await runAsk(request, choices)
+    return { ...outcome, text: withNotice(notice, outcome.text) }
   }
 
   // Asks the seats through query-council.sh, whose JSON gives each seat's
@@ -344,16 +356,18 @@ function openCouncil({ root, keys, tooShort }) {
   }
 
   async function status() {
-    const result = await runScript('check-status.sh', [], { cwd: runDirectory(), env: scriptEnvironment(keys, readChoices().choices), timeoutMs: STATUS_TIMEOUT_MS })
+    const { choices, notice } = readChoices()
+    const result = await runScript('check-status.sh', [], { cwd: runDirectory(), env: scriptEnvironment(keys, choices), timeoutMs: STATUS_TIMEOUT_MS })
     const report = stripAnsi(`${result.stdout}\n${result.stderr}`).trim() || `The status check exited ${result.exitCode} with no output.`
     const short = tooShort.map(provider => `The ${provider.field} field holds under ${KEY_MIN_LENGTH} characters, too short to be a key, so ${provider.title} has no key.`)
     const where = 'In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure, not in exported variables. Models are chosen with the council_settings tool.'
-    return { text: [report, '', ...short, where].join('\n'), isError: result.exitCode !== 0 }
+    const notes = [...short, notice, where].filter(Boolean)
+    return { text: `${report}\n\n${notes.join('\n')}`, isError: result.exitCode !== 0 }
   }
 
   async function settingsText(drawsPanel) {
     const defaults = await defaultModels()
-    const { choices, problem } = readChoices()
+    const { choices, notice } = readChoices()
     const lines = PROVIDERS.map(provider => {
       const choice = choices[provider.name]
       const key = keys.has(provider.name) ? '' : ', no key'
@@ -362,7 +376,7 @@ function openCouncil({ root, keys, tooShort }) {
       return `${provider.title}: ${defaults[provider.name]} (default${key})`
     })
     const notes = []
-    if (problem) notes.push(`The saved choices in ${choicesFile()} were ignored because ${problem}; the defaults apply.`)
+    if (notice) notes.push(notice)
     notes.push(drawsPanel
       ? 'Change them in the panel shown with this result; a change applies to the next council question.'
       : 'This app does not show the settings panel, so these models cannot be changed here.')
@@ -371,7 +385,7 @@ function openCouncil({ root, keys, tooShort }) {
 
   async function panelData() {
     const defaults = await defaultModels()
-    const { choices, problem } = readChoices()
+    const { choices, notice } = readChoices()
     const rows = await Promise.all(PROVIDERS.map(async provider => {
       const row = {
         name: provider.name,
@@ -391,7 +405,7 @@ function openCouncil({ root, keys, tooShort }) {
       }
       return row
     }))
-    return { text: JSON.stringify({ providers: rows, rosterMax: ROSTER_MAX, problem: problem ? `The saved choices were ignored because ${problem}.` : '' }) }
+    return { text: JSON.stringify({ providers: rows, rosterMax: ROSTER_MAX, problem: notice }) }
   }
 
   function saveFromPanel(input) {
