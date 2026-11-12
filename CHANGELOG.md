@@ -7,7 +7,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Added
-- A Claude Desktop extension, `extension/`, that runs the council from an ordinary Desktop chat on macOS and Linux. Keys go in Desktop's settings form, one optional field per provider (Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter). Claude gets `council_ask`, `council_status` and `council_settings`; the last opens a panel in the chat that lists each keyed provider's models live and saves a choice per provider, or up to 12 OpenRouter models as seats. `bash extension/build.sh` packs it as `dist/council-<version>.mcpb`. No key appears in any reply or log line the server writes, or in its state directory once a run ends, and the server opens no listening socket. The README's "Claude Desktop" section covers installing it.
+- A Claude Desktop extension, `extension/`, that runs the council from an ordinary Desktop chat on macOS and Linux. Keys go in Desktop's settings form, one optional field per provider (Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter). Claude gets `council_ask`, `council_status` and `council_settings`; the last opens a panel in the chat that lists each keyed provider's models live and saves a choice per provider, or up to 12 OpenRouter models as seats. A second panel under each `council_ask` call shows every seat's answer, or its error, in a card of its own. `bash extension/build.sh` packs it as `dist/council-<version>.mcpb`. No key appears in any reply or log line the server writes, or in its state directory once a run ends, and the server opens no listening socket. The README's "Claude Desktop" section covers installing it.
 
 ## 2026.11.1
 

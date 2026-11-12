@@ -6,9 +6,9 @@
 # Runs the server from this checkout, or from an unpacked .mcpb when a directory
 # is given, with a state directory of its own so the user's saved choices are
 # untouched. Checks, for every provider with a key: its live model list loads,
-# a saved model choice reaches a real council run, and no key appears in any
-# reply or in any file the run leaves. Every reply is kept under the printed
-# directory for review.
+# a saved model choice reaches a real council run and the answers panel's
+# seats, and no key appears in any reply or in any file the run leaves. Every
+# reply is kept under the printed directory for review.
 
 set -euo pipefail
 
@@ -90,6 +90,11 @@ while IFS= read -r model; do
     [[ "$answer" == *"$model"* ]] || fail "the answer does not name the saved model $model"
 done < <(echo "$selections" | jq -r '.[] | if type == "array" then .[] else . end')
 if grep -i '^error' <<< "$answer"; then fail "a seat answered with an error"; fi
+seats=$(jq -c 'select(.id == 3) | .result.structuredContent.seats' "$OUT/ask.jsonl")
+[[ "$(jq -c '[.[].provider]' <<< "$seats")" == "$asked" ]] || fail "the panel's seats $(jq -c '[.[].provider]' <<< "$seats") are not the seats asked, $asked"
+while IFS= read -r failed; do
+    fail "the panel shows an error for $failed"
+done < <(jq -r '.[] | select(has("error")) | "\(.provider): \(.error)"' <<< "$seats")
 text_of ask 4 | tail -4
 
 for variable in "${keyed[@]}"; do

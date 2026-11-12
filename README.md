@@ -72,8 +72,9 @@ Linux only, because it starts the council's bash scripts.
    Every change saves at once and applies to the next question.
 5. Ask Claude to put a question to the council. Desktop asks you to approve
    the tool call, and that approval is the only check before the question
-   leaves your machine. Claude shows each seat's answer and then writes the
-   synthesis.
+   leaves your machine. A panel under the tool call shows each seat's answer,
+   or its error, in a card of its own, and Claude writes the synthesis below
+   it. Desktop waits for the whole run, from seconds to a few minutes.
 
 A question with no providers named goes to every provider with a key and to
 every CLI agent the scripts find (`codex`, `agy`, `grok`, `kimi`,

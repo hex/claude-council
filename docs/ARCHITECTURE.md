@@ -620,18 +620,29 @@ runs the same scripts the plugin does.
   each run's environment and runs the scripts. A run's environment is the
   server's own minus every key and model variable it inherited, plus the keys
   from the form and the saved models. Each script runs in a process group of
-  its own, so stopping it reaches the providers and CLIs under it. Asks run one
-  at a time, because `run-council.sh` names its transcript after the second it
-  started in. The defaults the panel shows come from `get_model` run under the
+  its own, so stopping it reaches the providers and CLIs under it. A question
+  runs `query-council.sh`, whose JSON keeps each seat's answer and error
+  apart, then pipes that JSON through `format-output.sh` for the text. Asks
+  run one at a time, as the plugin runs them; the scripts were not written for
+  two runs sharing one working directory and cache. The defaults the panel shows come from `get_model` run under the
   same environment as a run with nothing chosen, so the two cannot disagree.
 - `server/models.js` asks each keyed provider for its model list and parses the
   answer. The parsing is pure, so `tests/extension-models.bats` checks it
   against recorded and documented answers.
-- `server/panel.html` is the settings panel, an MCP App page served as
-  `ui://council/settings` with mimeType `text/html;profile=mcp-app`. Desktop
-  draws it for `council_settings`, whose `_meta.ui.resourceUri` names it. The
-  page has no network access: it loads and saves through the two app-only
-  tools, relayed by Desktop over `postMessage`.
+- `server/settings.html` and `server/answers.html` are the two panels, MCP
+  App pages served as `ui://council/settings` and `ui://council/answers` with
+  mimeType `text/html;profile=mcp-app`. Desktop draws one for each tool whose
+  `_meta.ui.resourceUri` names it: `council_settings` and `council_ask`. Each
+  page carries `@include` lines that `index.js` replaces with
+  `panel-style.css` (colour tokens and card layout), `panel-host.js` (the
+  `postMessage` connection, theme and size reports) and, for the answers
+  panel, `markdown.js`. The pages have no network access: the settings panel
+  loads and saves through the two app-only tools, and the answers panel draws
+  the `structuredContent` of the `council_ask` result Desktop hands it.
+- `server/markdown.js` reads the subset of markdown the answers panel draws
+  into plain data (blocks of styled runs). The page builds every DOM node from
+  that data with `textContent`, so a model's answer can never become markup.
+  `tests/extension-markdown.bats` runs it in node.
 
 Packed, the scripts sit under `plugin/` beside `server/`; in a checkout the
 server finds them one directory up. `extension/build.sh` builds the package.
@@ -792,10 +803,14 @@ claude-council/
 │   ├── build.sh                 # Packs HEAD into dist/council-<version>.mcpb with mcpb 2.1.2
 │   ├── manifest.json            # Name, key fields, tools, privacy policies, platforms
 │   └── server/
-│       ├── index.js             # stdio JSON-RPC, tool table, key redaction on every write
+│       ├── index.js             # stdio JSON-RPC, tool table, panels, key redaction on every write
 │       ├── council.js           # Providers, keys, saved choices, script runs
 │       ├── models.js            # Live model lists and their parsing
-│       └── panel.html           # Settings panel drawn in the chat (MCP App)
+│       ├── settings.html        # Settings panel drawn in the chat (MCP App)
+│       ├── answers.html         # One card per seat under a council_ask call (MCP App)
+│       ├── panel-style.css      # Colour tokens and card layout both panels inline
+│       ├── panel-host.js        # Both panels' connection to Desktop
+│       └── markdown.js          # The markdown subset the answers panel draws, as data
 ├── hooks/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/

@@ -622,13 +622,22 @@ built-in Node.js 18 or later and bash, so it supports macOS and Linux only.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `council_ask` | `question` (required), `providers` (list of names, such as `openai` or `openrouter-2`), `verbosity` (`brief`, `standard`, `detailed`) | Runs `run-council.sh --no-pane` and returns the transcript. Each seat's answer comes back as returned; the tool's description asks Claude to write the synthesis. |
+| `council_ask` | `question` (required), `providers` (list of names, such as `openai` or `openrouter-2`), `verbosity` (`brief`, `standard`, `detailed`) | Runs `query-council.sh --no-pane` and returns two things: the transcript `format-output.sh` renders from its JSON, as text, and `structuredContent` of the form `{question, seats: [{provider, model, answer}` or `{provider, model, error}]}`, in the order the seats ran. Desktop draws the seats in the answers panel; the text, which orders seats by name, is what the model and an app with no panel get. The tool's description asks Claude for the synthesis, and not to repeat the answers when the app draws the panel. |
 | `council_status` | none | Runs `check-status.sh`, then says that keys go in Desktop's settings, not in exported variables. |
 | `council_settings` | none | Lists each provider's model in plain text, and in Desktop opens the settings panel. |
 
 Two more tools, `council_models_data` and `council_models_save`, serve the
-panel. They carry `_meta.ui.visibility: ["app"]`, so Desktop hides them from
-the model.
+settings panel. They carry `_meta.ui.visibility: ["app"]`, so Desktop hides
+them from the model.
+
+**Panels.** Both are MCP App pages with mimeType `text/html;profile=mcp-app`.
+`council_settings` names `ui://council/settings`, and `council_ask` names
+`ui://council/answers`. The answers panel shows the question and "asking the
+council" until the result arrives, then one card per seat: the answer drawn
+from a subset of markdown (headings, paragraphs, lists, fenced code, rules,
+bold, italic and inline code; anything else shows as the lines the model
+wrote), or the error in the error colour. A cancelled call says so. Neither
+page uses `innerHTML` or loads anything from the network.
 
 **Keys.** Six optional, sensitive fields in Desktop's settings form reach the
 server as `GEMINI_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`,
@@ -665,7 +674,7 @@ server sets it back to 0700 when it finds it looser.
 | Path | Contents |
 |---|---|
 | `models.json` | The saved choices, mode 0600, replaced whole through a temporary file. The server ignores a file that fails to parse or holds a bad value: runs use the defaults, and `council_settings` and the panel say so. |
-| `runs/` | The working directory of every council run, mode 0700. The response cache lands in `runs/.claude/council-cache/`. The server reads each run's transcript and deletes it; a seat error that quotes a key sits in it only until then. |
+| `runs/` | The working directory of every council run, mode 0700. The response cache lands in `runs/.claude/council-cache/`. The server saves no transcript: the answers come back in the tool result. |
 
 **Limits and environment.** One `council_ask` runs at a time; a second waits
 for the first. The server stops a run after 10 minutes and a status check after
