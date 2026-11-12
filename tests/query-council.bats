@@ -858,14 +858,17 @@ env_reporting_provider() {
     run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY=example-key GEMINI_MODEL=gemini-x \
         OPENAI_API_KEY=other-key BWS_ACCESS_TOKEN=vault EXAMPLE_DB_PASSWORD=pw \
         CLAUDE_CODE_OAUTH_TOKEN=example-token \
+        CLAUDE_PLUGIN_ROOT=/tmp/example-root CLAUDE_PLUGIN_OPTION_OPENAI_API_KEY=stored-key \
+        CLAUDE_PLUGIN_OPTION_GEMINI_API_KEY=stored-key \
         "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=gemini "ping"
     [ "$status" -eq 0 ]
     local seen
     seen=" $(echo "$output" | jq -r '.round1.gemini.response') "
-    for name in GEMINI_API_KEY GEMINI_MODEL PATH HOME COUNCIL_SEAT; do
+    for name in GEMINI_API_KEY GEMINI_MODEL PATH HOME COUNCIL_SEAT CLAUDE_PLUGIN_ROOT; do
         [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
     done
-    for name in OPENAI_API_KEY BWS_ACCESS_TOKEN EXAMPLE_DB_PASSWORD CLAUDE_CODE_OAUTH_TOKEN PROVIDERS_DIR_REAL; do
+    for name in OPENAI_API_KEY BWS_ACCESS_TOKEN EXAMPLE_DB_PASSWORD CLAUDE_CODE_OAUTH_TOKEN PROVIDERS_DIR_REAL \
+        CLAUDE_PLUGIN_OPTION_OPENAI_API_KEY CLAUDE_PLUGIN_OPTION_GEMINI_API_KEY; do
         [[ "$seen" != *" $name "* ]] || { echo "leaked $name in:$seen"; return 1; }
     done
 }

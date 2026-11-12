@@ -121,7 +121,8 @@ provider_env_prefix() {
 # subshell that then execs the provider. A shell that loads every secret at
 # start would otherwise hand each provider, and each CLI agent, every other
 # vendor's key. What stays: the base a process needs, proxy and CA settings,
-# the Windows variables Git Bash's node CLIs need, COUNCIL_*, the provider's
+# the Windows variables Git Bash's node CLIs need, COUNCIL_*, CLAUDE_PLUGIN_*
+# apart from CLAUDE_PLUGIN_OPTION_*, the provider's
 # own vendor prefixes and exact names, and any names listed in COUNCIL_PASS_ENV
 # (comma-separated). Windows keeps some of these names in mixed case, so the
 # match ignores case.
@@ -171,6 +172,8 @@ provider_env_scrub() {
         keep=0
         case "$name" in
             PATH|HOME|USER|LOGNAME|SHELL|TMPDIR|TERM|COLORTERM|LANG|LANGUAGE|TZ|PWD|SHLVL|PROVIDERS_DIR) keep=1 ;;
+            # A hook gets every stored plugin option here, the API keys among them.
+            CLAUDE_PLUGIN_OPTION_*) ;;
             LC_*|XDG_*|COUNCIL_*|CLAUDE_PLUGIN_*) keep=1 ;;
             HTTP_PROXY|HTTPS_PROXY|NO_PROXY|ALL_PROXY|SSL_CERT_FILE|SSL_CERT_DIR|CURL_CA_BUNDLE|REQUESTS_CA_BUNDLE|NODE_EXTRA_CA_CERTS) keep=1 ;;
             SYSTEMROOT|WINDIR|SYSTEMDRIVE|APPDATA|LOCALAPPDATA|USERPROFILE|PROGRAMDATA|PROGRAMFILES|COMMONPROGRAMFILES|PATHEXT|COMSPEC|TEMP|TMP|MSYSTEM|HOMEDRIVE|HOMEPATH|USERNAME|USERDOMAIN|COMPUTERNAME|OS|PROCESSOR_ARCHITECTURE|NUMBER_OF_PROCESSORS) keep=1 ;;
