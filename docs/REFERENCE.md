@@ -610,3 +610,75 @@ bash scripts/query-council.sh --list-default-models
 ```
 
 `model_fallback` names the preferred model when it was unavailable and a fallback model answered. A CLI seat answered by its API sibling also carries `fallback` (the sibling's name) and `fallback_reason` (the CLI's error text, or that the image went to a vision model).
+
+## Claude Desktop extension
+
+`extension/` holds a Claude Desktop extension (a `.mcpb` package with a local
+stdio MCP server) that runs the same scripts from a Desktop chat. The
+[README](../README.md#claude-desktop) covers installing it. It needs Desktop's
+built-in Node.js 18 or later and bash, so it supports macOS and Linux only.
+
+**Tools.**
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `council_ask` | `question` (required), `providers` (list of names, such as `openai` or `openrouter-2`), `verbosity` (`brief`, `standard`, `detailed`) | Runs `run-council.sh --no-pane` and returns the transcript. Each seat's answer comes back as returned; the tool's description asks Claude to write the synthesis. |
+| `council_status` | none | Runs `check-status.sh`, then says that keys go in Desktop's settings, not in exported variables. |
+| `council_settings` | none | Lists each provider's model in plain text, and in Desktop opens the settings panel. |
+
+Two more tools, `council_models_data` and `council_models_save`, serve the
+panel. They carry `_meta.ui.visibility: ["app"]`, so Desktop hides them from
+the model.
+
+**Keys.** Six optional, sensitive fields in Desktop's settings form reach the
+server as `GEMINI_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`,
+`PERPLEXITY_API_KEY`, `KIMI_API_KEY` and `OPENROUTER_API_KEY`. A field left
+empty arrives as an empty string or as its unsubstituted `${user_config.x}`
+placeholder, and both count as no key. The server drops `GROK_API_KEY` and
+`MOONSHOT_API_KEY` from the environment Desktop starts it with, so keys come
+only from the form. Every reply and log line the server writes has each key value
+replaced by `[key removed]`, which covers a provider error that quotes the key.
+
+**Models.** The panel lists each keyed provider's models live when it opens:
+Gemini (models that support `generateContent`), OpenAI, xAI (plus
+`grok-latest`, which xAI serves but does not list), Kimi and OpenRouter from
+their list endpoints, each with that provider's key, and Perplexity's presets
+`fast`, `low`, `medium`, `high` and `xhigh`, with no request. A provider with no
+key is never contacted. A list request gives up after 15 seconds. The lists
+include models a council seat cannot use, such as speech, image and embedding
+models. "Default" means the model `get_model` resolves with nothing chosen.
+
+The saved choices set `GEMINI_MODEL`, `OPENAI_MODEL`, `GROK_MODEL`,
+`PERPLEXITY_MODEL`, `KIMI_MODEL` and `OPENROUTER_MODELS` for each run. The
+server drops those variables, `OPENROUTER_MODEL` and every
+`OPENROUTER_<N>_MODEL` from the environment Desktop starts it with. A model id must match
+`^~?[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`, on save and on read. OpenRouter takes
+at most 12 models, one seat each, named `openrouter-1` to `openrouter-12`;
+`council_ask` refuses a seat number past the saved roster before running
+anything.
+
+**Files.** The extension keeps its state in
+`$XDG_CONFIG_HOME/council-extension`, or `~/.config/council-extension` when
+`XDG_CONFIG_HOME` is unset or relative. The directory is mode 0700, and the
+server sets it back to 0700 when it finds it looser.
+
+| Path | Contents |
+|---|---|
+| `models.json` | The saved choices, mode 0600, replaced whole through a temporary file. The server ignores a file that fails to parse or holds a bad value: runs use the defaults, and `council_settings` and the panel say so. |
+| `runs/` | The working directory of every council run, mode 0700. The response cache lands in `runs/.claude/council-cache/`. The server reads each run's transcript and deletes it; a seat error that quotes a key sits in it only until then. |
+
+**Limits and environment.** One `council_ask` runs at a time; a second waits
+for the first. The server stops a run after 10 minutes and a status check after
+3. Each run starts in a process group of its own, and the server stops the
+whole group when Desktop closes its input. Desktop starts the server with a
+minimal `PATH`, so the server appends `~/.local/bin`, `~/bin`,
+`/opt/homebrew/bin` and `/usr/local/bin`, in that order, after the `PATH`
+Desktop gives it. The server never opens a listening socket.
+
+**Building.** `bash extension/build.sh` packs the committed tree (`git archive
+HEAD`) and stops when a packed file has uncommitted changes. It stages
+`scripts/` (without `scripts/dev/`), `config/`, `prompts/` and `schemas/` under
+`plugin/`, adds `extension/manifest.json`, `extension/server/` and the icon,
+sets the manifest's version to `.claude-plugin/plugin.json`'s, runs `mcpb
+validate`, and packs with `@anthropic-ai/mcpb` 2.1.2 into
+`dist/council-<version>.mcpb`.

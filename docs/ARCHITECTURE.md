@@ -604,6 +604,38 @@ Loop guards: stop_hook_active check + per-session block
 counter capped at max_iterations. Reviewer failure => allow.
 ```
 
+### Claude Desktop extension (`extension/`)
+
+A Claude Desktop chat has no shell and no keys, so the plugin's commands and
+skills cannot run there. The extension is a local stdio MCP server that Desktop
+starts with its built-in Node.js, plain CommonJS with no dependencies, which
+runs the same scripts the plugin does.
+
+- `server/index.js` reads newline-delimited JSON-RPC from stdin and answers on
+  stdout. Every message it writes, and every log line, passes through one
+  function that replaces each key value with `[key removed]`. It exits when
+  stdin closes, stopping any council run first.
+- `server/council.js` holds the provider table (form field, model variable,
+  title), reads the keys once at start, keeps the saved model choices, builds
+  each run's environment and runs the scripts. A run's environment is the
+  server's own minus every key and model variable it inherited, plus the keys
+  from the form and the saved models. Each script runs in a process group of
+  its own, so stopping it reaches the providers and CLIs under it. Asks run one
+  at a time, because `run-council.sh` names its transcript after the second it
+  started in. The defaults the panel shows come from `get_model` run under the
+  same environment as a run with nothing chosen, so the two cannot disagree.
+- `server/models.js` asks each keyed provider for its model list and parses the
+  answer. The parsing is pure, so `tests/extension-models.bats` checks it
+  against recorded and documented answers.
+- `server/panel.html` is the settings panel, an MCP App page served as
+  `ui://council/settings` with mimeType `text/html;profile=mcp-app`. Desktop
+  draws it for `council_settings`, whose `_meta.ui.resourceUri` names it. The
+  page has no network access: it loads and saves through the two app-only
+  tools, relayed by Desktop over `postMessage`.
+
+Packed, the scripts sit under `plugin/` beside `server/`; in a checkout the
+server finds them one directory up. `extension/build.sh` builds the package.
+
 ## Data Flow
 
 ### Standard Query
@@ -756,6 +788,14 @@ claude-council/
 ├── evals/                       # `claude plugin eval` cases: prompt.md + graders/ per case
 │   ├── .gitignore               # Keeps eval run output (results/) out of the repo
 │   └── _shared/                 # Grader text the cases link to, file by file
+├── extension/                   # Claude Desktop extension (.mcpb), macOS and Linux
+│   ├── build.sh                 # Packs HEAD into dist/council-<version>.mcpb with mcpb 2.1.2
+│   ├── manifest.json            # Name, key fields, tools, privacy policies, platforms
+│   └── server/
+│       ├── index.js             # stdio JSON-RPC, tool table, key redaction on every write
+│       ├── council.js           # Providers, keys, saved choices, script runs
+│       ├── models.js            # Live model lists and their parsing
+│       └── panel.html           # Settings panel drawn in the chat (MCP App)
 ├── hooks/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/

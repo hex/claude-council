@@ -48,6 +48,40 @@ agreement, disagreements, and recommendation. Agreement is not verification:
 the models share your description and its assumptions.
 [The synthesis names the premise that could change the answer](docs/REFERENCE.md#reading-the-synthesis).
 
+## Claude Desktop
+
+The plugin needs Claude Code. For an ordinary Claude Desktop chat there is a
+Desktop extension, `council-<version>.mcpb`, that gives Claude three tools:
+`council_ask`, `council_status` and `council_settings`. It runs on macOS and
+Linux only, because it starts the council's bash scripts.
+
+1. Build the package with `bash extension/build.sh` in a clean checkout. It
+   needs `npm` and writes `dist/council-<version>.mcpb`.
+2. Double-click the file. Desktop warns that the extension gets access to
+   everything on your computer and is not verified by Anthropic. Both hold for
+   any extension installed from a file: its server runs as you, with your files
+   and network, and Anthropic has not reviewed it. Install only a package you
+   built or trust.
+3. In Settings, Extensions, Claude Council, Configure, paste a key for each
+   provider you want: Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter. An
+   empty field leaves that provider out. Desktop stores the keys; each one
+   goes only to its own provider.
+4. In a chat, ask Claude to open the council settings. A panel in the chat
+   lists each keyed provider's models, fetched live from that provider. Pick
+   one per provider, or switch on up to 12 OpenRouter models, one seat each.
+   Every change saves at once and applies to the next question.
+5. Ask Claude to put a question to the council. Desktop asks you to approve
+   the tool call, and that approval is the only check before the question
+   leaves your machine. Claude shows each seat's answer and then writes the
+   synthesis.
+
+A question with no providers named goes to every provider with a key and to
+every CLI agent the scripts find (`codex`, `agy`, `grok`, `kimi`,
+`cursor-agent`, `ollama`) in your PATH, `~/.local/bin`, `~/bin`,
+`/opt/homebrew/bin` or `/usr/local/bin`. The
+[reference](docs/REFERENCE.md#claude-desktop-extension) lists the files it
+keeps and its limits.
+
 ## Features
 
 | Capability | Guide |
@@ -67,6 +101,7 @@ the models share your description and its assumptions.
 | Watch answers arrive and retry failed seats | [The pane](#the-pane) |
 | Get a note from one seat while Claude works | [Heads-up side-check](#heads-up-side-check) |
 | Have a second model review the diff before Claude stops | [Stop-gate review](docs/USAGE.md#stop-gate-review-opt-in-off-by-default) |
+| Ask the council from a Claude Desktop chat | [Claude Desktop](#claude-desktop) |
 | Call the scripts without Claude Code | [Direct script usage](docs/REFERENCE.md#direct-script-usage) |
 
 The [reference](docs/REFERENCE.md) lists every flag, variable, model default,
