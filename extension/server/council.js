@@ -169,13 +169,26 @@ function scriptEnvironment(keys, choices) {
 
 const stripAnsi = text => text.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
 
+// The most of one seat's answer or error the panel is given to draw. The
+// model always gets the whole text; this bounds what the page has to lay out.
+const PANEL_SEAT_CHARS = 100000
+
+// The text as the panel gets it under `field`, with `shortenedFrom` set to
+// its full length when it was cut.
+function forPanel(field, text) {
+  if (text.length <= PANEL_SEAT_CHARS) return { [field]: text }
+  // Never between the two halves of a surrogate pair.
+  const end = /[\uD800-\uDBFF]/.test(text[PANEL_SEAT_CHARS - 1]) ? PANEL_SEAT_CHARS - 1 : PANEL_SEAT_CHARS
+  return { [field]: text.slice(0, end), shortenedFrom: text.length }
+}
+
 // Each seat's answer or error from query-council.sh's JSON, in the order the
 // council ran them, for the answers panel.
 function seatsOf(answers) {
   return Object.entries(answers.round1).map(([provider, seat]) => {
     const model = stripAnsi(String(seat.model))
-    if (seat.status === 'success') return { provider, model, answer: stripAnsi(String(seat.response)) }
-    if (seat.status === 'error') return { provider, model, error: stripAnsi(String(seat.error)) }
+    if (seat.status === 'success') return { provider, model, ...forPanel('answer', stripAnsi(String(seat.response))) }
+    if (seat.status === 'error') return { provider, model, ...forPanel('error', stripAnsi(String(seat.error))) }
     return { provider, model, error: `the seat returned status ${JSON.stringify(seat.status)} with no answer` }
   })
 }

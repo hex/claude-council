@@ -252,6 +252,8 @@ if [[ "$COUNCIL_FAKE_CURL_MODE" == echo ]]; then
     # Long enough that two runs asked together are both in flight.
     sleep 2
     jq -c '{choices: [{message: {content: ("asked: " + .messages[-1].content)}}]}' "$payload" > "$out"
+elif [[ "$COUNCIL_FAKE_CURL_MODE" == long ]]; then
+    jq -cn '{choices: [{message: {content: ("start " + ("x" * 150000) + " end")}}]}' > "$out"
 elif [[ "$COUNCIL_FAKE_CURL_MODE" == colour ]]; then
     jq -cn --arg m "$model" '{choices: [{message: {content: ("\u001b[1manswer\u001b[0m from " + $m)}}]}' > "$out"
 else
@@ -314,6 +316,16 @@ result_seats() {
     assert_eq "$(result_seats 1 | jq -c '[.seats[] | {provider, answer, error: (.error != null)}]')" \
         '[{"provider":"codex","answer":null,"error":true},{"provider":"openrouter","answer":"answer from anthropic/claude-fable-5.1","error":false}]'
     assert_eq "$(result_seats 1 | jq -r '.seats[0].error')" 'Error from codex CLI: Error: fake provider failure'
+}
+
+@test "extension: a long answer reaches the model whole, and the panel its first 100000 characters, marked shortened" {
+    install_fake_curl long
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')"
+    assert_eq "$(result_error 1)" false
+    [[ "$(result_text 1)" == *"start xxx"*"xxx end"* ]]
+    assert_eq "$(result_seats 1 | jq -c '.seats[0] | {length: (.answer | length), shortenedFrom, tail: .answer[-3:]}')" \
+        '{"length":100000,"shortenedFrom":150010,"tail":"xxx"}'
 }
 
 @test "extension: colour codes in a seat's answer or error reach neither the text nor the seats" {
