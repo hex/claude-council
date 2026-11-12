@@ -5,3 +5,6 @@ retry.bats
 roles.bats
 shards.bats
 tokens.bats
+extension.bats
+extension-build.bats
+extension-models.bats
