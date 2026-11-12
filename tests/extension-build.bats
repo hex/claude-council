@@ -24,7 +24,7 @@ setup() {
     esac
     command -v npx >/dev/null || skip "npx is not installed, so the mcpb packer cannot run"
     command -v unzip >/dev/null || skip "unzip is not installed"
-    timeout 60 npm view @anthropic-ai/mcpb@2.1.2 version >/dev/null 2>&1 \
+    npm view @anthropic-ai/mcpb@2.1.2 version --fetch-timeout=30000 --fetch-retries=1 >/dev/null 2>&1 \
         || skip "the npm registry is unreachable, so the mcpb packer cannot be fetched"
     mkdir -p "$TEST_TMP_DIR" "$TEST_CACHE_DIR"
     # The build packs HEAD, so it runs in a clone of the committed tree.
