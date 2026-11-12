@@ -211,7 +211,7 @@ if [[ "$LIST_AVAILABLE" == true ]]; then
     read -ra DISCOVERED <<< "$(discover_providers)"
     if [[ ${#DISCOVERED[@]} -eq 0 ]]; then
         echo "No providers configured."
-        echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY or OPENROUTER_API_KEY) in your shell or with /plugin configure claude-council"
+        echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY or OPENROUTER_API_KEY) in your shell or with /plugin configure claude-council in the Claude Code CLI"
         echo "  or install a CLI agent (codex, agy, grok, kimi) or ollama."
         exit 0
     fi
@@ -315,7 +315,7 @@ if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
         exit 1
     fi
     echo "Error: No providers configured." >&2
-    echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY or OPENROUTER_API_KEY) in your shell or with /plugin configure claude-council" >&2
+    echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY or OPENROUTER_API_KEY) in your shell or with /plugin configure claude-council in the Claude Code CLI" >&2
     echo "  or install a CLI agent (codex, agy, grok, kimi) or ollama." >&2
     echo "  Or run '/claude-council:ask --local' for a local Claude-only council (same-model, no API keys)." >&2
     exit 1

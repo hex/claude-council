@@ -933,7 +933,7 @@ $off" ]
         bash '${SCRIPTS_DIR}/query-council.sh' --no-cache --no-pane --no-auto-context 'ping'
     "
     [ "$status" -eq 1 ]
-    [[ "$stderr" == *$'\n'"  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY or OPENROUTER_API_KEY) in your shell or with /plugin configure claude-council"$'\n'* ]]
+    [[ "$stderr" == *$'\n'"  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY or OPENROUTER_API_KEY) in your shell or with /plugin configure claude-council in the Claude Code CLI"$'\n'* ]]
 }
 
 @test "antigravity.sh: a malformed COUNCIL_ARGV_LIMIT still spills rather than silently skipping" {

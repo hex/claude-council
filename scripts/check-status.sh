@@ -353,14 +353,14 @@ check_cli_provider() {
 # Usage: remediation_for <provider_id> <state>
 remediation_for() {
     case "$1:$2" in
-        gemini:no_key)        echo "export GEMINI_API_KEY=<key> or /plugin configure claude-council" ;;
-        openai:no_key)        echo "export OPENAI_API_KEY=<key> or /plugin configure claude-council" ;;
-        grok:no_key)          echo "export XAI_API_KEY=<key> or /plugin configure claude-council" ;;
-        perplexity:no_key)    echo "export PERPLEXITY_API_KEY=<key> or /plugin configure claude-council" ;;
-        kimi:no_key)          echo "export KIMI_API_KEY=<key> or /plugin configure claude-council" ;;
+        gemini:no_key)        echo "export GEMINI_API_KEY=<key> or /plugin configure claude-council in the Claude Code CLI" ;;
+        openai:no_key)        echo "export OPENAI_API_KEY=<key> or /plugin configure claude-council in the Claude Code CLI" ;;
+        grok:no_key)          echo "export XAI_API_KEY=<key> or /plugin configure claude-council in the Claude Code CLI" ;;
+        perplexity:no_key)    echo "export PERPLEXITY_API_KEY=<key> or /plugin configure claude-council in the Claude Code CLI" ;;
+        kimi:no_key)          echo "export KIMI_API_KEY=<key> or /plugin configure claude-council in the Claude Code CLI" ;;
         # A roster names every row openrouter-N, and one key serves all of them,
         # so the hint must not vanish exactly when the feature is configured.
-        openrouter:no_key|openrouter-*:no_key) echo "export OPENROUTER_API_KEY=<key> or /plugin configure claude-council" ;;
+        openrouter:no_key|openrouter-*:no_key) echo "export OPENROUTER_API_KEY=<key> or /plugin configure claude-council in the Claude Code CLI" ;;
         codex:no_binary)      echo "npm install -g @openai/codex" ;;
         codex:unauthed)       echo "codex login" ;;
         antigravity:no_binary) echo "install the Antigravity CLI (agy)" ;;
