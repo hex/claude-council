@@ -389,10 +389,16 @@ function setKey($: EngineInterface, variable: KeyVariable, value: string): Retur
 
 // Set in this process, so every Bash command, hook and script started after
 // inherits the stored key in place of the shell's; nothing is written to disk.
+// A key that fails is logged and the rest still go on; the engine's text is
+// not known to leave the value out, so the value is cut from it.
 async function applyStoredKeys($: EngineInterface, keys: readonly StoredKey[]): Promise<void> {
   for (const { variable, value } of keys) {
-    const { deny } = await setKey($, variable, value)
-    if (deny) $.ui.log(`stored ${variable} not applied: ${deny}`)
+    try {
+      const { deny } = await setKey($, variable, value)
+      if (deny) $.ui.log(`stored ${variable} not applied: ${deny.replaceAll(value, '<key>')}`)
+    } catch (error) {
+      $.ui.log(`stored ${variable} not applied: ${String(error).replaceAll(value, '<key>')}`)
+    }
   }
 }
 
