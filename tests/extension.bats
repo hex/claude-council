@@ -26,6 +26,10 @@
 #     shared parts inlined; an unknown uri is an error naming it
 #   - council_ask's description: where the app draws the answers panel it asks for the synthesis
 #     without repeating the answers, elsewhere it asks for the answers to be shown first
+#   - council_ask's description and question field: the user's question as they asked it, never
+#     "self-contained", which a model reads as leave to rewrite it
+#   - council_ask's description (trial variant A): unless the user chose, list the seats with
+#     council_seats and ask which seats and verbosity in one message, all at standard by default
 #  council_ask
 #   - an empty or blank question, an unknown or malformed provider, a bad verbosity, an unknown
 #     argument: refused with a sentence, nothing run
@@ -63,7 +67,10 @@
 #   - a models file that is a symbolic link: not read, and the answer says the defaults ran
 #  settings and status
 #   - council_status: the scripts' report, then where keys go in Desktop
-#   - council_settings: each provider's model in plain text, defaults as the scripts resolve them
+#   - council_settings: each provider's model in plain text, defaults as the scripts resolve them,
+#     every line saying "key set" or "no key"
+#   - council_seats: each seat a question with no providers named goes to, with its model under the
+#     saved choices, starting no agent; with no key and no agent, a sentence saying where keys go
 #   - panel data: a provider with no key is never contacted; one with a key is, and only its own
 #     endpoint, and a failed list says so without the key
 # Model-list parsing is in extension-models.bats, the package build in extension-build.bats.
@@ -210,7 +217,7 @@ save_choices() {
 @test "extension: tools/list hides the two panel tools from the model and ties settings to the panel" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
     assert_eq "$(reply 1 | jq -c '[.result.tools[] | {name, ui: ._meta.ui}]')" \
-        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers"}},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
+        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers"}},{"name":"council_seats","ui":null},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
 }
 
 @test "extension: both panels are served as MCP App pages, the shared parts inlined" {
@@ -250,6 +257,14 @@ save_choices() {
     assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .inputSchema.properties.question.description')" \
         "The user's question, as they asked it."
     [[ "$(reply 1)" != *'self-contained'* ]]
+}
+
+@test "extension: council_ask tells the model to offer the seats and a verbosity first, unless the user chose" {
+    mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+    local sentence="Unless the user named the seats or a verbosity, or said to just ask, first call council_seats and ask the user in one short message which seats to use, naming each with its model, and which verbosity (standard, brief or detailed), offering all seats at standard as the default; then call this tool with their choice. When the user named them or said to just ask, call this tool at once."
+    [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .description')" == *"$sentence"* ]]
+    assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .inputSchema.properties.providers.description')" \
+        'Seat names as council_seats lists them, such as codex or openrouter-2. Leave out to ask every seat.'
 }
 
 @test "extension: an unknown resource uri is an error naming it" {
@@ -877,6 +892,41 @@ Change them in the panel shown with this result; a change applies to the next co
     assert_eq "$(result_text 1 | sed -n '9,$p')" "The saved model choices in ${STATE_DIR}/models.json could not be read (Gemini: [\"not\",\"a\",\"string\"] is not a model id), so every provider uses its default model.
 This app does not show the settings panel, so these models cannot be changed here."
     assert_eq "$(result_text 1 | sed -n 2p)" "Gemini: $(script_default gemini) (default, no key)"
+}
+
+@test "extension: council_seats lists each seat a question would go to, with its model, and the verbosities" {
+    export OPENROUTER_API_KEY="$SENTINEL_KEY" PERPLEXITY_API_KEY="${SENTINEL_KEY}-pplx" PERPLEXITY_MODEL=inherited-model
+    save_choices '{"perplexity":"sonar-test-1","openrouter":["vendor/alpha","vendor/beta"]}'
+    mcp "$INIT" "$(call 1 council_seats)"
+    assert_eq "$(result_error 1)" false
+    # The fake CLIs stand in for installed agents; claude, copilot and opencode
+    # are never seated by discovery.
+    assert_eq "$(result_text 1)" "The council's seats, each with the model it uses:
+antigravity: default
+codex: default
+cursor-cli: default
+grok-cli: default
+kimi-cli: default
+ollama: local
+openrouter-1: vendor/alpha
+openrouter-2: vendor/beta
+perplexity: sonar-test-1
+
+Verbosity: standard (the default), brief or detailed."
+    # Listing starts no agent.
+    [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
+}
+
+@test "extension: council_seats with no key and no agent says where keys go" {
+    local dir
+    for dir in "${HOME}/.local/bin" "${HOME}/bin" /opt/homebrew/bin /usr/local/bin; do
+        for bin in codex agy grok kimi cursor-agent ollama; do
+            [[ -x "${dir}/${bin}" ]] && skip "${dir}/${bin} is installed, and the server searches ${dir} as Desktop's does"
+        done
+    done
+    PATH="$(dirname "$NODE"):/usr/bin:/bin" mcp "$INIT" "$(call 1 council_seats)"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" 'No council seat is set up: no provider has a key and no CLI agent is installed. In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure.'
 }
 
 @test "extension: council_status gives the scripts' report, then where keys go in Desktop" {

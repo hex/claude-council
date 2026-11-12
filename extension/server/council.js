@@ -479,6 +479,33 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     return { text: stripAnsi(rendered.stdout).trim(), structured: { question, seats: seatsOf(answers) } }
   }
 
+  // The seats a question with no providers named would go to, each with the
+  // model it would use, as query-council.sh resolves them under the saved
+  // choices. Probes nothing: a status check starts every CLI agent.
+  async function defaultSeats(signal) {
+    const { choices, notice } = readChoices()
+    const result = await runScript('query-council.sh', ['--list-default-models'], {
+      cwd: runDirectory(), env: scriptEnvironment(keys, choices), timeoutMs: timeoutsMs.script, signal,
+    })
+    if (result.stopped) throw new Refusal(stopText('seat listing', result.stopped, timeoutsMs.script))
+    if (result.exitCode !== 0) throw new Error(`could not list the default seats: ${stripAnsi(result.stderr).trim()}`)
+    const seats = result.stdout.split('\n').filter(line => line !== '').map(line => {
+      const fields = line.split('\t')
+      if (fields.length !== 2) throw new Error(`query-council.sh --list-default-models printed ${shown(line)}, not "<provider>\\t<model>"`)
+      return { provider: fields[0], model: fields[1] }
+    })
+    return { seats, notice }
+  }
+
+  async function seatsText(input, signal) {
+    const { seats, notice } = await defaultSeats(signal)
+    if (seats.length === 0) {
+      return refused(withNotice(notice, 'No council seat is set up: no provider has a key and no CLI agent is installed. In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure.'))
+    }
+    const lines = seats.map(seat => `${seat.provider}: ${seat.model}`)
+    return { text: withNotice(notice, `The council's seats, each with the model it uses:\n${lines.join('\n')}\n\nVerbosity: standard (the default), brief or detailed.`) }
+  }
+
   async function status(input, signal) {
     const { choices, notice } = readChoices()
     const result = await runScript('check-status.sh', [], { cwd: runDirectory(), env: scriptEnvironment(keys, choices), timeoutMs: timeoutsMs.status, signal })
@@ -542,7 +569,7 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     return { text: JSON.stringify({ saved: true }) }
   }
 
-  return { ask, status, settingsText, panelData, saveFromPanel, stopRuns }
+  return { ask, seatsText, status, settingsText, panelData, saveFromPanel, stopRuns }
 }
 
 module.exports = { PROVIDERS, Refusal, VERBOSITIES, findPluginRoot, openCouncil, readKeys }
