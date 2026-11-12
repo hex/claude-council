@@ -78,7 +78,12 @@ function drawPicker(result) {
   ask.addEventListener('click', () => {
     for (const control of controls) control.disabled = true
     const providers = data.seats.map(seat => seat.provider).filter(name => chosen.has(name))
-    run({ question: data.question, providers, verbosity }).then(asked => {
+    run({ question: data.question, providers, verbosity }).catch(err => {
+      report('failed', true)
+      seats.replaceChildren(element('p', { className: 'lead bad', textContent: `The panel could not show the answers (${err.message}).` }))
+      host.reportSize()
+      return false
+    }).then(asked => {
       if (asked) return
       for (const control of controls) control.disabled = false
       recount()
@@ -111,7 +116,7 @@ async function run(args) {
   }
   showAnswers(result, seats)
   if (result?.isError) return false
-  await handOff(args.question, result.content.find(part => part.type === 'text')?.text ?? '')
+  await handOff(args.question, result?.content?.find(part => part.type === 'text')?.text ?? '')
   return true
 }
 
