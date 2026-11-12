@@ -68,6 +68,13 @@ setup() {
 
 teardown() {
     rm -rf "$TEST_CACHE_DIR"
+    # The shutdown test's hung seat, should the server have failed to stop it.
+    pkill -f 'sleep 97.31' || true
+    # No test, whatever it calls, may open a listening socket.
+    if grep -q '"listen"' "$COUNCIL_FENCE_LOG" 2>/dev/null; then
+        echo "the server tried to listen on a socket" >&2
+        return 1
+    fi
 }
 
 # Runs one server session with the given request lines; leaves the server's
@@ -332,4 +339,126 @@ CURL
     [ "$status" -eq 0 ]
     sleep 1
     run ! pgrep -f 'sleep 97.31'
+}
+
+# ============================================================================
+# Keys
+# ============================================================================
+
+# The model the scripts resolve for a provider with no override in force.
+script_default() {
+    env -u GEMINI_MODEL -u OPENAI_MODEL -u GROK_MODEL -u PERPLEXITY_MODEL -u KIMI_MODEL -u OPENROUTER_MODEL \
+        bash -c 'source "$1"; get_model "$2"' _ "${LIB_DIR}/providers.sh" "$1"
+}
+
+@test "extension: a key field left empty, as an empty string or an unsubstituted placeholder, is no key" {
+    export OPENROUTER_API_KEY='' GEMINI_API_KEY='${user_config.gemini_api_key}' KIMI_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_models_data)"
+    assert_eq "$(result_text 1 | jq -c '[.providers[] | {name, hasKey}]')" \
+        '[{"name":"gemini","hasKey":false},{"name":"openai","hasKey":false},{"name":"grok","hasKey":false},{"name":"perplexity","hasKey":false},{"name":"kimi","hasKey":true},{"name":"openrouter","hasKey":false}]'
+    assert_eq "$(jq -r '.fetch' "$COUNCIL_FENCE_LOG")" 'https://api.moonshot.ai/v1/models'
+}
+
+# ============================================================================
+# Panel data and saved choices
+# ============================================================================
+
+@test "extension: with no keys the panel data contacts no provider" {
+    mcp "$INIT" "$(call 1 council_models_data)"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_text 1 | jq -c '[.providers[] | [.hasKey, .models, .listError]] | unique')" '[[false,[],""]]'
+    assert_eq "$(result_text 1 | jq -c '{rosterMax, problem}')" '{"rosterMax":12,"problem":""}'
+    [ ! -s "$COUNCIL_FENCE_LOG" ]
+}
+
+@test "extension: a keyed provider's list is asked of its own endpoint only, and a failure says so" {
+    export GEMINI_API_KEY="$SENTINEL_KEY" OPENROUTER_API_KEY="${SENTINEL_KEY}-router"
+    mcp "$INIT" "$(call 1 council_models_data)"
+    assert_eq "$(jq -sc 'sort_by(.fetch)' "$COUNCIL_FENCE_LOG")" \
+        '[{"fetch":"https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000","authorized":true},{"fetch":"https://openrouter.ai/api/v1/models","authorized":true}]'
+    assert_eq "$(result_text 1 | jq -c '[.providers[] | select(.hasKey) | {name, listError}]')" \
+        '[{"name":"gemini","listError":"Could not load the model list (network fenced off in tests)"},{"name":"openrouter","listError":"Could not load the model list (network fenced off in tests)"}]'
+}
+
+@test "extension: panel data offers the scripts' default for each provider and the saved choice" {
+    export GEMINI_MODEL=inherited-model
+    save_choices '{"openai":"gpt-test-1","openrouter":["vendor/alpha"]}'
+    mcp "$INIT" "$(call 1 council_models_data)"
+    assert_eq "$(result_text 1 | jq -c '[.providers[] | [.name, .defaultModel, .selected]]')" \
+        "$(jq -cn --arg g "$(script_default gemini)" --arg o "$(script_default openai)" --arg x "$(script_default grok)" \
+            --arg p "$(script_default perplexity)" --arg k "$(script_default kimi)" --arg r "$(script_default openrouter)" \
+            '[["gemini",$g,""],["openai",$o,"gpt-test-1"],["grok",$x,""],["perplexity",$p,""],["kimi",$k,""],["openrouter",$r,["vendor/alpha"]]]')"
+}
+
+# Octal permission bits of a file, on GNU or BSD stat.
+mode_of() {
+    stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"
+}
+
+@test "extension: a save writes every provider's choice, 0600 in a 0700 directory, nothing left behind" {
+    mkdir -p "$STATE_DIR"
+    chmod 755 "$STATE_DIR"
+    mcp "$INIT" "$(call 1 council_models_save '{"selections":{"openai":"gpt-test-1","openrouter":["vendor/alpha","~vendor/beta-latest"]}}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_text 1)" '{"saved":true}'
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"","openai":"gpt-test-1","grok":"","perplexity":"","kimi":"","openrouter":["vendor/alpha","~vendor/beta-latest"]}'
+    assert_eq "$(mode_of "${STATE_DIR}/models.json")" 600
+    assert_eq "$(mode_of "$STATE_DIR")" 700
+    assert_eq "$(ls -A "$STATE_DIR" | paste -sd, -)" 'models.json'
+}
+
+@test "extension: a save with a bad model id is refused, naming it, and the file is left as it was" {
+    save_choices '{"openai":"gpt-test-1"}'
+    mcp "$INIT" "$(call 1 council_models_save '{"selections":{"openai":"gpt test; rm -rf ~"}}')" \
+        "$(call 2 council_models_save '{"selections":{"openrouter":["a/1","a/2","a/3","a/4","a/5","a/6","a/7","a/8","a/9","a/10","a/11","a/12","a/13"]}}')" \
+        "$(call 3 council_models_save '{"selections":{"mistral":"m"}}')" \
+        "$(call 4 council_models_save '{"selections":{"openrouter":["a/1,a/2"]}}')"
+    assert_eq "$(result_text 1)" 'Not saved: OpenAI: "gpt test; rm -rf ~" is not a model id.'
+    assert_eq "$(result_text 2)" 'Not saved: OpenRouter: 13 models chosen, at most 12 seats.'
+    assert_eq "$(result_text 3)" 'Not saved: "mistral" is not a provider the settings cover.'
+    assert_eq "$(result_text 4)" 'Not saved: OpenRouter: "a/1,a/2" is not a model id.'
+    for id in 1 2 3 4; do assert_eq "$(result_error $id)" true; done
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" '{"openai":"gpt-test-1"}'
+}
+
+# ============================================================================
+# Settings and status
+# ============================================================================
+
+@test "extension: council_settings lists each provider's model in plain text" {
+    export OPENROUTER_API_KEY="$SENTINEL_KEY" OPENAI_MODEL=inherited-model
+    save_choices '{"gemini":"gemini-test-1","openrouter":["vendor/alpha","vendor/beta"]}'
+    mcp "$INIT" "$(call 1 council_settings)"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_text 1)" "Council models:
+Gemini: gemini-test-1, no key
+OpenAI: $(script_default openai) (default, no key)
+Grok: $(script_default grok) (default, no key)
+Perplexity: $(script_default perplexity) (default, no key)
+Kimi: $(script_default kimi) (default, no key)
+OpenRouter: 2 seats: vendor/alpha, vendor/beta
+
+Change them in the panel shown with this result; a change applies to the next council question."
+}
+
+@test "extension: council_settings says a malformed models file was ignored, and where no panel is drawn" {
+    save_choices '{"gemini":["not","a","string"]}'
+    mcp '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"plain","version":"0"}}}' \
+        "$(call 1 council_settings)"
+    assert_eq "$(reply 0 | jq -r '.result.protocolVersion')" 2025-06-18
+    assert_eq "$(result_text 1 | sed -n '9,$p')" "The saved choices in ${STATE_DIR}/models.json were ignored because Gemini: [\"not\",\"a\",\"string\"] is not a model id; the defaults apply.
+This app does not show the settings panel, so these models cannot be changed here."
+    assert_eq "$(result_text 1 | sed -n 2p)" "Gemini: $(script_default gemini) (default, no key)"
+}
+
+@test "extension: council_status gives the scripts' report, then where keys go in Desktop" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    mcp "$INIT" "$(call 1 council_status)"
+    assert_eq "$(result_error 1)" false
+    local text
+    text=$(result_text 1)
+    [[ "$text" == "Provider Status:"* ]]
+    [[ "$(printf '%s\n' "$text" | grep '^  .*Gemini')" == *"API key not set"* ]]
+    assert_eq "$(printf '%s\n' "$text" | tail -1)" 'In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure, not in exported variables. Models are chosen with the council_settings tool.'
 }
