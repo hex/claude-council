@@ -7,16 +7,17 @@ const os = require('node:os')
 const path = require('node:path')
 const models = require('./models.js')
 
-// The providers the settings form and panel cover. `keyVariable` is the field
-// Desktop fills, `modelVariable` what the council scripts read; the router is
-// the one provider that takes a roster of models, one council seat each.
+// The providers the settings form and panel cover. `keyVariable` is the
+// variable Desktop fills from the form field titled `field` (as in
+// manifest.json), `modelVariable` what the council scripts read; the router
+// is the one provider that takes a roster of models, one council seat each.
 const PROVIDERS = [
-  { name: 'gemini', title: 'Gemini', keyVariable: 'GEMINI_API_KEY', modelVariable: 'GEMINI_MODEL' },
-  { name: 'openai', title: 'OpenAI', keyVariable: 'OPENAI_API_KEY', modelVariable: 'OPENAI_MODEL' },
-  { name: 'grok', title: 'Grok', keyVariable: 'XAI_API_KEY', modelVariable: 'GROK_MODEL' },
-  { name: 'perplexity', title: 'Perplexity', keyVariable: 'PERPLEXITY_API_KEY', modelVariable: 'PERPLEXITY_MODEL' },
-  { name: 'kimi', title: 'Kimi', keyVariable: 'KIMI_API_KEY', modelVariable: 'KIMI_MODEL' },
-  { name: 'openrouter', title: 'OpenRouter', keyVariable: 'OPENROUTER_API_KEY', modelVariable: 'OPENROUTER_MODELS', roster: true },
+  { name: 'gemini', title: 'Gemini', field: 'Gemini API key', keyVariable: 'GEMINI_API_KEY', modelVariable: 'GEMINI_MODEL' },
+  { name: 'openai', title: 'OpenAI', field: 'OpenAI API key', keyVariable: 'OPENAI_API_KEY', modelVariable: 'OPENAI_MODEL' },
+  { name: 'grok', title: 'Grok', field: 'xAI API key (Grok)', keyVariable: 'XAI_API_KEY', modelVariable: 'GROK_MODEL' },
+  { name: 'perplexity', title: 'Perplexity', field: 'Perplexity API key', keyVariable: 'PERPLEXITY_API_KEY', modelVariable: 'PERPLEXITY_MODEL' },
+  { name: 'kimi', title: 'Kimi', field: 'Kimi API key', keyVariable: 'KIMI_API_KEY', modelVariable: 'KIMI_MODEL' },
+  { name: 'openrouter', title: 'OpenRouter', field: 'OpenRouter API key', keyVariable: 'OPENROUTER_API_KEY', modelVariable: 'OPENROUTER_MODELS', roster: true },
 ]
 const ROSTER_MAX = 12
 const VERBOSITIES = ['brief', 'standard', 'detailed']
@@ -37,15 +38,24 @@ function isKeyVariable(name) {
   return PROVIDERS.some(provider => provider.keyVariable === name) || ALIAS_KEY_VARIABLES.includes(name)
 }
 
-// A field left empty in Desktop's form arrives as an empty string or as its
-// unsubstituted placeholder, `${user_config.x}`. Neither is a key.
+// Every provider's key is far longer. A shorter value is a placeholder or a
+// slip, and removing it from the server's output would also cut it out of
+// ordinary words.
+const KEY_MIN_LENGTH = 8
+
+// The keys Desktop gave, by provider name, and the providers whose field held
+// a value too short to be one. A field left empty arrives as an empty string
+// or as its unsubstituted placeholder, `${user_config.x}`; neither is a key.
 function readKeys(env) {
   const keys = new Map()
+  const tooShort = []
   for (const provider of PROVIDERS) {
     const value = (env[provider.keyVariable] ?? '').trim()
-    if (value !== '' && !value.startsWith('${')) keys.set(provider.name, value)
+    if (value === '' || value.startsWith('${')) continue
+    if (value.length < KEY_MIN_LENGTH) tooShort.push(provider)
+    else keys.set(provider.name, value)
   }
-  return keys
+  return { keys, tooShort }
 }
 
 // Packed, the scripts ride along under plugin/; in a checkout, extension/ sits
@@ -202,8 +212,9 @@ function refused(text) {
   return { text, isError: true }
 }
 
-// The council as one object over a plugin root and the keys Desktop gave.
-function openCouncil({ root, keys }) {
+// The council as one object over a plugin root and what readKeys made of
+// the keys Desktop gave.
+function openCouncil({ root, keys, tooShort }) {
   const running = new Set()
 
   function runScript(script, args, options) {
@@ -335,8 +346,9 @@ function openCouncil({ root, keys }) {
   async function status() {
     const result = await runScript('check-status.sh', [], { cwd: runDirectory(), env: scriptEnvironment(keys, readChoices().choices), timeoutMs: STATUS_TIMEOUT_MS })
     const report = stripAnsi(`${result.stdout}\n${result.stderr}`).trim() || `The status check exited ${result.exitCode} with no output.`
+    const short = tooShort.map(provider => `The ${provider.field} field holds under ${KEY_MIN_LENGTH} characters, too short to be a key, so ${provider.title} has no key.`)
     const where = 'In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure, not in exported variables. Models are chosen with the council_settings tool.'
-    return { text: `${report}\n\n${where}`, isError: result.exitCode !== 0 }
+    return { text: [report, '', ...short, where].join('\n'), isError: result.exitCode !== 0 }
   }
 
   async function settingsText(drawsPanel) {

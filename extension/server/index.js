@@ -1,5 +1,5 @@
 // ABOUTME: Claude Desktop extension server: the council as MCP tools over stdio, plus its two panels
-// ABOUTME: Every line it writes passes one chokepoint that removes the user's API keys from it
+// ABOUTME: Tool results, errors and logs pass one chokepoint that removes the user's API keys from them
 'use strict'
 const fs = require('node:fs')
 const path = require('node:path')
@@ -25,19 +25,25 @@ const PANELS = [
 ]
 const [SETTINGS_PANEL, ANSWERS_PANEL] = PANELS
 
-const keys = council.readKeys(process.env)
-const theCouncil = council.openCouncil({ root: council.findPluginRoot(EXTENSION_ROOT), keys })
+const { keys, tooShort } = council.readKeys(process.env)
+const theCouncil = council.openCouncil({ root: council.findPluginRoot(EXTENSION_ROOT), keys, tooShort })
 const KEY_MARK = '[key removed]'
 
 // Whether the connected app said it draws a tool's panel inside the chat.
 let drawsPanel = false
 
-// Replaces every key value in every string of a message. Error text from a
-// provider can quote the key it was sent; nothing here may pass it on.
+// Each key as it is written, and as it reads inside JSON text such as the
+// panel data, where a quote or backslash in it would be escaped.
+const KEY_SPELLINGS = [...new Set([...keys.values()].flatMap(key => [key, JSON.stringify(key).slice(1, -1)]))]
+
+// Replaces every key value in every string of what the council's scripts and
+// providers produced. Error text from a provider can quote the key it was
+// sent; nothing here may pass it on. The server's own words (the envelope,
+// tool names, schemas, panel pages) are left alone: they hold no key.
 function redact(value) {
   if (typeof value === 'string') {
     let text = value
-    for (const key of keys.values()) text = text.split(key).join(KEY_MARK)
+    for (const spelling of KEY_SPELLINGS) text = text.split(spelling).join(KEY_MARK)
     return text
   }
   if (Array.isArray(value)) return value.map(redact)
@@ -46,7 +52,7 @@ function redact(value) {
 }
 
 function send(message) {
-  process.stdout.write(`${JSON.stringify(redact({ jsonrpc: '2.0', ...message }))}\n`)
+  process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`)
 }
 
 function log(text) {
@@ -113,8 +119,8 @@ async function callTool(id, params) {
   const tool = TOOLS.find(candidate => candidate.name === params?.name)
   if (!tool) return send({ id, error: { code: -32602, message: `unknown tool: ${String(params?.name)}` } })
   const outcome = await tool.run(params.arguments ?? {})
-  const result = { content: [{ type: 'text', text: outcome.text }], isError: Boolean(outcome.isError) }
-  if (outcome.structured) result.structuredContent = outcome.structured
+  const result = { content: [{ type: 'text', text: redact(outcome.text) }], isError: Boolean(outcome.isError) }
+  if (outcome.structured) result.structuredContent = redact(outcome.structured)
   send({ id, result })
 }
 
@@ -153,7 +159,7 @@ function receive(line) {
   if (message.id === undefined) return
   handle(message).catch(err => {
     log(`council extension: ${message.method} failed: ${err?.stack ?? err}`)
-    send({ id: message.id, error: { code: -32603, message: `internal error: ${err?.message ?? err}` } })
+    send({ id: message.id, error: { code: -32603, message: redact(`internal error: ${err?.message ?? err}`) } })
   })
 }
 

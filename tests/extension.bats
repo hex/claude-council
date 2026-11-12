@@ -38,6 +38,9 @@
 #   - two questions at once: each gets its own answer
 #  keys
 #   - a key field left empty arrives as an empty string or as the literal ${user_config.x}: no key
+#   - a key field holding under 8 characters (2.0, x, test): no key, and council_status names the field
+#   - a key that occurs in the server's own text (a tool name, the panel mimeType): the envelope,
+#     tool list and panel pages come out byte for byte as with no key
 #  saved model choices
 #   - the state directory: under an absolute XDG_CONFIG_HOME, else under ~/.config
 #   - a malformed models file: runs use the defaults, and the settings text says the file was ignored
@@ -457,6 +460,34 @@ script_default() {
     assert_eq "$(result_text 1 | jq -c '[.providers[] | {name, hasKey}]')" \
         '[{"name":"gemini","hasKey":false},{"name":"openai","hasKey":false},{"name":"grok","hasKey":false},{"name":"perplexity","hasKey":false},{"name":"kimi","hasKey":true},{"name":"openrouter","hasKey":false}]'
     assert_eq "$(jq -r '.fetch' "$COUNCIL_FENCE_LOG")" 'https://api.moonshot.ai/v1/models'
+}
+
+@test "extension: a key field holding under 8 characters is no key, and council_status names the field" {
+    export GEMINI_API_KEY=1234567 OPENAI_API_KEY=2.0 XAI_API_KEY=x PERPLEXITY_API_KEY=' test ' COUNCIL_FAKE_BEHAVIOR=valid
+    mcp "$INIT" "$(call 1 council_models_data)" "$(call 2 council_status)"
+    assert_eq "$(result_text 1 | jq -c '[.providers[] | .hasKey] | unique')" '[false]'
+    [ ! -s "$COUNCIL_FENCE_LOG" ]
+    assert_eq "$(result_text 2 | tail -5)" 'The Gemini API key field holds under 8 characters, too short to be a key, so Gemini has no key.
+The OpenAI API key field holds under 8 characters, too short to be a key, so OpenAI has no key.
+The xAI API key (Grok) field holds under 8 characters, too short to be a key, so Grok has no key.
+The Perplexity API key field holds under 8 characters, too short to be a key, so Perplexity has no key.
+In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure, not in exported variables. Models are chosen with the council_settings tool.'
+}
+
+@test "extension: keys change nothing the server says about itself, even a key that occurs in its pages" {
+    # Answered from the server alone: the envelope, tool names, schemas and
+    # panel pages, none of which a key may change.
+    local requests=("$INIT" '{"jsonrpc":"2.0","id":1,"method":"ping"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+        '{"jsonrpc":"2.0","id":3,"method":"resources/list"}'
+        '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"ui://council/settings"}}'
+        '{"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"ui://council/answers"}}'
+        '{"jsonrpc":"2.0","id":6,"method":"sampling/fly"}' "$(call 7 council_fly)")
+    mcp "${requests[@]}"
+    local keyless="$output"
+    [[ "$keyless" == *'"jsonrpc":"2.0"'*'council_settings'*'text/html;profile=mcp-app'* ]]
+    OPENAI_API_KEY=2.0 GEMINI_API_KEY=x KIMI_API_KEY=council_settings OPENROUTER_API_KEY=text/html mcp "${requests[@]}"
+    [ "$status" -eq 0 ]
+    assert_eq "$output" "$keyless"
 }
 
 # ============================================================================

@@ -612,9 +612,12 @@ starts with its built-in Node.js, plain CommonJS with no dependencies, which
 runs the same scripts the plugin does.
 
 - `server/index.js` reads newline-delimited JSON-RPC from stdin and answers on
-  stdout. Every message it writes, and every log line, passes through one
-  function that replaces each key value with `[key removed]`. It exits when
-  stdin closes, stopping any council run first.
+  stdout. Every tool result, error message and log line passes through one
+  function that replaces each key value with `[key removed]`; the envelope,
+  tool names, schemas and panel pages are the server's own and pass
+  untouched, so a key that happens to occur in them cannot corrupt the
+  protocol. A key field holding under 8 characters counts as no key. It exits
+  when stdin closes, stopping any council run first.
 - `server/council.js` holds the provider table (form field, model variable,
   title), reads the keys once at start, keeps the saved model choices, builds
   each run's environment and runs the scripts. A run's environment is the
@@ -803,7 +806,7 @@ claude-council/
 │   ├── build.sh                 # Packs HEAD into dist/council-<version>.mcpb with mcpb 2.1.2
 │   ├── manifest.json            # Name, key fields, tools, privacy policies, platforms
 │   └── server/
-│       ├── index.js             # stdio JSON-RPC, tool table, panels, key redaction on every write
+│       ├── index.js             # stdio JSON-RPC, tool table, panels, key redaction of tool output
 │       ├── council.js           # Providers, keys, saved choices, script runs
 │       ├── models.js            # Live model lists and their parsing
 │       ├── settings.html        # Settings panel drawn in the chat (MCP App)

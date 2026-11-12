@@ -645,8 +645,12 @@ server as `GEMINI_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`,
 empty arrives as an empty string or as its unsubstituted `${user_config.x}`
 placeholder, and both count as no key. The server drops `GROK_API_KEY` and
 `MOONSHOT_API_KEY` from the environment Desktop starts it with, so keys come
-only from the form. Every reply and log line the server writes has each key value
-replaced by `[key removed]`, which covers a provider error that quotes the key.
+only from the form. A value under 8 characters is too short to be any
+provider's key: it counts as no key, and `council_status` names the field that
+holds it. In every tool result, error message and log line the server writes,
+each key value is replaced by `[key removed]`, which covers a provider error
+that quotes the key. The server's own text (the JSON-RPC envelope, tool names,
+schemas and panel pages) is never changed.
 
 **Models.** The panel lists each keyed provider's models live when it opens:
 Gemini (models that support `generateContent`), OpenAI, xAI (plus
