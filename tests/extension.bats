@@ -43,6 +43,7 @@
 #   - the saved roster reaches the run as one seat per model
 #   - a model variable inherited from Desktop's environment: dropped, the scripts' default is used
 #   - Desktop's minimal PATH: a CLI seat installed in ~/.local/bin is still found
+#   - all six keys set: each seat, API or CLI, starts with its own vendor's key and no other
 #   - two questions at once: each gets its own answer
 #  keys
 #   - a key field left empty arrives as an empty string or as the literal ${user_config.x}: no key
@@ -469,6 +470,51 @@ result_seats() {
     assert_eq "$(result_text 1 | head -1)" "$notice"
     [[ "$(result_text 1)" == *"answer from "* ]]
     assert_eq "$(result_text 2 | tail -2 | head -1)" "$notice"
+}
+
+@test "extension: each seat, API or CLI, gets only its own vendor's key" {
+    install_fake_curl answer
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local key
+    for key in GEMINI_API_KEY OPENAI_API_KEY XAI_API_KEY PERPLEXITY_API_KEY KIMI_API_KEY OPENROUTER_API_KEY; do
+        export "$key=placeholder-${key}"
+    done
+    # Each seat's curl or CLI first records the *_API_KEY variables it was
+    # started with, by the host it calls or its own name, then runs the fake
+    # it stands in front of.
+    local spy="${BATS_TEST_TMPDIR}/spy" bin next
+    export COUNCIL_SEAT_KEYS="${BATS_TEST_TMPDIR}/seat-keys.jsonl"
+    mkdir -p "$spy"
+    for bin in curl codex agy grok kimi cursor-agent claude copilot opencode ollama; do
+        next=$(command -v "$bin")
+        printf '#!/bin/bash\nwho=%s\nfor arg in "$@"; do [[ "$arg" == https://* ]] && who="${arg#https://}" && who="${who%%%%/*}"; done\njq -cn --arg who "$who" '"'"'{who: $who, keys: [env | to_entries[] | select(.key | endswith("_API_KEY")) | "\\(.key)=\\(.value)"]}'"'"' >> "$COUNCIL_SEAT_KEYS"\nexec %q "$@"\n' \
+            "$bin" "$next" > "${spy}/${bin}"
+        chmod +x "${spy}/${bin}"
+    done
+    export PATH="${spy}:$PATH"
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q"}')" "$(call 2 council_ask '{"question":"q","providers":["gemini","openai","grok","kimi","claude-cli","copilot-cli","opencode"]}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_error 2)" false
+    # A CLI is preferred over its vendor's API, so the second question names
+    # the API seats, and the CLI seats the first leaves out.
+    assert_eq "$(jq -sc 'group_by(.who) | map({(.[0].who): (map(.keys) | add | unique)}) | add' "$COUNCIL_SEAT_KEYS")" \
+        "$(jq -cn '{
+            "agy": ["GEMINI_API_KEY=placeholder-GEMINI_API_KEY"],
+            "api.moonshot.ai": ["KIMI_API_KEY=placeholder-KIMI_API_KEY"],
+            "api.openai.com": ["OPENAI_API_KEY=placeholder-OPENAI_API_KEY"],
+            "api.perplexity.ai": ["PERPLEXITY_API_KEY=placeholder-PERPLEXITY_API_KEY"],
+            "api.x.ai": ["GROK_API_KEY=placeholder-XAI_API_KEY", "XAI_API_KEY=placeholder-XAI_API_KEY"],
+            "claude": [],
+            "codex": ["OPENAI_API_KEY=placeholder-OPENAI_API_KEY"],
+            "copilot": [],
+            "cursor-agent": [],
+            "generativelanguage.googleapis.com": ["GEMINI_API_KEY=placeholder-GEMINI_API_KEY"],
+            "grok": ["GROK_API_KEY=placeholder-XAI_API_KEY", "XAI_API_KEY=placeholder-XAI_API_KEY"],
+            "kimi": ["KIMI_API_KEY=placeholder-KIMI_API_KEY"],
+            "ollama": [],
+            "opencode": [],
+            "openrouter.ai": ["OPENROUTER_API_KEY=placeholder-OPENROUTER_API_KEY"]
+        }')"
 }
 
 @test "extension: under Desktop's minimal PATH a CLI seat in ~/.local/bin is still found" {
