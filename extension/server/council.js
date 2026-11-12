@@ -21,9 +21,15 @@ const PROVIDERS = [
 ]
 const ROSTER_MAX = 12
 const VERBOSITIES = ['brief', 'standard', 'detailed']
-const ASK_TIMEOUT_MS = 10 * 60 * 1000
-const STATUS_TIMEOUT_MS = 3 * 60 * 1000
-const SCRIPT_TIMEOUT_MS = 30 * 1000
+// How long each kind of run may take before it is stopped.
+const TIMEOUTS_MS = { ask: 10 * 60 * 1000, status: 3 * 60 * 1000, script: 30 * 1000 }
+// The question reaches query-council.sh as one argument, and Linux refuses an
+// argument over 128 KiB; this leaves room under that.
+const QUESTION_MAX_BYTES = 100000
+// What a run may write before it is stopped: far past twelve long answers on
+// stdout, and past any progress a run prints on stderr.
+const STDOUT_MAX_BYTES = 8 * 1024 * 1024
+const STDERR_MAX_BYTES = 1024 * 1024
 
 // Names the scripts also read a key from. Only the form's fields may supply one.
 const ALIAS_KEY_VARIABLES = ['GROK_API_KEY', 'MOONSHOT_API_KEY']
@@ -257,59 +263,126 @@ function withNotice(notice, text) {
   return notice ? `${notice}\n\n${text}` : text
 }
 
+// How long a stopped run's process group has to exit after SIGTERM before
+// it is sent SIGKILL.
+const STOP_GRACE_MS = 2000
+
+function duration(ms) {
+  return ms >= 60000 ? `${ms / 60000} minute${ms === 60000 ? '' : 's'}` : `${ms / 1000} seconds`
+}
+
+// Why runBash stopped a run, in words, for `what` it was (such as "council
+// run") and the time it had. A cancelled run is never answered, nor is one
+// stopped for the server's exit, but both still get words.
+function stopText(what, stopped, timeoutMs) {
+  switch (stopped) {
+    case 'timeout': return `The ${what} took longer than ${duration(timeoutMs)} and was stopped.`
+    case 'stdout': return `The ${what} wrote more than ${STDOUT_MAX_BYTES / 1024 / 1024} MiB, more than any set of answers needs, so it was stopped.`
+    case 'stderr': return `The ${what} wrote more than ${STDERR_MAX_BYTES / 1024 / 1024} MiB of progress and errors, so it was stopped.`
+    case 'cancelled': return `The ${what} was cancelled.`
+    case 'shutdown': return `The ${what} was stopped because the extension is shutting down.`
+  }
+  throw new Error(`no words for a run stopped as ${JSON.stringify(stopped)}`)
+}
+
+// Sends a signal to a run's whole process group, which may have exited.
+// ESRCH says no member is left; macOS answers EPERM instead when the only
+// members left are exited processes not yet reaped. Every member is this
+// user's own child, so neither means a process the signal could still reach.
+function signalGroup(child, signal) {
+  try {
+    process.kill(-child.pid, signal)
+  } catch (err) {
+    if (err.code !== 'ESRCH' && err.code !== 'EPERM') throw err
+  }
+}
+
+// Collects a stream's bytes up to `limit`, calling `overflowed` once if it
+// writes past that. Decoded as UTF-8 only at the end, so a character split
+// across two chunks stays whole.
+function capture(stream, limit, overflowed) {
+  const chunks = []
+  let bytes = 0
+  stream.on('data', chunk => {
+    if (bytes > limit) return
+    bytes += chunk.length
+    if (bytes > limit) overflowed()
+    else chunks.push(chunk)
+  })
+  return { text: () => Buffer.concat(chunks).toString('utf8') }
+}
+
 // The council as one object over a plugin root and what readKeys made of
-// the keys Desktop gave.
-function openCouncil({ root, keys, tooShort }) {
+// the keys Desktop gave. Every tool function takes the call's AbortSignal
+// last; aborting it stops the runs the call started.
+function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
   const running = new Set()
 
   function runScript(script, args, options) {
     return runBash([path.join(root, 'scripts', script), ...args], options)
   }
 
-  // Each run gets its own process group so stopping it reaches the provider
-  // scripts and CLIs it started, not just the bash at the top.
+  // Runs bash with the arguments, in a process group of its own so stopping
+  // it reaches the provider scripts and CLIs it started, not just the bash at
+  // the top. Resolves once the run's output has closed, with `stopped`
+  // naming why the run was stopped (a STOP_REASONS key), or null when it
+  // ended on its own. `options.signal` aborting stops it as cancelled.
   function runBash(args, options) {
+    if (options.signal?.aborted) return Promise.resolve({ exitCode: 1, stdout: '', stderr: '', stopped: 'cancelled' })
     return new Promise(resolve => {
       const child = spawn('bash', args, {
         cwd: options.cwd, env: options.env, detached: true, stdio: [options.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
       })
-      running.add(child)
-      let stdout = ''
-      let stderr = ''
-      let timedOut = false
-      const timer = setTimeout(() => {
-        timedOut = true
-        stopGroup(child)
-      }, options.timeoutMs)
+      let closed
+      const run = { child, stopped: null, killed: null, closed: new Promise(done => { closed = done }) }
+      running.add(run)
+      const stdout = capture(child.stdout, STDOUT_MAX_BYTES, () => stopRun(run, 'stdout'))
+      const stderr = capture(child.stderr, STDERR_MAX_BYTES, () => stopRun(run, 'stderr'))
+      const timer = setTimeout(() => stopRun(run, 'timeout'), options.timeoutMs)
+      const cancel = () => stopRun(run, 'cancelled')
+      options.signal?.addEventListener('abort', cancel, { once: true })
+      let inputError = ''
       if (options.input !== undefined) {
-        child.stdin.on('error', err => { stderr += `could not write the script's input: ${err.message}\n` })
+        child.stdin.on('error', err => { inputError = `could not write the script's input: ${err.message}\n` })
         child.stdin.end(options.input)
       }
-      child.stdout.on('data', chunk => { stdout += chunk })
-      child.stderr.on('data', chunk => { stderr += chunk })
-      child.on('error', err => {
+      // A stopped run is done once its group has also been sent SIGKILL: the
+      // bash at the top can close its output while a seat that ignored
+      // SIGTERM is still running.
+      const finish = async result => {
         clearTimeout(timer)
-        running.delete(child)
-        resolve({ exitCode: 127, stdout, stderr: `could not start bash: ${err.message}`, timedOut })
-      })
-      child.on('close', code => {
-        clearTimeout(timer)
-        running.delete(child)
-        resolve({ exitCode: code ?? 1, stdout, stderr, timedOut })
-      })
+        options.signal?.removeEventListener('abort', cancel)
+        await run.killed
+        running.delete(run)
+        closed()
+        resolve({ ...result, stopped: run.stopped })
+      }
+      child.on('error', err => finish({ exitCode: 127, stdout: '', stderr: `could not start bash: ${err.message}` }))
+      child.on('close', code => finish({ exitCode: code ?? 1, stdout: stdout.text(), stderr: `${inputError}${stderr.text()}` }))
     })
   }
 
-  function stopGroup(child) {
-    try {
-      process.kill(-child.pid, 'SIGTERM')
-    } catch (err) {
-      if (err.code !== 'ESRCH') throw err
-    }
+  // Stops a run's whole process group: SIGTERM first so the scripts can clean
+  // up, then SIGKILL after a grace period for anything that ignored it. The
+  // SIGKILL is sent whatever the leader did, since a seat can outlive it.
+  function stopRun(run, reason) {
+    if (run.stopped) return
+    run.stopped = reason
+    signalGroup(run.child, 'SIGTERM')
+    run.killed = new Promise(done => setTimeout(() => {
+      signalGroup(run.child, 'SIGKILL')
+      done()
+    }, STOP_GRACE_MS))
   }
 
-  function stopRuns() {
-    for (const child of running) stopGroup(child)
+  // Stops every run, for the server's own exit: resolves once each has closed,
+  // or the grace period is over and its group has been sent SIGKILL.
+  async function stopRuns() {
+    const runs = [...running]
+    for (const run of runs) stopRun(run, 'shutdown')
+    const graceOver = new Promise(done => setTimeout(done, STOP_GRACE_MS))
+    await Promise.race([Promise.all(runs.map(run => run.closed)), graceOver])
+    for (const run of runs) signalGroup(run.child, 'SIGKILL')
   }
 
   function runDirectory() {
@@ -318,13 +391,14 @@ function openCouncil({ root, keys, tooShort }) {
 
   // What each provider uses with nothing chosen, asked of the scripts so the
   // panel can never disagree with a run.
-  async function defaultModels() {
+  async function defaultModels(signal) {
     const names = PROVIDERS.map(provider => provider.name)
     const lookup = 'source "$1"; shift; for name in "$@"; do get_model "$name"; done'
     const library = path.join(root, 'scripts', 'lib', 'providers.sh')
     const result = await runBash(['-c', lookup, 'defaults', library, ...names], {
-      cwd: runDirectory(), env: scriptEnvironment(keys, noChoices()), timeoutMs: SCRIPT_TIMEOUT_MS,
+      cwd: runDirectory(), env: scriptEnvironment(keys, noChoices()), timeoutMs: timeoutsMs.script, signal,
     })
+    if (result.stopped) throw new Refusal(stopText('default model lookup', result.stopped, timeoutsMs.script))
     const lines = result.stdout.trim().split('\n')
     if (result.exitCode !== 0 || lines.length !== names.length) throw new Error(`could not read the default models: ${result.stderr.trim()}`)
     return Object.fromEntries(names.map((name, index) => [name, lines[index]]))
@@ -341,6 +415,8 @@ function openCouncil({ root, keys, tooShort }) {
     if (unknown !== undefined) return { refusal: `council_ask has no argument ${shown(unknown)}; it takes question, providers and verbosity` }
     const { question, providers, verbosity } = input
     if (typeof question !== 'string' || question.trim() === '') return { refusal: 'The question is empty. Ask a self-contained question: the council sees nothing else.' }
+    const questionBytes = Buffer.byteLength(question, 'utf8')
+    if (questionBytes > QUESTION_MAX_BYTES) return { refusal: `The question is ${questionBytes} bytes long; the council takes at most ${QUESTION_MAX_BYTES}. Shorten it, or say the rest in fewer words.` }
     if (providers !== undefined) {
       if (!Array.isArray(providers) || providers.length === 0) return { refusal: 'providers must list at least one provider name, or be left out to ask every configured provider' }
       const known = await knownProviders()
@@ -351,7 +427,7 @@ function openCouncil({ root, keys, tooShort }) {
     return { question, providers, verbosity }
   }
 
-  async function ask(input) {
+  async function ask(input, signal) {
     const request = await parseAsk(input)
     if (request.refusal) return refused(request.refusal)
     const { choices, notice } = readChoices()
@@ -361,21 +437,21 @@ function openCouncil({ root, keys, tooShort }) {
       const saved = roster.length === 0 ? 'no OpenRouter seats are saved' : `the saved OpenRouter roster has ${roster.length} model${roster.length === 1 ? '' : 's'}`
       return refused(withNotice(notice, `${pastRoster} is not a seat: ${saved}. Choose OpenRouter models with the council_settings tool.`))
     }
-    const outcome = await runAsk(request, choices)
+    const outcome = await runAsk(request, choices, signal)
     return { ...outcome, text: withNotice(notice, outcome.text) }
   }
 
   // Asks the seats through query-council.sh, whose JSON gives each seat's
   // answer or error apart, then renders that JSON as text with the same
   // format-output.sh the plugin's transcripts come from.
-  async function runAsk({ question, providers, verbosity }, choices) {
+  async function runAsk({ question, providers, verbosity }, choices, signal) {
     const flags = ['--no-pane']
     if (providers) flags.push(`--providers=${providers.join(',')}`)
     if (verbosity) flags.push(`--verbosity=${verbosity}`)
     const cwd = runDirectory()
     const env = scriptEnvironment(keys, choices)
-    const result = await runScript('query-council.sh', [...flags, '--', question], { cwd, env, timeoutMs: ASK_TIMEOUT_MS })
-    if (result.timedOut) return refused(`The council run took longer than ${ASK_TIMEOUT_MS / 60000} minutes and was stopped.`)
+    const result = await runScript('query-council.sh', [...flags, '--', question], { cwd, env, timeoutMs: timeoutsMs.ask, signal })
+    if (result.stopped) return refused(stopText('council run', result.stopped, timeoutsMs.ask))
     const tail = stripAnsi(result.stderr).trim().split('\n').slice(-20).join('\n')
     if (result.exitCode !== 0) return refused(`Council query failed:\n${tail || `the script exited ${result.exitCode} with no output.`}`)
     let answers
@@ -384,14 +460,16 @@ function openCouncil({ root, keys, tooShort }) {
     } catch (err) {
       return refused(`The council run printed no result (${err.message}):\n${tail}`)
     }
-    const rendered = await runScript('format-output.sh', [], { cwd, env, input: result.stdout, timeoutMs: SCRIPT_TIMEOUT_MS })
+    const rendered = await runScript('format-output.sh', [], { cwd, env, input: result.stdout, timeoutMs: timeoutsMs.script, signal })
+    if (rendered.stopped) return refused(stopText('formatting of the answers', rendered.stopped, timeoutsMs.script))
     if (rendered.exitCode !== 0) return refused(`The council's answers could not be formatted:\n${stripAnsi(rendered.stderr).trim()}`)
     return { text: stripAnsi(rendered.stdout).trim(), structured: { question, seats: seatsOf(answers) } }
   }
 
-  async function status() {
+  async function status(input, signal) {
     const { choices, notice } = readChoices()
-    const result = await runScript('check-status.sh', [], { cwd: runDirectory(), env: scriptEnvironment(keys, choices), timeoutMs: STATUS_TIMEOUT_MS })
+    const result = await runScript('check-status.sh', [], { cwd: runDirectory(), env: scriptEnvironment(keys, choices), timeoutMs: timeoutsMs.status, signal })
+    if (result.stopped) return refused(stopText('status check', result.stopped, timeoutsMs.status))
     const report = stripAnsi(`${result.stdout}\n${result.stderr}`).trim() || `The status check exited ${result.exitCode} with no output.`
     const short = tooShort.map(provider => `The ${provider.field} field holds under ${KEY_MIN_LENGTH} characters, too short to be a key, so ${provider.title} has no key.`)
     const where = 'In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure, not in exported variables. Models are chosen with the council_settings tool.'
@@ -399,8 +477,8 @@ function openCouncil({ root, keys, tooShort }) {
     return { text: `${report}\n\n${notes.join('\n')}`, isError: result.exitCode !== 0 }
   }
 
-  async function settingsText(drawsPanel) {
-    const defaults = await defaultModels()
+  async function settingsText(drawsPanel, signal) {
+    const defaults = await defaultModels(signal)
     const { choices, notice } = readChoices()
     const lines = PROVIDERS.map(provider => {
       const choice = choices[provider.name]
@@ -417,8 +495,8 @@ function openCouncil({ root, keys, tooShort }) {
     return { text: `Council models:\n${lines.join('\n')}\n\n${notes.join('\n')}` }
   }
 
-  async function panelData() {
-    const defaults = await defaultModels()
+  async function panelData(input, signal) {
+    const defaults = await defaultModels(signal)
     const { choices, notice } = readChoices()
     const rows = await Promise.all(PROVIDERS.map(async provider => {
       const row = {

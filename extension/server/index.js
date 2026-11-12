@@ -3,7 +3,6 @@
 'use strict'
 const fs = require('node:fs')
 const path = require('node:path')
-const readline = require('node:readline')
 const council = require('./council.js')
 
 const EXTENSION_ROOT = path.join(__dirname, '..')
@@ -84,27 +83,27 @@ const TOOLS = [
       required: ['question'],
       additionalProperties: false,
     },
-    run: args => theCouncil.ask(args),
+    run: (args, signal) => theCouncil.ask(args, signal),
   },
   {
     name: 'council_status',
     description: 'Show which council providers are usable on this machine, the model each would use, and why the others are not.',
     inputSchema: NO_ARGUMENTS,
-    run: () => theCouncil.status(),
+    run: (args, signal) => theCouncil.status(args, signal),
   },
   {
     name: 'council_settings',
     description: 'Show the model each council provider uses. In Claude Desktop this also opens a panel in the chat where the user picks models from each provider\'s live list. Use when the user wants to see or change the council\'s models.',
     inputSchema: NO_ARGUMENTS,
     _meta: { ui: { resourceUri: SETTINGS_PANEL.uri } },
-    run: () => theCouncil.settingsText(drawsPanel),
+    run: (args, signal) => theCouncil.settingsText(drawsPanel, signal),
   },
   {
     name: 'council_models_data',
     description: 'Loads the council settings panel: each provider\'s model list and saved choice. Used by the panel only.',
     inputSchema: NO_ARGUMENTS,
     _meta: { ui: { visibility: ['app'] } },
-    run: () => theCouncil.panelData(),
+    run: (args, signal) => theCouncil.panelData(args, signal),
   },
   {
     name: 'council_models_save',
@@ -115,16 +114,27 @@ const TOOLS = [
   },
 ]
 
+// Each tool call still running, by request id, with the controller whose
+// abort stops the runs it started.
+const callsInFlight = new Map()
+
 async function callTool(id, params) {
   const tool = TOOLS.find(candidate => candidate.name === params?.name)
   if (!tool) return send({ id, error: { code: -32602, message: `unknown tool: ${String(params?.name)}` } })
+  const controller = new AbortController()
+  callsInFlight.set(id, controller)
   let outcome
   try {
-    outcome = await tool.run(params.arguments ?? {})
+    outcome = await tool.run(params.arguments ?? {}, controller.signal)
   } catch (err) {
     if (!(err instanceof council.Refusal)) throw err
     outcome = { text: err.message, isError: true }
+  } finally {
+    callsInFlight.delete(id)
   }
+  // A cancelled request is never answered, and neither is one cut short by
+  // the server's own exit.
+  if (controller.signal.aborted || shuttingDown) return
   const result = { content: [{ type: 'text', text: redact(outcome.text) }], isError: Boolean(outcome.isError) }
   if (outcome.structured) result.structuredContent = redact(outcome.structured)
   send({ id, result })
@@ -162,16 +172,73 @@ function receive(line) {
     return send({ id: message?.id ?? null, error: { code: -32600, message: 'invalid request: expected a JSON-RPC request object' } })
   }
   // A notification is never answered, whether or not it is understood.
-  if (message.id === undefined) return
+  if (message.id === undefined) {
+    if (message.method === 'notifications/cancelled') callsInFlight.get(message.params?.requestId)?.abort()
+    return
+  }
   handle(message).catch(err => {
     log(`council extension: ${message.method} failed: ${err?.stack ?? err}`)
     send({ id: message.id, error: { code: -32603, message: redact(`internal error: ${err?.message ?? err}`) } })
   })
 }
 
-// Desktop ends the server by closing its input. A council run still going
-// would otherwise outlive it, so it is stopped first.
-readline.createInterface({ input: process.stdin }).on('line', receive).on('close', () => {
-  theCouncil.stopRuns()
-  process.exit(0)
-})
+// The longest request line read. The longest a real request needs is a
+// question at its limit with every character escaped, well under this.
+const MAX_LINE_BYTES = 1024 * 1024
+
+// Splits the input into lines on the newline byte, which never occurs inside
+// a UTF-8 character, so a line is decoded whole. A line past the limit is
+// dropped as it arrives rather than held, and answered with one error.
+function readLines(input, onLine, onEnd) {
+  let pending = []
+  let pendingBytes = 0
+  let dropping = false
+  const take = piece => {
+    if (dropping) return
+    if (pendingBytes + piece.length > MAX_LINE_BYTES) {
+      dropping = true
+      pending = []
+      pendingBytes = 0
+      send({ id: null, error: { code: -32600, message: `invalid request: a line over ${MAX_LINE_BYTES} bytes was dropped` } })
+      return
+    }
+    pending.push(piece)
+    pendingBytes += piece.length
+  }
+  const finishLine = () => {
+    const line = dropping ? null : Buffer.concat(pending).toString('utf8')
+    pending = []
+    pendingBytes = 0
+    dropping = false
+    if (line !== null) onLine(line)
+  }
+  input.on('data', chunk => {
+    let start = 0
+    for (let newline = chunk.indexOf(10); newline !== -1; newline = chunk.indexOf(10, start)) {
+      take(chunk.subarray(start, newline))
+      finishLine()
+      start = newline + 1
+    }
+    take(chunk.subarray(start))
+  })
+  input.on('end', () => {
+    if (pendingBytes > 0) finishLine()
+    onEnd()
+  })
+}
+
+let shuttingDown = false
+
+// Exits once every council run still going has been stopped: a run is in a
+// process group of its own, so it would otherwise outlive the server.
+async function shutDown(exitCode) {
+  if (shuttingDown) return
+  shuttingDown = true
+  await theCouncil.stopRuns()
+  process.exit(exitCode)
+}
+
+// Desktop ends the server by closing its input; a signal ends it as usual.
+readLines(process.stdin, receive, () => shutDown(0))
+process.on('SIGTERM', () => shutDown(128 + 15))
+process.on('SIGINT', () => shutDown(128 + 2))

@@ -10,7 +10,15 @@
 #   - a notification, known or unknown: never answered
 #   - an unknown tool: invalid params, naming it
 #   - initialize: answers the version Desktop asked for when supported, offers tools and resources
-#   - input ends: the server exits 0, and a council run still in flight dies with it
+#   - input ends, or SIGTERM or SIGINT arrives, during a council run: the run's whole process
+#     group is stopped, a seat that ignores SIGTERM too (SIGKILL after a grace period), before
+#     the server exits
+#   - a council run past its time limit: stopped the same way, and the tool says so
+#   - notifications/cancelled for a council question in flight: its run is stopped and the
+#     request never answered, while a question asked beside it is answered
+#   - a request line over 1 MiB: dropped with one invalid request error, serving goes on
+#   - a question over 100000 bytes (one argv entry): refused before any run
+#   - a run writing more than 8 MiB: stopped, and the tool says so
 #   - a listening socket, ever: none (the fence refuses and records any attempt)
 #  tools and the panel resource
 #   - tools/list: the two panel tools carry the app-only visibility key, the settings tool the panel uri
@@ -91,7 +99,8 @@ setup() {
 teardown() {
     rm -rf "$TEST_CACHE_DIR"
     # The shutdown test's hung seat, should the server have failed to stop it.
-    pkill -f 'sleep 97.31' || true
+    # SIGKILL, since some of them ignore SIGTERM.
+    pkill -9 -f 'sleep 97.3[1-5]' || true
     # No test, whatever it calls, may open a listening socket.
     if grep -q '"listen"' "$COUNCIL_FENCE_LOG" 2>/dev/null; then
         echo "the server tried to listen on a socket" >&2
@@ -152,6 +161,14 @@ save_choices() {
     assert_eq "$(printf '%s\n' "$output" | jq -c 'select(.id == null) | .error' | sort -u)" '{"code":-32600,"message":"invalid request: expected a JSON-RPC request object"}'
     assert_eq "$(printf '%s\n' "$output" | jq -c 'select(.id == null)' | wc -l | tr -d ' ')" 3
     assert_eq "$(reply 3)" '{"jsonrpc":"2.0","id":3,"result":{}}'
+}
+
+@test "extension: a line over 1 MiB is dropped with an invalid request error, and serving goes on" {
+    mcp "$(head -c 1048577 /dev/zero | tr '\0' x)" '{"jsonrpc":"2.0","id":7,"method":"ping"}'
+    [ "$status" -eq 0 ]
+    assert_eq "$(printf '%s\n' "$output" | sed -n 1p)" '{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"invalid request: a line over 1048576 bytes was dropped"}}'
+    assert_eq "$(reply 7)" '{"jsonrpc":"2.0","id":7,"result":{}}'
+    assert_eq "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" 2
 }
 
 @test "extension: an unknown method is answered with method not found, naming it" {
@@ -262,6 +279,8 @@ if [[ "$COUNCIL_FAKE_CURL_MODE" == echo ]]; then
     # Long enough that two runs asked together are both in flight.
     sleep 2
     jq -c '{choices: [{message: {content: ("asked: " + .messages[-1].content)}}]}' "$payload" > "$out"
+elif [[ "$COUNCIL_FAKE_CURL_MODE" == huge ]]; then
+    jq -cn '{choices: [{message: {content: ("x" * 9000000)}}]}' > "$out"
 elif [[ "$COUNCIL_FAKE_CURL_MODE" == long ]]; then
     jq -cn '{choices: [{message: {content: ("start " + ("x" * 150000) + " end")}}]}' > "$out"
 elif [[ "$COUNCIL_FAKE_CURL_MODE" == colour ]]; then
@@ -291,6 +310,26 @@ CURL
     assert_eq "$(result_text 1)" '"../openai" is not a council provider. Known providers: antigravity, claude-cli, codex, copilot-cli, cursor-cli, gemini, grok, grok-cli, kimi, kimi-cli, ollama, openai, opencode, openrouter, perplexity, and openrouter-1 to openrouter-12 for saved OpenRouter seats.'
     assert_eq "$(result_text 2)" 'providers must list at least one provider name, or be left out to ask every configured provider'
     [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
+}
+
+@test "extension: council_ask refuses a question over 100000 bytes, which argv may not carry" {
+    local over at_limit
+    over=$(printf '%050001d' 0 | sed 's/0/é/g')
+    at_limit=$(printf '%050000d' 0 | sed 's/0/é/g')
+    mcp "$INIT" "$(call 1 council_ask "$(jq -cn --arg q "$over" '{question: $q}')")" \
+        "$(call 2 council_ask "$(jq -cn --arg q "$at_limit" '{question: $q, providers: ["codex"]}')")"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" 'The question is 100002 bytes long; the council takes at most 100000. Shorten it, or say the rest in fewer words.'
+    assert_eq "$(result_error 2)" false
+    assert_eq "$(jq -s length "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl")" 1
+}
+
+@test "extension: a council run that writes more than 8 MiB is stopped, and says so" {
+    install_fake_curl huge
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" 'The council run wrote more than 8 MiB, more than any set of answers needs, so it was stopped.'
 }
 
 @test "extension: council_ask refuses a bad verbosity and an argument it does not take" {
@@ -443,12 +482,111 @@ result_seats() {
     [[ "$second" == *"second question"* && "$second" != *"first question"* ]]
 }
 
-@test "extension: input ending during a council run stops the run with the server" {
-    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=97.31
-    CLIENT_CLOSE_WHEN="${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
+# A codex seat that ignores SIGTERM, as a hung CLI can: it marks
+# $STUBBORN_STARTED once running, then sleeps for the given seconds, a number
+# no other process uses, so pgrep can find it.
+stubborn_seat() {
+    local dir="${BATS_TEST_TMPDIR}/stubborn"
+    mkdir -p "$dir"
+    STUBBORN_STARTED="${dir}/started"
+    printf '#!/bin/bash\ntrap "" TERM\n: > "%s"\nexec sleep %s\n' "$STUBBORN_STARTED" "$1" > "${dir}/codex"
+    chmod +x "${dir}/codex"
+    export PATH="${dir}:$PATH"
+}
+
+# Runs one server session: writes the request lines, waits for the file $1 to
+# appear, then does $2 to the server: "cancel <id>" sends notifications/cancelled
+# for that request and a ping with id 99, then holds the input open for
+# DRIVE_HOLD_MS so a reply the server should not send has time to arrive;
+# "signal <NAME>" sends the server that signal. Leaves the server's stdout in
+# $output and its exit code in $status, 128 plus the signal's number for a
+# signal it died of.
+drive() {
+    local when="$1" action="$2"
+    shift 2
+    printf '%s\n' "$@" > "${BATS_TEST_TMPDIR}/requests.jsonl"
+    run --separate-stderr "$NODE" -e '
+        const { spawn } = require("node:child_process")
+        const fs = require("node:fs")
+        const os = require("node:os")
+        const readline = require("node:readline")
+        const [server, requests, when, action] = process.argv.slice(1)
+        const child = spawn(process.execPath, [server], { stdio: ["pipe", "pipe", "inherit"] })
+        readline.createInterface({ input: child.stdout }).on("line", line => process.stdout.write(`${line}\n`))
+        for (const line of fs.readFileSync(requests, "utf8").split("\n").filter(Boolean)) child.stdin.write(`${line}\n`)
+        const limit = setTimeout(() => {
+          process.stderr.write(`no exit within 30 s; ${when} ${fs.existsSync(when) ? "appeared" : "never appeared"}\n`)
+          child.kill("SIGKILL")
+          process.exit(124)
+        }, 30000)
+        const poll = setInterval(() => {
+          if (!fs.existsSync(when)) return
+          clearInterval(poll)
+          const [verb, argument] = action.split(" ")
+          if (verb === "signal") return child.kill(argument)
+          child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: Number(argument) } })}\n`)
+          child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 99, method: "ping" })}\n`)
+          setTimeout(() => child.stdin.end(), Number(process.env.DRIVE_HOLD_MS ?? 0))
+        }, 50)
+        child.on("exit", (code, signal) => {
+          clearTimeout(limit)
+          process.exit(code ?? 128 + os.constants.signals[signal])
+        })
+    ' "$SERVER" "${BATS_TEST_TMPDIR}/requests.jsonl" "$when" "$action"
+}
+
+@test "extension: input ending during a council run stops the run's whole group, a seat ignoring SIGTERM too" {
+    stubborn_seat 97.31
+    CLIENT_CLOSE_WHEN="$STUBBORN_STARTED" mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
     [ "$status" -eq 0 ]
-    sleep 1
+    assert_eq "$(reply 1)" ''
     run ! pgrep -f 'sleep 97.31'
+}
+
+@test "extension: SIGTERM during a council run stops the run's whole group before the server exits" {
+    stubborn_seat 97.33
+    drive "$STUBBORN_STARTED" "signal SIGTERM" "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
+    [ "$status" -eq 143 ]
+    assert_eq "$(reply 1)" ''
+    run ! pgrep -f 'sleep 97.33'
+}
+
+@test "extension: SIGINT during a council run stops the run's whole group before the server exits" {
+    stubborn_seat 97.34
+    drive "$STUBBORN_STARTED" "signal SIGINT" "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
+    [ "$status" -eq 130 ]
+    assert_eq "$(reply 1)" ''
+    run ! pgrep -f 'sleep 97.34'
+}
+
+@test "extension: a cancelled council question stops its run and is never answered; another goes on" {
+    stubborn_seat 97.32
+    install_fake_curl echo
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    DRIVE_HOLD_MS=4000 drive "$STUBBORN_STARTED" "cancel 1" "$INIT" \
+        "$(call 1 council_ask '{"question":"first question","providers":["codex"]}')" \
+        "$(call 2 council_ask '{"question":"second question","providers":["openrouter"]}')"
+    [ "$status" -eq 0 ]
+    assert_eq "$(reply 1)" ''
+    assert_eq "$(reply 99)" '{"jsonrpc":"2.0","id":99,"result":{}}'
+    assert_eq "$(result_error 2)" false
+    [[ "$(result_seats 2 | jq -r '.seats[0].answer')" == *"second question"* ]]
+    run ! pgrep -f 'sleep 97.32'
+}
+
+@test "extension: a council run past its time limit is stopped, a seat ignoring SIGTERM too" {
+    stubborn_seat 97.35
+    run --separate-stderr "$NODE" -e '
+        const council = require(process.argv[1])
+        const { keys, tooShort } = council.readKeys(process.env)
+        const theCouncil = council.openCouncil({ root: process.argv[2], keys, tooShort, timeoutsMs: { ask: 4000, status: 4000, script: 30000 } })
+        theCouncil.ask({ question: "q", providers: ["codex"] }, new AbortController().signal)
+          .then(outcome => process.stdout.write(JSON.stringify(outcome)))
+    ' "${PROJECT_ROOT}/extension/server/council.js" "$PROJECT_ROOT"
+    [ "$status" -eq 0 ]
+    assert_eq "$output" '{"text":"The council run took longer than 4 seconds and was stopped.","isError":true}'
+    [ -e "$STUBBORN_STARTED" ]
+    run ! pgrep -f 'sleep 97.35'
 }
 
 # ============================================================================
