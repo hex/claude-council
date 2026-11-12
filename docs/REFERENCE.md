@@ -623,12 +623,15 @@ built-in Node.js 18 or later and bash, so it supports macOS and Linux only.
 | Tool | Arguments | What it does |
 |---|---|---|
 | `council_ask` | `question` (required), `providers` (list of names, such as `openai` or `openrouter-2`), `verbosity` (`brief`, `standard`, `detailed`) | Runs `query-council.sh --no-pane` and returns two things: the transcript `format-output.sh` renders from its JSON, as text, and `structuredContent` of the form `{question, seats: [{provider, model, answer}` or `{provider, model, error}]}`, in the order the seats ran. Desktop draws the seats in the answers panel; the text, which orders seats by name, is what the model and an app with no panel get. The tool's description asks Claude for the synthesis, and not to repeat the answers when the app draws the panel. |
-| `council_status` | none | Runs `check-status.sh`, then says that keys go in Desktop's settings, not in exported variables. |
+| `council_status` | none | Runs `check-status.sh`, then names any key field too short to be a key, says when the saved model choices could not be read, and says that keys go in Desktop's settings, not in exported variables. |
 | `council_settings` | none | Lists each provider's model in plain text, and in Desktop opens the settings panel. |
 
 Two more tools, `council_models_data` and `council_models_save`, serve the
 settings panel. They carry `_meta.ui.visibility: ["app"]`, so Desktop hides
 them from the model.
+
+A `notifications/cancelled` for a tool call still running stops the runs it
+started, and the server never answers that call.
 
 **Panels.** Both are MCP App pages with mimeType `text/html;profile=mcp-app`.
 `council_settings` names `ui://council/settings`, and `council_ask` names
@@ -636,8 +639,11 @@ them from the model.
 council" until the result arrives, then one card per seat: the answer drawn
 from a subset of markdown (headings, paragraphs, lists, fenced code, rules,
 bold, italic and inline code; anything else shows as the lines the model
-wrote), or the error in the error colour. A cancelled call says so. Neither
-page uses `innerHTML` or loads anything from the network.
+wrote), or the error in the error colour. The panel gets at most the first
+100000 characters of a seat's answer or error, with `shortenedFrom` giving
+the full length, and the card says it was shortened; the text result always
+carries all of it. A cancelled call says so. Neither page uses `innerHTML` or
+loads anything from the network.
 
 **Keys.** Six optional, sensitive fields in Desktop's settings form reach the
 server as `GEMINI_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`,
@@ -652,6 +658,15 @@ each key value is replaced by `[key removed]`, which covers a provider error
 that quotes the key. The server's own text (the JSON-RPC envelope, tool names,
 schemas and panel pages) is never changed.
 
+Each council seat starts with its own vendor's key and no other, whether it
+is an API seat or a CLI agent: `codex` gets `OPENAI_API_KEY`, `agy`
+`GEMINI_API_KEY`, `grok` `XAI_API_KEY` (and `GROK_API_KEY`, set from it),
+`kimi` `KIMI_API_KEY`, and `cursor-agent`, `claude`, `copilot`, `opencode`
+and `ollama` none. `council_status` is different: `check-status.sh` probes
+`codex`, `agy`, `grok`, `kimi`, `cursor-agent`, `copilot` and `ollama` with
+every key in their environment, and only the `claude` and `opencode` probes
+with their seat's own.
+
 **Models.** The panel lists each keyed provider's models live when it opens:
 Gemini (models that support `generateContent`), OpenAI, xAI (plus
 `grok-latest`, which xAI serves but does not list), Kimi and OpenRouter from
@@ -665,7 +680,9 @@ The saved choices set `GEMINI_MODEL`, `OPENAI_MODEL`, `GROK_MODEL`,
 `PERPLEXITY_MODEL`, `KIMI_MODEL` and `OPENROUTER_MODELS` for each run. The
 server drops those variables, `OPENROUTER_MODEL` and every
 `OPENROUTER_<N>_MODEL` from the environment Desktop starts it with. A model id must match
-`^~?[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`, on save and on read. OpenRouter takes
+`^~?[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`, on save and on read, and none of its
+`/`-separated parts may be empty, `.` or `..`, since `gemini.sh` puts the id
+in a URL path. OpenRouter takes
 at most 12 models, one seat each, named `openrouter-1` to `openrouter-12`;
 `council_ask` refuses a seat number past the saved roster before running
 anything.
@@ -673,17 +690,24 @@ anything.
 **Files.** The extension keeps its state in
 `$XDG_CONFIG_HOME/council-extension`, or `~/.config/council-extension` when
 `XDG_CONFIG_HOME` is unset or relative. The directory is mode 0700, and the
-server sets it back to 0700 when it finds it looser.
+server sets it back to 0700 when it finds it looser. A state directory, or
+its `runs/`, that is a symbolic link is refused with a sentence naming it,
+never followed.
 
 | Path | Contents |
 |---|---|
-| `models.json` | The saved choices, mode 0600, replaced whole through a temporary file. The server ignores a file that fails to parse or holds a bad value: runs use the defaults, and `council_settings` and the panel say so. |
+| `models.json` | The saved choices, mode 0600, replaced whole through a temporary file. The server ignores a file that fails to parse, holds a bad value or is a symbolic link: runs use the defaults, and the `council_ask` result, `council_status`, `council_settings` and the panel each say so. |
 | `runs/` | The working directory of every council run, mode 0700. The response cache lands in `runs/.claude/council-cache/`. The server saves no transcript: the answers come back in the tool result. |
 
 **Limits and environment.** Two `council_ask` calls made together run side
 by side. The server stops a run after 10 minutes and a status check after
-3. Each run starts in a process group of its own, and the server stops the
-whole group when Desktop closes its input. Desktop starts the server with a
+3. Each run starts in a process group of its own. The server stops the whole
+group on a timeout, a cancelled call, a run that writes more than 8 MiB to
+stdout or 1 MiB to stderr, and its own exit (Desktop closing its input, or
+SIGTERM or SIGINT): SIGTERM first, then SIGKILL 2 seconds later for anything
+still running, and it exits only after that. `council_ask` refuses a question
+over 100000 bytes, since it reaches `query-council.sh` as one argument. A
+request line over 1 MiB is dropped with an invalid-request error. Desktop starts the server with a
 minimal `PATH`, so the server appends `~/.local/bin`, `~/bin`,
 `/opt/homebrew/bin` and `/usr/local/bin`, in that order, after the `PATH`
 Desktop gives it. The server never opens a listening socket.

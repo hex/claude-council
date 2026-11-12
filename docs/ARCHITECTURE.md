@@ -617,13 +617,18 @@ runs the same scripts the plugin does.
   tool names, schemas and panel pages are the server's own and pass
   untouched, so a key that happens to occur in them cannot corrupt the
   protocol. A key field holding under 8 characters counts as no key. It exits
-  when stdin closes, stopping any council run first.
+  when stdin closes or on SIGTERM or SIGINT, stopping any council run first,
+  and a `notifications/cancelled` stops the run of the call it names. It reads
+  input by the byte and drops a line over 1 MiB before holding it whole.
 - `server/council.js` holds the provider table (form field, model variable,
   title), reads the keys once at start, keeps the saved model choices, builds
   each run's environment and runs the scripts. A run's environment is the
   server's own minus every key and model variable it inherited, plus the keys
   from the form and the saved models. Each script runs in a process group of
-  its own, so stopping it reaches the providers and CLIs under it. A question
+  its own, so stopping it reaches the providers and CLIs under it: SIGTERM to
+  the group, then SIGKILL two seconds later, since a CLI can ignore SIGTERM
+  and outlive the bash that started it. A run that passes its time limit or
+  writes more than any answers need is stopped the same way. A question
   runs `query-council.sh`, whose JSON keeps each seat's answer and error
   apart, then pipes that JSON through `format-output.sh` for the text. Two
   questions asked together run side by side, as two plugin runs can. The
@@ -641,7 +646,10 @@ runs the same scripts the plugin does.
   `postMessage` connection, theme and size reports) and, for the answers
   panel, `markdown.js`. The pages have no network access: the settings panel
   loads and saves through the two app-only tools, and the answers panel draws
-  the `structuredContent` of the `council_ask` result Desktop hands it.
+  the `structuredContent` of the `council_ask` result Desktop hands it. The
+  `visibility: ["app"]` hint on those two tools is the host's to enforce: the
+  server cannot tell a call from the panel from one by the model, so saving
+  validates every value as if the model had sent it.
 - `server/markdown.js` reads the subset of markdown the answers panel draws
   into plain data (blocks of styled runs). The page builds every DOM node from
   that data with `textContent`, so a model's answer can never become markup.

@@ -64,8 +64,10 @@ Linux only, because it starts the council's bash scripts.
    built or trust.
 3. In Settings, Extensions, Claude Council, Configure, paste a key for each
    provider you want: Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter. An
-   empty field leaves that provider out. Desktop stores the keys; each one
-   goes only to its own provider.
+   empty field leaves that provider's API out. Desktop stores the keys. Each
+   key goes only to its own vendor's seats: the vendor's API, and its CLI
+   agent when one is installed (`codex` gets the OpenAI key, `agy` the Gemini
+   key, `grok` the xAI key, `kimi` the Kimi key).
 4. In a chat, ask Claude to open the council settings. A panel in the chat
    lists each keyed provider's models, fetched live from that provider. Pick
    one per provider, or switch on up to 12 OpenRouter models, one seat each.
@@ -79,7 +81,10 @@ Linux only, because it starts the council's bash scripts.
 A question with no providers named goes to every provider with a key and to
 every CLI agent the scripts find (`codex`, `agy`, `grok`, `kimi`,
 `cursor-agent`, `ollama`) in your PATH, `~/.local/bin`, `~/bin`,
-`/opt/homebrew/bin` or `/usr/local/bin`. The
+`/opt/homebrew/bin` or `/usr/local/bin`. `claude`, `copilot` and `opencode`
+get it only when the question names them. A CLI agent answers on its own
+login, so it receives the question even when its vendor's key field is
+empty; apart from its own vendor's key it gets no key from the form. The
 [reference](docs/REFERENCE.md#claude-desktop-extension) lists the files it
 keeps and its limits.
 
