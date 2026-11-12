@@ -6,7 +6,8 @@
 #  - uncommitted changes in a packed file: the build stops and names the file
 #  - the package misses what the council needs at run time, or carries the developer tools
 #  - the package's version drifts from the plugin's
-#  - mcpb rejects the staged manifest (the build runs mcpb validate before packing)
+#  - mcpb rejects the staged manifest: the build stops with mcpb's reason and packs nothing
+#  - the staging directory left in dist/ after a build, whether it passed or failed
 #  - the packed server cannot find the scripts packed beside it: council_status and
 #    council_ask are run from the unpacked package, outside any checkout
 
@@ -40,6 +41,17 @@ setup() {
     [ ! -e "${REPO}/dist" ]
 }
 
+@test "extension build: a manifest mcpb rejects stops the build with mcpb's reason, leaving nothing in dist" {
+    jq 'del(.author)' "${REPO}/extension/manifest.json" > "${BATS_TEST_TMPDIR}/manifest.json"
+    cp "${BATS_TEST_TMPDIR}/manifest.json" "${REPO}/extension/manifest.json"
+    git -C "$REPO" -c user.name=test -c user.email=test@example.com commit -qam "manifest without an author"
+    run --separate-stderr bash "${REPO}/extension/build.sh"
+    [ "$status" -eq 1 ]
+    assert_eq "$output" ''
+    [[ "$stderr" == *$'ERROR: Manifest validation failed:\n\n  - author: Required'* ]]
+    assert_eq "$(ls -A "${REPO}/dist")" ''
+}
+
 @test "extension build: the package holds the server and the council scripts at the plugin's version, and runs" {
     run --separate-stderr bash "${REPO}/extension/build.sh"
     [ "$status" -eq 0 ]
@@ -60,6 +72,7 @@ setup() {
     done
     [ ! -e "${unpacked}/plugin/scripts/dev" ]
     [ ! -e "${unpacked}/tests" ]
+    assert_eq "$(ls -A "${REPO}/dist")" "council-${version}.mcpb"
 
     install_fake_clis
     isolate_seat_dirs

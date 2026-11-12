@@ -27,6 +27,17 @@ DIST="${REPO_ROOT}/dist"
 STAGE="${DIST}/stage"
 OUTPUT="${DIST}/council-${VERSION}.mcpb"
 
+# The stage goes whether the build passed or failed, and so does a package
+# a failed build may have left half written. The status is passed on by hand:
+# bash 3.2 can lose it when an EXIT trap runs after a set -u failure.
+cleanup() {
+    local status=$?
+    rm -rf "$STAGE"
+    if (( status != 0 )); then rm -f "$OUTPUT"; fi
+    exit "$status"
+}
+trap cleanup EXIT
+
 rm -rf "$STAGE" "$OUTPUT"
 mkdir -p "${STAGE}/plugin"
 git archive HEAD "${PLUGIN_PATHS[@]}" | tar -x -C "${STAGE}/plugin"
