@@ -8,6 +8,9 @@
 // it provokes (a parse error) still lands in order. After the last line the
 // server's input is closed, and the server must then exit on its own within
 // CLIENT_EXIT_WAIT_MS, or this exits 124.
+// CLIENT_CONCURRENT=1 writes every line at once and then waits for all the
+// replies. CLIENT_CLOSE_WHEN=<path> writes every line at once and closes the
+// input as soon as that file exists, without waiting for any reply.
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const readline = require('node:readline')
@@ -19,7 +22,7 @@ const lines = fs.readFileSync(requestsPath, 'utf8').split('\n').filter(line => l
 
 const server = spawn(process.execPath, [serverPath], { stdio: ['pipe', 'pipe', 'inherit'] })
 const replies = new Map()
-let waiting = null
+const waiting = new Map()
 readline.createInterface({ input: server.stdout }).on('line', line => {
   process.stdout.write(`${line}\n`)
   let id
@@ -29,14 +32,14 @@ readline.createInterface({ input: server.stdout }).on('line', line => {
     return
   }
   replies.set(id, true)
-  if (waiting && waiting.id === id) waiting.resolve()
+  waiting.get(id)?.()
 })
 
 function replyTo(id) {
   if (replies.has(id)) return Promise.resolve()
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`no reply to request ${id} within ${REPLY_WAIT_MS} ms`)), REPLY_WAIT_MS)
-    waiting = { id, resolve: () => { clearTimeout(timer); waiting = null; resolve() } }
+    waiting.set(id, () => { clearTimeout(timer); waiting.delete(id); resolve() })
   })
 }
 
@@ -49,13 +52,39 @@ function idOf(line) {
   }
 }
 
-async function main() {
+function fileAppears(file) {
+  return new Promise((resolve, reject) => {
+    const started = Date.now()
+    const timer = setInterval(() => {
+      if (fs.existsSync(file)) { clearInterval(timer); resolve() }
+      else if (Date.now() - started > REPLY_WAIT_MS) { clearInterval(timer); reject(new Error(`${file} did not appear within ${REPLY_WAIT_MS} ms`)) }
+    }, 50)
+  })
+}
+
+async function send() {
+  if (process.env.CLIENT_CLOSE_WHEN) {
+    for (const line of lines) server.stdin.write(`${line}\n`)
+    return fileAppears(process.env.CLIENT_CLOSE_WHEN)
+  }
+  if (process.env.CLIENT_CONCURRENT === '1') {
+    for (const line of lines) server.stdin.write(`${line}\n`)
+    for (const line of lines) {
+      const id = idOf(line)
+      if (id !== undefined) await replyTo(id)
+    }
+    return
+  }
   for (const line of lines) {
     server.stdin.write(`${line}\n`)
     const id = idOf(line)
     if (id === undefined) await new Promise(resolve => setTimeout(resolve, 300))
     else await replyTo(id)
   }
+}
+
+async function main() {
+  await send()
   server.stdin.end()
   const timer = setTimeout(() => {
     process.stderr.write(`server still running ${EXIT_WAIT_MS} ms after its input closed\n`)

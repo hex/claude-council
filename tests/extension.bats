@@ -180,3 +180,156 @@ save_choices() {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"ui://council/nope"}}'
     assert_eq "$(reply 1)" '{"jsonrpc":"2.0","id":1,"error":{"code":-32002,"message":"resource not found: ui://council/nope"}}'
 }
+
+# ============================================================================
+# council_ask
+# ============================================================================
+
+# A curl that stands in for the provider APIs, first on PATH. "answer" replies
+# to a chat request with the model it was asked for and appends that model to
+# $COUNCIL_FAKE_SENT_MODELS; "leak" fails the transfer after printing its --config file,
+# which holds the Authorization header, to stderr.
+install_fake_curl() {
+    local dir="${BATS_TEST_TMPDIR}/curlbin"
+    mkdir -p "$dir"
+    export COUNCIL_FAKE_SENT_MODELS="${BATS_TEST_TMPDIR}/sent-models" COUNCIL_FAKE_CURL_MODE="$1"
+    cat > "$dir/curl" <<'CURL'
+#!/bin/bash
+out="" prev="" payload=""
+for arg in "$@"; do
+    [[ "$prev" == "-o" ]] && out="$arg"
+    [[ "$prev" == "--config" && "$COUNCIL_FAKE_CURL_MODE" == leak ]] && cat "$arg" >&2
+    [[ "$prev" == "--data-binary" && "$arg" == @* ]] && payload="${arg#@}"
+    prev="$arg"
+done
+if [[ "$COUNCIL_FAKE_CURL_MODE" == leak ]]; then
+    echo "curl: (7) Failed to connect" >&2
+    printf '000'
+    exit 7
+fi
+model=$(jq -r '.model' "$payload")
+printf '%s\n' "$model" >> "$COUNCIL_FAKE_SENT_MODELS"
+jq -cn --arg m "$model" '{choices: [{message: {content: ("answer from " + $m)}}]}' > "$out"
+printf '200'
+CURL
+    chmod +x "$dir/curl"
+    export PATH="$dir:$PATH"
+}
+
+@test "extension: council_ask refuses a question that is empty or blank, running nothing" {
+    mcp "$INIT" "$(call 1 council_ask '{"question":""}')" "$(call 2 council_ask '{"question":"  \n "}')" "$(call 3 council_ask '{}')"
+    for id in 1 2 3; do
+        assert_eq "$(result_error $id)" true
+        assert_eq "$(result_text $id)" 'The question is empty. Ask a self-contained question: the council sees nothing else.'
+    done
+    [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
+}
+
+@test "extension: council_ask refuses a provider that does not exist, naming it and the real ones" {
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["../openai"]}')" \
+        "$(call 2 council_ask '{"question":"q","providers":[]}')"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" '"../openai" is not a council provider. Known providers: antigravity, claude-cli, codex, copilot-cli, cursor-cli, gemini, grok, grok-cli, kimi, kimi-cli, ollama, openai, opencode, openrouter, perplexity, and openrouter-1 to openrouter-12 for saved OpenRouter seats.'
+    assert_eq "$(result_text 2)" 'providers must list at least one provider name, or be left out to ask every configured provider'
+    [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
+}
+
+@test "extension: council_ask refuses a bad verbosity and an argument it does not take" {
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","verbosity":"loud"}')" \
+        "$(call 2 council_ask '{"question":"q","model":"x"}')"
+    assert_eq "$(result_text 1)" 'verbosity must be brief, standard or detailed, not "loud"'
+    assert_eq "$(result_text 2)" 'council_ask has no argument "model"; it takes question, providers and verbosity'
+    [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
+}
+
+@test "extension: council_ask returns the saved answer although the script prints its path relative to the run" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    mcp "$INIT" "$(call 1 council_ask '{"question":"Which queue?","providers":["codex"]}')"
+    assert_eq "$(result_error 1)" false
+    [[ "$(result_text 1)" == *"FAKE-CODEX-RESPONSE: deterministic answer"* ]]
+    assert_eq "$(jq -r '.bin' "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl")" codex
+    # Read and removed: no transcript is left behind in the run directory.
+    assert_eq "$(find "${STATE_DIR}/runs" -name 'council-*.md' | wc -l | tr -d ' ')" 0
+}
+
+@test "extension: a failed council run returns the scripts' own error" {
+    export COUNCIL_FAKE_BEHAVIOR=valid TMPDIR="${BATS_TEST_TMPDIR}/no-such-dir"
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
+    assert_eq "$(result_error 1)" true
+    # The third line is mktemp's own, worded differently by BSD and GNU.
+    local text
+    text=$(result_text 1)
+    assert_eq "$(printf '%s\n' "$text" | sed -n 1,2p)" "$(printf '%s\n' 'Error: Invalid JSON input' 'Council query failed:')"
+    [[ "$(printf '%s\n' "$text" | sed -n 3p)" == "mktemp: "*"${TMPDIR}/council-query."*": No such file or directory" ]]
+}
+
+@test "extension: a key quoted in a seat's error never leaves the server, nor lands in a state file" {
+    install_fake_curl leak
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')" "$(call 2 council_settings)" "$(call 3 council_models_data)"
+    [[ "$(result_text 1)" == *'header = "Authorization: Bearer [key removed]"'* ]]
+    [[ "$output" != *"$SENTINEL_KEY"* ]]
+    [[ "$stderr" != *"$SENTINEL_KEY"* ]]
+    run ! grep -rqF "$SENTINEL_KEY" "$STATE_DIR"
+}
+
+@test "extension: a seat past the saved OpenRouter roster is refused before anything runs" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    save_choices '{"openrouter":["vendor/alpha","vendor/beta"]}'
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter-1","openrouter-3"]}')"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" 'openrouter-3 is not a seat: the saved OpenRouter roster has 2 models. Choose OpenRouter models with the council_settings tool.'
+    [ ! -e "$COUNCIL_FAKE_SENT_MODELS" ]
+}
+
+@test "extension: the saved OpenRouter roster reaches the run as one seat per model" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    save_choices '{"openrouter":["vendor/alpha","vendor/beta"]}'
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter-1","openrouter-2"]}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(sort "$COUNCIL_FAKE_SENT_MODELS" | paste -sd, -)" 'vendor/alpha,vendor/beta'
+    [[ "$(result_text 1)" == *"answer from vendor/alpha"*"answer from vendor/beta"* ]]
+}
+
+@test "extension: model variables inherited from Desktop's environment are dropped" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    export OPENROUTER_MODEL=inherited/model OPENROUTER_1_MODEL=inherited/seat OPENROUTER_MODELS=inherited/roster
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')"
+    assert_eq "$(cat "$COUNCIL_FAKE_SENT_MODELS")" "$(env -u OPENROUTER_MODEL bash -c 'source "$1"; get_model openrouter' _ "${LIB_DIR}/providers.sh")"
+}
+
+@test "extension: a malformed models file is ignored for runs" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    save_choices '{"openrouter":"vendor/not-a-list"}'
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(cat "$COUNCIL_FAKE_SENT_MODELS")" "$(bash -c 'source "$1"; get_model openrouter' _ "${LIB_DIR}/providers.sh")"
+}
+
+@test "extension: under Desktop's minimal PATH a CLI seat in ~/.local/bin is still found" {
+    mkdir -p "${HOME}/.local/bin"
+    cp "${FAKE_BIN_DIR}/codex" "${HOME}/.local/bin/codex"
+    PATH=/usr/bin:/bin mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
+    assert_eq "$(result_error 1)" false
+    [[ "$(result_text 1)" == *"FAKE-CODEX-RESPONSE: deterministic answer"* ]]
+}
+
+@test "extension: two questions asked at once each get their own answer" {
+    CLIENT_CONCURRENT=1 mcp "$INIT" "$(call 1 council_ask '{"question":"first question","providers":["codex"]}')" \
+        "$(call 2 council_ask '{"question":"second question","providers":["codex"]}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_error 2)" false
+    assert_eq "$(jq -s 'length' "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl")" 2
+}
+
+@test "extension: input ending during a council run stops the run with the server" {
+    export COUNCIL_FAKE_BEHAVIOR=hang COUNCIL_FAKE_SLEEP=97.31
+    CLIENT_CLOSE_WHEN="${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
+    [ "$status" -eq 0 ]
+    sleep 1
+    run ! pgrep -f 'sleep 97.31'
+}
