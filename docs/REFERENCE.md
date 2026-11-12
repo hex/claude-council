@@ -166,6 +166,23 @@ export KIMI_API_KEY="your-key"         # MOONSHOT_API_KEY is read as a fallback,
 export OPENROUTER_API_KEY="your-key"   # one key, any model on openrouter.ai/models
 ```
 
+Or store them in the plugin's config with `/plugin configure claude-council`, or
+from a shell with `claude plugin configure claude-council@<marketplace> --values-stdin`.
+The six fields are `gemini_api_key`, `openai_api_key`, `xai_api_key`,
+`perplexity_api_key`, `kimi_api_key` and `openrouter_api_key`. Claude Code keeps
+them in the system's credential store, not in `settings.json`. When a session
+starts, the council's mod sets each stored key as `GEMINI_API_KEY`,
+`OPENAI_API_KEY`, `XAI_API_KEY`, `PERPLEXITY_API_KEY`, `KIMI_API_KEY` or
+`OPENROUTER_API_KEY` in Claude Code's own process. Every slash command, council
+tool call, heads-up check and Stop-gate review started after that inherits it, and
+a stored key wins over the same variable exported in your shell. The mod writes no
+key to a file. Restart Claude Code after you save a key.
+
+Stored keys work only where the mod loads, which takes Claude Code 2.1.287 or
+later and a session without `--safe-mode` or `disableAllHooks`. claude.ai chat and Cowork have no config
+dialog, so stored keys never reach them. Saving an empty value does not remove a
+stored key.
+
 `openrouter` seats whatever model `OPENROUTER_MODEL` names, defaulting to
 `anthropic/claude-fable-5.1` — the one vendor the council has no direct seat for.
 To seat several routed models at once, list them instead:
@@ -483,7 +500,9 @@ proxy and CA-bundle settings, the Windows variables Git Bash needs, every
 `COUNCIL_*` setting, and its own vendor's variables (`GEMINI_*` and
 `GOOGLE_*` for Gemini and Antigravity, `XAI_*` and `GROK_*` for Grok, and so
 on). Another vendor's key, and any other secret your shell exports, does not
-reach it. If a CLI provider needs something else from your environment, name
+reach it. Nor do the `CLAUDE_PLUGIN_OPTION_*` variables Claude Code gives a
+hook, which hold every stored plugin option, the API keys among them.
+If a CLI provider needs something else from your environment, name
 it:
 
 ```bash

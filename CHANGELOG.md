@@ -4,6 +4,17 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Added
+- Provider API keys can live in the plugin's config instead of your shell profile. `/plugin configure claude-council` has six new fields, for Gemini, OpenAI, xAI, Perplexity, Kimi and OpenRouter. Claude Code keeps them in the system's credential store, not in `settings.json`. When a session starts, the council's mod sets each stored key as its variable (`GEMINI_API_KEY` and so on) in Claude Code's own process, and no key goes to a file. A stored key wins over the same variable exported in your shell, for slash commands, the council tool, heads-up checks and the Stop gate. Stored keys work only where the mod loads, which takes Claude Code 2.1.287 or later and a session without `--safe-mode`. They never reach claude.ai chat or Cowork, which have no config dialog. Restart Claude Code after you save a key.
+
+### Changed
+- `/claude-council:status` and the no-providers message name `/plugin configure claude-council` next to the shell export.
+
+### Security
+- No seat receives the `CLAUDE_PLUGIN_OPTION_*` variables any more. Claude Code gives a hook every stored plugin option under that prefix, and the Stop gate starts its seat from a hook, so that seat would otherwise have received every stored API key. A seat still gets its own key through its vendor's variables.
+
 ## 2026.11.1
 
 ### Fixed

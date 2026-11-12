@@ -26,6 +26,15 @@ export OPENAI_API_KEY="..."
 # KIMI_API_KEY, OPENROUTER_API_KEY
 ```
 
+Or store the keys in the plugin's config. Run `/plugin configure claude-council`,
+fill in the API key rows, and restart Claude Code. Claude Code keeps them in the
+system's credential store, not in a settings file. When a session starts, the
+council's mod sets each stored key as its variable for that session, so a stored
+key wins over one your shell exports. Stored keys work only where the mod loads,
+which takes Claude Code 2.1.287 or later and a session without `--safe-mode` or
+`disableAllHooks`.
+claude.ai chat and Cowork have no config dialog, so stored keys never reach them.
+
 The `codex`, `agy` (Antigravity), `grok`, `kimi`, and `cursor-agent` CLIs use
 your existing subscriptions without an API key. Claude Code itself, the
 Copilot CLI and OpenCode can sit too, when named in `--providers`. A local
@@ -202,7 +211,8 @@ home, because the native CLIs find it through `USERPROFILE`.
 | Problem | Fix |
 |---|---|
 | Cloned the repo and nothing loads | Don't clone into `~/.claude/plugins/`. `pluginDirectories` is not a setting. Follow [running from a local clone](docs/REFERENCE.md#running-from-a-local-clone). |
-| No providers found | Run `/claude-council:status`. Export keys in the shell that starts Claude Code, or use `--local`. |
+| No providers found | Run `/claude-council:status`. Export keys in the shell that starts Claude Code, store them with `/plugin configure claude-council`, or use `--local`. |
+| A stored key is not used | Restart Claude Code after saving it. Stored keys need the council's mod, which loads on Claude Code 2.1.287 or later and not under `--safe-mode`. Without it, export the key in your shell. |
 | A different model answered | A header such as `grok-4.7 (grok-latest unavailable)` records a [model fallback](docs/REFERENCE.md#model-fallback). Setting that provider's `_MODEL` variable disables fallback. |
 | No pane | Use tmux or set `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` for the pane inside Claude Code. |
 | Updating | Run `/plugin update claude-council`, then restart Claude Code. |

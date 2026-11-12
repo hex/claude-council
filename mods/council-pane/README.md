@@ -74,6 +74,8 @@ They show up in `/config`, which lists each row by its title alone; the table be
 | `council_tool` | on | Registers `mcp__claude-council__ask` so the model can call the council as a tool. Each call asks you first. |
 | `heads_up` | off | Turns the heads-up side-check on in every project. A project's `.claude/council-heads-up.json` overrides it for that project. See [Heads-up side-check](#heads-up-side-check). |
 
+Six more fields hold provider API keys: `gemini_api_key`, `openai_api_key`, `xai_api_key`, `perplexity_api_key`, `kimi_api_key` and `openrouter_api_key`. They are sensitive, so `/config` does not list them; set them with `/plugin configure claude-council` and restart Claude Code. Claude Code keeps them in the system's credential store. At session start, before anything else, the mod sets each stored key as its variable (`GEMINI_API_KEY` and so on) in Claude Code's own process with `$.env.set`, so the council's scripts, Bash commands and hooks started after it see the stored key in place of a shell export. The mod writes no key to a file. `hooks/keys.ts` holds the table, and `tests/keys.test.ts` fails when it, `plugin.json` and the `$.env.set` calls in `pane.tsx` disagree.
+
 The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. Every call opens a dialog quoting the question and naming the providers, and nothing leaves the machine unless you choose `Send to the council`. `Don't send` or dismissing the dialog refuses the call. Anything you type under Other goes back to the model as a plain tool result, not a refusal, so it reads as your answer rather than an error. A `claude -p` run has no one to ask and gets the same refusal.
 
 ## Heads-up side-check

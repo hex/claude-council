@@ -137,7 +137,9 @@ EXIT:   0 = success, non-zero = failure (error to stderr)
             model instead of surfacing the error (see Model Fallback below)
 ENV:    scrubbed by provider_env_scrub (lib/providers.sh) in the subshell
         that execs the script: base, proxy/CA and Windows variables,
-        COUNCIL_*, the provider's vendor prefixes and exact names (claude-cli
+        COUNCIL_*, CLAUDE_PLUGIN_* apart from the CLAUDE_PLUGIN_OPTION_*
+        variables a hook gets (every stored option, API keys included),
+        the provider's vendor prefixes and exact names (claude-cli
         keeps CLAUDE_CODE_OAUTH_TOKEN and CLAUDE_CONFIG_DIR; copilot-cli keeps
         COPILOT_GITHUB_TOKEN and COPILOT_HOME, not GH_TOKEN or GITHUB_TOKEN;
         opencode keeps OPENCODE_MODEL, OPENCODE_CONFIG and OPENCODE_CONFIG_DIR,
@@ -817,7 +819,7 @@ claude-council/
 │       ├── export.sh            # Markdown export
 │       ├── hash.sh              # Portable SHA-256 helper (shasum / sha256sum)
 │       ├── jobs.sh              # Background job store
-│       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY)
+│       ├── keys.sh              # API key resolution (XAI_API_KEY ↔ GROK_API_KEY); a key stored in plugin config is already exported by then, set by the mod
 │       ├── model_fallback.sh    # Fallback model per provider + TTL-cached unavailable verdicts
 │       ├── pane-watcher.sh      # Runs in the tmux pane: streams status + rendered responses, re-renders them all on resize, offers a retry of failed providers
 │       ├── prompts.sh           # Template loading + {{VAR}} interpolation
@@ -948,6 +950,7 @@ claude-council/
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
 | `COUNCIL_MOD_PANE_DIR` | - | An existing directory a run writes its watch dir into, opening no tmux pane. Only the council-pane mod sets it; `COUNCIL_NO_PANE` still wins |
 | `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `heads_up` | ask, on, off, on, off | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each |
+| `/plugin configure` fields `gemini_api_key`, `openai_api_key`, `xai_api_key`, `perplexity_api_key`, `kimi_api_key`, `openrouter_api_key` | unset | Provider API keys in the system's credential store (`sensitive` in `userConfig`, so no `/config` row). `mods/council-pane/hooks/keys.ts` maps each to its variable, and at `session.start`, before anything else, the mod sets it with `$.env.set` in Claude Code's own process, over a shell export. Nothing reaches a file. Only where the mod loads |
 | `COUNCIL_HEADS_UP_SEAT_SECONDS` | 60 | The heads-up seat's deadline per check (s) |
 | `COUNCIL_HEADS_UP_TURNS` | 5 | Prompts (typed, or submitted by cs/cs-rotate) the heads-up digest window covers, from the Nth-last to the end |
 | `COUNCIL_HEADS_UP_RESULTS` | 8 | Tool results inside that window the heads-up digest carries, 2000 characters each; a Write or Edit slot carries the text it wrote |
