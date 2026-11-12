@@ -45,7 +45,9 @@ function markdownBlocks(markdown) {
       blocks.push({ type: 'code', text: code.join('\n') })
       continue
     }
-    if (line.trim() === '') { close(); continue }
+    // A blank line ends a paragraph but not a list: models put one between
+    // items, and an indented paragraph after one still belongs to its item.
+    if (line.trim() === '') { paragraph = null; continue }
     const heading = line.match(HEADING)
     if (heading) {
       close()

@@ -50,3 +50,8 @@ setup() {
     assert_eq "$(blocks $'Intro\r\n```\r\nleft open\r\nstill code')" \
         '[{"type":"paragraph","runs":[{"style":"text","text":"Intro"}]},{"type":"code","text":"left open\nstill code"}]'
 }
+
+@test "extension markdown: items separated by blank lines stay one list, and an indented paragraph stays in its item" {
+    assert_eq "$(blocks $'1. a\n\n2. b\n\n   more of b\n\n3. c\n\n- x\n\n- y\n\nAfter.')" \
+        '[{"type":"list","ordered":true,"items":[{"depth":0,"runs":[{"style":"text","text":"a"}]},{"depth":0,"runs":[{"style":"text","text":"b more of b"}]},{"depth":0,"runs":[{"style":"text","text":"c"}]}]},{"type":"list","ordered":false,"items":[{"depth":0,"runs":[{"style":"text","text":"x"}]},{"depth":0,"runs":[{"style":"text","text":"y"}]}]},{"type":"paragraph","runs":[{"style":"text","text":"After."}]}]'
+}
