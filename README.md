@@ -64,10 +64,12 @@ Linux only, because it starts the council's bash scripts.
    built or trust.
 3. In Settings, Extensions, Claude Council, Configure, paste a key for each
    provider you want: Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter. An
-   empty field leaves that provider's API out. Desktop stores the keys. Each
-   key goes only to its own vendor's seats: the vendor's API, and its CLI
-   agent when one is installed (`codex` gets the OpenAI key, `agy` the Gemini
-   key, `grok` the xAI key, `kimi` the Kimi key).
+   empty field leaves that provider's API out. Desktop stores the keys. For a
+   question, each key goes only to its own vendor's seats: the vendor's API,
+   and its CLI agent when one is installed (`codex` gets the OpenAI key, `agy`
+   the Gemini key, `grok` the xAI key, `kimi` the Kimi key). A status check is
+   different: it starts each installed CLI agent but `claude` and `opencode`
+   with every key set.
 4. In a chat, ask Claude to open the council settings. A panel in the chat
    lists each keyed provider's models, fetched live from that provider. Pick
    one per provider, or switch on up to 12 OpenRouter models, one seat each.
