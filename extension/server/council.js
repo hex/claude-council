@@ -183,12 +183,12 @@ function openCouncil({ root, keys }) {
   const running = new Set()
   let asking = Promise.resolve()
 
-  // Each run gets its own process group so stopping it reaches the provider
-  // scripts and CLIs it started, not just the bash at the top.
   function runScript(script, args, options) {
     return runBash([path.join(root, 'scripts', script), ...args], options)
   }
 
+  // Each run gets its own process group so stopping it reaches the provider
+  // scripts and CLIs it started, not just the bash at the top.
   function runBash(args, options) {
     return new Promise(resolve => {
       const child = spawn('bash', args, {
@@ -204,6 +204,11 @@ function openCouncil({ root, keys }) {
       }, options.timeoutMs)
       child.stdout.on('data', chunk => { stdout += chunk })
       child.stderr.on('data', chunk => { stderr += chunk })
+      child.on('error', err => {
+        clearTimeout(timer)
+        running.delete(child)
+        resolve({ exitCode: 127, stdout, stderr: `could not start bash: ${err.message}`, timedOut })
+      })
       child.on('close', code => {
         clearTimeout(timer)
         running.delete(child)
