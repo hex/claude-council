@@ -192,7 +192,6 @@ function refused(text) {
 // The council as one object over a plugin root and the keys Desktop gave.
 function openCouncil({ root, keys }) {
   const running = new Set()
-  let asking = Promise.resolve()
 
   function runScript(script, args, options) {
     return runBash([path.join(root, 'scripts', script), ...args], options)
@@ -293,11 +292,7 @@ function openCouncil({ root, keys }) {
       const saved = roster.length === 0 ? 'no OpenRouter seats are saved' : `the saved OpenRouter roster has ${roster.length} model${roster.length === 1 ? '' : 's'}`
       return refused(`${pastRoster} is not a seat: ${saved}. Choose OpenRouter models with the council_settings tool.`)
     }
-    // One run at a time, as the plugin runs them in Claude Code: the scripts
-    // were not written for two runs sharing one working directory and cache.
-    const run = asking.then(() => runAsk(request, choices))
-    asking = run.catch(() => {})
-    return run
+    return runAsk(request, choices)
   }
 
   // Asks the seats through query-council.sh, whose JSON gives each seat's

@@ -622,10 +622,10 @@ runs the same scripts the plugin does.
   from the form and the saved models. Each script runs in a process group of
   its own, so stopping it reaches the providers and CLIs under it. A question
   runs `query-council.sh`, whose JSON keeps each seat's answer and error
-  apart, then pipes that JSON through `format-output.sh` for the text. Asks
-  run one at a time, as the plugin runs them; the scripts were not written for
-  two runs sharing one working directory and cache. The defaults the panel shows come from `get_model` run under the
-  same environment as a run with nothing chosen, so the two cannot disagree.
+  apart, then pipes that JSON through `format-output.sh` for the text. Two
+  questions asked together run side by side, as two plugin runs can. The
+  defaults the panel shows come from `get_model` run under the same
+  environment as a run with nothing chosen, so the two cannot disagree.
 - `server/models.js` asks each keyed provider for its model list and parses the
   answer. The parsing is pure, so `tests/extension-models.bats` checks it
   against recorded and documented answers.

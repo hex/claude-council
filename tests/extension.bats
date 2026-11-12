@@ -244,7 +244,11 @@ if [[ "$COUNCIL_FAKE_CURL_MODE" == leak ]]; then
 fi
 model=$(jq -r '.model' "$payload")
 printf '%s\n' "$model" >> "$COUNCIL_FAKE_SENT_MODELS"
-if [[ "$COUNCIL_FAKE_CURL_MODE" == colour ]]; then
+if [[ "$COUNCIL_FAKE_CURL_MODE" == echo ]]; then
+    # Long enough that two runs asked together are both in flight.
+    sleep 2
+    jq -c '{choices: [{message: {content: ("asked: " + .messages[-1].content)}}]}' "$payload" > "$out"
+elif [[ "$COUNCIL_FAKE_CURL_MODE" == colour ]]; then
     jq -cn --arg m "$model" '{choices: [{message: {content: ("\u001b[1manswer\u001b[0m from " + $m)}}]}' > "$out"
 else
     jq -cn --arg m "$model" '{choices: [{message: {content: ("answer from " + $m)}}]}' > "$out"
@@ -396,11 +400,17 @@ result_seats() {
 }
 
 @test "extension: two questions asked at once each get their own answer" {
-    CLIENT_CONCURRENT=1 mcp "$INIT" "$(call 1 council_ask '{"question":"first question","providers":["codex"]}')" \
-        "$(call 2 council_ask '{"question":"second question","providers":["codex"]}')"
+    install_fake_curl echo
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    CLIENT_CONCURRENT=1 mcp "$INIT" "$(call 1 council_ask '{"question":"first question","providers":["openrouter"]}')" \
+        "$(call 2 council_ask '{"question":"second question","providers":["openrouter"]}')"
     assert_eq "$(result_error 1)" false
     assert_eq "$(result_error 2)" false
-    assert_eq "$(jq -s 'length' "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl")" 2
+    local first second
+    first=$(result_seats 1 | jq -r '.seats[0].answer')
+    second=$(result_seats 2 | jq -r '.seats[0].answer')
+    [[ "$first" == *"first question"* && "$first" != *"second question"* ]]
+    [[ "$second" == *"second question"* && "$second" != *"first question"* ]]
 }
 
 @test "extension: input ending during a council run stops the run with the server" {

@@ -676,8 +676,8 @@ server sets it back to 0700 when it finds it looser.
 | `models.json` | The saved choices, mode 0600, replaced whole through a temporary file. The server ignores a file that fails to parse or holds a bad value: runs use the defaults, and `council_settings` and the panel say so. |
 | `runs/` | The working directory of every council run, mode 0700. The response cache lands in `runs/.claude/council-cache/`. The server saves no transcript: the answers come back in the tool result. |
 
-**Limits and environment.** One `council_ask` runs at a time; a second waits
-for the first. The server stops a run after 10 minutes and a status check after
+**Limits and environment.** Two `council_ask` calls made together run side
+by side. The server stops a run after 10 minutes and a status check after
 3. Each run starts in a process group of its own, and the server stops the
 whole group when Desktop closes its input. Desktop starts the server with a
 minimal `PATH`, so the server appends `~/.local/bin`, `~/bin`,
