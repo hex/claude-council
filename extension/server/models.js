@@ -9,6 +9,14 @@ const LIST_TIMEOUT_MS = 15 * 1000
 // shell character gets through. OpenRouter's aliases start with a tilde.
 const MODEL_ID = /^~?[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/
 
+// Whether a value is a model id. Some scripts put the id in a URL path
+// (gemini.sh), so its slash-separated parts must each be a real name: none
+// empty, none `.` or `..`.
+function isModelId(value) {
+  return typeof value === 'string' && MODEL_ID.test(value) &&
+    value.split('/').every(part => part !== '' && part !== '.' && part !== '..')
+}
+
 // Perplexity's Agent API takes these presets; it has no list endpoint to ask.
 const PERPLEXITY_PRESETS = ['fast', 'low', 'medium', 'high', 'xhigh']
 
@@ -46,7 +54,7 @@ const LISTS = {
 // The ids a provider's list answer offers, in the order the panel shows them.
 function modelIds(provider, body) {
   if (provider === 'perplexity') return PERPLEXITY_PRESETS
-  const ids = LISTS[provider].ids(body).filter(id => typeof id === 'string' && MODEL_ID.test(id))
+  const ids = LISTS[provider].ids(body).filter(isModelId)
   return [...new Set(ids)].sort()
 }
 
@@ -58,4 +66,4 @@ async function listModels(provider, key) {
   return modelIds(provider, await response.json())
 }
 
-module.exports = { MODEL_ID, PERPLEXITY_PRESETS, listModels, modelIds }
+module.exports = { PERPLEXITY_PRESETS, isModelId, listModels, modelIds }

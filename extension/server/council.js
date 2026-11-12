@@ -82,12 +82,12 @@ function choiceProblem(provider, choice) {
   if (provider.roster) {
     if (!Array.isArray(choice)) return `${provider.title}: expected a list of model ids, got ${shown(choice)}`
     if (choice.length > ROSTER_MAX) return `${provider.title}: ${choice.length} models chosen, at most ${ROSTER_MAX} seats`
-    const bad = choice.find(id => typeof id !== 'string' || !models.MODEL_ID.test(id))
+    const bad = choice.find(id => !models.isModelId(id))
     if (bad !== undefined) return `${provider.title}: ${shown(bad)} is not a model id`
     if (new Set(choice).size !== choice.length) return `${provider.title}: a model is chosen twice`
     return ''
   }
-  if (choice !== '' && (typeof choice !== 'string' || !models.MODEL_ID.test(choice))) return `${provider.title}: ${shown(choice)} is not a model id`
+  if (choice !== '' && !models.isModelId(choice)) return `${provider.title}: ${shown(choice)} is not a model id`
   return ''
 }
 

@@ -24,6 +24,8 @@
 #   - each seat's answer comes back twice: in the text for the model, and as structuredContent seats
 #     in the order the council ran them for the answers panel
 #   - a seat error reaches structuredContent as an error, never as an answer
+#   - an answer too long for the panel: the model gets it whole, the panel its first 100000
+#     characters with the full length beside them
 #   - every seat failing: still a result, with every seat's error, that the panel can draw
 #   - ANSI colour codes in a seat's answer or error: none in the text or in structuredContent
 #   - a failed run: the scripts' own error comes back as the tool error
@@ -40,6 +42,8 @@
 #   - the state directory: under an absolute XDG_CONFIG_HOME, else under ~/.config
 #   - a malformed models file: runs use the defaults, and the settings text says the file was ignored
 #   - a bad model id on save: refused naming the provider, the file left as it was
+#   - a model id with a `..`, `.` or empty part (gemini.sh puts the id in a URL path): refused,
+#     while real ids with slashes, colons and a leading tilde save
 #   - a save: the file is 0600 in a 0700 directory, no temporary file left behind, and a state
 #     directory found with looser permissions is tightened
 #  settings and status
@@ -502,6 +506,23 @@ mode_of() {
     assert_eq "$(mode_of "${STATE_DIR}/models.json")" 600
     assert_eq "$(mode_of "$STATE_DIR")" 700
     assert_eq "$(ls -A "$STATE_DIR" | paste -sd, -)" 'models.json'
+}
+
+@test "extension: a model id shaped like a path that climbs or has an empty part is refused; real ids save" {
+    mcp "$INIT" "$(call 1 council_models_save '{"selections":{"openrouter":["a/../../../etc/x"]}}')" \
+        "$(call 2 council_models_save '{"selections":{"gemini":"x:generateContent/../y"}}')" \
+        "$(call 3 council_models_save '{"selections":{"openai":"gpt-6-astra/"}}')" \
+        "$(call 4 council_models_save '{"selections":{"openrouter":["vendor//alpha"]}}')" \
+        "$(call 5 council_models_save '{"selections":{"kimi":"./kimi-k3"}}')" \
+        "$(call 6 council_models_save '{"selections":{"gemini":"gemini-3-pro","openai":"gpt-6-astra","perplexity":"xhigh","openrouter":["deepseek/deepseek-v4.1-flash","meta/llama-4:free","~vendor/beta-latest"]}}')"
+    assert_eq "$(result_text 1)" 'Not saved: OpenRouter: "a/../../../etc/x" is not a model id.'
+    assert_eq "$(result_text 2)" 'Not saved: Gemini: "x:generateContent/../y" is not a model id.'
+    assert_eq "$(result_text 3)" 'Not saved: OpenAI: "gpt-6-astra/" is not a model id.'
+    assert_eq "$(result_text 4)" 'Not saved: OpenRouter: "vendor//alpha" is not a model id.'
+    assert_eq "$(result_text 5)" 'Not saved: Kimi: "./kimi-k3" is not a model id.'
+    assert_eq "$(result_text 6)" '{"saved":true}'
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"gemini-3-pro","openai":"gpt-6-astra","grok":"","perplexity":"xhigh","kimi":"","openrouter":["deepseek/deepseek-v4.1-flash","meta/llama-4:free","~vendor/beta-latest"]}'
 }
 
 @test "extension: the state directory is under an absolute XDG_CONFIG_HOME, else under ~/.config" {
