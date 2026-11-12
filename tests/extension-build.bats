@@ -64,7 +64,7 @@ setup() {
     install_fake_clis
     isolate_seat_dirs
     unset_provider_keys
-    export COUNCIL_FAKE_BEHAVIOR=valid
+    export COUNCIL_FAKE_BEHAVIOR=valid XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/config"
     local requests="${BATS_TEST_TMPDIR}/requests.jsonl"
     printf '%s\n' "$INIT" \
         '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"council_status","arguments":{}}}' \

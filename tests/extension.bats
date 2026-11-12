@@ -37,6 +37,7 @@
 #  keys
 #   - a key field left empty arrives as an empty string or as the literal ${user_config.x}: no key
 #  saved model choices
+#   - the state directory: under an absolute XDG_CONFIG_HOME, else under ~/.config
 #   - a malformed models file: runs use the defaults, and the settings text says the file was ignored
 #   - a bad model id on save: refused naming the provider, the file left as it was
 #   - a save: the file is 0600 in a 0700 directory, no temporary file left behind, and a state
@@ -71,7 +72,10 @@ setup() {
     export COUNCIL_FENCE_LOG="${BATS_TEST_TMPDIR}/fence.jsonl"
     : > "$COUNCIL_FENCE_LOG"
     export NODE_OPTIONS="--require ${FENCE}"
-    STATE_DIR="${HOME}/.config/council-extension"
+    # The server keeps its state under XDG_CONFIG_HOME when that is absolute;
+    # one exported in the developer's shell would point it at their real one.
+    export XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/config"
+    STATE_DIR="${XDG_CONFIG_HOME}/council-extension"
 }
 
 teardown() {
@@ -486,6 +490,16 @@ mode_of() {
     assert_eq "$(mode_of "${STATE_DIR}/models.json")" 600
     assert_eq "$(mode_of "$STATE_DIR")" 700
     assert_eq "$(ls -A "$STATE_DIR" | paste -sd, -)" 'models.json'
+}
+
+@test "extension: the state directory is under an absolute XDG_CONFIG_HOME, else under ~/.config" {
+    mcp "$INIT" "$(call 1 council_models_save '{"selections":{"openai":"gpt-test-1"}}')"
+    assert_eq "$(jq -r .openai "${XDG_CONFIG_HOME}/council-extension/models.json")" gpt-test-1
+    [ ! -e "${HOME}/.config" ]
+    cd "$BATS_TEST_TMPDIR"
+    XDG_CONFIG_HOME=relative-config mcp "$INIT" "$(call 1 council_models_save '{"selections":{"openai":"gpt-test-2"}}')"
+    assert_eq "$(jq -r .openai "${HOME}/.config/council-extension/models.json")" gpt-test-2
+    [ ! -e "${BATS_TEST_TMPDIR}/relative-config" ]
 }
 
 @test "extension: a save with a bad model id is refused, naming it, and the file is left as it was" {
