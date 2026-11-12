@@ -172,8 +172,6 @@ provider_env_scrub() {
         keep=0
         case "$name" in
             PATH|HOME|USER|LOGNAME|SHELL|TMPDIR|TERM|COLORTERM|LANG|LANGUAGE|TZ|PWD|SHLVL|PROVIDERS_DIR) keep=1 ;;
-            # A hook gets every stored plugin option here, the API keys among them.
-            CLAUDE_PLUGIN_OPTION_*) ;;
             LC_*|XDG_*|COUNCIL_*|CLAUDE_PLUGIN_*) keep=1 ;;
             HTTP_PROXY|HTTPS_PROXY|NO_PROXY|ALL_PROXY|SSL_CERT_FILE|SSL_CERT_DIR|CURL_CA_BUNDLE|REQUESTS_CA_BUNDLE|NODE_EXTRA_CA_CERTS) keep=1 ;;
             SYSTEMROOT|WINDIR|SYSTEMDRIVE|APPDATA|LOCALAPPDATA|USERPROFILE|PROGRAMDATA|PROGRAMFILES|COMMONPROGRAMFILES|PATHEXT|COMSPEC|TEMP|TMP|MSYSTEM|HOMEDRIVE|HOMEPATH|USERNAME|USERDOMAIN|COMPUTERNAME|OS|PROCESSOR_ARCHITECTURE|NUMBER_OF_PROCESSORS) keep=1 ;;
@@ -181,6 +179,9 @@ provider_env_scrub() {
         for prefix in $families; do
             if [[ "$name" == "$prefix"* ]]; then keep=1; fi
         done
+        # A hook gets every stored plugin option here, the API keys among them,
+        # so neither CLAUDE_PLUGIN_* above nor a family such as CLAUDE_ keeps one.
+        if [[ "$name" == CLAUDE_PLUGIN_OPTION_* ]]; then keep=0; fi
         if [[ "$pass" == *",${name},"* || "$exact" == *",${name},"* ]]; then keep=1; fi
         if (( keep == 0 )); then unset "$name" 2>/dev/null || true; fi
     done
