@@ -286,9 +286,10 @@ function stopText(what, stopped, timeoutMs) {
 }
 
 // Sends a signal to a run's whole process group, which may have exited.
-// ESRCH says no member is left; macOS answers EPERM instead when the only
-// members left are exited processes not yet reaped. Every member is this
-// user's own child, so neither means a process the signal could still reach.
+// ESRCH says no member is left. On macOS the call has also answered EPERM
+// for a group whose processes had all exited, seen when SIGTERM ended every
+// member before the SIGKILL. Every member runs as this user, who may signal
+// it, so EPERM is taken to mean the same.
 function signalGroup(child, signal) {
   try {
     process.kill(-child.pid, signal)

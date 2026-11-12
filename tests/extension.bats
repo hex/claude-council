@@ -18,7 +18,7 @@
 #     request never answered, while a question asked beside it is answered
 #   - a request line over 1 MiB: dropped with one invalid request error, serving goes on
 #   - a question over 100000 bytes (one argv entry): refused before any run
-#   - a run writing more than 8 MiB: stopped, and the tool says so
+#   - a run writing more than 8 MiB to stdout, or 1 MiB to stderr: stopped, and the tool says so
 #   - a listening socket, ever: none (the fence refuses and records any attempt)
 #  tools and the panel resource
 #   - tools/list: the two panel tools carry the app-only visibility key, the settings tool the panel uri
@@ -101,7 +101,7 @@ teardown() {
     rm -rf "$TEST_CACHE_DIR"
     # The shutdown test's hung seat, should the server have failed to stop it.
     # SIGKILL, since some of them ignore SIGTERM.
-    pkill -9 -f 'sleep 97.3[1-5]' || true
+    pkill -9 -f 'sleep 97.3[1-6]' || true
     # No test, whatever it calls, may open a listening socket.
     if grep -q '"listen"' "$COUNCIL_FENCE_LOG" 2>/dev/null; then
         echo "the server tried to listen on a socket" >&2
@@ -554,15 +554,17 @@ stubborn_seat() {
 # Runs one server session: writes the request lines, waits for the file $1 to
 # appear, then does $2 to the server: "cancel <id>" sends notifications/cancelled
 # for that request and a ping with id 99, then holds the input open for
-# DRIVE_HOLD_MS so a reply the server should not send has time to arrive;
-# "signal <NAME>" sends the server that signal. Leaves the server's stdout in
+# DRIVE_HOLD_MS so a reply the server should not send has time to arrive,
+# and just before closing it writes to $DRIVE_SEEN whether a process matching
+# DRIVE_WATCH (a pgrep -f pattern) was still running; "signal <NAME>" sends the server that signal. Leaves the server's stdout in
 # $output and its exit code in $status, 128 plus the signal's number for a
 # signal it died of.
 drive() {
     local when="$1" action="$2"
     shift 2
     printf '%s\n' "$@" > "${BATS_TEST_TMPDIR}/requests.jsonl"
-    run --separate-stderr "$NODE" -e '
+    DRIVE_SEEN="${BATS_TEST_TMPDIR}/seen"
+    DRIVE_SEEN="$DRIVE_SEEN" run --separate-stderr "$NODE" -e '
         const { spawn } = require("node:child_process")
         const fs = require("node:fs")
         const os = require("node:os")
@@ -583,7 +585,11 @@ drive() {
           if (verb === "signal") return child.kill(argument)
           child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: Number(argument) } })}\n`)
           child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 99, method: "ping" })}\n`)
-          setTimeout(() => child.stdin.end(), Number(process.env.DRIVE_HOLD_MS ?? 0))
+          setTimeout(() => {
+            const watched = require("node:child_process").spawnSync("pgrep", ["-f", process.env.DRIVE_WATCH])
+            fs.writeFileSync(process.env.DRIVE_SEEN, watched.status === 0 ? "running" : "gone")
+            child.stdin.end()
+          }, Number(process.env.DRIVE_HOLD_MS))
         }, 50)
         child.on("exit", (code, signal) => {
           clearTimeout(limit)
@@ -620,7 +626,8 @@ drive() {
     stubborn_seat 97.32
     install_fake_curl echo
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
-    DRIVE_HOLD_MS=4000 drive "$STUBBORN_STARTED" "cancel 1" "$INIT" \
+    # Long enough for the stop's 2-second grace period and its SIGKILL.
+    DRIVE_HOLD_MS=4000 DRIVE_WATCH='sleep 97.32' drive "$STUBBORN_STARTED" "cancel 1" "$INIT" \
         "$(call 1 council_ask '{"question":"first question","providers":["codex"]}')" \
         "$(call 2 council_ask '{"question":"second question","providers":["openrouter"]}')"
     [ "$status" -eq 0 ]
@@ -628,7 +635,26 @@ drive() {
     assert_eq "$(reply 99)" '{"jsonrpc":"2.0","id":99,"result":{}}'
     assert_eq "$(result_error 2)" false
     [[ "$(result_seats 2 | jq -r '.seats[0].answer')" == *"second question"* ]]
+    # Seen while the server was still serving, so the cancel stopped the
+    # run, not the server's exit.
+    assert_eq "$(cat "$DRIVE_SEEN")" gone
     run ! pgrep -f 'sleep 97.32'
+}
+
+@test "extension: a status check writing more than 1 MiB to stderr is stopped, and says so" {
+    # A plugin root whose status script floods stderr and then waits.
+    local root="${BATS_TEST_TMPDIR}/flood"
+    mkdir -p "${root}/scripts"
+    printf '#!/bin/bash\nhead -c 1100000 /dev/zero | tr "\\0" x >&2\nexec sleep 97.36\n' > "${root}/scripts/check-status.sh"
+    run --separate-stderr "$NODE" -e '
+        const council = require(process.argv[1])
+        const theCouncil = council.openCouncil({ root: process.argv[2], keys: new Map(), tooShort: [] })
+        theCouncil.status({}, new AbortController().signal)
+          .then(outcome => process.stdout.write(JSON.stringify(outcome)))
+    ' "${PROJECT_ROOT}/extension/server/council.js" "$root"
+    [ "$status" -eq 0 ]
+    assert_eq "$output" '{"text":"The status check wrote more than 1 MiB of progress and errors, so it was stopped.","isError":true}'
+    run ! pgrep -f 'sleep 97.36'
 }
 
 @test "extension: a council run past its time limit is stopped, a seat ignoring SIGTERM too" {
