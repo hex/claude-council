@@ -92,6 +92,7 @@ run_council() {
     run "$HOST_BASH" "$SCRIPT" --list-available
     [ "$status" -eq 0 ]
     [[ "$output" == *"No providers configured."* ]]
+    [[ "$output" == *"Set an API key"*"in your shell or with /plugin configure claude-council"$'\n'* ]]
 }
 
 @test "query-council: querying with no providers exits nonzero with guidance" {
