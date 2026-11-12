@@ -118,7 +118,13 @@ const TOOLS = [
 async function callTool(id, params) {
   const tool = TOOLS.find(candidate => candidate.name === params?.name)
   if (!tool) return send({ id, error: { code: -32602, message: `unknown tool: ${String(params?.name)}` } })
-  const outcome = await tool.run(params.arguments ?? {})
+  let outcome
+  try {
+    outcome = await tool.run(params.arguments ?? {})
+  } catch (err) {
+    if (!(err instanceof council.Refusal)) throw err
+    outcome = { text: err.message, isError: true }
+  }
   const result = { content: [{ type: 'text', text: redact(outcome.text) }], isError: Boolean(outcome.isError) }
   if (outcome.structured) result.structuredContent = redact(outcome.structured)
   send({ id, result })

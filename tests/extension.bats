@@ -50,6 +50,8 @@
 #     while real ids with slashes, colons and a leading tilde save
 #   - a save: the file is 0600 in a 0700 directory, no temporary file left behind, and a state
 #     directory found with looser permissions is tightened
+#   - a state directory that is a symbolic link: refused with a sentence, the target left as it was
+#   - a models file that is a symbolic link: not read, and the answer says the defaults ran
 #  settings and status
 #   - council_status: the scripts' report, then where keys go in Desktop
 #   - council_settings: each provider's model in plain text, defaults as the scripts resolve them
@@ -529,6 +531,34 @@ In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configur
 # Octal permission bits of a file, on GNU or BSD stat.
 mode_of() {
     stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"
+}
+
+@test "extension: a state directory that is a symbolic link is refused, never followed" {
+    local elsewhere="${BATS_TEST_TMPDIR}/elsewhere"
+    mkdir -p "$elsewhere" "$XDG_CONFIG_HOME"
+    chmod 755 "$elsewhere"
+    ln -s "$elsewhere" "$STATE_DIR"
+    mcp "$INIT" "$(call 1 council_models_save '{"selections":{"openai":"gpt-test-1"}}')" \
+        "$(call 2 council_ask '{"question":"q","providers":["codex"]}')"
+    local refusal="The council's state directory ${STATE_DIR} is a symbolic link, which the extension does not follow. Remove the link and try again."
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" "$refusal"
+    assert_eq "$(result_error 2)" true
+    assert_eq "$(result_text 2)" "$refusal"
+    assert_eq "$(mode_of "$elsewhere")" 755
+    assert_eq "$(ls -A "$elsewhere")" ''
+    [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
+}
+
+@test "extension: a models file that is a symbolic link is not read, and the answer says so" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    printf '%s\n' '{"openrouter":["vendor/alpha"]}' > "${BATS_TEST_TMPDIR}/planted.json"
+    mkdir -p "$STATE_DIR"
+    ln -s "${BATS_TEST_TMPDIR}/planted.json" "${STATE_DIR}/models.json"
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')"
+    assert_eq "$(result_text 1 | head -1)" "The saved model choices in ${STATE_DIR}/models.json could not be read (the file is a symbolic link, which is not followed), so every provider uses its default model."
+    assert_eq "$(cat "$COUNCIL_FAKE_SENT_MODELS")" "$(script_default openrouter)"
 }
 
 @test "extension: a save writes every provider's choice, 0600 in a 0700 directory, nothing left behind" {

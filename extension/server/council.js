@@ -72,11 +72,36 @@ function stateDirectory() {
   return path.join(base, 'council-extension')
 }
 
+// A problem with the user's own files that a tool answers with, as its
+// result, rather than as a fault of the server.
+class Refusal extends Error {}
+
 // Council transcripts hold the whole question, so they live where only the
-// user can read them, however the directory was left before.
+// user can read them, however the directory was left before. A symbolic link
+// in its place is refused: following it would tighten, and write into,
+// whatever directory it points at.
 function privateDirectory(dir) {
+  const linked = new Refusal(`The council's state directory ${dir} is a symbolic link, which the extension does not follow. Remove the link and try again.`)
+  try {
+    if (fs.lstatSync(dir).isSymbolicLink()) throw linked
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err
+  }
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
-  fs.chmodSync(dir, 0o700)
+  // Opened without following a link, so the mode is set on this directory
+  // even if a link took its place since the check above.
+  let fd
+  try {
+    fd = fs.openSync(dir, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW)
+  } catch (err) {
+    if (err.code === 'ELOOP') throw linked
+    throw err
+  }
+  try {
+    fs.fchmodSync(fd, 0o700)
+  } finally {
+    fs.closeSync(fd)
+  }
   return dir
 }
 
@@ -128,12 +153,21 @@ function readChoices() {
     choices: noChoices(),
     notice: `The saved model choices in ${choicesFile()} could not be read (${problem}), so every provider uses its default model.`,
   })
-  let text
+  let fd
   try {
-    text = fs.readFileSync(choicesFile(), 'utf8')
+    fd = fs.openSync(choicesFile(), fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
   } catch (err) {
     if (err.code === 'ENOENT') return { choices: noChoices(), notice: '' }
+    if (err.code === 'ELOOP') return ignored('the file is a symbolic link, which is not followed')
     return ignored(`the file could not be opened: ${err.code}`)
+  }
+  let text
+  try {
+    text = fs.readFileSync(fd, 'utf8')
+  } catch (err) {
+    return ignored(`the file could not be read: ${err.code}`)
+  } finally {
+    fs.closeSync(fd)
   }
   let parsed
   try {
@@ -418,4 +452,4 @@ function openCouncil({ root, keys, tooShort }) {
   return { ask, status, settingsText, panelData, saveFromPanel, stopRuns }
 }
 
-module.exports = { PROVIDERS, VERBOSITIES, findPluginRoot, openCouncil, readKeys }
+module.exports = { PROVIDERS, Refusal, VERBOSITIES, findPluginRoot, openCouncil, readKeys }
