@@ -188,8 +188,8 @@ command Claude Code starts, in every project. A per-project export of that
 variable, such as one direnv loads, no longer reaches those commands while the
 key is stored.
 
-The mod only ever sets these variables. A key you clear, or the plugin
-disabled, stays in that session's environment until Claude Code restarts, and
+The mod only ever sets these variables. A key removed from the config, or the
+plugin disabled, stays in that session's environment until Claude Code restarts, and
 the shell export it replaced does not come back until then. Saving an empty
 value does not remove a stored key.
 
