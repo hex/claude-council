@@ -495,10 +495,12 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     const { choices, notice } = readChoices()
     const lines = PROVIDERS.map(provider => {
       const choice = choices[provider.name]
-      const key = keys.has(provider.name) ? '' : ', no key'
-      if (provider.roster && choice.length > 0) return `${provider.title}: ${choice.length} seat${choice.length === 1 ? '' : 's'}${key}: ${choice.join(', ')}`
-      if (!provider.roster && choice !== '') return `${provider.title}: ${choice}${key}`
-      return `${provider.title}: ${defaults[provider.name]} (default${key})`
+      // Every line says it, both ways: a model reading only the lines that
+      // say "no key" has concluded that no provider has one.
+      const key = keys.has(provider.name) ? 'key set' : 'no key'
+      if (provider.roster && choice.length > 0) return `${provider.title}: ${choice.join(', ')} (${choice.length} seat${choice.length === 1 ? '' : 's'}, ${key})`
+      if (!provider.roster && choice !== '') return `${provider.title}: ${choice} (${key})`
+      return `${provider.title}: ${defaults[provider.name]} (default, ${key})`
     })
     const notes = []
     if (notice) notes.push(notice)

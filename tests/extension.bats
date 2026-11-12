@@ -844,18 +844,18 @@ mode_of() {
 # Settings and status
 # ============================================================================
 
-@test "extension: council_settings lists each provider's model in plain text" {
-    export OPENROUTER_API_KEY="$SENTINEL_KEY" OPENAI_MODEL=inherited-model
-    save_choices '{"gemini":"gemini-test-1","openrouter":["vendor/alpha","vendor/beta"]}'
+@test "extension: council_settings lists each provider's model in plain text, and whether its key is set" {
+    export OPENROUTER_API_KEY="$SENTINEL_KEY" XAI_API_KEY="${SENTINEL_KEY}-xai" KIMI_API_KEY="${SENTINEL_KEY}-kimi" OPENAI_MODEL=inherited-model
+    save_choices '{"gemini":"gemini-test-1","grok":"grok-test-1","openrouter":["vendor/alpha","vendor/beta"]}'
     mcp "$INIT" "$(call 1 council_settings)"
     assert_eq "$(result_error 1)" false
     assert_eq "$(result_text 1)" "Council models:
-Gemini: gemini-test-1, no key
+Gemini: gemini-test-1 (no key)
 OpenAI: $(script_default openai) (default, no key)
-Grok: $(script_default grok) (default, no key)
+Grok: grok-test-1 (key set)
 Perplexity: $(script_default perplexity) (default, no key)
-Kimi: $(script_default kimi) (default, no key)
-OpenRouter: 2 seats: vendor/alpha, vendor/beta
+Kimi: $(script_default kimi) (default, key set)
+OpenRouter: vendor/alpha, vendor/beta (2 seats, key set)
 
 Change them in the panel shown with this result; a change applies to the next council question."
 }
