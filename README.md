@@ -27,10 +27,10 @@ export OPENAI_API_KEY="..."
 ```
 
 Or store the keys in the plugin's config. Run `/plugin configure claude-council`,
-fill in the API key rows, and restart Claude Code. Claude Code keeps them in the
-system's credential store, not in a settings file. When a session starts, the
-council's mod sets each stored key as its variable for that session, so a stored
-key wins over one your shell exports. Stored keys work only where the mod loads,
+fill in the API key rows, and choose Save configuration. Claude Code keeps them in
+the system's credential store, not in a settings file. The council's mod sets
+each stored key as its variable for the whole session, so every command Claude
+Code starts gets the stored key in place of one your shell exports. Stored keys work only where the mod loads,
 which takes Claude Code 2.1.287 or later and a session without `--safe-mode` or
 `disableAllHooks`.
 claude.ai chat and Cowork have no config dialog, so stored keys never reach them.
@@ -144,6 +144,12 @@ It writes files in that `$TMPDIR` directory, including `model.json` and
 `/heads-up setup`, `/heads-up on`, `/heads-up off` or a note's `Turn off`.
 That file is the heads-up switch. Claude Code itself does not read it.
 
+It sets environment variables in Claude Code's own process. With an API key
+stored in the plugin's config, it sets that key's variable, such as
+`OPENAI_API_KEY`, when the session starts. Every command Claude Code starts
+after that gets the stored key in place of the one your shell exports, the
+same as an export would. Before a council run it sets `COUNCIL_MOD_PANE_DIR`.
+
 It touches the prompt in two places. With `wake_on_async_done` on, it
 submits `The background council job <id> has finished. Fetch it with
 /claude-council:result <id> and summarise it.` once a background job
@@ -212,7 +218,7 @@ home, because the native CLIs find it through `USERPROFILE`.
 |---|---|
 | Cloned the repo and nothing loads | Don't clone into `~/.claude/plugins/`. `pluginDirectories` is not a setting. Follow [running from a local clone](docs/REFERENCE.md#running-from-a-local-clone). |
 | No providers found | Run `/claude-council:status`. Export keys in the shell that starts Claude Code, store them with `/plugin configure claude-council`, or use `--local`. |
-| A stored key is not used | Restart Claude Code after saving it. Stored keys need the council's mod, which loads on Claude Code 2.1.287 or later and not under `--safe-mode`. Without it, export the key in your shell. |
+| A stored key is not used | After saving one with `claude plugin configure` in a shell, restart Claude Code. Stored keys need the council's mod, which loads on Claude Code 2.1.287 or later and not under `--safe-mode`. Without it, export the key in your shell. |
 | A different model answered | A header such as `grok-4.7 (grok-latest unavailable)` records a [model fallback](docs/REFERENCE.md#model-fallback). Setting that provider's `_MODEL` variable disables fallback. |
 | No pane | Use tmux or set `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` for the pane inside Claude Code. |
 | Updating | Run `/plugin update claude-council`, then restart Claude Code. |

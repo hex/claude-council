@@ -67,37 +67,37 @@
     "gemini_api_key": {
       "type": "string",
       "title": "Gemini API key",
-      "description": "The key the gemini seat uses, kept in the system's credential store, not in settings.json. The council's mod sets GEMINI_API_KEY from it for every council run, over any value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export GEMINI_API_KEY in the shell that starts Claude Code.",
+      "description": "The key the gemini seat uses, kept in the system's credential store, not in settings.json. The council's mod sets GEMINI_API_KEY from it for the whole session, so every command Claude Code starts gets it in place of a value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export GEMINI_API_KEY in the shell that starts Claude Code.",
       "sensitive": true
     },
     "openai_api_key": {
       "type": "string",
       "title": "OpenAI API key",
-      "description": "The key the openai seat uses, kept in the system's credential store, not in settings.json. The council's mod sets OPENAI_API_KEY from it for every council run, over any value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export OPENAI_API_KEY in the shell that starts Claude Code.",
+      "description": "The key the openai seat uses, kept in the system's credential store, not in settings.json. The council's mod sets OPENAI_API_KEY from it for the whole session, so every command Claude Code starts gets it in place of a value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export OPENAI_API_KEY in the shell that starts Claude Code.",
       "sensitive": true
     },
     "xai_api_key": {
       "type": "string",
       "title": "xAI API key (Grok)",
-      "description": "The key the grok seat uses, kept in the system's credential store, not in settings.json. The council's mod sets XAI_API_KEY from it for every council run, over any value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export XAI_API_KEY in the shell that starts Claude Code.",
+      "description": "The key the grok seat uses, kept in the system's credential store, not in settings.json. The council's mod sets XAI_API_KEY from it for the whole session, so every command Claude Code starts gets it in place of a value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export XAI_API_KEY in the shell that starts Claude Code.",
       "sensitive": true
     },
     "perplexity_api_key": {
       "type": "string",
       "title": "Perplexity API key",
-      "description": "The key the perplexity seat uses, kept in the system's credential store, not in settings.json. The council's mod sets PERPLEXITY_API_KEY from it for every council run, over any value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export PERPLEXITY_API_KEY in the shell that starts Claude Code.",
+      "description": "The key the perplexity seat uses, kept in the system's credential store, not in settings.json. The council's mod sets PERPLEXITY_API_KEY from it for the whole session, so every command Claude Code starts gets it in place of a value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export PERPLEXITY_API_KEY in the shell that starts Claude Code.",
       "sensitive": true
     },
     "kimi_api_key": {
       "type": "string",
       "title": "Kimi API key",
-      "description": "The key the kimi seat uses, kept in the system's credential store, not in settings.json. The council's mod sets KIMI_API_KEY from it for every council run, over any value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export KIMI_API_KEY in the shell that starts Claude Code.",
+      "description": "The key the kimi seat uses, kept in the system's credential store, not in settings.json. The council's mod sets KIMI_API_KEY from it for the whole session, so every command Claude Code starts gets it in place of a value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export KIMI_API_KEY in the shell that starts Claude Code.",
       "sensitive": true
     },
     "openrouter_api_key": {
       "type": "string",
       "title": "OpenRouter API key",
-      "description": "The key every OpenRouter seat uses, kept in the system's credential store, not in settings.json. The council's mod sets OPENROUTER_API_KEY from it for every council run, over any value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export OPENROUTER_API_KEY in the shell that starts Claude Code.",
+      "description": "The key every OpenRouter seat uses, kept in the system's credential store, not in settings.json. The council's mod sets OPENROUTER_API_KEY from it for the whole session, so every command Claude Code starts gets it in place of a value your shell exports. It works only where the mod loads (Claude Code 2.1.287 or later, not under --safe-mode); anywhere else, export OPENROUTER_API_KEY in the shell that starts Claude Code.",
       "sensitive": true
     }
   }

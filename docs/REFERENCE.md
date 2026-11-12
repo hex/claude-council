@@ -173,10 +173,12 @@ The six fields are `gemini_api_key`, `openai_api_key`, `xai_api_key`,
 them in the system's credential store, not in `settings.json`. When a session
 starts, the council's mod sets each stored key as `GEMINI_API_KEY`,
 `OPENAI_API_KEY`, `XAI_API_KEY`, `PERPLEXITY_API_KEY`, `KIMI_API_KEY` or
-`OPENROUTER_API_KEY` in Claude Code's own process. Every slash command, council
-tool call, heads-up check and Stop-gate review started after that inherits it, and
-a stored key wins over the same variable exported in your shell. The mod writes no
-key to a file. Restart Claude Code after you save a key.
+`OPENROUTER_API_KEY` in Claude Code's own process. Every command Claude Code
+starts after that inherits it, the council's slash commands, tool calls,
+heads-up checks and Stop-gate reviews among them, and a stored key wins over the
+same variable exported in your shell. The mod writes no key to a file. Saving in
+the `/plugin configure` dialog reloads the mod, which applies the key at once.
+After `claude plugin configure` in a shell, restart Claude Code.
 
 Stored keys work only where the mod loads, which takes Claude Code 2.1.287 or
 later and a session without `--safe-mode` or `disableAllHooks`. claude.ai chat and Cowork have no config
