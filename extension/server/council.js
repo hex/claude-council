@@ -427,7 +427,7 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     const unknown = Object.keys(input).find(name => !['question', 'providers', 'verbosity'].includes(name))
     if (unknown !== undefined) return { refusal: `council_ask has no argument ${shown(unknown)}; it takes question, providers and verbosity` }
     const { question, providers, verbosity } = input
-    if (typeof question !== 'string' || question.trim() === '') return { refusal: 'The question is empty. Ask a self-contained question: the council sees nothing else.' }
+    if (typeof question !== 'string' || question.trim() === '') return { refusal: 'The question is empty. Pass the question the user asked.' }
     const questionBytes = Buffer.byteLength(question, 'utf8')
     if (questionBytes > QUESTION_MAX_BYTES) return { refusal: `The question is ${questionBytes} bytes long; the council takes at most ${QUESTION_MAX_BYTES}. Shorten it, or say the rest in fewer words.` }
     if (providers !== undefined) {

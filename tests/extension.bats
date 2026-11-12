@@ -243,6 +243,15 @@ save_choices() {
     [[ "$(reply 1 | jq -r '.result.tools[0].description')" == *"Show the user each seat's answer as returned, then"* ]]
 }
 
+@test "extension: council_ask asks for the user's question as they asked it, never a rewrite" {
+    mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+    local sentence="Pass the user's question as they asked it, adding context only when their message depends on earlier conversation the council cannot see."
+    [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .description')" == *"$sentence"* ]]
+    assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .inputSchema.properties.question.description')" \
+        "The user's question, as they asked it."
+    [[ "$(reply 1)" != *'self-contained'* ]]
+}
+
 @test "extension: an unknown resource uri is an error naming it" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"ui://council/nope"}}'
     assert_eq "$(reply 1)" '{"jsonrpc":"2.0","id":1,"error":{"code":-32002,"message":"resource not found: ui://council/nope"}}'
@@ -299,7 +308,7 @@ CURL
     mcp "$INIT" "$(call 1 council_ask '{"question":""}')" "$(call 2 council_ask '{"question":"  \n "}')" "$(call 3 council_ask '{}')"
     for id in 1 2 3; do
         assert_eq "$(result_error $id)" true
-        assert_eq "$(result_text $id)" 'The question is empty. Ask a self-contained question: the council sees nothing else.'
+        assert_eq "$(result_text $id)" 'The question is empty. Pass the question the user asked.'
     done
     [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
 }

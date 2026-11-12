@@ -60,13 +60,18 @@ function log(text) {
 
 const NO_ARGUMENTS = { type: 'object', properties: {}, additionalProperties: false }
 
+// The council should hear what the user asked. A model told only that the
+// council sees nothing else rewrites the question and adds angles of its own.
+const AS_ASKED = 'Pass the user\'s question as they asked it, adding context only when their message depends on earlier conversation the council cannot see.'
+const QUESTION_AS_ASKED = 'The user\'s question, as they asked it.'
+
 const TOOLS = [
   {
     name: 'council_ask',
     // Read when tools/list is answered, after initialize said whether the
     // app draws the answers panel.
     get description() {
-      const about = 'Ask the council, several other AI models, one question and get each one\'s answer. The question goes to third-party providers (Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter, and any CLI agents installed) on the user\'s own API keys, and they see nothing but the question, so make it self-contained. The result has one section per council seat.'
+      const about = `Ask the council, several other AI models, one question and get each one's answer. The question goes to third-party providers (Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter, and any CLI agents installed) on the user's own API keys, and they see nothing but the question. ${AS_ASKED} The result has one section per council seat.`
       const synthesis = 'where the seats agree, where they differ, and what you recommend. A run can take several minutes.'
       return drawsPanel
         ? `${about} Claude Desktop shows every seat's answer in a panel above your reply, so do not repeat the answers: write your synthesis of them, ${synthesis}`
@@ -76,7 +81,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        question: { type: 'string', description: 'The question, self-contained: the council sees nothing else.' },
+        question: { type: 'string', description: QUESTION_AS_ASKED },
         providers: { type: 'array', items: { type: 'string' }, description: 'Provider names to ask, such as openai or openrouter-2. Leave out to ask every provider that has a key.' },
         verbosity: { type: 'string', enum: council.VERBOSITIES, description: 'How long the answers should be. Defaults to standard.' },
       },
