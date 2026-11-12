@@ -20,11 +20,6 @@
   .models label:hover { background: var(--card-hover); }
   .models label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .models .empty { padding: 10px 14px; }
-  input.switch { appearance: none; -webkit-appearance: none; flex: none; width: 34px; height: 20px; border-radius: 10px; background: var(--off); position: relative; margin: 0; cursor: pointer; transition: background .15s ease-out; }
-  input.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--knob); box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .15s ease-out; }
-  input.switch:checked { background: var(--lit); }
-  input.switch:checked::after { transform: translateX(14px); }
-  @media (prefers-reduced-motion: reduce) { input.switch, input.switch::after { transition: none; } }
 </style>
 </head>
 <body>
@@ -36,21 +31,10 @@
 <script>
 'use strict'
 // @include panel-host.js
+// @include panel-page.js
 const root = document.getElementById('providers')
-const statusLine = document.getElementById('status')
 const state = {}
 let rosterMax = 0
-
-function element(tag, properties, children) {
-  const node = Object.assign(document.createElement(tag), properties ?? {})
-  for (const child of children ?? []) node.append(child)
-  return node
-}
-
-function report(text, bad) {
-  statusLine.textContent = text
-  statusLine.className = bad ? 'bad' : ''
-}
 
 async function save() {
   report('saving')

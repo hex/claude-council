@@ -235,11 +235,16 @@ save_choices() {
     answers=$(reply 3 | jq -r '.result.contents[0].text')
     [[ "$settings" == '<!doctype html>'* && "$answers" == '<!doctype html>'* ]]
     [[ "$settings" != *'@include'* && "$answers" != *'@include'* ]]
-    for part in panel-style.css panel-host.js; do
+    for part in panel-style.css panel-host.js panel-page.js markdown.js seat-cards.js seat-cards.css; do
+        [ -s "${PROJECT_ROOT}/extension/server/${part}" ]
+    done
+    for part in panel-style.css panel-host.js panel-page.js; do
         [[ "$settings" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
         [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
     done
-    [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/markdown.js")"* ]]
+    for part in markdown.js seat-cards.js seat-cards.css; do
+        [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
+    done
 }
 
 @test "extension: council_ask's description fits whether or not the app draws the answers panel" {
