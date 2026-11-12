@@ -5,6 +5,7 @@
   "version": "2026.11.1",
   "description": "Ask other AI models one question from a Claude Desktop chat, on your own API keys.",
   "long_description": "Claude Council sends one question to several other AI model providers (Gemini, OpenAI, xAI, Perplexity, Kimi and any model OpenRouter routes to) and returns each answer to the chat, where Claude compares them. Enter an API key for each provider you want on the council under Configure; a provider without a key is left out. To pick models, ask Claude to open the council settings. The question leaves your machine for every provider with a key, on your keys and at your cost.",
+  "icon": "icon.png",
   "author": {
     "name": "hex",
     "url": "https://github.com/hex"
