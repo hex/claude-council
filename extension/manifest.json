@@ -41,6 +41,14 @@
       "description": "Ask the council of other AI models one question and get each answer back."
     },
     {
+      "name": "council_seats",
+      "description": "List the council's seats, each with its model, and the verbosities."
+    },
+    {
+      "name": "council_pick",
+      "description": "A trial: a panel to choose the seats and verbosity, then ask."
+    },
+    {
       "name": "council_status",
       "description": "Show which council providers are usable and the model each would use."
     },

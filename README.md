@@ -51,9 +51,10 @@ the models share your description and its assumptions.
 ## Claude Desktop
 
 The plugin needs Claude Code. For an ordinary Claude Desktop chat there is a
-Desktop extension, `council-<version>.mcpb`, that gives Claude three tools:
-`council_ask`, `council_status` and `council_settings`. It runs on macOS and
-Linux only, because it starts the council's bash scripts.
+Desktop extension, `council-<version>.mcpb`, that gives Claude five tools:
+`council_ask`, `council_seats`, `council_pick`, `council_status` and
+`council_settings`. It runs on macOS and Linux only, because it starts the
+council's bash scripts.
 
 1. Build the package with `bash extension/build.sh` in a clean checkout. It
    needs `npm` and writes `dist/council-<version>.mcpb`.
@@ -79,6 +80,21 @@ Linux only, because it starts the council's bash scripts.
    leaves your machine. A panel under the tool call shows each seat's answer,
    or its error, in a card of its own, and Claude writes the synthesis below
    it. Desktop waits for the whole run, from seconds to a few minutes.
+
+Choosing the seats and the verbosity before a question is a trial, in two
+forms, and only one stays after it. Say "ask the council: which queue should
+we use?" and Claude first lists the seats with their models
+(`council_seats`) and asks in the chat which seats and which verbosity
+(standard, brief or detailed) you want, all at standard by default. Name them
+in your message, or say "just ask", and it runs at once. Say "ask the council
+with the picker: which queue should we use?" and Claude opens `council_pick`,
+a panel with the question, a switch per seat and the three verbosities. Press
+Ask: the answers appear in that panel, and the panel asks Claude for the
+synthesis. A line under the answers in small type names how it reached Claude
+(`handoff: context, message`, for example). When Desktop refuses both ways,
+the panel says to ask Claude to summarise the answers. Claude passes your
+question as you asked it, adding context only when it depends on earlier
+messages the council cannot see.
 
 A question with no providers named goes to every provider with a key and to
 every CLI agent the scripts find (`codex`, `agy`, `grok`, `kimi`,

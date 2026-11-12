@@ -636,23 +636,39 @@ runs the same scripts the plugin does.
   apart, then pipes that JSON through `format-output.sh` for the text. Two
   questions asked together run side by side, as two plugin runs can. The
   defaults the panel shows come from `get_model` run under the same
-  environment as a run with nothing chosen, so the two cannot disagree.
+  environment as a run with nothing chosen, so the two cannot disagree. The
+  seat list (`council_seats`, and the picker's rows) comes from
+  `query-council.sh --list-default-models` under that same environment, which
+  starts no agent.
 - `server/models.js` asks each keyed provider for its model list and parses the
   answer. The parsing is pure, so `tests/extension-models.bats` checks it
   against recorded and documented answers.
-- `server/settings.html` and `server/answers.html` are the two panels, MCP
-  App pages served as `ui://council/settings` and `ui://council/answers` with
-  mimeType `text/html;profile=mcp-app`. Desktop draws one for each tool whose
-  `_meta.ui.resourceUri` names it: `council_settings` and `council_ask`. Each
-  page carries `@include` lines that `index.js` replaces with
-  `panel-style.css` (colour tokens and card layout), `panel-host.js` (the
-  `postMessage` connection, theme and size reports) and, for the answers
-  panel, `markdown.js`. The pages have no network access: the settings panel
-  loads and saves through the two app-only tools, and the answers panel draws
-  the `structuredContent` of the `council_ask` result Desktop hands it. The
-  `visibility: ["app"]` hint on those two tools is the host's to enforce: the
-  server cannot tell a call from the panel from one by the model, so saving
-  validates every value as if the model had sent it.
+- `server/settings.html`, `server/answers.html` and `server/pick.html` are
+  the three panels, MCP App pages served as `ui://council/settings`,
+  `ui://council/answers` and `ui://council/pick` with mimeType
+  `text/html;profile=mcp-app`. Desktop draws one for each tool whose
+  `_meta.ui.resourceUri` names it: `council_settings`, `council_ask` and
+  `council_pick`. Each page carries `@include` lines that `index.js` replaces
+  with `panel-style.css` (colour tokens, card layout, switches),
+  `panel-host.js` (the `postMessage` connection, the host's capabilities,
+  theme and size reports), `panel-page.js` (element building and the status
+  line) and, for the two pages that show answers, `markdown.js`,
+  `seat-cards.js` and `seat-cards.css`, which draw a `council_ask` result as
+  one card per seat. The pages have no network access: the settings panel
+  loads and saves through two app-only tools, the answers panel draws the
+  `structuredContent` of the `council_ask` result Desktop hands it, and the
+  picker runs its question through the app-only `council_pick_ask`, whose
+  function is `council_ask`'s own. The `visibility: ["app"]` hint on those
+  tools is the host's to enforce: the server cannot tell a call from a panel
+  from one by the model, so each validates every value as if the model had
+  sent it.
+- Choosing the seats and verbosity before a question is a trial with two
+  forms, each removable on its own. In the first, `council_ask`'s description
+  has the model list the seats with `council_seats` and ask in the chat. In
+  the second, `council_pick` opens the picker, which after the answers asks
+  Claude for the synthesis through `ui/update-model-context` and
+  `ui/message`, and names what Desktop did with each in a line on the
+  panel.
 - `server/markdown.js` reads the subset of markdown the answers panel draws
   into plain data (blocks of styled runs). The page builds every DOM node from
   that data with `textContent`, so a model's answer can never become markup.
@@ -822,9 +838,13 @@ claude-council/
 │       ├── models.js            # Live model lists and their parsing
 │       ├── settings.html        # Settings panel drawn in the chat (MCP App)
 │       ├── answers.html         # One card per seat under a council_ask call (MCP App)
-│       ├── panel-style.css      # Colour tokens and card layout both panels inline
-│       ├── panel-host.js        # Both panels' connection to Desktop
-│       └── markdown.js          # The markdown subset the answers panel draws, as data
+│       ├── pick.html            # Trial: choose seats and verbosity, ask, hand the answers to Claude
+│       ├── panel-style.css      # Colour tokens, card layout and switches every panel inlines
+│       ├── panel-host.js        # Every panel's connection to Desktop
+│       ├── panel-page.js        # Element building and the status line every panel uses
+│       ├── seat-cards.js        # A council_ask result as one card per seat
+│       ├── seat-cards.css       # The seat cards' look
+│       └── markdown.js          # The markdown subset the seat cards draw, as data
 ├── hooks/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/
