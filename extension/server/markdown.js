@@ -3,24 +3,88 @@
 'use strict'
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})/
-const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t#]*$/
+const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*)$/
 const ITEM = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+(.*)$/
 const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
-// Inline code first, so markers inside it stay literal; then bold, then italic.
-const INLINE = /(`+)([\s\S]*?[^`])\1(?!`)|\*\*(?=\S)([\s\S]*?\S)\*\*|__(?=\S)([\s\S]*?\S)__|\*(?=[^\s*])([\s\S]*?[^\s*])\*|(?<![A-Za-z0-9_])_(?=[^\s_])([\s\S]*?[^\s_])_(?![A-Za-z0-9_])/g
+
+const isBlank = char => char === undefined || /\s/.test(char)
+const isWordChar = char => char !== undefined && /[A-Za-z0-9_]/.test(char)
+
+// The styling markers, tried in this order at each position after inline
+// code. A span opens where `opens` holds, and closes at the first later
+// marker where `closes` holds with at least one character between.
+const SPANS = [
+  { marker: '**', style: 'strong', opens: (text, at) => !isBlank(text[at + 2]), closes: (text, at) => !isBlank(text[at - 1]) },
+  { marker: '__', style: 'strong', opens: (text, at) => !isBlank(text[at + 2]), closes: (text, at) => !isBlank(text[at - 1]) },
+  { marker: '*', style: 'em', opens: (text, at) => !isBlank(text[at + 1]) && text[at + 1] !== '*', closes: (text, at) => !isBlank(text[at - 1]) && text[at - 1] !== '*' },
+  // Not inside a word, so snake_case stays as written.
+  {
+    marker: '_',
+    style: 'em',
+    opens: (text, at) => !isWordChar(text[at - 1]) && !isBlank(text[at + 1]) && text[at + 1] !== '_',
+    closes: (text, at) => !isBlank(text[at - 1]) && text[at - 1] !== '_' && !isWordChar(text[at + 1]),
+  },
+]
+
+// The first of the ascending positions that is at least `from`. Asked with
+// a `from` that never decreases, so one pass over the positions serves a
+// whole line: that keeps the reader linear in the answer's length, which a
+// model controls.
+function nextPosition(positions) {
+  let index = 0
+  return from => {
+    while (index < positions.length && positions[index] < from) index++
+    return index < positions.length ? positions[index] : -1
+  }
+}
 
 // One line of text as styled runs: {style: 'text' | 'strong' | 'em' | 'code', text}.
+// Inline code comes first, so markers inside it stay literal; a run of
+// backticks closes only on a run of the same length.
 function markdownInline(text) {
-  const runs = []
-  let last = 0
-  for (const match of text.matchAll(INLINE)) {
-    if (match.index > last) runs.push({ style: 'text', text: text.slice(last, match.index) })
-    if (match[2] !== undefined) runs.push({ style: 'code', text: match[2].replace(/^ (.*) $/, '$1') })
-    else if (match[3] !== undefined || match[4] !== undefined) runs.push({ style: 'strong', text: match[3] ?? match[4] })
-    else runs.push({ style: 'em', text: match[5] ?? match[6] })
-    last = match.index + match[0].length
+  const tickRuns = new Map()
+  for (let at = 0; at < text.length;) {
+    if (text[at] !== '`') { at++; continue }
+    let end = at
+    while (text[end] === '`') end++
+    if (!tickRuns.has(end - at)) tickRuns.set(end - at, [])
+    tickRuns.get(end - at).push(at)
+    at = end
   }
-  if (last < text.length) runs.push({ style: 'text', text: text.slice(last) })
+  const tickCloser = new Map([...tickRuns].map(([length, starts]) => [length, nextPosition(starts)]))
+  const closers = SPANS.map(span => {
+    const positions = []
+    for (let at = text.indexOf(span.marker); at !== -1; at = text.indexOf(span.marker, at + 1)) {
+      if (span.closes(text, at)) positions.push(at)
+    }
+    return nextPosition(positions)
+  })
+
+  const runs = []
+  let plainFrom = 0
+  const emit = (from, style, inner, to) => {
+    if (from > plainFrom) runs.push({ style: 'text', text: text.slice(plainFrom, from) })
+    runs.push({ style, text: inner })
+    plainFrom = to
+  }
+  for (let at = 0; at < text.length;) {
+    if (text[at] === '`') {
+      let end = at
+      while (text[end] === '`') end++
+      const close = tickCloser.get(end - at)(end)
+      if (close === -1) { at = end; continue }
+      emit(at, 'code', text.slice(end, close).replace(/^ (.*) $/, '$1'), close + end - at)
+      at = plainFrom
+      continue
+    }
+    const index = SPANS.findIndex(span => text.startsWith(span.marker, at) && span.opens(text, at))
+    const close = index === -1 ? -1 : closers[index](at + SPANS[index].marker.length + 1)
+    if (close === -1) { at++; continue }
+    const { marker, style } = SPANS[index]
+    emit(at, style, text.slice(at + marker.length, close), close + marker.length)
+    at = plainFrom
+  }
+  if (plainFrom < text.length) runs.push({ style: 'text', text: text.slice(plainFrom) })
   return runs
 }
 
@@ -51,7 +115,11 @@ function markdownBlocks(markdown) {
     const heading = line.match(HEADING)
     if (heading) {
       close()
-      blocks.push({ type: 'heading', level: heading[1].length, runs: markdownInline(heading[2]) })
+      // Trailing spaces and closing #s go, cut by hand: a pattern anchored at
+      // the line's end rescans the rest of the line from every # it meets.
+      let end = heading[2].length
+      while (end > 0 && ' \t#'.includes(heading[2][end - 1])) end--
+      blocks.push({ type: 'heading', level: heading[1].length, runs: markdownInline(heading[2].slice(0, end)) })
       continue
     }
     if (RULE.test(line)) {

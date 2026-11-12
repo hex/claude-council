@@ -12,8 +12,11 @@
 #   - paragraph line breaks lost, so a table the reader does not draw runs together
 #   - a code fence never closed: the rest of the answer is code, not dropped
 #   - CRLF line ends left in the text
+#   - blank lines between list items split one list into several
+#   - an answer shaped to make the reader backtrack takes time quadratic in its length
 
 load test_helper
+bats_require_minimum_version 1.5.0
 
 blocks() {
     node -e 'const { markdownBlocks } = require(process.argv[1]); process.stdout.write(JSON.stringify(markdownBlocks(process.argv[2])))' \
@@ -54,4 +57,32 @@ setup() {
 @test "extension markdown: items separated by blank lines stay one list, and an indented paragraph stays in its item" {
     assert_eq "$(blocks $'1. a\n\n2. b\n\n   more of b\n\n3. c\n\n- x\n\n- y\n\nAfter.')" \
         '[{"type":"list","ordered":true,"items":[{"depth":0,"runs":[{"style":"text","text":"a"}]},{"depth":0,"runs":[{"style":"text","text":"b more of b"}]},{"depth":0,"runs":[{"style":"text","text":"c"}]}]},{"type":"list","ordered":false,"items":[{"depth":0,"runs":[{"style":"text","text":"x"}]},{"depth":0,"runs":[{"style":"text","text":"y"}]}]},{"type":"paragraph","runs":[{"style":"text","text":"After."}]}]'
+}
+
+# A seat's answer is untrusted and unbounded, and the panel parses it on the
+# page's one thread: each of these 200 KB shapes, built to make a backtracking
+# reader rescan the rest of the line for every marker, must parse in under
+# half a second, timed inside node.
+@test "extension markdown: hostile 200 KB answers parse in linear time" {
+    run --separate-stderr node -e '
+        const { markdownBlocks } = require(process.argv[1])
+        const size = 200000
+        const fill = unit => unit.repeat(Math.ceil(size / unit.length))
+        let ticks = ""
+        for (let length = 1; ticks.length < size; length++) ticks += "`".repeat(length) + "a "
+        const shapes = {
+          strong: fill("**a "), underscores: fill("__a "), star: fill("*a "), underscore: fill(" _a"),
+          ticks, heading: "# " + fill("# ") + "x", mixed: fill("**a `b *c _d __e "),
+        }
+        const slow = []
+        for (const [name, text] of Object.entries(shapes)) {
+          const started = process.hrtime.bigint()
+          markdownBlocks(text)
+          const ms = Number(process.hrtime.bigint() - started) / 1e6
+          if (ms >= 500) slow.push(`${name} ${Math.round(ms)} ms`)
+        }
+        process.stdout.write(slow.join(", "))
+    ' "${PROJECT_ROOT}/extension/server/markdown.js"
+    [ "$status" -eq 0 ]
+    assert_eq "$output" ''
 }
