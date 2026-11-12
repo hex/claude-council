@@ -325,6 +325,16 @@ function capture(stream, limit, overflowed) {
   return { text: () => Buffer.concat(chunks).toString('utf8') }
 }
 
+// Why the question cannot be put to the council, or '' when it can.
+function questionProblem(question) {
+  if (typeof question !== 'string' || question.trim() === '') return 'The question is empty. Pass the question the user asked.'
+  const questionBytes = Buffer.byteLength(question, 'utf8')
+  if (questionBytes > QUESTION_MAX_BYTES) return `The question is ${questionBytes} bytes long; the council takes at most ${QUESTION_MAX_BYTES}. Shorten it, or say the rest in fewer words.`
+  return ''
+}
+
+const NO_SEATS = 'No council seat is set up: no provider has a key and no CLI agent is installed. In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure.'
+
 // The council as one object over a plugin root and what readKeys made of
 // the keys Desktop gave. Every tool function takes the call's AbortSignal
 // last; aborting it stops the runs the call started.
@@ -427,9 +437,8 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     const unknown = Object.keys(input).find(name => !['question', 'providers', 'verbosity'].includes(name))
     if (unknown !== undefined) return { refusal: `council_ask has no argument ${shown(unknown)}; it takes question, providers and verbosity` }
     const { question, providers, verbosity } = input
-    if (typeof question !== 'string' || question.trim() === '') return { refusal: 'The question is empty. Pass the question the user asked.' }
-    const questionBytes = Buffer.byteLength(question, 'utf8')
-    if (questionBytes > QUESTION_MAX_BYTES) return { refusal: `The question is ${questionBytes} bytes long; the council takes at most ${QUESTION_MAX_BYTES}. Shorten it, or say the rest in fewer words.` }
+    const problem = questionProblem(question)
+    if (problem) return { refusal: problem }
     if (providers !== undefined) {
       if (!Array.isArray(providers) || providers.length === 0) return { refusal: 'providers must list at least one provider name, or be left out to ask every configured provider' }
       const known = await knownProviders()
@@ -497,13 +506,32 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     return { seats, notice }
   }
 
+  function seatLines(seats) {
+    return seats.map(seat => `${seat.provider}: ${seat.model}`).join('\n')
+  }
+
   async function seatsText(input, signal) {
     const { seats, notice } = await defaultSeats(signal)
     if (seats.length === 0) {
-      return refused(withNotice(notice, 'No council seat is set up: no provider has a key and no CLI agent is installed. In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure.'))
+      return refused(withNotice(notice, NO_SEATS))
     }
-    const lines = seats.map(seat => `${seat.provider}: ${seat.model}`)
-    return { text: withNotice(notice, `The council's seats, each with the model it uses:\n${lines.join('\n')}\n\nVerbosity: standard (the default), brief or detailed.`) }
+    return { text: withNotice(notice, `The council's seats, each with the model it uses:\n${seatLines(seats)}\n\nVerbosity: standard (the default), brief or detailed.`) }
+  }
+
+  // Trial variant B: the question and the seats for the picker panel, where
+  // the user chooses and presses Ask, which runs council_pick_ask.
+  async function pick(input, drawsPanel, signal) {
+    if (input === null || typeof input !== 'object' || Array.isArray(input)) return refused('council_pick takes an object with a question')
+    const unknown = Object.keys(input).find(name => name !== 'question')
+    if (unknown !== undefined) return refused(`council_pick has no argument ${shown(unknown)}; it takes question`)
+    const problem = questionProblem(input.question)
+    if (problem) return refused(problem)
+    const { seats, notice } = await defaultSeats(signal)
+    if (seats.length === 0) return refused(withNotice(notice, NO_SEATS))
+    const text = drawsPanel
+      ? `The council picker is open in a panel with the question and ${seats.length} seat${seats.length === 1 ? '' : 's'}. The user picks the seats and the verbosity there and presses Ask, and the answers appear in the panel. Wait for the user: do not call council_ask for this question and do not answer it yourself.`
+      : `This app does not draw the council picker. Ask the user in one short message which of these seats to use and which verbosity (standard, brief or detailed), offering all seats at standard as the default, then call council_ask with their choice.\n${seatLines(seats)}`
+    return { text: withNotice(notice, text), structured: { question: input.question, seats, verbosities: VERBOSITIES, verbosity: 'standard' } }
   }
 
   async function status(input, signal) {
@@ -569,7 +597,7 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     return { text: JSON.stringify({ saved: true }) }
   }
 
-  return { ask, seatsText, status, settingsText, panelData, saveFromPanel, stopRuns }
+  return { ask, seatsText, pick, status, settingsText, panelData, saveFromPanel, stopRuns }
 }
 
 module.exports = { PROVIDERS, Refusal, VERBOSITIES, findPluginRoot, openCouncil, readKeys }

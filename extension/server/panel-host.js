@@ -5,6 +5,8 @@
 const host = {
   nextId: 1,
   pending: new Map(),
+  // What the host said it offers, in its answer to ui/initialize.
+  capabilities: {},
   post(message) { window.parent.postMessage(message, '*') },
   request(method, params) {
     return new Promise((resolve, reject) => {
@@ -41,6 +43,7 @@ const host = {
       }
     })
     const hello = await host.request('ui/initialize', { appInfo: { name: appName, version: '1' }, appCapabilities: {}, protocolVersion: '2026-01-26' })
+    host.capabilities = hello?.hostCapabilities ?? {}
     host.theme(hello?.hostContext)
     host.post({ jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {} })
     new ResizeObserver(host.reportSize).observe(document.body)

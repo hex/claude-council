@@ -1,0 +1,170 @@
+<!doctype html>
+<!-- ABOUTME: The council picker panel Claude Desktop draws under a council_pick call (an MCP App page, a trial) -->
+<!-- ABOUTME: The user picks seats and verbosity and presses Ask; the answers then show here and go to Claude -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Council picker</title>
+<style>
+  /* @include panel-style.css */
+  /* @include seat-cards.css */
+  .seat { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+  .seat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat small { font: 11px var(--mono); color: var(--dim); margin-left: 8px; }
+  .choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+  .choices label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .choices input { accent-color: var(--lit); margin: 0; }
+  .act { display: flex; align-items: center; justify-content: flex-end; }
+  button { font: 600 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; color: var(--bg); background: var(--fg); border: 0; border-radius: 6px; padding: 6px 18px; cursor: pointer; }
+  button:disabled, input:disabled { opacity: .5; cursor: default; }
+  #picker { margin-bottom: 12px; }
+  #handoff { margin: 12px 4px 0; }
+  #handoff code { font: 11px var(--mono); color: var(--dim); overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Council picker</h1><span id="status" role="status"></span></header>
+  <p class="lead" id="question">Waiting for the question.</p>
+  <div id="picker" class="seat-list"></div>
+  <div id="seats" class="seat-list" aria-live="polite"></div>
+  <div id="handoff"></div>
+</main>
+<script>
+'use strict'
+// @include panel-host.js
+// @include panel-page.js
+// @include markdown.js
+// @include seat-cards.js
+const question = document.getElementById('question')
+const picker = document.getElementById('picker')
+const seats = document.getElementById('seats')
+const handoff = document.getElementById('handoff')
+
+// What Claude is asked once the answers are in, after them or after they were
+// put into its context.
+const SYNTHESIS = 'Write your synthesis of the council\'s answers: where the seats agree, where they differ, and what you recommend.'
+
+function drawPicker(result) {
+  const data = result?.structuredContent
+  if (result?.isError || !Array.isArray(data?.seats)) return showAnswers(result, picker)
+  question.textContent = data.question
+  const chosen = new Set(data.seats.map(seat => seat.provider))
+  let verbosity = data.verbosity
+  const count = element('small')
+  const ask = element('button', { type: 'button', textContent: 'Ask' })
+  const controls = [ask]
+  const recount = () => {
+    count.textContent = `${chosen.size} of ${data.seats.length} on`
+    ask.disabled = chosen.size === 0
+  }
+  const rows = data.seats.map(seat => {
+    const box = element('input', { type: 'checkbox', className: 'switch', checked: true })
+    box.setAttribute('aria-label', `${seat.provider} (${seat.model})`)
+    box.addEventListener('change', () => {
+      if (box.checked) chosen.add(seat.provider); else chosen.delete(seat.provider)
+      recount()
+    })
+    controls.push(box)
+    return element('label', { className: 'seat' }, [element('span', {}, [document.createTextNode(seat.provider), element('small', { textContent: seat.model })]), box])
+  })
+  const choices = data.verbosities.map(level => {
+    const radio = element('input', { type: 'radio', name: 'verbosity', value: level, checked: level === verbosity })
+    radio.addEventListener('change', () => { verbosity = level })
+    controls.push(radio)
+    return element('label', {}, [radio, document.createTextNode(level)])
+  })
+  ask.addEventListener('click', () => {
+    for (const control of controls) control.disabled = true
+    const providers = data.seats.map(seat => seat.provider).filter(name => chosen.has(name))
+    run({ question: data.question, providers, verbosity }).then(asked => {
+      if (asked) return
+      for (const control of controls) control.disabled = false
+      recount()
+    })
+  })
+  recount()
+  report('')
+  picker.replaceChildren(
+    element('section', {}, [element('h2', {}, [document.createTextNode('Seats'), count]), ...rows]),
+    element('section', {}, [element('h2', {}, [document.createTextNode('Verbosity')]), element('div', { className: 'choices' }, choices)]),
+    element('div', { className: 'act' }, [ask]),
+  )
+  host.reportSize()
+}
+
+// Runs the question through council_pick_ask, which is council_ask itself,
+// shows the answers and hands them to Claude. True once the council answered.
+async function run(args) {
+  report('asking the council')
+  seats.replaceChildren()
+  host.reportSize()
+  let result
+  try {
+    result = await host.request('tools/call', { name: 'council_pick_ask', arguments: args })
+  } catch (err) {
+    report('failed', true)
+    seats.replaceChildren(element('p', { className: 'lead bad', textContent: `Claude Desktop did not run the question (${err.message}).` }))
+    host.reportSize()
+    return false
+  }
+  showAnswers(result, seats)
+  if (result?.isError) return false
+  await handOff(args.question, result.content.find(part => part.type === 'text')?.text ?? '')
+  return true
+}
+
+// Gives Claude the answers: into its context, then a chat message asking for
+// the synthesis that carries the answers too when the context step failed.
+// Each step is tried whether or not the host lists it among its capabilities,
+// which only the draft of the MCP Apps spec defines; the note says what the
+// host listed and what each step did, for reading off a screenshot.
+async function handOff(asked, answers) {
+  const offered = Object.keys(host.capabilities).sort().join(', ') || 'nothing'
+  const steps = []
+  const code = element('code')
+  const note = () => {
+    code.textContent = `handoff: ${steps.join(', ')} | host offers: ${offered}`
+    host.reportSize()
+  }
+  handoff.replaceChildren(code)
+  const step = async (name, method, params) => {
+    steps.push(`${name} pending`)
+    note()
+    try {
+      await host.request(method, params)
+      steps[steps.length - 1] = name
+      return true
+    } catch (err) {
+      steps[steps.length - 1] = `${name} refused (${err.message})`
+      return false
+    } finally {
+      note()
+    }
+  }
+  const inContext = await step('context', 'ui/update-model-context', {
+    content: [{ type: 'text', text: `The council's answers to the question "${asked}":\n\n${answers}` }],
+  })
+  const message = inContext ? SYNTHESIS : `${SYNTHESIS}\n\nThe council's answers to the question "${asked}":\n\n${answers}`
+  const sent = await step('message', 'ui/message', { role: 'user', content: [{ type: 'text', text: message }] })
+  if (!sent) handoff.prepend(element('p', { className: 'lead', textContent: 'Ask Claude to summarise the council\'s answers.' }))
+  host.reportSize()
+}
+
+host.connect('council-pick', {
+  'ui/notifications/tool-input': params => {
+    if (typeof params?.arguments?.question === 'string') question.textContent = params.arguments.question
+    report('listing the seats')
+    host.reportSize()
+  },
+  'ui/notifications/tool-result': drawPicker,
+  'ui/notifications/tool-cancelled': () => {
+    report('cancelled', true)
+    picker.replaceChildren(element('p', { className: 'lead', textContent: 'The picker was cancelled.' }))
+    host.reportSize()
+  },
+}).catch(err => { picker.replaceChildren(element('p', { className: 'lead bad', textContent: `Could not connect to Claude Desktop (${err.message}).` })) })
+</script>
+</body>
+</html>

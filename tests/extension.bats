@@ -21,8 +21,8 @@
 #   - a run writing more than 8 MiB to stdout, or 1 MiB to stderr: stopped, and the tool says so
 #   - a listening socket, ever: none (the fence refuses and records any attempt)
 #  tools and the panel resource
-#   - tools/list: the two panel tools carry the app-only visibility key, the settings tool the panel uri
-#   - resources/read: both panels (settings, answers) with mimeType text/html;profile=mcp-app, the
+#   - tools/list: the three panel tools carry the app-only visibility key, each panel's tool its uri
+#   - resources/read: the three panels (settings, answers, picker) with mimeType text/html;profile=mcp-app, the
 #     shared parts inlined; an unknown uri is an error naming it
 #   - council_ask's description: where the app draws the answers panel it asks for the synthesis
 #     without repeating the answers, elsewhere it asks for the answers to be shown first
@@ -73,6 +73,14 @@
 #     saved choices, starting no agent; with no key and no agent, a sentence saying where keys go
 #   - panel data: a provider with no key is never contacted; one with a key is, and only its own
 #     endpoint, and a failed list says so without the key
+#  trial variant B, the council picker
+#   - council_pick: the panel gets the question, each seat with its model and the three
+#     verbosities, standard chosen, and no agent is started; where no panel is drawn the text lists
+#     the seats and says to ask in the chat; an empty question, one over the cap and an unknown
+#     argument are refused as council_ask refuses them
+#   - council_pick_ask, the tool the panel's Ask button calls: the same replies as council_ask for
+#     every refusal and for an answer, a key in a seat's error removed, a cancel stopping its run
+#   - the panel's handoff to Claude (context, message) runs only in a host; bats cannot reach it
 # Model-list parsing is in extension-models.bats, the package build in extension-build.bats.
 
 load test_helper
@@ -108,7 +116,7 @@ teardown() {
     rm -rf "$TEST_CACHE_DIR"
     # The shutdown test's hung seat, should the server have failed to stop it.
     # SIGKILL, since some of them ignore SIGTERM.
-    pkill -9 -f 'sleep 97.3[1-6]' || true
+    pkill -9 -f 'sleep 97.3[1-7]' || true
     # No test, whatever it calls, may open a listening socket.
     if grep -q '"listen"' "$COUNCIL_FENCE_LOG" 2>/dev/null; then
         echo "the server tried to listen on a socket" >&2
@@ -214,18 +222,21 @@ save_choices() {
 # Tools and the panel resource
 # ============================================================================
 
-@test "extension: tools/list hides the two panel tools from the model and ties settings to the panel" {
+@test "extension: tools/list hides the three panel tools from the model and ties each panel to its tool" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
     assert_eq "$(reply 1 | jq -c '[.result.tools[] | {name, ui: ._meta.ui}]')" \
-        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers"}},{"name":"council_seats","ui":null},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
+        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers"}},{"name":"council_seats","ui":null},{"name":"council_pick","ui":{"resourceUri":"ui://council/pick"}},{"name":"council_pick_ask","ui":{"visibility":["app"]}},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
 }
 
-@test "extension: both panels are served as MCP App pages, the shared parts inlined" {
+@test "extension: the three panels are served as MCP App pages, the shared parts inlined" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"resources/list"}' \
         '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"ui://council/settings"}}' \
-        '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://council/answers"}}'
+        '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://council/answers"}}' \
+        '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"ui://council/pick"}}'
     assert_eq "$(reply 1 | jq -c '.result.resources')" \
-        '[{"uri":"ui://council/settings","name":"Council models","mimeType":"text/html;profile=mcp-app"},{"uri":"ui://council/answers","name":"Council answers","mimeType":"text/html;profile=mcp-app"}]'
+        '[{"uri":"ui://council/settings","name":"Council models","mimeType":"text/html;profile=mcp-app"},{"uri":"ui://council/answers","name":"Council answers","mimeType":"text/html;profile=mcp-app"},{"uri":"ui://council/pick","name":"Council picker","mimeType":"text/html;profile=mcp-app"}]'
+    assert_eq "$(reply 4 | jq -c '.result.contents[0] | {uri, mimeType}')" \
+        '{"uri":"ui://council/pick","mimeType":"text/html;profile=mcp-app"}'
     assert_eq "$(reply 2 | jq -c '.result.contents[0] | {uri, mimeType}')" \
         '{"uri":"ui://council/settings","mimeType":"text/html;profile=mcp-app"}'
     assert_eq "$(reply 3 | jq -c '.result.contents[0] | {uri, mimeType}')" \
@@ -241,6 +252,12 @@ save_choices() {
     for part in panel-style.css panel-host.js panel-page.js; do
         [[ "$settings" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
         [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
+    done
+    local pick
+    pick=$(reply 4 | jq -r '.result.contents[0].text')
+    [[ "$pick" == '<!doctype html>'* && "$pick" != *'@include'* ]]
+    for part in panel-style.css panel-host.js panel-page.js markdown.js seat-cards.js seat-cards.css; do
+        [[ "$pick" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
     done
     for part in markdown.js seat-cards.js seat-cards.css; do
         [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
@@ -943,4 +960,94 @@ Verbosity: standard (the default), brief or detailed."
     [[ "$text" == "Provider Status:"* ]]
     [[ "$(printf '%s\n' "$text" | grep '^  .*Gemini')" == *"API key not set"* ]]
     assert_eq "$(printf '%s\n' "$text" | tail -1)" 'In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure, not in exported variables. Models are chosen with the council_settings tool.'
+}
+
+# ============================================================================
+# Trial variant B: the council picker panel
+# ============================================================================
+
+# The seats the fake CLIs, a Perplexity key with a saved model and a saved
+# OpenRouter roster of two make, as the scripts list them.
+PICK_SEATS='[{"provider":"antigravity","model":"default"},{"provider":"codex","model":"default"},{"provider":"cursor-cli","model":"default"},{"provider":"grok-cli","model":"default"},{"provider":"kimi-cli","model":"default"},{"provider":"ollama","model":"local"},{"provider":"openrouter-1","model":"vendor/alpha"},{"provider":"openrouter-2","model":"vendor/beta"},{"provider":"perplexity","model":"sonar-test-1"}]'
+
+pick_setup() {
+    export OPENROUTER_API_KEY="$SENTINEL_KEY" PERPLEXITY_API_KEY="${SENTINEL_KEY}-pplx"
+    save_choices '{"perplexity":"sonar-test-1","openrouter":["vendor/alpha","vendor/beta"]}'
+}
+
+@test "extension: council_pick gives its panel the question, each seat with its model and the verbosities, starting no agent" {
+    pick_setup
+    mcp "$INIT" "$(call 1 council_pick '{"question":"Which queue?"}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_seats 1)" "{\"question\":\"Which queue?\",\"seats\":${PICK_SEATS},\"verbosities\":[\"brief\",\"standard\",\"detailed\"],\"verbosity\":\"standard\"}"
+    assert_eq "$(result_text 1)" 'The council picker is open in a panel with the question and 9 seats. The user picks the seats and the verbosity there and presses Ask, and the answers appear in the panel. Wait for the user: do not call council_ask for this question and do not answer it yourself.'
+    [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
+}
+
+@test "extension: council_pick where no panel is drawn lists the seats and says to ask in the chat" {
+    pick_setup
+    mcp '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"plain","version":"0"}}}' \
+        "$(call 1 council_pick '{"question":"Which queue?"}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_text 1)" "This app does not draw the council picker. Ask the user in one short message which of these seats to use and which verbosity (standard, brief or detailed), offering all seats at standard as the default, then call council_ask with their choice.
+antigravity: default
+codex: default
+cursor-cli: default
+grok-cli: default
+kimi-cli: default
+ollama: local
+openrouter-1: vendor/alpha
+openrouter-2: vendor/beta
+perplexity: sonar-test-1"
+}
+
+@test "extension: council_pick refuses an empty question, one over the cap and an unknown argument, as council_ask does" {
+    local long
+    long=$(head -c 100001 /dev/zero | tr '\0' q)
+    mcp "$INIT" "$(call 1 council_pick '{"question":" "}')" "$(call 2 council_pick "$(jq -cn --arg q "$long" '{question: $q}')")" \
+        "$(call 3 council_pick '{"question":"q","providers":["codex"]}')"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" 'The question is empty. Pass the question the user asked.'
+    assert_eq "$(result_text 2)" 'The question is 100001 bytes long; the council takes at most 100000. Shorten it, or say the rest in fewer words.'
+    assert_eq "$(result_text 3)" 'council_pick has no argument "providers"; it takes question'
+}
+
+@test "extension: council_pick_ask is council_ask: the same refusals and the same answer" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    save_choices '{"openrouter":["vendor/alpha"]}'
+    local cases=('{"question":""}' '{"question":"q","providers":["nope"]}' '{"question":"q","providers":[]}'
+        '{"question":"q","verbosity":"loud"}' '{"question":"q","model":"x"}' '{"question":"q","providers":["openrouter-2"]}'
+        '{"question":"q","providers":["openrouter-1"],"verbosity":"brief"}')
+    local requests=("$INIT") id
+    for id in "${!cases[@]}"; do
+        requests+=("$(call $((id + 1)) council_ask "${cases[$id]}")" "$(call $((id + 101)) council_pick_ask "${cases[$id]}")")
+    done
+    mcp "${requests[@]}"
+    for id in "${!cases[@]}"; do
+        [ -n "$(reply $((id + 1)))" ]
+        assert_eq "$(reply $((id + 101)) | jq -c 'del(.id)')" "$(reply $((id + 1)) | jq -c 'del(.id)')"
+    done
+    assert_eq "$(result_error 101)" true
+    assert_eq "$(result_seats 107)" '{"question":"q","seats":[{"provider":"openrouter-1","model":"vendor/alpha","answer":"answer from vendor/alpha"}]}'
+}
+
+@test "extension: a key quoted in a seat's error never leaves the server through council_pick_ask" {
+    install_fake_curl leak
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_pick_ask '{"question":"q","providers":["openrouter"]}')"
+    [[ "$(result_seats 1 | jq -r '.seats[0].error')" == *'header = "Authorization: Bearer [key removed]"'* ]]
+    [[ "$output" != *"$SENTINEL_KEY"* ]]
+    [[ "$stderr" != *"$SENTINEL_KEY"* ]]
+}
+
+@test "extension: a cancelled council_pick_ask stops its run and is never answered" {
+    stubborn_seat 97.37
+    DRIVE_HOLD_MS=4000 DRIVE_WATCH='sleep 97.37' drive "$STUBBORN_STARTED" "cancel 1" "$INIT" \
+        "$(call 1 council_pick_ask '{"question":"q","providers":["codex"]}')"
+    [ "$status" -eq 0 ]
+    assert_eq "$(reply 1)" ''
+    assert_eq "$(reply 99)" '{"jsonrpc":"2.0","id":99,"result":{}}'
+    assert_eq "$(cat "$DRIVE_SEEN")" gone
+    run ! pgrep -f 'sleep 97.37'
 }

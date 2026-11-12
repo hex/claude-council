@@ -21,8 +21,9 @@ function panelPage(file) {
 const PANELS = [
   { uri: 'ui://council/settings', name: 'Council models', text: panelPage('settings.html') },
   { uri: 'ui://council/answers', name: 'Council answers', text: panelPage('answers.html') },
+  { uri: 'ui://council/pick', name: 'Council picker', text: panelPage('pick.html') },
 ]
-const [SETTINGS_PANEL, ANSWERS_PANEL] = PANELS
+const [SETTINGS_PANEL, ANSWERS_PANEL, PICK_PANEL] = PANELS
 
 const { keys, tooShort } = council.readKeys(process.env)
 const theCouncil = council.openCouncil({ root: council.findPluginRoot(EXTENSION_ROOT), keys, tooShort })
@@ -97,6 +98,23 @@ const TOOLS = [
     description: 'List the council\'s seats, each with the model it uses, and the verbosities a question can ask for. Quick: it starts no provider and no CLI agent.',
     inputSchema: NO_ARGUMENTS,
     run: (args, signal) => theCouncil.seatsText(args, signal),
+  },
+  // Trial variant B: the picker panel and the tool its Ask button calls.
+  {
+    name: 'council_pick',
+    description: `Open the council picker: a panel in the chat with the question, each council seat with its model and a switch, a choice of verbosity and an Ask button. The council runs when the user presses Ask, and the answers appear in the panel. Use it when the user asks for the picker or to choose the seats in a panel. ${AS_ASKED}`,
+    inputSchema: { type: 'object', properties: { question: { type: 'string', description: QUESTION_AS_ASKED } }, required: ['question'], additionalProperties: false },
+    _meta: { ui: { resourceUri: PICK_PANEL.uri } },
+    run: (args, signal) => theCouncil.pick(args, drawsPanel, signal),
+  },
+  {
+    name: 'council_pick_ask',
+    description: 'Asks the council the question with the seats and verbosity chosen in the council picker. Used by the panel only.',
+    inputSchema: { type: 'object', properties: { question: { type: 'string' }, providers: { type: 'array', items: { type: 'string' } }, verbosity: { type: 'string', enum: council.VERBOSITIES } }, required: ['question'], additionalProperties: false },
+    _meta: { ui: { visibility: ['app'] } },
+    // council_ask's own function, so the panel's runs pass every check a
+    // model's do.
+    run: (args, signal) => theCouncil.ask(args, signal),
   },
   {
     name: 'council_status',
