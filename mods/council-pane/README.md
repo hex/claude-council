@@ -2,19 +2,15 @@
 
 A Claude Code mod that draws the council's streaming pane inside Claude Code, so it works without tmux.
 
-Mods are early access. You need `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, and the API can change between Claude Code releases. The heads-up side-check needs Claude Code 2.1.302 or later; the rest of the mod runs on 2.1.278. The tmux pane is still the default and nothing here replaces it.
+The mod loads by itself on Claude Code 2.1.287 or later. On 2.1.278 to 2.1.286 it loads only with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, which later versions ignore. It does not load under `--safe-mode`, with `disableAllHooks` set, or where managed settings set `allowManagedHooksOnly` or the built-in guard's `allowManagedModsOnly`. The mods API can change between Claude Code releases. The heads-up side-check needs Claude Code 2.1.302 or later. The tmux pane is still the default and nothing here replaces it.
 
 The [plugin README](../../README.md#what-the-mod-runs-reads-and-sends) lists every program the mod starts and what it reads, writes and sends.
 
 ## Run it
 
-The mod ships with the plugin: `hooks/hooks.json` at the repo root names `pane.tsx` as a module, so an installed council loads it whenever the variable is set. Without the variable Claude Code skips the module and the tmux pane works as before.
+The mod ships with the plugin: `hooks/hooks.json` at the repo root names `pane.tsx` as a module, so an installed council loads it in every session where mods load. Where it does not load, the tmux pane works as before.
 
-```
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude
-```
-
-Then run `/claude-council:ask` as usual. From a checkout, add `--plugin-dir .` to run this tree's copy over the installed one.
+Run `/claude-council:ask` as usual. From a checkout, add `--plugin-dir .` to run this tree's copy over the installed one.
 
 ## How it hooks in
 
@@ -74,7 +70,7 @@ They show up in `/config`, which lists each row by its title alone; the table be
 | `council_tool` | on | Registers `mcp__claude-council__ask` so the model can call the council as a tool. Each call asks you first. |
 | `heads_up` | off | Turns the heads-up side-check on in every project. A project's `.claude/council-heads-up.json` overrides it for that project. See [Heads-up side-check](#heads-up-side-check). |
 
-Six more fields hold provider API keys: `gemini_api_key`, `openai_api_key`, `xai_api_key`, `perplexity_api_key`, `kimi_api_key` and `openrouter_api_key`. They are sensitive, so `/config` does not list them; set them with `/plugin configure claude-council`, whose Save reloads the mod. Claude Code keeps them in the system's credential store. At session start, before anything else, the mod sets each stored key as its variable (`GEMINI_API_KEY` and so on) in Claude Code's own process with `$.env.set`, so every command Claude Code starts after it, the council's scripts among them, gets the stored key in place of a shell export. The mod writes no key to a file. `hooks/keys.ts` holds the table, and `tests/keys.test.ts` fails when it, `plugin.json` and the `$.env.set` calls in `pane.tsx` disagree.
+Six more fields hold provider API keys: `gemini_api_key`, `openai_api_key`, `xai_api_key`, `perplexity_api_key`, `kimi_api_key` and `openrouter_api_key`. They are sensitive, so `/config` does not list them; set them with `/plugin configure claude-council`, whose Save reloads the mod. Claude Code keeps them in its secure storage. At session start, before anything else, the mod sets each stored key as its variable (`GEMINI_API_KEY` and so on) in Claude Code's own process with `$.env.set`, so every command Claude Code starts after it, the council's scripts among them, gets the stored key in place of a shell export. The mod writes no key to a file. It only ever sets these variables: a key you clear, or the plugin disabled, stays in that session's environment until Claude Code restarts, and the shell export it replaced does not come back until then. `hooks/keys.ts` holds the table, and `tests/keys.test.ts` fails when it, `plugin.json` and the `$.env.set` calls in `pane.tsx` disagree.
 
 The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. Every call opens a dialog quoting the question and naming the providers, and nothing leaves the machine unless you choose `Send to the council`. `Don't send` or dismissing the dialog refuses the call. Anything you type under Other goes back to the model as a plain tool result, not a refusal, so it reads as your answer rather than an error. A `claude -p` run has no one to ask and gets the same refusal.
 

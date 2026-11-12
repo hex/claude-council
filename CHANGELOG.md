@@ -7,13 +7,14 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Added
-- Provider API keys can live in the plugin's config instead of your shell profile. `/plugin configure claude-council` has six new fields, for Gemini, OpenAI, xAI, Perplexity, Kimi and OpenRouter. Claude Code keeps them in the system's credential store, not in `settings.json`. When a session starts, the council's mod sets each stored key as its variable (`GEMINI_API_KEY` and so on) in Claude Code's own process, and no key goes to a file. Every command Claude Code starts in that session gets the stored key in place of the same variable exported in your shell, the council's slash commands, tool, heads-up checks and Stop gate among them. Stored keys work only where the mod loads, which takes Claude Code 2.1.287 or later and a session without `--safe-mode`. They never reach claude.ai chat or Cowork, which have no config dialog. Saving in the dialog applies a key at once; after `claude plugin configure` in a shell, restart Claude Code.
+- Provider API keys can live in the plugin's config instead of your shell profile. `/plugin configure claude-council` has six new fields, for Gemini, OpenAI, xAI, Perplexity, Kimi and OpenRouter. Claude Code keeps them in its secure storage, not in `settings.json`. When a session starts, the council's mod sets each stored key as its variable (`GEMINI_API_KEY` and so on) in Claude Code's own process; the mod writes no key to a file. Every command Claude Code starts in that session, in any project, gets the stored key in place of the same variable exported in your shell, the council's slash commands, tool, heads-up checks and Stop gate among them. Stored keys work only where the mod loads, which takes Claude Code 2.1.287 or later and a session without `--safe-mode`. They never reach claude.ai chat or Cowork: the desktop app's plugin page shows no fields for them, and Cowork does not prompt for plugin values. Saving in the dialog applies a key at once; after `claude plugin configure` in a shell, restart Claude Code. A cleared key stays in the session until Claude Code restarts. `tests/e2e/stored-keys-e2e.sh` checks the keys in a real `claude -p` session.
 
 ### Changed
-- `/claude-council:status` and the no-providers message name `/plugin configure claude-council` next to the shell export.
+- `/claude-council:status` and the no-providers message name `/plugin configure claude-council` next to the shell export, and the no-providers message names all six key variables.
+- The docs no longer say the council-pane mod needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. Claude Code 2.1.287 and later loads mods by default and ignores that variable.
 
 ### Security
-- No seat receives the `CLAUDE_PLUGIN_OPTION_*` variables any more. Claude Code gives a hook every stored plugin option under that prefix, and the Stop gate starts its seat from a hook, so that seat would otherwise have received every stored API key. A seat still gets its own key through its vendor's variables.
+- No seat receives the `CLAUDE_PLUGIN_OPTION_*` variables any more, a custom seat named `claude` included, unless `COUNCIL_PASS_ENV` names one. Claude Code gives a hook every stored plugin option under that prefix, and the Stop gate starts its seat from a hook, so that seat would otherwise have received every stored API key. A seat still gets its own key through its vendor's variables.
 
 ## 2026.11.1
 

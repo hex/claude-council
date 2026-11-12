@@ -370,7 +370,7 @@ contain secrets.
 While Claude works a long turn inside Claude Code, a council seat can reread
 the conversation and surface one thing you may have missed: a trade-off nobody
 called out, a result that looks off. It needs the council-pane mod (Claude Code
-with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, 2.1.302 or later) and one of two
+2.1.302 or later) and one of two
 switches. The `/config` row "Heads-up side-check" turns it on in every project.
 A project file turns it on, or off, for that project alone and picks the seat
 and cadence:

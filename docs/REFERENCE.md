@@ -170,20 +170,36 @@ Or store them in the plugin's config with `/plugin configure claude-council`, or
 from a shell with `claude plugin configure claude-council@<marketplace> --values-stdin`.
 The six fields are `gemini_api_key`, `openai_api_key`, `xai_api_key`,
 `perplexity_api_key`, `kimi_api_key` and `openrouter_api_key`. Claude Code keeps
-them in the system's credential store, not in `settings.json`. When a session
+them in its secure storage, not in `settings.json`. On macOS that is the
+Keychain. On Linux and Windows, and on a Mac whose Keychain refuses the write,
+Claude Code falls back to a plaintext `.credentials.json` file in `~/.claude`,
+readable only by your user, the same place it keeps its own
+[login](https://code.claude.com/docs/en/authentication). When a session
 starts, the council's mod sets each stored key as `GEMINI_API_KEY`,
 `OPENAI_API_KEY`, `XAI_API_KEY`, `PERPLEXITY_API_KEY`, `KIMI_API_KEY` or
 `OPENROUTER_API_KEY` in Claude Code's own process. Every command Claude Code
 starts after that inherits it, the council's slash commands, tool calls,
-heads-up checks and Stop-gate reviews among them, and a stored key wins over the
-same variable exported in your shell. The mod writes no key to a file. Saving in
-the `/plugin configure` dialog reloads the mod, which applies the key at once.
-After `claude plugin configure` in a shell, restart Claude Code.
+heads-up checks and Stop-gate reviews among them. The mod writes no key to a
+file. Saving in the `/plugin configure` dialog reloads the mod, which applies
+the key at once. After `claude plugin configure` in a shell, restart Claude Code.
 
-Stored keys work only where the mod loads, which takes Claude Code 2.1.287 or
-later and a session without `--safe-mode` or `disableAllHooks`. claude.ai chat and Cowork have no config
-dialog, so stored keys never reach them. Saving an empty value does not remove a
-stored key.
+A stored key wins over the same variable exported in your shell, for every
+command Claude Code starts, in every project. A per-project export of that
+variable, such as one direnv loads, no longer reaches those commands while the
+key is stored.
+
+The mod only ever sets these variables. A key you clear, or the plugin
+disabled, stays in that session's environment until Claude Code restarts, and
+the shell export it replaced does not come back until then. Saving an empty
+value does not remove a stored key.
+
+Stored keys work only where the mod loads. It needs Claude Code 2.1.287 or
+later, and it does not load under `--safe-mode`, with `disableAllHooks` set, or
+where managed settings set `allowManagedHooksOnly` or `allowManagedModsOnly`.
+The desktop app's plugin page shows no fields for them, and the
+[platform-support page](https://claude.com/docs/plugins/platform-support) says
+Cowork does not prompt for plugin values, so stored keys never reach claude.ai
+chat or Cowork.
 
 `openrouter` seats whatever model `OPENROUTER_MODEL` names, defaulting to
 `anthropic/claude-fable-5.1` — the one vendor the council has no direct seat for.
@@ -503,7 +519,8 @@ proxy and CA-bundle settings, the Windows variables Git Bash needs, every
 `GOOGLE_*` for Gemini and Antigravity, `XAI_*` and `GROK_*` for Grok, and so
 on). Another vendor's key, and any other secret your shell exports, does not
 reach it. Nor do the `CLAUDE_PLUGIN_OPTION_*` variables Claude Code gives a
-hook, which hold every stored plugin option, the API keys among them.
+hook, which hold every stored plugin option, the API keys among them, unless
+`COUNCIL_PASS_ENV` names one.
 If a CLI provider needs something else from your environment, name
 it:
 
@@ -563,7 +580,7 @@ When a pane (tmux or the one inside Claude Code) streamed the answers, the chat 
 
 ### Pane inside Claude Code (experimental)
 
-`mods/council-pane` is a Claude Code mod that draws the same pane inside Claude Code, without tmux. It ships with the plugin and loads when Claude Code runs with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`; mods are early access, so without that variable nothing changes. Its [README](../mods/council-pane/README.md) lists the settings and the limits.
+`mods/council-pane` is a Claude Code mod that draws the same pane inside Claude Code, without tmux. It ships with the plugin and loads by itself on Claude Code 2.1.287 or later; where it does not load, nothing changes. Its [README](../mods/council-pane/README.md) lists the settings and the limits.
 
 The scripts support it through one variable. When `COUNCIL_MOD_PANE_DIR` names an existing directory, a run writes its watch directory there and does not open tmux. `--no-pane` and `COUNCIL_NO_PANE=1` still win. Only the mod sets the variable.
 
