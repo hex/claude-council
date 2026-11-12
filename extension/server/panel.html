@@ -1,0 +1,220 @@
+<!doctype html>
+<!-- ABOUTME: The council settings panel Claude Desktop draws in the chat (an MCP App page) -->
+<!-- ABOUTME: Picks each provider's model; all data and saves go through the extension's tools -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Council models</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #faf9f5; --card: #ffffff; --card-hover: #f6f5f0; --rule: #e2dfd5; --fg: #1c1c1e; --dim: #6c6c70;
+    --lit: #4d8c57; --ink-claude: #a15840; --alert: #c2410c; --off: #d3d0c6; --knob: #ffffff;
+    --card-edge: 0 2px 4px rgb(35 35 35 / .03), 0 1px 2px rgb(35 35 35 / .04), 0 0 0 .5px var(--rule);
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1c1c1e; --card: #2c2c2e; --card-hover: #323236; --rule: #3a3a3c; --fg: #f2f2f7; --dim: #98989d;
+      --lit: #8ec07c; --ink-claude: #e08f75; --alert: #fb8b5e; --off: #48484a; --knob: #f2f2f7;
+      --card-edge: 0 0 0 1px var(--rule);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1c1c1e; --card: #2c2c2e; --card-hover: #323236; --rule: #3a3a3c; --fg: #f2f2f7; --dim: #98989d;
+    --lit: #8ec07c; --ink-claude: #e08f75; --alert: #fb8b5e; --off: #48484a; --knob: #f2f2f7;
+    --card-edge: 0 0 0 1px var(--rule);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  main { padding: 16px 16px 4px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 4px 12px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  #status { font: 11px var(--mono); color: var(--dim); }
+  #status.bad { color: var(--alert); }
+  p.lead { color: var(--dim); font-size: 12px; margin: 0 4px 14px; }
+  p.lead.bad { color: var(--alert); }
+  section { background: var(--card); border-radius: 10px; box-shadow: var(--card-edge); margin-bottom: 12px; overflow: hidden; }
+  section > * { padding: 9px 14px; border-top: 1px dotted var(--rule); }
+  section > :first-child { border-top: 0; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  h2 small { font: 11px var(--mono); font-weight: 400; color: var(--dim); }
+  section.off h2 { color: var(--dim); }
+  .line { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 38px; }
+  .line > span:first-child { flex: none; }
+  /* The elbow that hangs a sub-row off the row above it. */
+  .sub { padding-left: 34px; position: relative; }
+  .sub::before { content: ""; position: absolute; left: 17px; top: 6px; width: 9px; height: 13px; border-left: 1px solid var(--rule); border-bottom: 1px solid var(--rule); border-bottom-left-radius: 3px; }
+  .note { color: var(--dim); font-size: 12px; }
+  .note.bad { color: var(--alert); }
+  select, input[type=search] { font: 12px var(--mono); color: var(--fg); background: var(--card-hover); border: .5px solid var(--rule); border-radius: 6px; padding: 5px 8px; min-width: 0; }
+  select { max-width: 62%; text-overflow: ellipsis; }
+  input[type=search] { width: 100%; }
+  select:disabled, input:disabled { opacity: .5; }
+  .models { padding: 0; max-height: 300px; overflow: auto; }
+  .models label { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 14px; border-top: 1px dotted var(--rule); font: 12px var(--mono); cursor: pointer; }
+  .models label:first-child { border-top: 0; }
+  .models label:hover { background: var(--card-hover); }
+  .models label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .models .empty { padding: 10px 14px; }
+  input.switch { appearance: none; -webkit-appearance: none; flex: none; width: 34px; height: 20px; border-radius: 10px; background: var(--off); position: relative; margin: 0; cursor: pointer; transition: background .15s ease-out; }
+  input.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--knob); box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .15s ease-out; }
+  input.switch:checked { background: var(--lit); }
+  input.switch:checked::after { transform: translateX(14px); }
+  :focus-visible { outline: 2px solid var(--ink-claude); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { input.switch, input.switch::after { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Council models</h1><span id="status" role="status"></span></header>
+  <p class="lead">Changes save as you make them and apply to the next council question. Keys are entered in Claude Desktop, under Settings, Extensions, Claude Council.</p>
+  <div id="providers" aria-live="polite"><p class="lead">Loading the model lists from each provider.</p></div>
+</main>
+<script>
+'use strict'
+// The page talks to Claude Desktop over postMessage (MCP Apps); it has no
+// network access, so every read and save is a tool call the host relays.
+const host = {
+  nextId: 1,
+  pending: new Map(),
+  post(message) { window.parent.postMessage(message, '*') },
+  request(method, params) {
+    return new Promise((resolve, reject) => {
+      const id = host.nextId++
+      host.pending.set(id, { resolve, reject })
+      host.post({ jsonrpc: '2.0', id, method, params })
+    })
+  },
+  async tool(name, args) {
+    const result = await host.request('tools/call', { name, arguments: args ?? {} })
+    const text = result?.content?.[0]?.text ?? ''
+    if (result?.isError) throw new Error(text || 'the tool failed')
+    return JSON.parse(text)
+  },
+  async connect() {
+    window.addEventListener('message', event => {
+      if (event.source !== window.parent) return
+      const message = event.data
+      if (!message || message.jsonrpc !== '2.0') return
+      const waiting = message.id !== undefined && message.method === undefined ? host.pending.get(message.id) : undefined
+      if (waiting) {
+        host.pending.delete(message.id)
+        if (message.error) waiting.reject(new Error(message.error.message ?? 'refused'))
+        else waiting.resolve(message.result)
+      } else if (message.method === 'ui/notifications/host-context-changed') {
+        host.theme(message.params)
+      } else if (message.method !== undefined && message.id !== undefined) {
+        host.post({ jsonrpc: '2.0', id: message.id, result: {} })
+      }
+    })
+    const hello = await host.request('ui/initialize', { appInfo: { name: 'council-models', version: '1' }, appCapabilities: {}, protocolVersion: '2026-01-26' })
+    host.theme(hello?.hostContext)
+    host.post({ jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {} })
+    // The body's own height, not the document's: the document is at least as
+    // tall as the frame, so reporting it could never let the frame shrink.
+    const size = () => host.post({ jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: { height: Math.ceil(document.body.getBoundingClientRect().height) } })
+    new ResizeObserver(size).observe(document.body)
+    size()
+  },
+  theme(context) {
+    if (context?.theme === 'light' || context?.theme === 'dark') document.documentElement.dataset.theme = context.theme
+  },
+}
+const root = document.getElementById('providers')
+const statusLine = document.getElementById('status')
+const state = {}
+let rosterMax = 0
+
+function element(tag, properties, children) {
+  const node = Object.assign(document.createElement(tag), properties ?? {})
+  for (const child of children ?? []) node.append(child)
+  return node
+}
+
+function report(text, bad) {
+  statusLine.textContent = text
+  statusLine.className = bad ? 'bad' : ''
+}
+
+async function save() {
+  report('saving')
+  try {
+    await host.tool('council_models_save', { selections: state })
+    report('saved')
+  } catch (err) {
+    report(err.message, true)
+  }
+}
+
+function heading(row, detail) {
+  return element('h2', {}, [document.createTextNode(row.title), element('small', { textContent: detail })])
+}
+
+function single(row) {
+  const select = element('select', { disabled: !row.hasKey })
+  select.setAttribute('aria-label', `${row.title} model`)
+  select.append(element('option', { value: '', textContent: `Default (${row.defaultModel})` }))
+  const ids = row.selected === '' || row.models.includes(row.selected) ? row.models : [row.selected, ...row.models]
+  for (const id of ids) select.append(element('option', { value: id, textContent: id }))
+  select.value = row.selected
+  state[row.name] = row.selected
+  select.addEventListener('change', () => { state[row.name] = select.value; save() })
+  return [heading(row, row.hasKey ? '' : 'no key'), element('div', { className: 'line' }, [element('span', { textContent: 'Model' }), select])]
+}
+
+function roster(row) {
+  const chosen = new Set(row.selected)
+  state[row.name] = [...chosen]
+  const title = heading(row, '')
+  const count = title.querySelector('small')
+  const filter = element('input', { type: 'search', placeholder: 'Filter models, for example deepseek', disabled: !row.hasKey })
+  filter.setAttribute('aria-label', 'Filter OpenRouter models')
+  const list = element('div', { className: 'models' })
+  const all = [...new Set([...row.selected, ...row.models])]
+  function label() {
+    count.textContent = !row.hasKey ? 'no key' : chosen.size === 0 ? `default: ${row.defaultModel}` : `${chosen.size} of ${rosterMax} seats`
+  }
+  function draw() {
+    const needle = filter.value.trim().toLowerCase()
+    const shown = all.filter(id => chosen.has(id) || id.toLowerCase().includes(needle))
+    shown.sort((a, b) => Number(chosen.has(b)) - Number(chosen.has(a)) || a.localeCompare(b))
+    if (shown.length === 0) return list.replaceChildren(element('p', { className: 'note empty', textContent: row.hasKey ? 'No model matches.' : 'The list appears once a key is saved.' }))
+    list.replaceChildren(...shown.slice(0, 300).map(id => {
+      const box = element('input', { type: 'checkbox', className: 'switch', checked: chosen.has(id), disabled: !row.hasKey })
+      box.addEventListener('change', () => {
+        if (box.checked && chosen.size >= rosterMax) { box.checked = false; return report(`at most ${rosterMax} OpenRouter seats`, true) }
+        if (box.checked) chosen.add(id); else chosen.delete(id)
+        state[row.name] = [...chosen]
+        label()
+        save()
+      })
+      return element('label', {}, [element('span', { textContent: id }), box])
+    }))
+  }
+  filter.addEventListener('input', draw)
+  draw()
+  label()
+  return [title, element('div', {}, [filter]), list]
+}
+
+async function load() {
+  await host.connect()
+  const data = await host.tool('council_models_data')
+  rosterMax = data.rosterMax
+  const cards = data.providers.map(row => {
+    const section = element('section', { className: row.hasKey ? '' : 'off' }, row.roster ? roster(row) : single(row))
+    if (!row.hasKey) section.append(element('div', { className: 'sub note', textContent: `Add the ${row.title} key in Claude Desktop, then reopen the council settings.` }))
+    if (row.listError) section.append(element('div', { className: 'sub note bad', textContent: `${row.listError}. The saved choice still applies.` }))
+    return section
+  })
+  if (data.problem) cards.unshift(element('p', { className: 'lead bad', textContent: `${data.problem} Any change here saves a fresh set.` }))
+  root.replaceChildren(...cards)
+}
+
+load().catch(err => { root.replaceChildren(element('p', { className: 'note bad', textContent: `Could not load the settings (${err.message}).` })) })
+</script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+{
+  "manifest_version": "0.3",
+  "name": "council",
+  "display_name": "Claude Council",
+  "version": "2026.11.1",
+  "description": "Ask other AI models one question from a Claude Desktop chat, on your own API keys.",
+  "long_description": "Claude Council sends one question to several other AI model providers (Gemini, OpenAI, xAI, Perplexity, Kimi and any model OpenRouter routes to) and returns each answer to the chat, where Claude compares them. Enter an API key for each provider you want on the council under Configure; a provider without a key is left out. To pick models, ask Claude to open the council settings. The question leaves your machine for every provider with a key, on your keys and at your cost.",
+  "author": {
+    "name": "hex",
+    "url": "https://github.com/hex"
+  },
+  "homepage": "https://github.com/hex/claude-council",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hex/claude-council"
+  },
+  "support": "https://github.com/hex/claude-council/issues",
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/server/index.js"
+      ],
+      "env": {
+        "GEMINI_API_KEY": "${user_config.gemini_api_key}",
+        "OPENAI_API_KEY": "${user_config.openai_api_key}",
+        "XAI_API_KEY": "${user_config.xai_api_key}",
+        "PERPLEXITY_API_KEY": "${user_config.perplexity_api_key}",
+        "KIMI_API_KEY": "${user_config.kimi_api_key}",
+        "OPENROUTER_API_KEY": "${user_config.openrouter_api_key}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "council_ask",
+      "description": "Ask the council of other AI models one question and get each answer back."
+    },
+    {
+      "name": "council_status",
+      "description": "Show which council providers are usable and the model each would use."
+    },
+    {
+      "name": "council_settings",
+      "description": "Show each provider's model, with a panel in the chat to change them."
+    }
+  ],
+  "user_config": {
+    "gemini_api_key": {
+      "type": "string",
+      "title": "Gemini API key",
+      "description": "Sent only to Google's Gemini API, for the gemini seat and its model list. Leave empty to leave it off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "openai_api_key": {
+      "type": "string",
+      "title": "OpenAI API key",
+      "description": "Sent only to OpenAI's API, for the openai seat and its model list. Leave empty to leave it off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "xai_api_key": {
+      "type": "string",
+      "title": "xAI API key (Grok)",
+      "description": "Sent only to xAI's API, for the grok seat and its model list. Leave empty to leave it off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "perplexity_api_key": {
+      "type": "string",
+      "title": "Perplexity API key",
+      "description": "Sent only to Perplexity's API, for the perplexity seat and its model list. Leave empty to leave it off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "kimi_api_key": {
+      "type": "string",
+      "title": "Kimi API key",
+      "description": "Sent only to Moonshot AI's Kimi API, for the kimi seat and its model list. Leave empty to leave it off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "openrouter_api_key": {
+      "type": "string",
+      "title": "OpenRouter API key",
+      "description": "Sent only to OpenRouter, for every OpenRouter seat and its model list. Leave empty to leave it off the council.",
+      "sensitive": true,
+      "required": false
+    }
+  },
+  "privacy_policies": [
+    "https://policies.google.com/privacy",
+    "https://openai.com/policies/privacy-policy/",
+    "https://x.ai/legal/privacy-policy",
+    "https://www.perplexity.ai/hub/legal/privacy-notice",
+    "https://platform.kimi.ai/docs/agreement/userprivacy",
+    "https://openrouter.ai/privacy"
+  ],
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "keywords": [
+    "council",
+    "second-opinion",
+    "gemini",
+    "openai",
+    "grok",
+    "perplexity",
+    "kimi",
+    "openrouter"
+  ]
+}

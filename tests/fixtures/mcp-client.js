@@ -1,0 +1,75 @@
+// ABOUTME: Drives the extension's stdio MCP server the way Claude Desktop does, one request at a time
+// ABOUTME: Prints every line the server writes, then exits with the server's own exit code
+'use strict'
+// Usage: node mcp-client.js <server.js> <requests-file>
+// Each line of the requests file is written to the server as is. A line that
+// parses as an object with an id waits for the reply carrying that id before
+// the next line goes; any other line is followed by a short pause, so a reply
+// it provokes (a parse error) still lands in order. After the last line the
+// server's input is closed, and the server must then exit on its own within
+// CLIENT_EXIT_WAIT_MS, or this exits 124.
+const { spawn } = require('node:child_process')
+const fs = require('node:fs')
+const readline = require('node:readline')
+
+const [serverPath, requestsPath] = process.argv.slice(2)
+const REPLY_WAIT_MS = Number(process.env.CLIENT_REPLY_WAIT_MS ?? 60000)
+const EXIT_WAIT_MS = Number(process.env.CLIENT_EXIT_WAIT_MS ?? 10000)
+const lines = fs.readFileSync(requestsPath, 'utf8').split('\n').filter(line => line !== '')
+
+const server = spawn(process.execPath, [serverPath], { stdio: ['pipe', 'pipe', 'inherit'] })
+const replies = new Map()
+let waiting = null
+readline.createInterface({ input: server.stdout }).on('line', line => {
+  process.stdout.write(`${line}\n`)
+  let id
+  try {
+    id = JSON.parse(line).id
+  } catch {
+    return
+  }
+  replies.set(id, true)
+  if (waiting && waiting.id === id) waiting.resolve()
+})
+
+function replyTo(id) {
+  if (replies.has(id)) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`no reply to request ${id} within ${REPLY_WAIT_MS} ms`)), REPLY_WAIT_MS)
+    waiting = { id, resolve: () => { clearTimeout(timer); waiting = null; resolve() } }
+  })
+}
+
+function idOf(line) {
+  try {
+    const parsed = JSON.parse(line)
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed.id : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function main() {
+  for (const line of lines) {
+    server.stdin.write(`${line}\n`)
+    const id = idOf(line)
+    if (id === undefined) await new Promise(resolve => setTimeout(resolve, 300))
+    else await replyTo(id)
+  }
+  server.stdin.end()
+  const timer = setTimeout(() => {
+    process.stderr.write(`server still running ${EXIT_WAIT_MS} ms after its input closed\n`)
+    server.kill('SIGKILL')
+    process.exit(124)
+  }, EXIT_WAIT_MS)
+  server.on('exit', code => {
+    clearTimeout(timer)
+    process.exit(code ?? 1)
+  })
+}
+
+main().catch(err => {
+  process.stderr.write(`${err.message}\n`)
+  server.kill('SIGKILL')
+  process.exit(125)
+})
