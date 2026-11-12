@@ -479,15 +479,19 @@ result_seats() {
     for key in GEMINI_API_KEY OPENAI_API_KEY XAI_API_KEY PERPLEXITY_API_KEY KIMI_API_KEY OPENROUTER_API_KEY; do
         export "$key=placeholder-${key}"
     done
+    # Keys the form never held, as a shell that started Desktop might export:
+    # none may reach a seat, named in COUNCIL_PASS_ENV or not.
+    export OPENAI_ADMIN_API_KEY=stray MOONSHOT_API_KEY=stray GROK_CLI_API_KEY=stray COUNCIL_PASS_ENV=OPENAI_ADMIN_API_KEY
     # Each seat's curl or CLI first records the *_API_KEY variables it was
     # started with, by the host it calls or its own name, then runs the fake
-    # it stands in front of.
+    # it stands in front of. A value that is not one of this test's
+    # placeholders is recorded as such, so a failure never prints a real key.
     local spy="${BATS_TEST_TMPDIR}/spy" bin next
     export COUNCIL_SEAT_KEYS="${BATS_TEST_TMPDIR}/seat-keys.jsonl"
     mkdir -p "$spy"
     for bin in curl codex agy grok kimi cursor-agent claude copilot opencode ollama; do
         next=$(command -v "$bin")
-        printf '#!/bin/bash\nwho=%s\nfor arg in "$@"; do [[ "$arg" == https://* ]] && who="${arg#https://}" && who="${who%%%%/*}"; done\njq -cn --arg who "$who" '"'"'{who: $who, keys: [env | to_entries[] | select(.key | endswith("_API_KEY")) | "\\(.key)=\\(.value)"]}'"'"' >> "$COUNCIL_SEAT_KEYS"\nexec %q "$@"\n' \
+        printf '#!/bin/bash\nwho=%s\nfor arg in "$@"; do [[ "$arg" == https://* ]] && who="${arg#https://}" && who="${who%%%%/*}"; done\njq -cn --arg who "$who" '"'"'{who: $who, keys: [env | to_entries[] | select(.key | endswith("_API_KEY")) | "\\(.key)=\\(if (.value | startswith("placeholder-")) then .value else "not-a-placeholder" end)"]}'"'"' >> "$COUNCIL_SEAT_KEYS"\nexec %q "$@"\n' \
             "$bin" "$next" > "${spy}/${bin}"
         chmod +x "${spy}/${bin}"
     done

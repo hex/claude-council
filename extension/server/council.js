@@ -212,10 +212,22 @@ function searchPath(inherited) {
   return [inherited, `${home}/.local/bin`, `${home}/bin`, '/opt/homebrew/bin', '/usr/local/bin'].filter(Boolean).join(':')
 }
 
+// What a run inherits from the server's own environment: what a process needs
+// to start, find a login and reach the network, and the council's own settings.
+// Everything else is left behind, because a seat keeps its vendor's whole
+// family of variables: a key the form never held (an admin key a shell
+// exported before starting Desktop) would otherwise reach that vendor's seats.
+// COUNCIL_PASS_ENV is left behind too, since it names variables for a seat to keep.
+const INHERITED = /^(PATH|HOME|USER|LOGNAME|SHELL|TMPDIR|LANG|LANGUAGE|TZ|LC_.*|XDG_.*|HTTP_PROXY|HTTPS_PROXY|NO_PROXY|ALL_PROXY|SSL_CERT_FILE|SSL_CERT_DIR|CURL_CA_BUNDLE|REQUESTS_CA_BUNDLE|NODE_EXTRA_CA_CERTS|COUNCIL_.*)$/i
+
+function isInherited(name) {
+  return INHERITED.test(name) && name.toUpperCase() !== 'COUNCIL_PASS_ENV' && !isKeyVariable(name) && !isModelVariable(name)
+}
+
 function scriptEnvironment(keys, choices) {
   const env = {}
   for (const [name, value] of Object.entries(process.env)) {
-    if (!isKeyVariable(name) && !isModelVariable(name)) env[name] = value
+    if (isInherited(name)) env[name] = value
   }
   for (const provider of PROVIDERS) {
     if (keys.has(provider.name)) env[provider.keyVariable] = keys.get(provider.name)

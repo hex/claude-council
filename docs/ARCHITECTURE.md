@@ -622,9 +622,12 @@ runs the same scripts the plugin does.
   input by the byte and drops a line over 1 MiB before holding it whole.
 - `server/council.js` holds the provider table (form field, model variable,
   title), reads the keys once at start, keeps the saved model choices, builds
-  each run's environment and runs the scripts. A run's environment is the
-  server's own minus every key and model variable it inherited, plus the keys
-  from the form and the saved models. Each script runs in a process group of
+  each run's environment and runs the scripts. A run's environment starts from
+  a short list of the server's own variables (`PATH`, `HOME`, the locale, the
+  `XDG_*` directories, proxy and certificate settings, and `COUNCIL_*` without
+  `COUNCIL_PASS_ENV`), then adds the keys from the form and the saved models.
+  Nothing else is inherited, so a key a shell exported before it started
+  Desktop reaches no seat. Each script runs in a process group of
   its own, so stopping it reaches the providers and CLIs under it: SIGTERM to
   the group, then SIGKILL two seconds later, since a CLI can ignore SIGTERM
   and outlive the bash that started it. A run that passes its time limit or
