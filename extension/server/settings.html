@@ -7,49 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Council models</title>
 <style>
-  :root {
-    color-scheme: light dark;
-    --bg: #faf9f5; --card: #ffffff; --card-hover: #f6f5f0; --rule: #e2dfd5; --fg: #1c1c1e; --dim: #6c6c70;
-    --lit: #4d8c57; --ink-claude: #a15840; --alert: #c2410c; --off: #d3d0c6; --knob: #ffffff;
-    --card-edge: 0 2px 4px rgb(35 35 35 / .03), 0 1px 2px rgb(35 35 35 / .04), 0 0 0 .5px var(--rule);
-    --mono: ui-monospace, "SF Mono", Menlo, monospace;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #1c1c1e; --card: #2c2c2e; --card-hover: #323236; --rule: #3a3a3c; --fg: #f2f2f7; --dim: #98989d;
-      --lit: #8ec07c; --ink-claude: #e08f75; --alert: #fb8b5e; --off: #48484a; --knob: #f2f2f7;
-      --card-edge: 0 0 0 1px var(--rule);
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #1c1c1e; --card: #2c2c2e; --card-hover: #323236; --rule: #3a3a3c; --fg: #f2f2f7; --dim: #98989d;
-    --lit: #8ec07c; --ink-claude: #e08f75; --alert: #fb8b5e; --off: #48484a; --knob: #f2f2f7;
-    --card-edge: 0 0 0 1px var(--rule);
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body { background: var(--bg); color: var(--fg); font: 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-  main { padding: 16px 16px 4px; }
-  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 4px 12px; }
-  h1 { font-size: 15px; font-weight: 600; margin: 0; }
-  #status { font: 11px var(--mono); color: var(--dim); }
-  #status.bad { color: var(--alert); }
-  p.lead { color: var(--dim); font-size: 12px; margin: 0 4px 14px; }
-  p.lead.bad { color: var(--alert); }
-  section { background: var(--card); border-radius: 10px; box-shadow: var(--card-edge); margin-bottom: 12px; overflow: hidden; }
-  section:last-child { margin-bottom: 0; }
-  section > * { padding: 9px 14px; border-top: 1px dotted var(--rule); }
-  section > :first-child { border-top: 0; }
-  h2 { font-size: 15px; font-weight: 600; margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  h2 small { font: 11px var(--mono); font-weight: 400; color: var(--dim); }
-  section.off h2 { color: var(--dim); }
+  /* @include panel-style.css */
   .line { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 38px; }
   .line > span:first-child { flex: none; }
-  /* The elbow that hangs a sub-row off the row above it. */
-  .sub { padding-left: 34px; position: relative; }
-  .sub::before { content: ""; position: absolute; left: 17px; top: 6px; width: 9px; height: 13px; border-left: 1px solid var(--rule); border-bottom: 1px solid var(--rule); border-bottom-left-radius: 3px; }
-  .note { color: var(--dim); font-size: 12px; }
-  .note.bad { color: var(--alert); }
   select, input[type=search] { font: 12px var(--mono); color: var(--fg); background: var(--card-hover); border: .5px solid var(--rule); border-radius: 6px; padding: 5px 8px; min-width: 0; }
   select { max-width: 62%; text-overflow: ellipsis; }
   input[type=search] { width: 100%; }
@@ -64,7 +24,6 @@
   input.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--knob); box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .15s ease-out; }
   input.switch:checked { background: var(--lit); }
   input.switch:checked::after { transform: translateX(14px); }
-  :focus-visible { outline: 2px solid var(--ink-claude); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { input.switch, input.switch::after { transition: none; } }
 </style>
 </head>
@@ -76,54 +35,7 @@
 </main>
 <script>
 'use strict'
-// The page talks to Claude Desktop over postMessage (MCP Apps); it has no
-// network access, so every read and save is a tool call the host relays.
-const host = {
-  nextId: 1,
-  pending: new Map(),
-  post(message) { window.parent.postMessage(message, '*') },
-  request(method, params) {
-    return new Promise((resolve, reject) => {
-      const id = host.nextId++
-      host.pending.set(id, { resolve, reject })
-      host.post({ jsonrpc: '2.0', id, method, params })
-    })
-  },
-  async tool(name, args) {
-    const result = await host.request('tools/call', { name, arguments: args ?? {} })
-    const text = result?.content?.[0]?.text ?? ''
-    if (result?.isError) throw new Error(text || 'the tool failed')
-    return JSON.parse(text)
-  },
-  async connect() {
-    window.addEventListener('message', event => {
-      if (event.source !== window.parent) return
-      const message = event.data
-      if (!message || message.jsonrpc !== '2.0') return
-      const waiting = message.id !== undefined && message.method === undefined ? host.pending.get(message.id) : undefined
-      if (waiting) {
-        host.pending.delete(message.id)
-        if (message.error) waiting.reject(new Error(message.error.message ?? 'refused'))
-        else waiting.resolve(message.result)
-      } else if (message.method === 'ui/notifications/host-context-changed') {
-        host.theme(message.params)
-      } else if (message.method !== undefined && message.id !== undefined) {
-        host.post({ jsonrpc: '2.0', id: message.id, result: {} })
-      }
-    })
-    const hello = await host.request('ui/initialize', { appInfo: { name: 'council-models', version: '1' }, appCapabilities: {}, protocolVersion: '2026-01-26' })
-    host.theme(hello?.hostContext)
-    host.post({ jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {} })
-    // The body's own height, not the document's: the document is at least as
-    // tall as the frame, so reporting it could never let the frame shrink.
-    const size = () => host.post({ jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: { height: Math.ceil(document.body.getBoundingClientRect().height) } })
-    new ResizeObserver(size).observe(document.body)
-    size()
-  },
-  theme(context) {
-    if (context?.theme === 'light' || context?.theme === 'dark') document.documentElement.dataset.theme = context.theme
-  },
-}
+// @include panel-host.js
 const root = document.getElementById('providers')
 const statusLine = document.getElementById('status')
 const state = {}
@@ -202,7 +114,7 @@ function roster(row) {
 }
 
 async function load() {
-  await host.connect()
+  await host.connect('council-models')
   const data = await host.tool('council_models_data')
   rosterMax = data.rosterMax
   const cards = data.providers.map(row => {
@@ -213,6 +125,7 @@ async function load() {
   })
   if (data.problem) cards.unshift(element('p', { className: 'lead bad', textContent: `${data.problem} Any change here saves a fresh set.` }))
   root.replaceChildren(...cards)
+  host.reportSize()
 }
 
 load().catch(err => { root.replaceChildren(element('p', { className: 'note bad', textContent: `Could not load the settings (${err.message}).` })) })

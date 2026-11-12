@@ -1,0 +1,115 @@
+<!doctype html>
+<!-- ABOUTME: The council answers panel Claude Desktop draws under a council_ask call (an MCP App page) -->
+<!-- ABOUTME: One card per seat with its answer or its error; the data arrives as the tool's result -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Council answers</title>
+<style>
+  /* @include panel-style.css */
+  .answer { padding: 4px 14px 10px; overflow-wrap: anywhere; }
+  .answer > * { margin: 8px 0 0; }
+  .answer p { white-space: pre-line; }
+  .answer h3 { font-size: 15px; } .answer h4 { font-size: 14px; } .answer h5, .answer h6 { font-size: 13px; }
+  .answer ul, .answer ol { padding-left: 20px; }
+  .answer li + li { margin-top: 3px; }
+  .answer code { font: 12px var(--mono); background: var(--card-hover); border-radius: 4px; padding: 1px 4px; }
+  .answer pre { background: var(--card-hover); border-radius: 6px; padding: 8px 10px; overflow: auto; }
+  .answer pre code { background: none; padding: 0; }
+  .answer hr { border: 0; border-top: 1px dotted var(--rule); }
+  .error { padding: 9px 14px; white-space: pre-line; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Council answers</h1><span id="status" role="status"></span></header>
+  <p class="lead" id="question">Waiting for the question.</p>
+  <div id="seats" aria-live="polite"></div>
+</main>
+<script>
+'use strict'
+// @include panel-host.js
+// @include markdown.js
+const question = document.getElementById('question')
+const seats = document.getElementById('seats')
+const statusLine = document.getElementById('status')
+
+function element(tag, properties, children) {
+  const node = Object.assign(document.createElement(tag), properties ?? {})
+  for (const child of children ?? []) node.append(child)
+  return node
+}
+
+function report(text, bad) {
+  statusLine.textContent = text
+  statusLine.className = bad ? 'bad' : ''
+}
+
+function runNodes(runs) {
+  return runs.map(run => run.style === 'text' ? document.createTextNode(run.text) : element(run.style, { textContent: run.text }))
+}
+
+function blockNode(block) {
+  if (block.type === 'heading') return element(`h${Math.min(block.level + 2, 6)}`, {}, runNodes(block.runs))
+  if (block.type === 'paragraph') return element('p', {}, runNodes(block.runs))
+  if (block.type === 'code') return element('pre', {}, [element('code', { textContent: block.text })])
+  if (block.type === 'rule') return element('hr')
+  if (block.type === 'list') {
+    return element(block.ordered ? 'ol' : 'ul', {}, block.items.map(item => {
+      const node = element('li', {}, runNodes(item.runs))
+      node.style.marginLeft = `${item.depth * 18}px`
+      return node
+    }))
+  }
+  throw new Error(`unknown markdown block ${block.type}`)
+}
+
+function seatCard(seat) {
+  const heading = element('h2', {}, [document.createTextNode(seat.provider), element('small', { textContent: seat.model })])
+  const body = seat.error !== undefined
+    ? element('div', { className: 'note bad error', textContent: seat.error })
+    : element('div', { className: 'answer' }, markdownBlocks(seat.answer).map(blockNode))
+  return element('section', {}, [heading, body])
+}
+
+function showQuestion(text) {
+  question.textContent = text
+}
+
+function showResult(result) {
+  const text = result?.content?.find(part => part.type === 'text')?.text ?? ''
+  if (result?.isError) {
+    report('failed', true)
+    seats.replaceChildren(element('p', { className: 'lead bad', textContent: text || 'The council run failed.' }))
+    host.reportSize()
+    return
+  }
+  const answers = result?.structuredContent?.seats
+  if (!Array.isArray(answers)) {
+    report('')
+    seats.replaceChildren(element('p', { className: 'lead', textContent: text }))
+    host.reportSize()
+    return
+  }
+  if (result.structuredContent.question) showQuestion(result.structuredContent.question)
+  const answered = answers.filter(seat => seat.error === undefined).length
+  report(`${answered} of ${answers.length} answered`, answered === 0)
+  seats.replaceChildren(...answers.map(seatCard))
+  host.reportSize()
+}
+
+host.connect('council-answers', {
+  'ui/notifications/tool-input': params => {
+    if (typeof params?.arguments?.question === 'string') showQuestion(params.arguments.question)
+    report('asking the council')
+  },
+  'ui/notifications/tool-result': showResult,
+  'ui/notifications/tool-cancelled': () => {
+    report('cancelled', true)
+    seats.replaceChildren(element('p', { className: 'lead', textContent: 'The council question was cancelled before the answers came back.' }))
+  },
+}).catch(err => { seats.replaceChildren(element('p', { className: 'lead bad', textContent: `Could not connect to Claude Desktop (${err.message}).` })) })
+</script>
+</body>
+</html>

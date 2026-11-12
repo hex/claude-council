@@ -169,6 +169,17 @@ function scriptEnvironment(keys, choices) {
 
 const stripAnsi = text => text.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
 
+// Each seat's answer or error from query-council.sh's JSON, in the order the
+// council ran them, for the answers panel.
+function seatsOf(answers) {
+  return Object.entries(answers.round1).map(([provider, seat]) => {
+    const model = stripAnsi(String(seat.model))
+    if (seat.status === 'success') return { provider, model, answer: stripAnsi(String(seat.response)) }
+    if (seat.status === 'error') return { provider, model, error: stripAnsi(String(seat.error)) }
+    return { provider, model, error: `the seat returned status ${JSON.stringify(seat.status)} with no answer` }
+  })
+}
+
 function seatIndex(name) {
   const match = /^openrouter-([1-9][0-9]*)$/.exec(name)
   return match ? Number(match[1]) : 0
@@ -192,7 +203,7 @@ function openCouncil({ root, keys }) {
   function runBash(args, options) {
     return new Promise(resolve => {
       const child = spawn('bash', args, {
-        cwd: options.cwd, env: options.env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: options.cwd, env: options.env, detached: true, stdio: [options.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
       })
       running.add(child)
       let stdout = ''
@@ -202,6 +213,10 @@ function openCouncil({ root, keys }) {
         timedOut = true
         stopGroup(child)
       }, options.timeoutMs)
+      if (options.input !== undefined) {
+        child.stdin.on('error', err => { stderr += `could not write the script's input: ${err.message}\n` })
+        child.stdin.end(options.input)
+      }
       child.stdout.on('data', chunk => { stdout += chunk })
       child.stderr.on('data', chunk => { stderr += chunk })
       child.on('error', err => {
@@ -278,27 +293,35 @@ function openCouncil({ root, keys }) {
       const saved = roster.length === 0 ? 'no OpenRouter seats are saved' : `the saved OpenRouter roster has ${roster.length} model${roster.length === 1 ? '' : 's'}`
       return refused(`${pastRoster} is not a seat: ${saved}. Choose OpenRouter models with the council_settings tool.`)
     }
-    // One run at a time: run-council.sh names its transcript after the second
-    // it started in, inside the one run directory.
+    // One run at a time, as the plugin runs them in Claude Code: the scripts
+    // were not written for two runs sharing one working directory and cache.
     const run = asking.then(() => runAsk(request, choices))
     asking = run.catch(() => {})
     return run
   }
 
+  // Asks the seats through query-council.sh, whose JSON gives each seat's
+  // answer or error apart, then renders that JSON as text with the same
+  // format-output.sh the plugin's transcripts come from.
   async function runAsk({ question, providers, verbosity }, choices) {
     const flags = ['--no-pane']
     if (providers) flags.push(`--providers=${providers.join(',')}`)
     if (verbosity) flags.push(`--verbosity=${verbosity}`)
     const cwd = runDirectory()
-    const result = await runScript('run-council.sh', [...flags, '--', question], { cwd, env: scriptEnvironment(keys, choices), timeoutMs: ASK_TIMEOUT_MS })
+    const env = scriptEnvironment(keys, choices)
+    const result = await runScript('query-council.sh', [...flags, '--', question], { cwd, env, timeoutMs: ASK_TIMEOUT_MS })
     if (result.timedOut) return refused(`The council run took longer than ${ASK_TIMEOUT_MS / 60000} minutes and was stopped.`)
-    if (result.exitCode !== 0) return refused(stripAnsi(result.stderr).trim() || `The council run exited ${result.exitCode} with no output.`)
-    // The script prints the transcript's path relative to the directory it ran in.
-    const printed = result.stdout.trim().split('\n').pop()
-    const transcript = path.resolve(cwd, printed)
-    const text = stripAnsi(await fs.promises.readFile(transcript, 'utf8'))
-    await fs.promises.rm(transcript)
-    return { text }
+    const tail = stripAnsi(result.stderr).trim().split('\n').slice(-20).join('\n')
+    if (result.exitCode !== 0) return refused(`Council query failed:\n${tail || `the script exited ${result.exitCode} with no output.`}`)
+    let answers
+    try {
+      answers = JSON.parse(result.stdout)
+    } catch (err) {
+      return refused(`The council run printed no result (${err.message}):\n${tail}`)
+    }
+    const rendered = await runScript('format-output.sh', [], { cwd, env, input: result.stdout, timeoutMs: SCRIPT_TIMEOUT_MS })
+    if (rendered.exitCode !== 0) return refused(`The council's answers could not be formatted:\n${stripAnsi(rendered.stderr).trim()}`)
+    return { text: stripAnsi(rendered.stdout).trim(), structured: { question, seats: seatsOf(answers) } }
   }
 
   async function status() {

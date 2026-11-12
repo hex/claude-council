@@ -1,4 +1,4 @@
-// ABOUTME: Claude Desktop extension server: the council as MCP tools over stdio, plus its settings panel
+// ABOUTME: Claude Desktop extension server: the council as MCP tools over stdio, plus its two panels
 // ABOUTME: Every line it writes passes one chokepoint that removes the user's API keys from it
 'use strict'
 const fs = require('node:fs')
@@ -9,9 +9,21 @@ const council = require('./council.js')
 const EXTENSION_ROOT = path.join(__dirname, '..')
 const VERSION = JSON.parse(fs.readFileSync(path.join(EXTENSION_ROOT, 'manifest.json'), 'utf8')).version
 const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']
-const PANEL_URI = 'ui://council/settings'
 const PANEL_MIME = 'text/html;profile=mcp-app'
-const PANEL = fs.readFileSync(path.join(__dirname, 'panel.html'), 'utf8')
+
+// A panel's page with each `@include <file>` line replaced by that file, so
+// the two panels share one stylesheet and one host connection.
+function panelPage(file) {
+  const page = fs.readFileSync(path.join(__dirname, file), 'utf8')
+  return page.replace(/^[ \t]*(?:\/\*|\/\/) @include ([a-z-]+\.(?:css|js))(?: \*\/)?$/gm,
+    (line, included) => fs.readFileSync(path.join(__dirname, included), 'utf8').trimEnd())
+}
+
+const PANELS = [
+  { uri: 'ui://council/settings', name: 'Council models', text: panelPage('settings.html') },
+  { uri: 'ui://council/answers', name: 'Council answers', text: panelPage('answers.html') },
+]
+const [SETTINGS_PANEL, ANSWERS_PANEL] = PANELS
 
 const keys = council.readKeys(process.env)
 const theCouncil = council.openCouncil({ root: council.findPluginRoot(EXTENSION_ROOT), keys })
@@ -46,7 +58,16 @@ const NO_ARGUMENTS = { type: 'object', properties: {}, additionalProperties: fal
 const TOOLS = [
   {
     name: 'council_ask',
-    description: 'Ask the council, several other AI models, one question and get each one\'s answer. The question goes to third-party providers (Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter, and any CLI agents installed) on the user\'s own API keys, and they see nothing but the question, so make it self-contained. The result has one section per council seat. Show the user each seat\'s answer as returned, then write your own synthesis after them: where the seats agree, where they differ, and what you recommend. A run can take several minutes.',
+    // Read when tools/list is answered, after initialize said whether the
+    // app draws the answers panel.
+    get description() {
+      const about = 'Ask the council, several other AI models, one question and get each one\'s answer. The question goes to third-party providers (Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter, and any CLI agents installed) on the user\'s own API keys, and they see nothing but the question, so make it self-contained. The result has one section per council seat.'
+      const synthesis = 'where the seats agree, where they differ, and what you recommend. A run can take several minutes.'
+      return drawsPanel
+        ? `${about} Claude Desktop shows every seat's answer in a panel above your reply, so do not repeat the answers: write your synthesis of them, ${synthesis}`
+        : `${about} Show the user each seat's answer as returned, then write your own synthesis after them: ${synthesis}`
+    },
+    _meta: { ui: { resourceUri: ANSWERS_PANEL.uri } },
     inputSchema: {
       type: 'object',
       properties: {
@@ -69,7 +90,7 @@ const TOOLS = [
     name: 'council_settings',
     description: 'Show the model each council provider uses. In Claude Desktop this also opens a panel in the chat where the user picks models from each provider\'s live list. Use when the user wants to see or change the council\'s models.',
     inputSchema: NO_ARGUMENTS,
-    _meta: { ui: { resourceUri: PANEL_URI } },
+    _meta: { ui: { resourceUri: SETTINGS_PANEL.uri } },
     run: () => theCouncil.settingsText(drawsPanel),
   },
   {
@@ -92,7 +113,9 @@ async function callTool(id, params) {
   const tool = TOOLS.find(candidate => candidate.name === params?.name)
   if (!tool) return send({ id, error: { code: -32602, message: `unknown tool: ${String(params?.name)}` } })
   const outcome = await tool.run(params.arguments ?? {})
-  send({ id, result: { content: [{ type: 'text', text: outcome.text }], isError: Boolean(outcome.isError) } })
+  const result = { content: [{ type: 'text', text: outcome.text }], isError: Boolean(outcome.isError) }
+  if (outcome.structured) result.structuredContent = outcome.structured
+  send({ id, result })
 }
 
 async function handle(message) {
@@ -105,11 +128,12 @@ async function handle(message) {
   if (method === 'ping') return send({ id, result: {} })
   if (method === 'tools/list') return send({ id, result: { tools: TOOLS.map(({ run, ...definition }) => definition) } })
   if (method === 'tools/call') return callTool(id, params)
-  if (method === 'resources/list') return send({ id, result: { resources: [{ uri: PANEL_URI, name: 'Council models', mimeType: PANEL_MIME }] } })
+  if (method === 'resources/list') return send({ id, result: { resources: PANELS.map(({ uri, name }) => ({ uri, name, mimeType: PANEL_MIME })) } })
   if (method === 'resources/templates/list') return send({ id, result: { resourceTemplates: [] } })
   if (method === 'resources/read') {
-    if (params?.uri !== PANEL_URI) return send({ id, error: { code: -32002, message: `resource not found: ${String(params?.uri)}` } })
-    return send({ id, result: { contents: [{ uri: PANEL_URI, mimeType: PANEL_MIME, text: PANEL }] } })
+    const panel = PANELS.find(candidate => candidate.uri === params?.uri)
+    if (!panel) return send({ id, error: { code: -32002, message: `resource not found: ${String(params?.uri)}` } })
+    return send({ id, result: { contents: [{ uri: panel.uri, mimeType: PANEL_MIME, text: panel.text }] } })
   }
   send({ id, error: { code: -32601, message: `method not found: ${method}` } })
 }

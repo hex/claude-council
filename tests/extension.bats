@@ -14,13 +14,21 @@
 #   - a listening socket, ever: none (the fence refuses and records any attempt)
 #  tools and the panel resource
 #   - tools/list: the two panel tools carry the app-only visibility key, the settings tool the panel uri
-#   - resources/read: the panel with mimeType text/html;profile=mcp-app; an unknown uri is an error naming it
+#   - resources/read: both panels (settings, answers) with mimeType text/html;profile=mcp-app, the
+#     shared parts inlined; an unknown uri is an error naming it
+#   - council_ask's description: where the app draws the answers panel it asks for the synthesis
+#     without repeating the answers, elsewhere it asks for the answers to be shown first
 #  council_ask
 #   - an empty or blank question, an unknown or malformed provider, a bad verbosity, an unknown
 #     argument: refused with a sentence, nothing run
-#   - the result path the script prints is relative to its working directory: the answer still returns
+#   - each seat's answer comes back twice: in the text for the model, and as structuredContent seats
+#     in the order the council ran them for the answers panel
+#   - a seat error reaches structuredContent as an error, never as an answer
+#   - every seat failing: still a result, with every seat's error, that the panel can draw
+#   - ANSI colour codes in a seat's answer or error: none in the text or in structuredContent
 #   - a failed run: the scripts' own error comes back as the tool error
-#   - a seat whose error text carries the key: the key is replaced in the reply, and is in no state file
+#   - a seat whose error text carries the key: the key is replaced in the text and in
+#     structuredContent, and is in no state file
 #   - openrouter-N past the saved roster: refused before any run
 #   - the saved roster reaches the run as one seat per model
 #   - a model variable inherited from Desktop's environment: dropped, the scripts' default is used
@@ -170,17 +178,37 @@ save_choices() {
 @test "extension: tools/list hides the two panel tools from the model and ties settings to the panel" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
     assert_eq "$(reply 1 | jq -c '[.result.tools[] | {name, ui: ._meta.ui}]')" \
-        '[{"name":"council_ask","ui":null},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
+        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers"}},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
 }
 
-@test "extension: the panel resource is served as an MCP App page" {
+@test "extension: both panels are served as MCP App pages, the shared parts inlined" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"resources/list"}' \
-        '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"ui://council/settings"}}'
+        '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"ui://council/settings"}}' \
+        '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://council/answers"}}'
     assert_eq "$(reply 1 | jq -c '.result.resources')" \
-        '[{"uri":"ui://council/settings","name":"Council models","mimeType":"text/html;profile=mcp-app"}]'
+        '[{"uri":"ui://council/settings","name":"Council models","mimeType":"text/html;profile=mcp-app"},{"uri":"ui://council/answers","name":"Council answers","mimeType":"text/html;profile=mcp-app"}]'
     assert_eq "$(reply 2 | jq -c '.result.contents[0] | {uri, mimeType}')" \
         '{"uri":"ui://council/settings","mimeType":"text/html;profile=mcp-app"}'
-    assert_eq "$(reply 2 | jq -r '.result.contents[0].text')" "$(cat "${PROJECT_ROOT}/extension/server/panel.html")"
+    assert_eq "$(reply 3 | jq -c '.result.contents[0] | {uri, mimeType}')" \
+        '{"uri":"ui://council/answers","mimeType":"text/html;profile=mcp-app"}'
+    local settings answers part
+    settings=$(reply 2 | jq -r '.result.contents[0].text')
+    answers=$(reply 3 | jq -r '.result.contents[0].text')
+    [[ "$settings" == '<!doctype html>'* && "$answers" == '<!doctype html>'* ]]
+    [[ "$settings" != *'@include'* && "$answers" != *'@include'* ]]
+    for part in panel-style.css panel-host.js; do
+        [[ "$settings" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
+        [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
+    done
+    [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/markdown.js")"* ]]
+}
+
+@test "extension: council_ask's description fits whether or not the app draws the answers panel" {
+    mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+    [[ "$(reply 1 | jq -r '.result.tools[0].description')" == *"Claude Desktop shows every seat's answer in a panel above your reply, so do not repeat the answers"* ]]
+    mcp '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"plain","version":"0"}}}' \
+        '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+    [[ "$(reply 1 | jq -r '.result.tools[0].description')" == *"Show the user each seat's answer as returned, then"* ]]
 }
 
 @test "extension: an unknown resource uri is an error naming it" {
@@ -216,7 +244,11 @@ if [[ "$COUNCIL_FAKE_CURL_MODE" == leak ]]; then
 fi
 model=$(jq -r '.model' "$payload")
 printf '%s\n' "$model" >> "$COUNCIL_FAKE_SENT_MODELS"
-jq -cn --arg m "$model" '{choices: [{message: {content: ("answer from " + $m)}}]}' > "$out"
+if [[ "$COUNCIL_FAKE_CURL_MODE" == colour ]]; then
+    jq -cn --arg m "$model" '{choices: [{message: {content: ("\u001b[1manswer\u001b[0m from " + $m)}}]}' > "$out"
+else
+    jq -cn --arg m "$model" '{choices: [{message: {content: ("answer from " + $m)}}]}' > "$out"
+fi
 printf '200'
 CURL
     chmod +x "$dir/curl"
@@ -249,25 +281,62 @@ CURL
     [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
 }
 
-@test "extension: council_ask returns the saved answer although the script prints its path relative to the run" {
-    export COUNCIL_FAKE_BEHAVIOR=valid
-    mcp "$INIT" "$(call 1 council_ask '{"question":"Which queue?","providers":["codex"]}')"
+# A tool result's structuredContent, compact.
+result_seats() {
+    reply "$1" | jq -c '.result.structuredContent'
+}
+
+@test "extension: council_ask returns each seat's answer as text and as seats, in the order they ran" {
+    install_fake_curl answer
+    export COUNCIL_FAKE_BEHAVIOR=valid OPENROUTER_API_KEY="$SENTINEL_KEY"
+    save_choices '{"openrouter":["vendor/alpha"]}'
+    mcp "$INIT" "$(call 1 council_ask '{"question":"Which queue?","providers":["openrouter-1","codex"]}')"
     assert_eq "$(result_error 1)" false
-    [[ "$(result_text 1)" == *"FAKE-CODEX-RESPONSE: deterministic answer"* ]]
-    assert_eq "$(jq -r '.bin' "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl")" codex
-    # Read and removed: no transcript is left behind in the run directory.
-    assert_eq "$(find "${STATE_DIR}/runs" -name 'council-*.md' | wc -l | tr -d ' ')" 0
+    assert_eq "$(result_seats 1)" \
+        '{"question":"Which queue?","seats":[{"provider":"openrouter-1","model":"vendor/alpha","answer":"answer from vendor/alpha"},{"provider":"codex","model":"default","answer":"FAKE-CODEX-RESPONSE: deterministic answer"}]}'
+    # The text is format-output.sh's transcript, which orders seats by name.
+    [[ "$(result_text 1)" == *"## ● Codex - default"*"FAKE-CODEX-RESPONSE: deterministic answer"*"## ● Openrouter-1 - vendor/alpha"*"answer from vendor/alpha"* ]]
+}
+
+@test "extension: a seat's error reaches the seats as an error, never as an answer" {
+    install_fake_curl answer
+    export COUNCIL_FAKE_BEHAVIOR=error OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex","openrouter"]}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_seats 1 | jq -c '[.seats[] | {provider, answer, error: (.error != null)}]')" \
+        '[{"provider":"codex","answer":null,"error":true},{"provider":"openrouter","answer":"answer from anthropic/claude-fable-5.1","error":false}]'
+    assert_eq "$(result_seats 1 | jq -r '.seats[0].error')" 'Error from codex CLI: Error: fake provider failure'
+}
+
+@test "extension: colour codes in a seat's answer or error reach neither the text nor the seats" {
+    install_fake_curl colour
+    export COUNCIL_FAKE_BEHAVIOR=noisy-error OPENROUTER_API_KEY="$SENTINEL_KEY"
+    save_choices '{"openrouter":["vendor/alpha"]}'
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex","openrouter-1"]}')"
+    assert_eq "$(result_error 1)" false
+    [[ "$(result_seats 1 | jq -r '.seats[0].error')" == *'Error: cause after the noise' ]]
+    assert_eq "$(result_seats 1 | jq -r '.seats[1].answer')" 'answer from vendor/alpha'
+    [[ "$(result_text 1)" == *'Error: cause after the noise'*'answer from vendor/alpha'* ]]
+    # JSON spells ESC as \u001b.
+    [[ "$(reply 1)" != *'\u001b'* ]]
+}
+
+@test "extension: a run where every seat fails is still a result the panel can draw" {
+    export COUNCIL_FAKE_BEHAVIOR=error
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex","grok-cli"]}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_seats 1 | jq -c '[.seats[] | [.provider, has("answer"), has("error")]]')" '[["codex",false,true],["grok-cli",false,true]]'
 }
 
 @test "extension: a failed council run returns the scripts' own error" {
     export COUNCIL_FAKE_BEHAVIOR=valid TMPDIR="${BATS_TEST_TMPDIR}/no-such-dir"
     mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
     assert_eq "$(result_error 1)" true
-    # The third line is mktemp's own, worded differently by BSD and GNU.
+    # The second line is mktemp's own, worded differently by BSD and GNU.
     local text
     text=$(result_text 1)
-    assert_eq "$(printf '%s\n' "$text" | sed -n 1,2p)" "$(printf '%s\n' 'Error: Invalid JSON input' 'Council query failed:')"
-    [[ "$(printf '%s\n' "$text" | sed -n 3p)" == "mktemp: "*"${TMPDIR}/council-query."*": No such file or directory" ]]
+    assert_eq "$(printf '%s\n' "$text" | sed -n 1p)" 'Council query failed:'
+    [[ "$(printf '%s\n' "$text" | sed -n 2p)" == "mktemp: "*"${TMPDIR}/council-query."*": No such file or directory" ]]
 }
 
 @test "extension: a key quoted in a seat's error never leaves the server, nor lands in a state file" {
@@ -275,6 +344,7 @@ CURL
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
     mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')" "$(call 2 council_settings)" "$(call 3 council_models_data)"
     [[ "$(result_text 1)" == *'header = "Authorization: Bearer [key removed]"'* ]]
+    [[ "$(result_seats 1 | jq -r '.seats[0].error')" == *'header = "Authorization: Bearer [key removed]"'* ]]
     [[ "$output" != *"$SENTINEL_KEY"* ]]
     [[ "$stderr" != *"$SENTINEL_KEY"* ]]
     run ! grep -rqF "$SENTINEL_KEY" "$STATE_DIR"
