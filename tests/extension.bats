@@ -416,7 +416,10 @@ result_seats() {
     [[ "$(result_seats 1 | jq -r '.seats[0].error')" == *'header = "Authorization: Bearer [key removed]"'* ]]
     [[ "$output" != *"$SENTINEL_KEY"* ]]
     [[ "$stderr" != *"$SENTINEL_KEY"* ]]
-    run ! grep -rqF "$SENTINEL_KEY" "$STATE_DIR"
+    # grep exits 1 for no match, and 2 for a directory that is not there.
+    [ -d "${STATE_DIR}/runs" ]
+    run grep -rqF "$SENTINEL_KEY" "$STATE_DIR"
+    [ "$status" -eq 1 ]
 }
 
 @test "extension: a seat past the saved OpenRouter roster is refused before anything runs" {
@@ -441,10 +444,18 @@ result_seats() {
 
 @test "extension: model variables inherited from Desktop's environment are dropped" {
     install_fake_curl answer
-    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    export OPENROUTER_API_KEY="$SENTINEL_KEY" COUNCIL_FAKE_BEHAVIOR=valid
     export OPENROUTER_MODEL=inherited/model OPENROUTER_1_MODEL=inherited/seat OPENROUTER_MODELS=inherited/roster
-    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')"
-    assert_eq "$(cat "$COUNCIL_FAKE_SENT_MODELS")" "$(env -u OPENROUTER_MODEL bash -c 'source "$1"; get_model openrouter' _ "${LIB_DIR}/providers.sh")"
+    # Nothing saved and no providers named: an inherited roster would add
+    # its own seat to the council.
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q"}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(sort "$COUNCIL_FAKE_SENT_MODELS" | paste -sd, -)" "$(script_default openrouter)"
+    # A saved roster: an inherited per-seat model would replace the saved one.
+    rm "$COUNCIL_FAKE_SENT_MODELS"
+    save_choices '{"openrouter":["vendor/alpha"]}'
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter-1"]}')"
+    assert_eq "$(cat "$COUNCIL_FAKE_SENT_MODELS")" vendor/alpha
 }
 
 @test "extension: a malformed models file is ignored for runs, and the answer and the status say so" {
