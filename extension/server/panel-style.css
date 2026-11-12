@@ -14,7 +14,10 @@
     --card-edge: 0 0 0 1px var(--rule);
   }
 }
+/* Native controls (radios, selects) follow the theme the host names, not the system's. */
+:root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #1c1c1e; --card: #2c2c2e; --card-hover: #323236; --rule: #3a3a3c; --fg: #f2f2f7; --dim: #98989d;
   --lit: #8ec07c; --ink-claude: #e08f75; --alert: #fb8b5e; --off: #48484a; --knob: #f2f2f7;
   --card-edge: 0 0 0 1px var(--rule);
