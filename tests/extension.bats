@@ -21,7 +21,8 @@
 #   - a run writing more than 8 MiB to stdout, or 1 MiB to stderr: stopped, and the tool says so
 #   - a listening socket, ever: none (the fence refuses and records any attempt)
 #  tools and the panel resource
-#   - tools/list: the three panel tools carry the app-only visibility key, each panel's tool its uri
+#   - tools/list: the three panel tools carry the app-only visibility key, each panel's tool its uri,
+#     council_result neither
 #   - resources/read: the three panels (settings, answers, picker) with mimeType text/html;profile=mcp-app, the
 #     shared parts inlined (the vendor marks in all three, the model list in settings and picker); an unknown
 #     uri is an error naming it
@@ -106,8 +107,8 @@
 #   - council_result with no id: the latest run; with an unknown or malformed id: a sentence saying it
 #     is not held and to ask the council again; before any run (as after a restart): the same sentence
 #   - more than 5 runs: the oldest is forgotten, the rest kept
-#   - a run where every seat failed, a refused run and a cancelled run: no id, nothing stored, the
-#     latest run stays the one before
+#   - a run where every seat failed and a refused run: no id, nothing stored, the latest run stays
+#     the one before (a cancelled run ends as a refusal, and is never answered)
 #   - a key quoted in a stored run's seat error: removed in council_result's text
 #   - council_result with an argument it does not take, or a run that is not a string: refused
 #   - the panel's handoff (one ui/message with no seat output, a line saying to press Enter, the
@@ -257,7 +258,7 @@ save_choices() {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
     # Each address's hash is checked against its page in a test of its own.
     assert_eq "$(reply 1 | jq -c '[.result.tools[] | {name, ui: ._meta.ui} | if .ui.resourceUri then .ui.resourceUri |= sub("/[0-9a-f]{12}$"; "/<hash>") end]')" \
-        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers/<hash>"}},{"name":"council_seats","ui":null},{"name":"council_pick","ui":{"resourceUri":"ui://council/pick/<hash>"}},{"name":"council_pick_ask","ui":{"visibility":["app"]}},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings/<hash>"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
+        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers/<hash>"}},{"name":"council_seats","ui":null},{"name":"council_pick","ui":{"resourceUri":"ui://council/pick/<hash>"}},{"name":"council_pick_ask","ui":{"visibility":["app"]}},{"name":"council_result","ui":null},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings/<hash>"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
 }
 
 @test "extension: the three panels are served as MCP App pages, the shared parts inlined" {
@@ -1149,7 +1150,7 @@ perplexity: sonar-test-1"
     assert_eq "$(result_text 3)" 'council_pick has no argument "providers"; it takes question'
 }
 
-@test "extension: council_pick_ask is council_ask: the same refusals and the same answer" {
+@test "extension: council_pick_ask is council_ask: the same refusals and the same answer, with a run id beside it" {
     install_fake_curl answer
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
     save_choices '{"openrouter":["vendor/alpha"]}'
@@ -1163,10 +1164,11 @@ perplexity: sonar-test-1"
     mcp "${requests[@]}"
     for id in "${!cases[@]}"; do
         [ -n "$(reply $((id + 1)))" ]
-        assert_eq "$(reply $((id + 101)) | jq -c 'del(.id)')" "$(reply $((id + 1)) | jq -c 'del(.id)')"
+        assert_eq "$(reply $((id + 101)) | jq -c 'del(.id, .result.structuredContent.run)')" "$(reply $((id + 1)) | jq -c 'del(.id)')"
     done
     assert_eq "$(result_error 101)" true
-    assert_eq "$(result_seats 107)" '{"question":"q","seats":[{"provider":"openrouter-1","model":"vendor/alpha","answer":"answer from vendor/alpha"}]}'
+    assert_eq "$(result_seats 107 | jq -c 'del(.run)')" '{"question":"q","seats":[{"provider":"openrouter-1","model":"vendor/alpha","answer":"answer from vendor/alpha"}]}'
+    [[ "$(result_seats 107 | jq -r '.run')" =~ ^[0-9a-f]{6}$ ]]
 }
 
 @test "extension: a key quoted in a seat's error never leaves the server through council_pick_ask" {
@@ -1187,4 +1189,87 @@ perplexity: sonar-test-1"
     assert_eq "$(reply 99)" '{"jsonrpc":"2.0","id":99,"result":{}}'
     assert_eq "$(cat "$DRIVE_SEEN")" gone
     run ! pgrep -f 'sleep 97.37'
+}
+
+# ============================================================================
+# council_result: the picker's answers handed to the model
+# ============================================================================
+
+@test "extension: council_result gives a picker run's answers by its id, as council_ask's own text" {
+    install_fake_curl answer
+    export COUNCIL_FAKE_BEHAVIOR=valid OPENROUTER_API_KEY="$SENTINEL_KEY"
+    save_choices '{"openrouter":["vendor/alpha"]}'
+    local args='{"question":"Which queue?","providers":["openrouter-1","codex"]}'
+    mcp "$INIT" "$(call 1 council_pick_ask "$args")" "$(call 2 council_result '{"run":"{{1.result.structuredContent.run}}"}')" \
+        "$(call 3 council_ask "$args")"
+    [[ "$(reply 1 | jq -r '.result.structuredContent.run')" =~ ^[0-9a-f]{6}$ ]]
+    assert_eq "$(result_error 2)" false
+    assert_eq "$(reply 2 | jq -c '.result | keys')" '["content","isError"]'
+    [[ "$(result_text 2)" == *"## ● Codex - default"*"FAKE-CODEX-RESPONSE: deterministic answer"*"## ● Openrouter-1 - vendor/alpha"*"answer from vendor/alpha"* ]]
+    assert_eq "$(result_text 2)" "$(result_text 3)"
+}
+
+@test "extension: council_result with no run gives the latest; an unknown run, or none yet, is a sentence saying to ask again" {
+    install_fake_curl echo
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_result)" "$(call 2 council_pick_ask '{"question":"first question","providers":["openrouter"]}')" \
+        "$(call 3 council_pick_ask '{"question":"second question","providers":["openrouter"]}')" "$(call 4 council_result)" \
+        "$(call 5 council_result '{"run":"{{2.result.structuredContent.run}}"}')" "$(call 6 council_result '{"run":"000000"}')" \
+        "$(call 7 council_result '{"run":"run 1"}')"
+    local kept='The extension keeps the last 5 picker runs in which a seat answered, and none from before Claude Desktop last started it. Ask the council the question again.'
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" "No council run from the picker is held. ${kept}"
+    [[ "$(result_text 3)" == *"asked: second question"* ]]
+    assert_eq "$(result_error 4)" false
+    assert_eq "$(result_text 4)" "$(result_text 3)"
+    [[ "$(result_text 2)" == *"asked: first question"* ]]
+    assert_eq "$(result_text 5)" "$(result_text 2)"
+    assert_eq "$(result_error 6)" true
+    assert_eq "$(result_text 6)" "Council run \"000000\" is not held. ${kept}"
+    assert_eq "$(result_text 7)" "Council run \"run 1\" is not held. ${kept}"
+}
+
+@test "extension: council_result keeps the latest 5 picker runs, forgetting the oldest" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    local requests=("$INIT") id
+    for id in 1 2 3 4 5 6; do
+        requests+=("$(call "$id" council_pick_ask '{"question":"q","providers":["codex"]}')")
+    done
+    mcp "${requests[@]}" "$(call 11 council_result '{"run":"{{1.result.structuredContent.run}}"}')" \
+        "$(call 12 council_result '{"run":"{{2.result.structuredContent.run}}"}')" "$(call 16 council_result '{"run":"{{6.result.structuredContent.run}}"}')"
+    assert_eq "$(result_error 11)" true
+    [[ "$(result_text 11)" == "Council run \"$(reply 1 | jq -r '.result.structuredContent.run')\" is not held."* ]]
+    assert_eq "$(result_error 12)" false
+    assert_eq "$(result_text 12)" "$(result_text 2)"
+    assert_eq "$(result_text 16)" "$(result_text 6)"
+}
+
+@test "extension: a picker run where no seat answered, or one refused, gets no id and leaves the latest run as it was" {
+    install_fake_curl leak
+    export COUNCIL_FAKE_BEHAVIOR=valid OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_pick_ask '{"question":"q","providers":["codex"]}')" \
+        "$(call 2 council_pick_ask '{"question":"q","providers":["openrouter"]}')" "$(call 3 council_pick_ask '{"question":""}')" \
+        "$(call 4 council_result)"
+    assert_eq "$(result_error 2)" false
+    assert_eq "$(reply 2 | jq -c '.result.structuredContent | {run, answered: [.seats[] | has("answer")]}')" '{"run":null,"answered":[false]}'
+    assert_eq "$(result_error 3)" true
+    assert_eq "$(result_text 4)" "$(result_text 1)"
+}
+
+@test "extension: a key quoted in a held run's seat error never leaves the server through council_result" {
+    install_fake_curl leak
+    export COUNCIL_FAKE_BEHAVIOR=valid OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_pick_ask '{"question":"q","providers":["codex","openrouter"]}')" "$(call 2 council_result)"
+    assert_eq "$(result_error 2)" false
+    [[ "$(result_text 2)" == *'FAKE-CODEX-RESPONSE: deterministic answer'*'header = "Authorization: Bearer [key removed]"'* ]]
+    [[ "$output" != *"$SENTINEL_KEY"* ]]
+    [[ "$stderr" != *"$SENTINEL_KEY"* ]]
+}
+
+@test "extension: council_result refuses an argument it does not take, and a run that is not a string" {
+    mcp "$INIT" "$(call 1 council_result '{"question":"q"}')" "$(call 2 council_result '{"run":7}')"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" 'council_result has no argument "question"; it takes run'
+    assert_eq "$(result_error 2)" true
+    assert_eq "$(result_text 2)" 'run must be a run id such as 3f9a2c, not 7'
 }

@@ -49,6 +49,10 @@
       "description": "A trial: a panel to choose the seats and verbosity, then ask."
     },
     {
+      "name": "council_result",
+      "description": "Give Claude the answers of a council run made in the picker, for its synthesis."
+    },
+    {
       "name": "council_status",
       "description": "Show which council providers are usable and the model each would use."
     },

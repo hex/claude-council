@@ -2,6 +2,7 @@
 // ABOUTME: Keys come only from Desktop's settings form, models only from the choices saved in the panel
 'use strict'
 const { spawn } = require('node:child_process')
+const crypto = require('node:crypto')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -23,6 +24,9 @@ const ROSTER_MAX = 12
 const VERBOSITIES = ['brief', 'standard', 'detailed']
 // How long each kind of run may take before it is stopped.
 const TIMEOUTS_MS = { ask: 10 * 60 * 1000, status: 3 * 60 * 1000, script: 30 * 1000 }
+// How many of the picker's runs council_result can give the model, newest
+// kept. Each is the text of one run, which the run's stdout cap bounds.
+const RUNS_KEPT = 5
 // The question reaches query-council.sh as one argument, and Linux refuses an
 // argument over 128 KiB; this leaves room under that.
 const QUESTION_MAX_BYTES = 100000
@@ -532,6 +536,40 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     return { text: stripAnsi(rendered.stdout).trim(), structured: { question, seats: seatsOf(answers) } }
   }
 
+  // The picker's runs in which a seat answered, oldest first, each by its run
+  // id: the text council_ask would have given the model, held for
+  // council_result. Lost when the server stops.
+  const pickedRuns = new Map()
+
+  // council_ask for the picker's Ask button: a run in which a seat answered is
+  // held under a run id the panel gets beside the answers. The id is random,
+  // not a count, so an id still in the chat from before a restart never names
+  // a later run.
+  async function pickAsk(input, signal) {
+    const outcome = await ask(input, signal)
+    // A cancelled run comes back as an error too, so it is never held.
+    if (outcome.isError || !outcome.structured.seats.some(seat => seat.error === undefined)) return outcome
+    let run
+    do run = crypto.randomBytes(3).toString('hex'); while (pickedRuns.has(run))
+    pickedRuns.set(run, outcome.text)
+    if (pickedRuns.size > RUNS_KEPT) pickedRuns.delete(pickedRuns.keys().next().value)
+    return { ...outcome, structured: { ...outcome.structured, run } }
+  }
+
+  // A picker run's text, by its id or the latest when none is given.
+  function result(input) {
+    if (input === null || typeof input !== 'object' || Array.isArray(input)) return refused('council_result takes an object, with a run id or none')
+    const unknown = Object.keys(input).find(name => name !== 'run')
+    if (unknown !== undefined) return refused(`council_result has no argument ${shown(unknown)}; it takes run`)
+    if (input.run !== undefined && typeof input.run !== 'string') return refused(`run must be a run id such as 3f9a2c, not ${shown(input.run)}`)
+    const kept = `The extension keeps the last ${RUNS_KEPT} picker runs in which a seat answered, and none from before Claude Desktop last started it. Ask the council the question again.`
+    if (input.run === undefined && pickedRuns.size === 0) return refused(`No council run from the picker is held. ${kept}`)
+    const run = input.run ?? [...pickedRuns.keys()].at(-1)
+    const text = pickedRuns.get(run)
+    if (text === undefined) return refused(`Council run ${shown(run)} is not held. ${kept}`)
+    return { text }
+  }
+
   // The seats a question with no providers named would go to, each with the
   // model it would use, as query-council.sh resolves them under the saved
   // choices. Probes nothing: a status check starts every CLI agent.
@@ -663,7 +701,7 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     return { text: JSON.stringify({ saved: true, seat: result.seat, model }) }
   }
 
-  return { ask, seatsText, pick, status, settingsText, panelData, saveFromPanel, stopRuns }
+  return { ask, pickAsk, result, seatsText, pick, status, settingsText, panelData, saveFromPanel, stopRuns }
 }
 
 module.exports = { PROVIDERS, Refusal, VERBOSITIES, findPluginRoot, openCouncil, readKeys }

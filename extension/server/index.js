@@ -120,7 +120,13 @@ const TOOLS = [
     _meta: { ui: { visibility: ['app'] } },
     // council_ask's own function, so the panel's runs pass every check a
     // model's do.
-    run: (args, signal) => theCouncil.ask(args, signal),
+    run: (args, signal) => theCouncil.pickAsk(args, signal),
+  },
+  {
+    name: 'council_result',
+    description: 'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, such as "Synthesise the council\'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you. Show each seat\'s answer, then write your own synthesis after them: where the seats agree, where they differ, and what you recommend.',
+    inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'The run id the user\'s message names, such as 3f9a2c. Leave out for the latest run.' } }, additionalProperties: false },
+    run: (args, signal) => theCouncil.result(args, signal),
   },
   {
     name: 'council_status',
