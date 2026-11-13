@@ -138,9 +138,9 @@ async function handOff(asked, answers) {
     steps.push(`${name} pending`)
     note()
     try {
-      await host.request(method, params)
-      steps[steps.length - 1] = name
-      return true
+      const reply = await host.request(method, params)
+      steps[steps.length - 1] = `${name} reply ${JSON.stringify(reply ?? null).slice(0, 200)}`
+      return reply?.isError !== true
     } catch (err) {
       steps[steps.length - 1] = `${name} refused (${err.message})`
       return false
@@ -154,6 +154,22 @@ async function handOff(asked, answers) {
   const message = inContext ? SYNTHESIS : `${SYNTHESIS}\n\nThe council's answers to the question "${asked}":\n\n${answers}`
   const sent = await step('message', 'ui/message', { role: 'user', content: [{ type: 'text', text: message }] })
   if (!sent) handoff.prepend(element('p', { className: 'lead', textContent: 'Ask Claude to summarise the council\'s answers.' }))
+  // Trial only: other shapes of the same two requests, one per button, so the
+  // host's reply to each can be read off a screenshot.
+  const text = 'Probe from the council picker: reply with the single word RECEIVED.'
+  const probes = {
+    'message, object': ['ui/message', { role: 'user', content: { type: 'text', text } }],
+    'message, array': ['ui/message', { role: 'user', content: [{ type: 'text', text }] }],
+    'context, structured': ['ui/update-model-context', { structuredContent: { councilProbe: text } }],
+    'context, array': ['ui/update-model-context', { content: [{ type: 'text', text }] }],
+  }
+  const row = element('div', { className: 'act' })
+  for (const [label, [method, params]] of Object.entries(probes)) {
+    const button = element('button', { type: 'button', textContent: label })
+    button.addEventListener('click', () => { step(`probe ${label}`, method, params) })
+    row.append(button)
+  }
+  handoff.append(row)
   host.reportSize()
 }
 
