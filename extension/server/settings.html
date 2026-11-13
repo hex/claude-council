@@ -8,18 +8,11 @@
 <title>Council models</title>
 <style>
   /* @include panel-style.css */
+  /* @include model-list.css */
   .line { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 38px; }
   .line > span:first-child { flex: none; }
-  select, input[type=search] { font: 12px var(--mono); color: var(--fg); background: var(--card-hover); border: .5px solid var(--rule); border-radius: 6px; padding: 5px 8px; min-width: 0; }
-  select { max-width: 62%; text-overflow: ellipsis; }
-  input[type=search] { width: 100%; }
+  select { font: 12px var(--mono); color: var(--fg); background: var(--card-hover); border: .5px solid var(--rule); border-radius: 6px; padding: 5px 8px; min-width: 0; max-width: 62%; text-overflow: ellipsis; }
   select:disabled, input:disabled { opacity: .5; }
-  .models { padding: 0; max-height: 300px; overflow: auto; }
-  .models label { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 14px; border-top: 1px dotted var(--rule); font: 12px var(--mono); cursor: pointer; }
-  .models label:first-child { border-top: 0; }
-  .models label:hover { background: var(--card-hover); }
-  .models label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .models .empty { padding: 10px 14px; }
 </style>
 </head>
 <body>
@@ -33,6 +26,7 @@
 // @include panel-host.js
 // @include panel-page.js
 // @include marks.js
+// @include model-list.js
 const root = document.getElementById('providers')
 const state = {}
 let rosterMax = 0
@@ -69,19 +63,16 @@ function roster(row) {
   state[row.name] = [...chosen]
   const title = heading(row, '')
   const count = title.querySelector('small')
-  const filter = element('input', { type: 'search', placeholder: 'Filter models, for example deepseek', disabled: !row.hasKey })
-  filter.setAttribute('aria-label', 'Filter OpenRouter models')
-  const list = element('div', { className: 'models' })
-  const all = [...new Set([...row.selected, ...row.models])]
   function label() {
     count.textContent = !row.hasKey ? 'no key' : chosen.size === 0 ? `default: ${row.defaultModel}` : `${chosen.size} of ${rosterMax} seats`
   }
-  function draw() {
-    const needle = filter.value.trim().toLowerCase()
-    const shown = all.filter(id => chosen.has(id) || id.toLowerCase().includes(needle))
-    shown.sort((a, b) => Number(chosen.has(b)) - Number(chosen.has(a)) || a.localeCompare(b))
-    if (shown.length === 0) return list.replaceChildren(element('p', { className: 'note empty', textContent: row.hasKey ? 'No model matches.' : 'The list appears once a key is saved.' }))
-    list.replaceChildren(...shown.slice(0, 300).map(id => {
+  const { filter, list } = modelList({
+    ids: [...new Set([...row.selected, ...row.models])],
+    pinned: id => chosen.has(id),
+    label: 'Filter OpenRouter models',
+    empty: row.hasKey ? 'No model matches.' : 'The list appears once a key is saved.',
+    disabled: !row.hasKey,
+    row: id => {
       const box = element('input', { type: 'checkbox', className: 'switch', checked: chosen.has(id), disabled: !row.hasKey })
       box.addEventListener('change', () => {
         if (box.checked && chosen.size >= rosterMax) { box.checked = false; return report(`at most ${rosterMax} OpenRouter seats`, true) }
@@ -91,10 +82,8 @@ function roster(row) {
         save()
       })
       return element('label', {}, [element('span', { textContent: id }), box])
-    }))
-  }
-  filter.addEventListener('input', draw)
-  draw()
+    },
+  })
   label()
   return [title, element('div', {}, [filter]), list]
 }

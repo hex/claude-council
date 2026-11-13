@@ -9,9 +9,22 @@
 <style>
   /* @include panel-style.css */
   /* @include seat-cards.css */
+  /* @include model-list.css */
   .seat { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
   .seat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .seat small { font: 11px var(--mono); color: var(--dim); margin-left: 8px; }
+  /* A seat's model where the extension chooses it: the grey text, made a button with a chevron. */
+  /* In a narrow panel the model's text shortens, never the name or the chevron. */
+  .seat > span.chooses { display: flex; align-items: center; min-width: 0; }
+  .seat button.model { display: inline-flex; align-items: center; min-width: 0; font: 11px var(--mono); color: var(--dim); background: none; border-radius: 4px; padding: 2px 4px; margin-left: 4px; }
+  .seat button.model:hover:not(:disabled) { color: var(--fg); background: var(--card-hover); }
+  .seat button.model::after { content: ""; display: inline-block; width: 4px; height: 4px; margin: 0 2px 0 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: translateY(-2px) rotate(45deg); }
+  .seat button.model[aria-expanded="true"]::after { transform: translateY(1px) rotate(225deg); }
+  /* Not while hidden: a display of its own would override the hidden attribute. */
+  .choose:not([hidden]) { display: grid; gap: 6px; }
+  .choose p { margin: 0; }
+  .choose .models { border: .5px solid var(--rule); border-radius: 6px; max-height: 240px; }
+  .choose .models > button[aria-pressed="true"] { color: var(--lit); font-weight: 600; }
   .choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
   .choices label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .choices input { accent-color: var(--lit); margin: 0; }
@@ -47,6 +60,7 @@
 // @include marks.js
 // @include markdown.js
 // @include seat-cards.js
+// @include model-list.js
 const question = document.getElementById('question')
 const picker = document.getElementById('picker')
 const seats = document.getElementById('seats')
@@ -55,6 +69,124 @@ const handoff = document.getElementById('handoff')
 // What Claude is asked once the answers are in, after them or after they were
 // put into its context.
 const SYNTHESIS = 'Write your synthesis of the council\'s answers: where the seats agree, where they differ, and what you recommend.'
+
+// The seats whose model the extension chooses, as the settings panel does: the
+// API seats and OpenRouter's. A CLI agent's model is set in its own settings.
+const CHOOSABLE = /^(gemini|openai|grok|perplexity|kimi|openrouter|openrouter-[1-9][0-9]*)$/
+// A list longer than this gets a filter box: OpenRouter's runs to hundreds.
+const FILTER_FROM = 20
+
+// Each provider's models and saved choice, from the tool the settings panel
+// loads with. Asked once, when a seat's model is first opened or focused, so
+// the picker itself draws at once; a failed load is asked again next time.
+let modelsLoad
+function loadModels() {
+  modelsLoad ??= host.tool('council_models_data').then(data => ({ data }), err => {
+    modelsLoad = undefined
+    return { error: err.message }
+  })
+  return modelsLoad
+}
+
+// A seat's row: its mark, its name, its model, and the switch that seats it.
+// Where the extension chooses the seat's model, the model is a button that
+// opens the provider's models under the row, and a choice saves at once, as
+// the saved default this question and later ones use. `saving(on)` says a
+// save started or ended; `renamed(was)` that the seat now has another name.
+function seatRow(seat, box, saving, renamed) {
+  const mark = { icon: markIcon(seat.provider, seat.model) }
+  const name = document.createTextNode(seat.provider)
+  const title = element('span', {}, [mark.icon, name])
+  const row = element('label', { className: 'seat', htmlFor: box.id }, [title, box])
+  const label = () => box.setAttribute('aria-label', `${seat.provider} (${seat.model})`)
+  label()
+  if (!CHOOSABLE.test(seat.provider)) {
+    title.append(element('small', { textContent: seat.model }))
+    return { rows: [row], close: () => {} }
+  }
+  const model = element('span', { textContent: seat.model })
+  const button = element('button', { type: 'button', className: 'model' }, [model])
+  button.setAttribute('aria-expanded', 'false')
+  title.className = 'chooses'
+  title.append(button)
+  const list = element('div', { className: 'sub choose', hidden: true })
+  // The saved choice: '' for the default, else a model id.
+  let current
+  const close = () => {
+    list.hidden = true
+    button.setAttribute('aria-expanded', 'false')
+    host.reportSize()
+  }
+  const say = (text, bad) => element('p', { className: bad ? 'note bad' : 'note', textContent: text })
+  async function save(id, provider) {
+    if (id === current) return close()
+    saving(true)
+    for (const option of list.querySelectorAll('button, input')) option.disabled = true
+    try {
+      const saved = await host.tool('council_models_save', { seat: seat.provider, model: id })
+      const was = seat.provider
+      current = id
+      seat.provider = saved.seat
+      seat.model = saved.model
+      name.textContent = seat.provider
+      model.textContent = seat.model
+      const icon = markIcon(seat.provider, seat.model)
+      mark.icon.replaceWith(icon)
+      mark.icon = icon
+      label()
+      if (was !== seat.provider) renamed(was)
+      close()
+    } catch (err) {
+      const problem = err.message.startsWith('Not saved') ? err.message : `Not saved (${err.message}).`
+      draw(provider, problem)
+    } finally {
+      saving(false)
+    }
+  }
+  function draw(provider, problem) {
+    // A roster seat has no default of its own: removing it is the settings panel's.
+    const offered = seat.provider.startsWith('openrouter-') ? [] : ['']
+    const ids = [...new Set([...offered, current, ...provider.models])]
+    const { filter, list: options } = modelList({
+      ids,
+      pinned: id => id === '' || id === current,
+      label: `Filter ${provider.title} models`,
+      empty: 'No model matches.',
+      row: id => {
+        const option = element('button', { type: 'button' }, [element('span', { textContent: id === '' ? `Default (${provider.defaultModel})` : id })])
+        option.setAttribute('aria-pressed', String(id === current))
+        option.addEventListener('click', () => { save(id, provider) })
+        return option
+      },
+    })
+    const lines = [problem, provider.listError && `${provider.listError}.`].filter(Boolean).map(text => say(text, true))
+    list.replaceChildren(...lines, ...(ids.length > FILTER_FROM ? [filter] : []), options)
+    host.reportSize()
+  }
+  async function open() {
+    list.hidden = false
+    button.setAttribute('aria-expanded', 'true')
+    list.replaceChildren(say('Loading the model list.'))
+    host.reportSize()
+    const { data, error } = await loadModels()
+    if (list.hidden) return
+    if (error) {
+      list.replaceChildren(say(`Could not load the model list (${error}).`, true))
+      return host.reportSize()
+    }
+    const provider = data.providers.find(candidate => candidate.name === (seat.provider.startsWith('openrouter') ? 'openrouter' : seat.provider))
+    current ??= provider.roster ? (seat.provider === 'openrouter' ? '' : seat.model) : provider.selected
+    draw(provider, '')
+  }
+  button.addEventListener('focus', loadModels)
+  button.addEventListener('click', () => { if (list.hidden) open(); else close() })
+  list.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return
+    close()
+    button.focus()
+  })
+  return { rows: [row, list], close, button }
+}
 
 function drawPicker(result) {
   const data = result?.structuredContent
@@ -67,7 +199,7 @@ function drawPicker(result) {
   const controls = [ask]
   const recount = () => {
     count.textContent = `${chosen.size} of ${data.seats.length} on`
-    ask.disabled = chosen.size === 0
+    ask.disabled = chosen.size === 0 || saves > 0
     all.checked = chosen.size === data.seats.length
   }
   const boxes = []
@@ -81,16 +213,23 @@ function drawPicker(result) {
     recount()
   })
   controls.push(all)
-  const rows = data.seats.map(seat => {
-    const box = element('input', { type: 'checkbox', className: 'switch', checked: true })
-    box.setAttribute('aria-label', `${seat.provider} (${seat.model})`)
+  // Saves in flight: Ask waits for them, so a run uses what the rows show.
+  let saves = 0
+  const saving = on => {
+    saves += on ? 1 : -1
+    recount()
+  }
+  const seatRows = data.seats.map((seat, at) => {
+    const box = element('input', { type: 'checkbox', className: 'switch', checked: true, id: `seat-${at}` })
     box.addEventListener('change', () => {
       if (box.checked) chosen.add(seat.provider); else chosen.delete(seat.provider)
       recount()
     })
     controls.push(box)
     boxes.push(box)
-    return element('label', { className: 'seat' }, [element('span', {}, [markIcon(seat.provider, seat.model), document.createTextNode(seat.provider), element('small', { textContent: seat.model })]), box])
+    const drawn = seatRow(seat, box, saving, was => { if (chosen.delete(was)) chosen.add(seat.provider) })
+    if (drawn.button) controls.push(drawn.button)
+    return drawn
   })
   const choices = data.verbosities.map(level => {
     const radio = element('input', { type: 'radio', name: 'verbosity', value: level, checked: level === verbosity })
@@ -100,6 +239,7 @@ function drawPicker(result) {
   })
   ask.addEventListener('click', () => {
     for (const control of controls) control.disabled = true
+    for (const drawn of seatRows) drawn.close()
     const picked = data.seats.filter(seat => chosen.has(seat.provider))
     run({ question: data.question, providers: picked.map(seat => seat.provider), verbosity }, picked, ask).catch(err => {
       report('failed', true)
@@ -116,7 +256,7 @@ function drawPicker(result) {
   report('')
   picker.replaceChildren(
     element('label', { className: 'seat all' }, [element('span', { textContent: 'All seats' }), all]),
-    element('section', {}, [element('h2', {}, [document.createTextNode('Seats'), count]), ...rows]),
+    element('section', {}, [element('h2', {}, [document.createTextNode('Seats'), count]), ...seatRows.flatMap(drawn => drawn.rows)]),
     element('section', {}, [element('h2', {}, [document.createTextNode('Verbosity')]), element('div', { className: 'choices' }, choices)]),
     element('div', { className: 'act' }, [ask]),
   )

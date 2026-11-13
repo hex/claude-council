@@ -1,0 +1,9 @@
+/* ABOUTME: The look of a provider's filterable model list, in the settings panel and the council picker */
+/* ABOUTME: On top of panel-style.css; each row is a label holding a switch, or a button */
+input[type=search] { width: 100%; font: 12px var(--mono); color: var(--fg); background: var(--card-hover); border: .5px solid var(--rule); border-radius: 6px; padding: 5px 8px; min-width: 0; }
+.models { padding: 0; max-height: 300px; overflow: auto; }
+.models > label, .models > button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 6px 14px; border: 0; border-top: 1px dotted var(--rule); border-radius: 0; font: 12px var(--mono); color: var(--fg); background: none; text-align: left; cursor: pointer; }
+.models > :first-child { border-top: 0; }
+.models > label:hover, .models > button:hover { background: var(--card-hover); }
+.models span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.models .empty { padding: 10px 14px; }
