@@ -38,6 +38,7 @@
 'use strict'
 // @include panel-host.js
 // @include panel-page.js
+// @include marks.js
 // @include markdown.js
 // @include seat-cards.js
 const question = document.getElementById('question')
@@ -83,7 +84,7 @@ function drawPicker(result) {
     })
     controls.push(box)
     boxes.push(box)
-    return element('label', { className: 'seat' }, [element('span', {}, [document.createTextNode(seat.provider), element('small', { textContent: seat.model })]), box])
+    return element('label', { className: 'seat' }, [element('span', {}, [markIcon(seat.provider, seat.model), document.createTextNode(seat.provider), element('small', { textContent: seat.model })]), box])
   })
   const choices = data.verbosities.map(level => {
     const radio = element('input', { type: 'radio', name: 'verbosity', value: level, checked: level === verbosity })

@@ -32,6 +32,7 @@
 'use strict'
 // @include panel-host.js
 // @include panel-page.js
+// @include marks.js
 const root = document.getElementById('providers')
 const state = {}
 let rosterMax = 0
@@ -47,7 +48,8 @@ async function save() {
 }
 
 function heading(row, detail) {
-  return element('h2', {}, [document.createTextNode(row.title), element('small', { textContent: detail })])
+  // One span for the mark and the title: the heading spreads its children apart.
+  return element('h2', {}, [element('span', {}, [markIcon(row.name), document.createTextNode(row.title)]), element('small', { textContent: detail })])
 }
 
 function single(row) {

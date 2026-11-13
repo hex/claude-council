@@ -35,7 +35,8 @@ function blockNode(block) {
 }
 
 function seatHeading(seat) {
-  return element('h2', {}, [document.createTextNode(seat.provider), element('small', { textContent: seat.model })])
+  // One span for the mark and the name: the heading spreads its children apart.
+  return element('h2', {}, [element('span', {}, [markIcon(seat.provider, seat.model), document.createTextNode(seat.provider)]), element('small', { textContent: seat.model })])
 }
 
 function seatCard(seat) {

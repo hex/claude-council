@@ -38,6 +38,8 @@ section > * { padding: 9px 14px; border-top: 1px dotted var(--rule); }
 section > :first-child { border-top: 0; }
 h2 { font-size: 15px; font-weight: 600; margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 h2 small { font: 11px var(--mono); font-weight: 400; color: var(--dim); }
+/* A seat's vendor mark, in line with the name and sitting on its baseline. */
+svg.mark { width: 16px; height: 16px; flex: none; vertical-align: -3px; margin-right: 7px; }
 section.off h2 { color: var(--dim); }
 /* The elbow that hangs a sub-row off the row above it. */
 .sub { padding-left: 34px; position: relative; }

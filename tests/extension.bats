@@ -23,7 +23,7 @@
 #  tools and the panel resource
 #   - tools/list: the three panel tools carry the app-only visibility key, each panel's tool its uri
 #   - resources/read: the three panels (settings, answers, picker) with mimeType text/html;profile=mcp-app, the
-#     shared parts inlined; an unknown uri is an error naming it
+#     shared parts inlined (the vendor marks in all three); an unknown uri is an error naming it
 #   - council_ask's description: where the app draws the answers panel it asks for the synthesis
 #     without repeating the answers, elsewhere it asks for the answers to be shown first
 #   - council_ask's description and question field: the user's question as they asked it, never
@@ -246,17 +246,17 @@ save_choices() {
     answers=$(reply 3 | jq -r '.result.contents[0].text')
     [[ "$settings" == '<!doctype html>'* && "$answers" == '<!doctype html>'* ]]
     [[ "$settings" != *'@include'* && "$answers" != *'@include'* ]]
-    for part in panel-style.css panel-host.js panel-page.js markdown.js seat-cards.js seat-cards.css; do
+    for part in panel-style.css panel-host.js panel-page.js marks.js markdown.js seat-cards.js seat-cards.css; do
         [ -s "${PROJECT_ROOT}/extension/server/${part}" ]
     done
-    for part in panel-style.css panel-host.js panel-page.js; do
+    for part in panel-style.css panel-host.js panel-page.js marks.js; do
         [[ "$settings" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
         [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
     done
     local pick
     pick=$(reply 4 | jq -r '.result.contents[0].text')
     [[ "$pick" == '<!doctype html>'* && "$pick" != *'@include'* ]]
-    for part in panel-style.css panel-host.js panel-page.js markdown.js seat-cards.js seat-cards.css; do
+    for part in panel-style.css panel-host.js panel-page.js marks.js markdown.js seat-cards.js seat-cards.css; do
         [[ "$pick" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
     done
     for part in markdown.js seat-cards.js seat-cards.css; do
