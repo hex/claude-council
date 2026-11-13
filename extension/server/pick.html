@@ -13,9 +13,9 @@
   .seat { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
   .seat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .seat small { font: 11px var(--mono); color: var(--dim); margin-left: 8px; }
-  /* A seat's model where the extension chooses it: the grey text, made a button with a chevron. */
   /* In a narrow panel the model's text shortens, never the name or the chevron. */
   .seat > span.chooses { display: flex; align-items: center; min-width: 0; }
+  /* A seat's model where the extension chooses it: the grey text, made a button with a chevron. */
   .seat button.model { display: inline-flex; align-items: center; min-width: 0; font: 11px var(--mono); color: var(--dim); background: none; border-radius: 4px; padding: 2px 4px; margin-left: 4px; }
   .seat button.model:hover:not(:disabled) { color: var(--fg); background: var(--card-hover); }
   .seat button.model::after { content: ""; display: inline-block; width: 4px; height: 4px; margin: 0 2px 0 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: translateY(-2px) rotate(45deg); }
