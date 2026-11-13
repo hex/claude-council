@@ -39,7 +39,9 @@ function seatHeading(seat) {
   return element('h2', {}, [element('span', {}, [markIcon(seat.provider, seat.model), document.createTextNode(seat.provider)]), element('small', { textContent: seat.model })])
 }
 
-function seatCard(seat) {
+// `whole` says what Claude has of an answer the card shortened, which differs
+// by panel.
+function seatCard(seat, whole) {
   const heading = seatHeading(seat)
   const body = seat.error !== undefined
     ? element('div', { className: 'note bad error', textContent: seat.error })
@@ -47,14 +49,14 @@ function seatCard(seat) {
   const parts = [heading, body]
   if (seat.shortenedFrom !== undefined) {
     const shown = (seat.answer ?? seat.error).length
-    parts.push(element('p', { className: 'note shortened', textContent: `Shortened here to its first ${shown.toLocaleString('en-US')} of ${seat.shortenedFrom.toLocaleString('en-US')} characters. Claude received all of it.` }))
+    parts.push(element('p', { className: 'note shortened', textContent: `Shortened here to its first ${shown.toLocaleString('en-US')} of ${seat.shortenedFrom.toLocaleString('en-US')} characters. ${whole}` }))
   }
   return element('section', {}, parts)
 }
 
 // Draws a council_ask result into `list`: a card per seat, the run's error,
 // or its text when it carries no seats; the status line says which.
-function showAnswers(result, list) {
+function showAnswers(result, list, whole) {
   const text = result?.content?.find(part => part.type === 'text')?.text ?? ''
   if (result?.isError) {
     report('failed', true)
@@ -71,6 +73,6 @@ function showAnswers(result, list) {
   }
   const answered = answers.filter(seat => seat.error === undefined).length
   report(`${answered} of ${answers.length} answered`, answered === 0)
-  list.replaceChildren(...answers.map(seatCard))
+  list.replaceChildren(...answers.map(seat => seatCard(seat, whole)))
   host.reportSize()
 }

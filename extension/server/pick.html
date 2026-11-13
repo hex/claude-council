@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- ABOUTME: The council picker panel Claude Desktop draws under a council_pick call (an MCP App page, a trial) -->
-<!-- ABOUTME: The user picks seats and verbosity and presses Ask; the answers then show here and go to Claude -->
+<!-- ABOUTME: The user picks seats and verbosity and presses Ask; the answers show here, then a message asks Claude to fetch them -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -42,7 +42,6 @@
   @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
   @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
   #handoff { margin: 12px 4px 0; }
-  #handoff code { font: 11px var(--mono); color: var(--dim); overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -66,9 +65,9 @@ const picker = document.getElementById('picker')
 const seats = document.getElementById('seats')
 const handoff = document.getElementById('handoff')
 
-// What Claude is asked once the answers are in, after them or after they were
-// put into its context.
-const SYNTHESIS = 'Write your synthesis of the council\'s answers: where the seats agree, where they differ, and what you recommend.'
+// What a shortened answer's card says Claude has of it: the whole of it, once
+// the user sends the message the picker drafts and Claude calls council_result.
+const WHOLE = 'Claude gets all of it when it writes the synthesis.'
 
 // The seats whose model the extension chooses, as the settings panel does: the
 // API seats and OpenRouter's. A CLI agent's model is set in its own settings.
@@ -190,9 +189,15 @@ function seatRow(seat, box, saving, renamed) {
   return { rows: [row, list], close, button }
 }
 
+// Desktop can send the tool result again; drawing the picker again would wipe
+// a run in progress or the answers it shows.
+let pickerDrawn = false
+
 function drawPicker(result) {
+  if (pickerDrawn) return
+  pickerDrawn = true
   const data = result?.structuredContent
-  if (result?.isError || !Array.isArray(data?.seats)) return showAnswers(result, picker)
+  if (result?.isError || !Array.isArray(data?.seats)) return showAnswers(result, picker, WHOLE)
   question.textContent = data.question
   const chosen = new Set(data.seats.map(seat => seat.provider))
   let verbosity = data.verbosity
@@ -243,7 +248,7 @@ function drawPicker(result) {
     for (const control of controls) control.disabled = true
     for (const drawn of seatRows) drawn.close()
     const picked = data.seats.filter(seat => chosen.has(seat.provider))
-    run({ question: data.question, providers: picked.map(seat => seat.provider), verbosity }, picked, ask).catch(err => {
+    run({ question: data.question, providers: picked.map(seat => seat.provider), verbosity }, picked, ask, data.answerWithinMs).catch(err => {
       report('failed', true)
       seats.replaceChildren(element('p', { className: 'lead bad', textContent: `The panel could not show the answers (${err.message}).` }))
       host.reportSize()
@@ -294,79 +299,56 @@ function showWaiting(picked, button) {
 }
 
 // Runs the question through council_pick_ask, which is council_ask itself,
-// shows the answers and hands them to Claude. True once the council answered.
-async function run(args, picked, button) {
+// shows the answers and asks Claude for the synthesis. True once a seat
+// answered; false to let the user press Ask again. Waits at most
+// `answerWithinMs`, the server's own bound on the run.
+async function run(args, picked, button, answerWithinMs) {
   report('asking the council')
+  handoff.replaceChildren()
   const stopWaiting = showWaiting(picked, button)
   let result
   try {
-    result = await host.request('tools/call', { name: 'council_pick_ask', arguments: args })
+    result = await host.request('tools/call', { name: 'council_pick_ask', arguments: args }, answerWithinMs)
   } catch (err) {
     report('failed', true)
-    seats.replaceChildren(element('p', { className: 'lead bad', textContent: `Claude Desktop did not run the question (${err.message}).` }))
+    const problem = err instanceof HostTimeout
+      ? `No answer came back within ${answerWithinMs / 60000} minutes, so the panel stopped waiting. Press Ask to try again.`
+      : `Claude Desktop did not run the question (${err.message}).`
+    seats.replaceChildren(element('p', { className: 'lead bad', textContent: problem }))
     host.reportSize()
     return false
   } finally {
-    // Here and not after the handoff below, whose requests Desktop may be slow to answer.
     stopWaiting()
   }
-  showAnswers(result, seats)
+  showAnswers(result, seats, WHOLE)
   if (result?.isError) return false
-  await handOff(args.question, result?.content?.find(part => part.type === 'text')?.text ?? '')
+  // The server holds a run, and names it, only when a seat answered.
+  const id = result?.structuredContent?.run
+  if (id === undefined) {
+    handoff.replaceChildren(element('p', { className: 'lead', textContent: 'No seat answered. Press Ask to try again.' }))
+    host.reportSize()
+    return false
+  }
+  handOff(id)
   return true
 }
 
-// Gives Claude the answers: into its context, then a chat message asking for
-// the synthesis that carries the answers too when the context step failed.
-// Each step is tried whether or not the host lists it among its capabilities,
-// which only the draft of the MCP Apps spec defines; the note says what the
-// host listed and what each step did, for reading off a screenshot.
-async function handOff(asked, answers) {
-  const offered = Object.keys(host.capabilities).sort().join(', ') || 'nothing'
-  const steps = []
-  const code = element('code')
-  const note = () => {
-    code.textContent = `handoff: ${steps.join(', ')} | host offers: ${offered}`
-    host.reportSize()
-  }
-  handoff.replaceChildren(code)
-  const step = async (name, method, params) => {
-    steps.push(`${name} pending`)
-    note()
-    try {
-      const reply = await host.request(method, params)
-      steps[steps.length - 1] = `${name} reply ${JSON.stringify(reply ?? null).slice(0, 200)}`
-      return reply?.isError !== true
-    } catch (err) {
-      steps[steps.length - 1] = `${name} refused (${err.message})`
-      return false
-    } finally {
-      note()
-    }
-  }
-  const inContext = await step('context', 'ui/update-model-context', {
-    content: [{ type: 'text', text: `The council's answers to the question "${asked}":\n\n${answers}` }],
-  })
-  const message = inContext ? SYNTHESIS : `${SYNTHESIS}\n\nThe council's answers to the question "${asked}":\n\n${answers}`
-  const sent = await step('message', 'ui/message', { role: 'user', content: [{ type: 'text', text: message }] })
-  if (!sent) handoff.prepend(element('p', { className: 'lead', textContent: 'Ask Claude to summarise the council\'s answers.' }))
-  // Trial only: other shapes of the same two requests, one per button, so the
-  // host's reply to each can be read off a screenshot.
-  const text = 'Probe from the council picker: reply with the single word RECEIVED.'
-  const probes = {
-    'message, object': ['ui/message', { role: 'user', content: { type: 'text', text } }],
-    'message, array': ['ui/message', { role: 'user', content: [{ type: 'text', text }] }],
-    'context, structured': ['ui/update-model-context', { structuredContent: { councilProbe: text } }],
-    'context, array': ['ui/update-model-context', { content: [{ type: 'text', text }] }],
-  }
-  const row = element('div', { className: 'act' })
-  for (const [label, [method, params]] of Object.entries(probes)) {
-    const button = element('button', { type: 'button', textContent: label })
-    button.addEventListener('click', () => { step(`probe ${label}`, method, params) })
-    row.append(button)
-  }
-  handoff.append(row)
+// Asks Claude for the synthesis. The answers cannot reach Claude from here:
+// Claude Desktop drops ui/update-model-context, and puts a ui/message into the
+// message box as a draft the user sends. So the message only names the run,
+// and council_result gives Claude its answers. The request is not awaited:
+// with text already in the box, Desktop asks the user whether to replace it
+// and answers late or never.
+function handOff(id) {
+  const line = element('p', { className: 'lead', textContent: 'Press Enter in the message box to get Claude\'s synthesis.' })
+  handoff.replaceChildren(line)
   host.reportSize()
+  host.request('ui/message', { role: 'user', content: [{ type: 'text', text: `Synthesise the council's answers (run ${id}).` }] })
+    .then(reply => { if (reply?.isError) throw new Error('refused') })
+    .catch(() => {
+      line.textContent = `Ask Claude: "synthesise council run ${id}"`
+      host.reportSize()
+    })
 }
 
 host.connect('council-pick', {

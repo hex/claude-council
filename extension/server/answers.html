@@ -29,7 +29,7 @@ const seats = document.getElementById('seats')
 
 function showResult(result) {
   if (!result?.isError && Array.isArray(result?.structuredContent?.seats) && result.structuredContent.question) question.textContent = result.structuredContent.question
-  showAnswers(result, seats)
+  showAnswers(result, seats, 'Claude received all of it.')
 }
 
 host.connect('council-answers', {

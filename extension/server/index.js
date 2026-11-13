@@ -1,4 +1,4 @@
-// ABOUTME: Claude Desktop extension server: the council as MCP tools over stdio, plus its two panels
+// ABOUTME: Claude Desktop extension server: the council as MCP tools over stdio, plus the panels they draw
 // ABOUTME: Tool results, errors and logs pass one chokepoint that removes the user's API keys from them
 'use strict'
 const crypto = require('node:crypto')
@@ -12,7 +12,7 @@ const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05
 const PANEL_MIME = 'text/html;profile=mcp-app'
 
 // A panel's page with each `@include <file>` line replaced by that file, so
-// the two panels share one stylesheet and one host connection.
+// the panels share one stylesheet and one host connection.
 function panelPage(file) {
   const page = fs.readFileSync(path.join(__dirname, file), 'utf8')
   return page.replace(/^[ \t]*(?:\/\*|\/\/) @include ([a-z-]+\.(?:css|js))(?: \*\/)?$/gm,
