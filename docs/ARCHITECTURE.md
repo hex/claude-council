@@ -715,10 +715,15 @@ colour, so it stays visible in the dark theme.
 | Mistral AI (`mistralai`) | maker `mistralai/` | `#FA520F` | https://chat.mistral.ai | CC0-1.0 data |
 | QWen (`qwen`) | maker `qwen/` | `#6950EF` | https://qwen.ai | CC0-1.0 data |
 
-`openai`, `codex`, `grok` and `grok-cli`, and OpenRouter models made by
-`openai/` or `x-ai/`, show no mark: simple-icons 16.37.0 carries no OpenAI or
-xAI mark, so the extension carries none. OpenRouter seats with those makers show OpenRouter's
-mark.
+simple-icons 16.37.0 carries no OpenAI or xAI mark. Those two come unmodified
+from [LobeHub Icons](https://github.com/lobehub/lobe-icons)
+(`https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/<slug>.svg`, MIT),
+and are drawn with the even-odd fill rule their files name.
+
+| Mark (`<slug>`) | Shown for | Colour | Usage terms |
+|---|---|---|---|
+| OpenAI (`openai`) | `openai`, `codex`, maker `openai/` | text colour | MIT (LobeHub Icons) |
+| Grok (`grok`) | `grok`, `grok-cli`, maker `x-ai/` | text colour | MIT (LobeHub Icons) |
 
 Packed, the scripts sit under `plugin/` beside `server/`; in a checkout the
 server finds them one directory up. `extension/build.sh` builds the package.

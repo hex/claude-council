@@ -663,8 +663,8 @@ cards, sits its vendor's mark in the vendor's colour, 16 pixels square. A
 CLI seat shares its vendor's mark. An OpenRouter seat shows the mark of its
 model's maker, read from the id before the slash with any leading `~`
 dropped (`~deepseek/deepseek-pro-latest` shows DeepSeek), or OpenRouter's
-mark when the maker has none. `openai`, `codex`, `grok` and `grok-cli` show
-no mark, and an empty box of the same size keeps their names in line.
+mark when the maker has none. A seat with no mark gets an empty box of the
+same size, which keeps the names in line.
 `docs/ARCHITECTURE.md` lists every mark, its source and its terms.
 
 The picker panel (a trial) shows the question, a switch per seat, all on, the
