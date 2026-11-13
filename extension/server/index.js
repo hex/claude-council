@@ -32,7 +32,7 @@ const PANELS = [panel('settings', 'Council models'), panel('answers', 'Council a
 const [SETTINGS_PANEL, ANSWERS_PANEL, PICK_PANEL] = PANELS
 
 const { keys, tooShort } = council.readKeys(process.env)
-const theCouncil = council.openCouncil({ root: council.findPluginRoot(EXTENSION_ROOT), keys, tooShort })
+const theCouncil = council.openCouncil({ root: council.findPluginRoot(EXTENSION_ROOT), keys, tooShort, redact })
 const KEY_MARK = '[key removed]'
 
 // Whether the connected app said it draws a tool's panel inside the chat.

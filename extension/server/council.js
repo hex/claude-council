@@ -386,7 +386,7 @@ const NO_SEATS = 'No council seat is set up: no provider has a key and no CLI ag
 // The council as one object over a plugin root and what readKeys made of
 // the keys Desktop gave. Every tool function takes the call's AbortSignal
 // last; aborting it stops the runs the call started.
-function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
+function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS }) {
   const running = new Set()
 
   function runScript(script, args, options) {
@@ -539,10 +539,22 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     return { text: stripAnsi(rendered.stdout).trim(), structured: { question, seats: seatsOf(answers) } }
   }
 
-  // The picker's runs in which a seat answered, oldest first, each by its run
-  // id: the text council_ask would have given the model, held for
-  // council_result. Lost when the server stops.
-  const pickedRuns = new Map()
+  // The picker's runs in which a seat answered, each a file named by when it
+  // was held and its run id: the text council_ask would have given the model,
+  // held for council_result. On disk, not in memory: Claude Desktop starts the
+  // extension twice, one copy for the panels' calls and one for the model's,
+  // so the copy that ran the question is not the one asked for its answers.
+  function heldDirectory() {
+    return privateDirectory(path.join(privateDirectory(stateDirectory()), 'held'))
+  }
+
+  // The held runs, oldest first, as [file name, run id].
+  function heldRuns(dir) {
+    return fs.readdirSync(dir).sort().flatMap(name => {
+      const run = /^[0-9]{15}-([0-9a-f]{6})\.txt$/.exec(name)?.[1]
+      return run === undefined ? [] : [[name, run]]
+    })
+  }
 
   // council_ask for the picker's Ask button: a run in which a seat answered is
   // held under a run id the panel gets beside the answers. The id is random:
@@ -552,10 +564,17 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     const outcome = await ask(input, signal)
     // A cancelled run comes back as an error too, so it is never held.
     if (outcome.isError || !outcome.structured.seats.some(seat => seat.error === undefined)) return outcome
+    const dir = heldDirectory()
+    const held = heldRuns(dir)
     let run
-    do run = crypto.randomBytes(3).toString('hex'); while (pickedRuns.has(run))
-    pickedRuns.set(run, outcome.text)
-    if (pickedRuns.size > RUNS_KEPT) pickedRuns.delete(pickedRuns.keys().next().value)
+    do run = crypto.randomBytes(3).toString('hex'); while (held.some(([, other]) => other === run))
+    // Without the keys: a seat's error can quote the key it was sent, and no
+    // key may reach a file. Written whole or not at all, as the choices are.
+    const name = `${String(Date.now()).padStart(15, '0')}-${run}.txt`
+    const scratch = path.join(dir, `.${name}.${process.pid}`)
+    fs.writeFileSync(scratch, redact(outcome.text), { mode: 0o600, flag: 'wx' })
+    fs.renameSync(scratch, path.join(dir, name))
+    for (const [old] of held.slice(0, Math.max(0, held.length + 1 - RUNS_KEPT))) fs.rmSync(path.join(dir, old), { force: true })
     return { ...outcome, structured: { ...outcome.structured, run } }
   }
 
@@ -565,12 +584,15 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     const unknown = Object.keys(input).find(name => name !== 'run')
     if (unknown !== undefined) return refused(`council_result has no argument ${shown(unknown)}; it takes run`)
     if (input.run !== undefined && typeof input.run !== 'string') return refused(`run must be a run id such as 3f9a2c, not ${shown(input.run)}`)
-    const kept = `The extension keeps the last ${RUNS_KEPT} picker runs in which a seat answered, and none from before Claude Desktop last started it. Ask the council the question again.`
-    if (input.run === undefined && pickedRuns.size === 0) return refused(`No council run from the picker is held. ${kept}`)
-    const run = input.run ?? [...pickedRuns.keys()].at(-1)
-    const text = pickedRuns.get(run)
-    if (text === undefined) return refused(`Council run ${shown(run)} is not held. ${kept}`)
-    return { text }
+    const kept = `The extension keeps the last ${RUNS_KEPT} picker runs in which a seat answered. Ask the council the question again.`
+    const dir = heldDirectory()
+    const held = heldRuns(dir)
+    if (input.run === undefined && held.length === 0) return refused(`No council run from the picker is held. ${kept}`)
+    // Matched against the names read from the directory, so the id the model
+    // passes never becomes part of a path.
+    const file = input.run === undefined ? held.at(-1)[0] : held.find(([, run]) => run === input.run)?.[0]
+    if (file === undefined) return refused(`Council run ${shown(input.run)} is not held. ${kept}`)
+    return { text: fs.readFileSync(path.join(dir, file), 'utf8') }
   }
 
   // The seats a question with no providers named would go to, each with the

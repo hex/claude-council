@@ -636,9 +636,9 @@ Three more tools serve the panels: `council_models_data` and
 `council_pick_ask` takes `council_ask`'s arguments and runs `council_ask`'s
 own function, so every check, limit, cancel and key removal
 applies to it alike. When a seat answered, the server keeps the run's text
-for `council_result` under a run id of 6 random hex digits and adds `run`
-to the `structuredContent`. The id is random: a count would start again after
-a restart, so an id left in the chat would name a later run. A run in which no
+for `council_result`, as a file under `held/` in the state directory, under
+a run id of 6 random hex digits and adds `run` to the `structuredContent`.
+The 5 newest are kept. A run in which no
 seat answered, a refused run and a cancelled one get no id.
 
 `council_models_save` takes either `selections`, every provider's choice at

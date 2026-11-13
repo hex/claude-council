@@ -1218,7 +1218,7 @@ perplexity: sonar-test-1"
         "$(call 3 council_pick_ask '{"question":"second question","providers":["openrouter"]}')" "$(call 4 council_result)" \
         "$(call 5 council_result '{"run":"{{2.result.structuredContent.run}}"}')" "$(call 6 council_result '{"run":"000000"}')" \
         "$(call 7 council_result '{"run":"run 1"}')"
-    local kept='The extension keeps the last 5 picker runs in which a seat answered, and none from before Claude Desktop last started it. Ask the council the question again.'
+    local kept='The extension keeps the last 5 picker runs in which a seat answered. Ask the council the question again.'
     assert_eq "$(result_error 1)" true
     assert_eq "$(result_text 1)" "No council run from the picker is held. ${kept}"
     [[ "$(result_text 3)" == *"asked: second question"* ]]
@@ -1269,6 +1269,27 @@ perplexity: sonar-test-1"
     [[ "$(result_text 2)" == *'FAKE-CODEX-RESPONSE: deterministic answer'*'header = "Authorization: Bearer [key removed]"'* ]]
     [[ "$output" != *"$SENTINEL_KEY"* ]]
     [[ "$stderr" != *"$SENTINEL_KEY"* ]]
+    [ -d "${STATE_DIR}/held" ]
+    run ! grep -rqF "$SENTINEL_KEY" "${STATE_DIR}/held"
+}
+
+# Claude Desktop starts the extension twice, one copy for the panels' calls and
+# one for the model's, so the copy that ran the question is not the one asked
+# for its answers.
+@test "extension: council_result gives a run that another copy of the server made, by id and as the latest" {
+    install_fake_curl echo
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_pick_ask '{"question":"asked in the panel","providers":["openrouter"]}')"
+    local id text
+    id="$(reply 1 | jq -r '.result.structuredContent.run')"
+    text="$(result_text 1)"
+    [[ "$text" == *"asked: asked in the panel"* ]]
+    mcp "$INIT" "$(call 1 council_result "$(jq -cn --arg run "$id" '{run: $run}')")" "$(call 2 council_result)"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_text 1)" "$text"
+    assert_eq "$(result_text 2)" "$text"
+    assert_eq "$(find "${STATE_DIR}/held" -type f -perm 600 | wc -l | tr -d ' ')" 1
+    assert_eq "$(find "${STATE_DIR}/held" -type f | wc -l | tr -d ' ')" 1
 }
 
 @test "extension: council_result refuses an argument it does not take, and a run that is not a string" {

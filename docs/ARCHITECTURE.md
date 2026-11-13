@@ -682,9 +682,12 @@ runs the same scripts the plugin does.
   box, Desktop asks "Replace current text?" and the request stays pending
   until the user answers, possibly for good. A panel's `tools/call` to an
   app-only tool runs with no approval prompt. The server keeps each
-  `council_pick_ask` run in which a seat answered, in memory, under a random
-  6-hex-digit id (the last 5 runs; lost on restart), and returns the id to
-  the panel. The panel's `ui/message` names only the id, "Synthesise the
+  `council_pick_ask` run in which a seat answered as a file in the state
+  directory's `held/` (mode 0600, keys removed), under a random 6-hex-digit
+  id (the last 5 runs), and returns the id to the panel. A file, not memory:
+  Desktop starts the extension twice, one copy for the panels' calls and one
+  for the model's, so the copy that ran the question is not the one
+  `council_result` reaches. The panel's `ui/message` names only the id, "Synthesise the
   council's answers (run <id>).", and the model-visible `council_result`
   returns that run's text exactly as `council_ask` would have. The
   descriptions of `council_pick` and `council_result`, and `council_pick`'s
