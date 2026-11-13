@@ -624,7 +624,8 @@ built-in Node.js 18 or later and bash, so it supports macOS and Linux only.
 |---|---|---|
 | `council_ask` | `question` (required), `providers` (list of names, such as `openai` or `openrouter-2`), `verbosity` (`brief`, `standard`, `detailed`) | Runs `query-council.sh --no-pane` and returns two things: the transcript `format-output.sh` renders from its JSON, as text, and `structuredContent` of the form `{question, seats: [{provider, model, answer}` or `{provider, model, error}]}`, in the order the seats ran. Desktop draws the seats in the answers panel; the text, which orders seats by name, is what the model and an app with no panel get. The tool's description asks Claude for the synthesis, and not to repeat the answers when the app draws the panel. |
 | `council_seats` | none | Runs `query-council.sh --list-default-models` under the saved choices and lists each seat a question with no providers named goes to, as `<seat>: <model>`, then the three verbosities. Starts no provider and no CLI agent. With no seat at all it is an error saying where keys go. |
-| `council_pick` | `question` (required) | A trial. Lists the seats as `council_seats` does and returns `structuredContent` `{question, seats: [{provider, model}], verbosities, verbosity}` for the picker panel; the text tells the model to wait for the user. Where no panel is drawn, the text lists the seats and tells the model to ask in the chat and then call `council_ask`. Refuses an empty question and one over 100000 bytes as `council_ask` does. |
+| `council_pick` | `question` (required) | A trial. Lists the seats as `council_seats` does and returns `structuredContent` `{question, seats: [{provider, model}], verbosities, verbosity, answerWithinMs}` for the picker panel, where `answerWithinMs` is how long the panel waits for its run (the run's limit, the formatting limit and one minute: 690000). The text, and the description, tell the model to wait for the user, and to call `council_result` with the run id when the user asks for the synthesis of a council run, never saying it cannot see the answers. Where no panel is drawn, the text lists the seats and tells the model to ask in the chat and then call `council_ask`. Refuses an empty question and one over 100000 bytes as `council_ask` does. |
+| `council_result` | `run` (a run id such as `3f9a2c`; leave out for the latest) | Returns the text `council_ask` gave for one of the picker's runs, unchanged, with no `structuredContent` and no panel: the picker already shows the answers. Its description asks the model to show each seat's answer and then write the synthesis. The server keeps the last 5 picker runs in which a seat answered, in memory only. An unknown id, and any id before a run or after Desktop restarts the extension, is an error saying the run is not held and to ask the council again. |
 | `council_status` | none | Runs `check-status.sh`, then names any key field too short to be a key, says when the saved model choices could not be read, and says that keys go in Desktop's settings, not in exported variables. |
 | `council_settings` | none | Lists each provider's model in plain text, each line ending "key set" or "no key", and in Desktop opens the settings panel. |
 
@@ -634,7 +635,11 @@ Three more tools serve the panels: `council_models_data` and
 `_meta.ui.visibility: ["app"]`, so Desktop hides them from the model.
 `council_pick_ask` takes `council_ask`'s arguments and runs `council_ask`'s
 own function, so every check, limit, cancel and key removal
-applies to it alike.
+applies to it alike. When a seat answered, the server keeps the run's text
+for `council_result` under a run id of 6 random hex digits and adds `run`
+to the `structuredContent`. The id is random, not a count, so an id left in
+the chat from before a restart never names a later run. A run in which no
+seat answered, a refused run and a cancelled one get no id.
 
 `council_models_save` takes either `selections`, every provider's choice at
 once (the settings panel), and answers `{"saved":true}`, or `seat` and
@@ -664,16 +669,22 @@ A `notifications/cancelled` for a tool call still running stops the runs it
 started, and the server never answers that call.
 
 **Panels.** All three are MCP App pages with mimeType
-`text/html;profile=mcp-app`. `council_settings` names `ui://council/settings`,
-`council_ask` names `ui://council/answers`, and `council_pick` names
-`ui://council/pick`. The answers panel shows the question and "asking the
+`text/html;profile=mcp-app`. `council_settings` names
+`ui://council/settings/<hash>`, `council_ask` names
+`ui://council/answers/<hash>`, and `council_pick` names
+`ui://council/pick/<hash>`, where `<hash>` is the first 12 hex digits of the
+SHA-256 of the page as served, computed when the server starts. Desktop keeps
+a page by its address across an extension upgrade, so a changed page gets a
+new address. Any other address, the one without the hash included, is
+"resource not found". The answers panel shows the question and "asking the
 council" until the result arrives, then one card per seat: the answer drawn
 from a subset of markdown (headings, paragraphs, lists, fenced code, rules,
 pipe tables, bold, italic and inline code; anything else shows as the lines
 the model wrote), or the error in the error colour. The panel gets at most the first
 100000 characters of a seat's answer or error, with `shortenedFrom` giving
 the full length, and the card says it was shortened; the text result always
-carries all of it. A cancelled call says so. No page uses `innerHTML` or
+carries all of it. The answers panel's card says Claude received all of it,
+and the picker's that Claude gets all of it when it writes the synthesis. A cancelled call says so. No page uses `innerHTML` or
 loads anything from the network.
 
 Beside each seat's name, in the picker, the answer cards and the settings
@@ -697,17 +708,19 @@ name, model and vendor mark from the answer. A failed list or save says so in
 a line under the row and leaves its model. Ask waits for a save in flight,
 and a run disables the model buttons, as it does the switches. CLI seats
 and ollama show their model as text. Ask calls `council_pick_ask` through
-Desktop with the seats left on, and the panel draws the answers as the answers panel does. It then hands them to
-Claude in two steps of the MCP Apps protocol: `ui/update-model-context` with
-the question and the answers, then `ui/message`, as the user, asking for the
-synthesis, which carries the answers too when Desktop refused the first step.
-The panel tries each step whether or not Desktop lists `updateModelContext` or
-`message` in its `hostCapabilities`, since only the draft of the spec defines
-those flags. A monospace line under the answers names each step's outcome,
-with Desktop's error when it refused one, and the capabilities Desktop listed.
-When Desktop refuses the message, the panel says to ask Claude to summarise
-the answers. The spec lets a host ask the user before it sends a panel's
-message, and before it runs a panel's tool call.
+Desktop with the seats left on, and the panel draws the answers as the answers panel does.
+It waits for the call at most `answerWithinMs`; a call Desktop never answers,
+such as a cancelled one, then ends in a line saying no answer came back, and
+Ask works again. When the run has an id, the panel sends one `ui/message`,
+as the user, with the text `Synthesise the council's answers (run <id>).`
+and no seat output, and shows "Press Enter in the message box to get
+Claude's synthesis." under the answers without waiting for Desktop's reply.
+If Desktop refuses the message, the line becomes `Ask Claude: "synthesise
+council run <id>"`. When no seat answered, the line says so and Ask works
+again. The picker is drawn from the first tool result Desktop sends; a
+repeated one is ignored, so it never wipes a run in progress or the answers.
+The spec lets a host ask the user before it sends a panel's message, and
+before it runs a panel's tool call.
 
 **Keys.** Six optional, sensitive fields in Desktop's settings form reach the
 server as `GEMINI_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`,

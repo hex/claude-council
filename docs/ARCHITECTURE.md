@@ -644,8 +644,8 @@ runs the same scripts the plugin does.
   answer. The parsing is pure, so `tests/extension-models.bats` checks it
   against recorded and documented answers.
 - `server/settings.html`, `server/answers.html` and `server/pick.html` are
-  the three panels, MCP App pages served as `ui://council/settings`,
-  `ui://council/answers` and `ui://council/pick` with mimeType
+  the three panels, MCP App pages served as `ui://council/settings/<hash>`,
+  `ui://council/answers/<hash>` and `ui://council/pick/<hash>` with mimeType
   `text/html;profile=mcp-app`. Desktop draws one for each tool whose
   `_meta.ui.resourceUri` names it: `council_settings`, `council_ask` and
   `council_pick`. Each page carries `@include` lines that `index.js` replaces
@@ -669,10 +669,31 @@ runs the same scripts the plugin does.
 - Choosing the seats and verbosity before a question is a trial with two
   forms, each removable on its own. In the first, `council_ask`'s description
   has the model list the seats with `council_seats` and ask in the chat. In
-  the second, `council_pick` opens the picker, which after the answers asks
-  Claude for the synthesis through `ui/update-model-context` and
-  `ui/message`, and names what Desktop did with each in a line on the
-  panel.
+  the second, `council_pick` opens the picker, which runs the question and
+  shows the answers itself; the model sees none of it until the user sends a
+  message.
+- The picker's answers reach the model only as a tool result. Measured in
+  Claude Desktop: `ui/update-model-context` answers `{}` and delivers nothing
+  to the model, with a content array or with `structuredContent`. `ui/message`
+  (its content must be an array; a single object is refused with "Invalid
+  params") neither posts a message nor starts a turn: Desktop puts the text
+  in the chat's message box as an unsent draft under a warning about
+  malicious content, and the user presses Enter. With text already in the
+  box, Desktop asks "Replace current text?" and the request stays pending
+  until the user answers, possibly for good. A panel's `tools/call` to an
+  app-only tool runs with no approval prompt. The server keeps each
+  `council_pick_ask` run in which a seat answered, in memory, under a random
+  6-hex-digit id (the last 5 runs; lost on restart), and returns the id to
+  the panel. The panel's `ui/message` names only the id, "Synthesise the
+  council's answers (run <id>).", and the model-visible `council_result`
+  returns that run's text exactly as `council_ask` would have. The
+  descriptions of `council_pick` and `council_result`, and `council_pick`'s
+  result, tell the model to call it when the user asks for a run's synthesis.
+- Desktop caches a panel page by its `ui://` address across an extension
+  reinstall or upgrade, and only a full restart fetches it again. Each
+  address ends in the first 12 hex digits of the SHA-256 of the page
+  as served (after its `@include` lines are filled in), computed when the
+  server starts, so a changed page has a new address.
 - `server/markdown.js` reads the subset of markdown the answers panel draws
   into plain data (blocks of styled runs). The page builds every DOM node from
   that data with `textContent`, so a model's answer can never become markup.

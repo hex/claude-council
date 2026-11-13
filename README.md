@@ -51,9 +51,9 @@ the models share your description and its assumptions.
 ## Claude Desktop
 
 The plugin needs Claude Code. For an ordinary Claude Desktop chat there is a
-Desktop extension, `council-<version>.mcpb`, that gives Claude five tools:
-`council_ask`, `council_seats`, `council_pick`, `council_status` and
-`council_settings`. It runs on macOS and Linux only, because it starts the
+Desktop extension, `council-<version>.mcpb`, that gives Claude six tools:
+`council_ask`, `council_seats`, `council_pick`, `council_result`,
+`council_status` and `council_settings`. It runs on macOS and Linux only, because it starts the
 council's bash scripts.
 
 1. Build the package with `bash extension/build.sh` in a clean checkout. It
@@ -90,10 +90,16 @@ we use?" and Claude first lists the seats with their models
 in your message, or say "just ask", and it runs at once. Say "ask the council
 with the picker: which queue should we use?" and Claude opens `council_pick`,
 a panel with the question, a switch per seat and the three verbosities. Press
-Ask: the answers appear in that panel, and the panel asks Claude for the
-synthesis. A line under the answers in small type names how it reached Claude
-(`handoff: context, message`, for example). When Desktop refuses both ways,
-the panel says to ask Claude to summarise the answers. On an API seat or an
+Ask: the answers appear in that panel, and Desktop puts "Synthesise the
+council's answers (run 3f9a2c)." in the message box, under a caution about
+malicious content. The line under the answers says to press
+Enter: Claude then fetches that run's answers with `council_result` and
+writes the synthesis. The panel cannot hand Claude the answers itself, and
+Desktop never sends its message for you. If Desktop refuses the message, the
+line instead gives the words to send yourself (`Ask Claude: "synthesise
+council run 3f9a2c"`). The extension keeps the last 5 runs in which a seat
+answered, until Desktop restarts it; after that, ask the council again. When
+no seat answers, the panel says so and Ask works again. On an API seat or an
 OpenRouter seat the model in grey is a button: click it to pick another model
 from that provider's live list (OpenRouter's has a filter box). The choice
 saves at once, as the settings panel's would, and applies to this question
