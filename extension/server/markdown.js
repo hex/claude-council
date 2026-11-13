@@ -132,7 +132,8 @@ function markdownBlocks(markdown) {
       const delimiter = header && index + 1 < lines.length ? tableCells(lines[index + 1]) : null
       if (header?.length > 0 && delimiter?.length === header.length && delimiter.every(cell => DELIMITER_CELL.test(cell))) {
         close()
-        table = { type: 'table', align: header.map(() => null), header, rows: [] }
+        const align = delimiter.map(cell => cell.startsWith(':') && cell.endsWith(':') ? 'center' : cell.endsWith(':') ? 'right' : cell.startsWith(':') ? 'left' : null)
+        table = { type: 'table', align, header, rows: [] }
         blocks.push(table)
         index++
         continue

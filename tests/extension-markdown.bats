@@ -75,6 +75,11 @@ setup() {
         '[{"type":"table","align":[null,null],"header":[[{"style":"text","text":"Option"}],[{"style":"text","text":"Cost"}]],"rows":[[[{"style":"strong","text":"Postgres"}],[{"style":"text","text":"low"}]],[[{"style":"text","text":"Redis"}],[{"style":"code","text":"high"}]]]}]'
 }
 
+@test "extension markdown: a table column takes its alignment from the colons in the delimiter row" {
+    assert_eq "$(blocks $'| a | b | c | d |\n| :-- | :-: | --: | --- |\n| 1 | 2 | 3 | 4 |')" \
+        '[{"type":"table","align":["left","center","right",null],"header":[[{"style":"text","text":"a"}],[{"style":"text","text":"b"}],[{"style":"text","text":"c"}],[{"style":"text","text":"d"}]],"rows":[[[{"style":"text","text":"1"}],[{"style":"text","text":"2"}],[{"style":"text","text":"3"}],[{"style":"text","text":"4"}]]]}]'
+}
+
 # A seat's answer is untrusted and unbounded, and the panel parses it on the
 # page's one thread: each of these 200 KB shapes, built to make a backtracking
 # reader rescan the rest of the line for every marker, must parse in under
