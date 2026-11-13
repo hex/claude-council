@@ -147,16 +147,57 @@ function parseChoices(value) {
   return { choices }
 }
 
+// How the saved roster reads in a refusal.
+function savedRoster(roster) {
+  return roster.length === 0 ? 'no OpenRouter seats are saved' : `the saved OpenRouter roster has ${roster.length} model${roster.length === 1 ? '' : 's'}`
+}
+
+// The choices with one seat's model changed, as the council picker saves it:
+// an API seat's provider gets the model ('' for its default), a router seat
+// its position in the roster, every other choice and position kept. `seat` is
+// the seat's name afterwards; it changes only when the first router model
+// turns the single `openrouter` seat into the roster's openrouter-1, which is
+// the only name a run gives that model.
+function withSeatModel(choices, seat, model) {
+  if (typeof seat !== 'string' || typeof model !== 'string') return { problem: `expected a seat name and a model id, got ${shown(seat)} and ${shown(model)}` }
+  const single = PROVIDERS.find(provider => provider.name === seat && !provider.roster)
+  if (single) {
+    const problem = choiceProblem(single, model)
+    return problem ? { problem } : { choices: { ...choices, [seat]: model }, seat }
+  }
+  const router = PROVIDERS.find(provider => provider.roster)
+  const roster = choices.openrouter
+  let next
+  if (seat === 'openrouter') {
+    if (roster.length > 0) return { problem: `openrouter is not a seat while ${savedRoster(roster)}` }
+    if (model === '') return { choices, seat }
+    next = [model]
+    seat = 'openrouter-1'
+  } else {
+    const index = seatIndex(seat)
+    if (index === 0) return { problem: `${shown(seat)} is not a seat whose model the council settings choose` }
+    if (index > roster.length) return { problem: `${seat} is not a seat: ${savedRoster(roster)}` }
+    if (model === '') return { problem: `${seat} needs a model; OpenRouter seats are removed in the council settings` }
+    const taken = roster.indexOf(model)
+    if (taken !== -1 && taken !== index - 1) return { problem: `${model} is already seat openrouter-${taken + 1}` }
+    next = roster.map((id, at) => (at === index - 1 ? model : id))
+  }
+  const problem = choiceProblem(router, next)
+  return problem ? { problem } : { choices: { ...choices, openrouter: next }, seat }
+}
+
 function choicesFile() {
   return path.join(stateDirectory(), 'models.json')
 }
 
 // The saved choices, or the defaults with a notice saying why the file was
 // ignored: a run on defaults the user did not choose may cost more, so every
-// tool that reads the choices passes the notice on.
+// tool that reads the choices passes the notice on. `problem` is why, for a
+// save that must not replace the file.
 function readChoices() {
   const ignored = problem => ({
     choices: noChoices(),
+    problem,
     notice: `The saved model choices in ${choicesFile()} could not be read (${problem}), so every provider uses its default model.`,
   })
   let fd
@@ -412,19 +453,23 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     return privateDirectory(path.join(privateDirectory(stateDirectory()), 'runs'))
   }
 
-  // What each provider uses with nothing chosen, asked of the scripts so the
-  // panel can never disagree with a run.
-  async function defaultModels(signal) {
-    const names = PROVIDERS.map(provider => provider.name)
+  // The model each named seat uses under the given choices, asked of the
+  // scripts so a panel can never disagree with a run.
+  async function seatModels(names, choices, signal) {
     const lookup = 'source "$1"; shift; for name in "$@"; do get_model "$name"; done'
     const library = path.join(root, 'scripts', 'lib', 'providers.sh')
-    const result = await runBash(['-c', lookup, 'defaults', library, ...names], {
-      cwd: runDirectory(), env: scriptEnvironment(keys, noChoices()), timeoutMs: timeoutsMs.script, signal,
+    const result = await runBash(['-c', lookup, 'models', library, ...names], {
+      cwd: runDirectory(), env: scriptEnvironment(keys, choices), timeoutMs: timeoutsMs.script, signal,
     })
-    if (result.stopped) throw new Refusal(stopText('default model lookup', result.stopped, timeoutsMs.script))
+    if (result.stopped) throw new Refusal(stopText('model lookup', result.stopped, timeoutsMs.script))
     const lines = result.stdout.trim().split('\n')
-    if (result.exitCode !== 0 || lines.length !== names.length) throw new Error(`could not read the default models: ${result.stderr.trim()}`)
+    if (result.exitCode !== 0 || lines.length !== names.length) throw new Error(`could not read the models: ${result.stderr.trim()}`)
     return Object.fromEntries(names.map((name, index) => [name, lines[index]]))
+  }
+
+  // What each provider uses with nothing chosen.
+  function defaultModels(signal) {
+    return seatModels(PROVIDERS.map(provider => provider.name), noChoices(), signal)
   }
 
   async function knownProviders() {
@@ -456,8 +501,7 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     const roster = choices.openrouter
     const pastRoster = (request.providers ?? []).find(name => seatIndex(name) > roster.length)
     if (pastRoster !== undefined) {
-      const saved = roster.length === 0 ? 'no OpenRouter seats are saved' : `the saved OpenRouter roster has ${roster.length} model${roster.length === 1 ? '' : 's'}`
-      return refused(withNotice(notice, `${pastRoster} is not a seat: ${saved}. Choose OpenRouter models with the council_settings tool.`))
+      return refused(withNotice(notice, `${pastRoster} is not a seat: ${savedRoster(roster)}. Choose OpenRouter models with the council_settings tool.`))
     }
     const outcome = await runAsk(request, choices, signal)
     return { ...outcome, text: withNotice(notice, outcome.text) }
@@ -590,11 +634,24 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     return { text: JSON.stringify({ providers: rows, rosterMax: ROSTER_MAX, problem: notice }) }
   }
 
-  function saveFromPanel(input) {
-    const result = parseChoices(input?.selections)
+  // The settings panel saves every provider's choice at once (selections);
+  // the picker saves one seat's model (seat and model), changed in the
+  // choices as saved at that moment, and is told the model the seat now uses.
+  async function saveFromPanel(input, signal) {
+    if (input?.seat === undefined && input?.model === undefined) {
+      const result = parseChoices(input?.selections)
+      if (result.problem) return refused(`Not saved: ${result.problem}.`)
+      writeChoices(result.choices)
+      return { text: JSON.stringify({ saved: true }) }
+    }
+    if (input.selections !== undefined) return refused('Not saved: council_models_save takes either selections or a seat and its model, not both.')
+    const saved = readChoices()
+    if (saved.problem) return refused(`Not saved: the saved model choices in ${choicesFile()} could not be read (${saved.problem}). Save a fresh set in the council settings.`)
+    const result = withSeatModel(saved.choices, input.seat, input.model)
     if (result.problem) return refused(`Not saved: ${result.problem}.`)
     writeChoices(result.choices)
-    return { text: JSON.stringify({ saved: true }) }
+    const model = (await seatModels([result.seat], result.choices, signal))[result.seat]
+    return { text: JSON.stringify({ saved: true, seat: result.seat, model }) }
   }
 
   return { ask, seatsText, pick, status, settingsText, panelData, saveFromPanel, stopRuns }

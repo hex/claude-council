@@ -65,6 +65,16 @@
 #     directory found with looser permissions is tightened
 #   - a state directory that is a symbolic link: refused with a sentence, the target left as it was
 #   - a models file that is a symbolic link: not read, and the answer says the defaults ran
+#   - one seat's model saved from the picker: only that provider's choice or that roster position
+#     changes, every other choice and the roster order kept; Default clears the choice and the
+#     answer names the scripts' default
+#   - the first model chosen for the single openrouter seat: the roster starts with it, and the
+#     seat is answered as openrouter-1, the name council_pick lists and a run uses
+#   - a picker save the choices cannot take (a seat past the roster, a model already on another
+#     seat, Default for a roster seat, openrouter beside a roster, a CLI or ollama seat, a bad id,
+#     no model, seat and selections together): refused with a sentence, the file left as it was
+#   - a picker save over a models file that cannot be read: refused, the file left for the settings
+#   - a model saved from the picker: council_pick lists it and council_pick_ask sends it
 #  settings and status
 #   - council_status: the scripts' report, then where keys go in Desktop
 #   - council_settings: each provider's model in plain text, defaults as the scripts resolve them,
@@ -884,6 +894,87 @@ mode_of() {
     assert_eq "$(result_text 4)" 'Not saved: OpenRouter: "a/1,a/2" is not a model id.'
     for id in 1 2 3 4; do assert_eq "$(result_error $id)" true; done
     assert_eq "$(jq -c . "${STATE_DIR}/models.json")" '{"openai":"gpt-test-1"}'
+}
+
+@test "extension: a seat's model saved from the picker changes that seat alone, the rest and the roster order kept" {
+    save_choices '{"openai":"gpt-test-1","perplexity":"sonar-test-1","openrouter":["vendor/alpha","vendor/beta","vendor/gamma"]}'
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"gemini","model":"gemini-3-pro"}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_text 1)" '{"saved":true,"seat":"gemini","model":"gemini-3-pro"}'
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"gemini-3-pro","openai":"gpt-test-1","grok":"","perplexity":"sonar-test-1","kimi":"","openrouter":["vendor/alpha","vendor/beta","vendor/gamma"]}'
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"openrouter-2","model":"vendor/delta"}')"
+    assert_eq "$(result_text 1)" '{"saved":true,"seat":"openrouter-2","model":"vendor/delta"}'
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"gemini-3-pro","openai":"gpt-test-1","grok":"","perplexity":"sonar-test-1","kimi":"","openrouter":["vendor/alpha","vendor/delta","vendor/gamma"]}'
+    # Default: the saved choice is cleared, and the answer names the model the scripts fall back to.
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"openai","model":""}')"
+    assert_eq "$(result_text 1)" "$(jq -cn --arg m "$(script_default openai)" '{saved: true, seat: "openai", model: $m}')"
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"gemini-3-pro","openai":"","grok":"","perplexity":"sonar-test-1","kimi":"","openrouter":["vendor/alpha","vendor/delta","vendor/gamma"]}'
+}
+
+@test "extension: with no roster saved, a model chosen for the openrouter seat starts the roster as openrouter-1" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    save_choices '{"perplexity":"sonar-test-1"}'
+    # Default on the single seat is what it already uses.
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"openrouter","model":""}')"
+    assert_eq "$(result_text 1)" "$(jq -cn --arg m "$(script_default openrouter)" '{saved: true, seat: "openrouter", model: $m}')"
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"openrouter","model":"vendor/alpha"}')"
+    assert_eq "$(result_text 1)" '{"saved":true,"seat":"openrouter-1","model":"vendor/alpha"}'
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"","openai":"","grok":"","perplexity":"sonar-test-1","kimi":"","openrouter":["vendor/alpha"]}'
+    mcp "$INIT" "$(call 1 council_pick '{"question":"q"}')" "$(call 2 council_pick_ask '{"question":"q","providers":["openrouter-1"]}')"
+    assert_eq "$(result_seats 1 | jq -c '[.seats[] | select(.provider | startswith("openrouter"))]')" '[{"provider":"openrouter-1","model":"vendor/alpha"}]'
+    assert_eq "$(cat "$COUNCIL_FAKE_SENT_MODELS")" vendor/alpha
+}
+
+@test "extension: a seat's model the picker cannot save is refused with a sentence, the file left as it was" {
+    local saved='{"openai":"gpt-test-1","openrouter":["vendor/alpha","vendor/beta"]}'
+    save_choices "$saved"
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"openrouter-3","model":"vendor/gamma"}')" \
+        "$(call 2 council_models_save '{"seat":"openrouter-1","model":"vendor/beta"}')" \
+        "$(call 3 council_models_save '{"seat":"openrouter-1","model":""}')" \
+        "$(call 4 council_models_save '{"seat":"openrouter","model":"vendor/gamma"}')" \
+        "$(call 5 council_models_save '{"seat":"codex","model":"gpt-test-2"}')" \
+        "$(call 6 council_models_save '{"seat":"ollama","model":"llama3"}')" \
+        "$(call 7 council_models_save '{"seat":"gemini","model":"gemini 3; rm -rf ~"}')" \
+        "$(call 8 council_models_save '{"seat":"openrouter-2","model":"a/1,a/2"}')" \
+        "$(call 9 council_models_save '{"seat":"gemini"}')" \
+        "$(call 10 council_models_save '{"seat":"gemini","model":"gemini-3-pro","selections":{}}')"
+    assert_eq "$(result_text 1)" 'Not saved: openrouter-3 is not a seat: the saved OpenRouter roster has 2 models.'
+    assert_eq "$(result_text 2)" 'Not saved: vendor/beta is already seat openrouter-2.'
+    assert_eq "$(result_text 3)" 'Not saved: openrouter-1 needs a model; OpenRouter seats are removed in the council settings.'
+    assert_eq "$(result_text 4)" 'Not saved: openrouter is not a seat while the saved OpenRouter roster has 2 models.'
+    assert_eq "$(result_text 5)" 'Not saved: "codex" is not a seat whose model the council settings choose.'
+    assert_eq "$(result_text 6)" 'Not saved: "ollama" is not a seat whose model the council settings choose.'
+    assert_eq "$(result_text 7)" 'Not saved: Gemini: "gemini 3; rm -rf ~" is not a model id.'
+    assert_eq "$(result_text 8)" 'Not saved: OpenRouter: "a/1,a/2" is not a model id.'
+    assert_eq "$(result_text 9)" 'Not saved: expected a seat name and a model id, got "gemini" and undefined.'
+    assert_eq "$(result_text 10)" 'Not saved: council_models_save takes either selections or a seat and its model, not both.'
+    local id
+    for id in 1 2 3 4 5 6 7 8 9 10; do assert_eq "$(result_error $id)" true; done
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" "$saved"
+    # A file that cannot be read is not overwritten from the picker: the
+    # choices it held would be lost to a set of one seat's model.
+    save_choices '{"openrouter":"vendor/not-a-list"}'
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"gemini","model":"gemini-3-pro"}')"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" "Not saved: the saved model choices in ${STATE_DIR}/models.json could not be read (OpenRouter: expected a list of model ids, got \"vendor/not-a-list\"). Save a fresh set in the council settings."
+    assert_eq "$(cat "${STATE_DIR}/models.json")" '{"openrouter":"vendor/not-a-list"}'
+}
+
+@test "extension: a model saved from the picker is the one council_pick then lists and council_pick_ask sends" {
+    install_fake_curl answer
+    pick_setup
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"openrouter-2","model":"vendor/delta"}')"
+    assert_eq "$(result_text 1)" '{"saved":true,"seat":"openrouter-2","model":"vendor/delta"}'
+    mcp "$INIT" "$(call 1 council_pick '{"question":"q"}')" "$(call 2 council_pick_ask '{"question":"q","providers":["openrouter-2"]}')"
+    assert_eq "$(result_seats 1 | jq -c '[.seats[] | select(.provider | startswith("openrouter"))]')" \
+        '[{"provider":"openrouter-1","model":"vendor/alpha"},{"provider":"openrouter-2","model":"vendor/delta"}]'
+    assert_eq "$(cat "$COUNCIL_FAKE_SENT_MODELS")" vendor/delta
+    assert_eq "$(result_seats 2 | jq -c '.seats')" '[{"provider":"openrouter-2","model":"vendor/delta","answer":"answer from vendor/delta"}]'
 }
 
 # ============================================================================

@@ -138,10 +138,10 @@ const TOOLS = [
   },
   {
     name: 'council_models_save',
-    description: 'Saves the model choices made in the council settings panel. Used by the panel only.',
-    inputSchema: { type: 'object', properties: { selections: { type: 'object' } }, required: ['selections'], additionalProperties: false },
+    description: 'Saves the model choices made in the council settings panel (selections), or one seat\'s model chosen in the council picker (seat and model). Used by the panels only.',
+    inputSchema: { type: 'object', properties: { selections: { type: 'object' }, seat: { type: 'string' }, model: { type: 'string' } }, additionalProperties: false },
     _meta: { ui: { visibility: ['app'] } },
-    run: args => theCouncil.saveFromPanel(args),
+    run: (args, signal) => theCouncil.saveFromPanel(args, signal),
   },
 ]
 
