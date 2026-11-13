@@ -630,17 +630,20 @@ built-in Node.js 18 or later and bash, so it supports macOS and Linux only.
 
 Three more tools serve the panels: `council_models_data` and
 `council_models_save` the settings panel and the picker's model lists, and
-`council_pick_ask` the picker's Ask button. They carry `_meta.ui.visibility: ["app"]`, so Desktop hides them
-from the model. `council_pick_ask` takes `council_ask`'s arguments and runs
-`council_ask`'s own function, so every check, limit, cancel and key removal
+`council_pick_ask` the picker's Ask button. They carry
+`_meta.ui.visibility: ["app"]`, so Desktop hides them from the model.
+`council_pick_ask` takes `council_ask`'s arguments and runs `council_ask`'s
+own function, so every check, limit, cancel and key removal
 applies to it alike.
 
 `council_models_save` takes either `selections`, every provider's choice at
 once (the settings panel), and answers `{"saved":true}`, or `seat` and
 `model`, one seat's model (the picker), and answers
 `{"saved":true,"seat":"<seat>","model":"<model>"}` with the model `get_model`
-resolves for the seat under the saved choices. A seat save changes the
-choices as saved at that moment and nothing else: `gemini`, `openai`, `grok`,
+resolves for the seat under the saved choices. A seat save looks the model
+up before it writes, so a refusal or failure always leaves the file as it
+was, and changes the choices as saved at the moment of the write and nothing
+else: `gemini`, `openai`, `grok`,
 `perplexity` and `kimi` take a model id or `""` for the default, and
 `openrouter-N` replaces position N of the roster, order kept. With no roster
 saved, a model for the single `openrouter` seat starts the roster with it,
@@ -693,8 +696,8 @@ focuses a model, not when the picker opens. A choice saves through
 name, model and vendor mark from the answer. A failed list or save says so in
 a line under the row and leaves its model. Ask waits for a save in flight,
 and a run disables the model buttons, as it does the switches. CLI seats
-and ollama show their model as text. Ask calls `council_pick_ask` through Desktop with the seats left on, and
-the panel draws the answers as the answers panel does. It then hands them to
+and ollama show their model as text. Ask calls `council_pick_ask` through
+Desktop with the seats left on, and the panel draws the answers as the answers panel does. It then hands them to
 Claude in two steps of the MCP Apps protocol: `ui/update-model-context` with
 the question and the answers, then `ui/message`, as the user, asking for the
 synthesis, which carries the answers too when Desktop refused the first step.

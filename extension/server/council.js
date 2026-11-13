@@ -645,12 +645,21 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
       return { text: JSON.stringify({ saved: true }) }
     }
     if (input.selections !== undefined) return refused('Not saved: council_models_save takes either selections or a seat and its model, not both.')
-    const saved = readChoices()
-    if (saved.problem) return refused(`Not saved: the saved model choices in ${choicesFile()} could not be read (${saved.problem}). Save a fresh set in the council settings.`)
-    const result = withSeatModel(saved.choices, input.seat, input.model)
+    const change = () => {
+      const saved = readChoices()
+      if (saved.problem) return { problem: `the saved model choices in ${choicesFile()} could not be read (${saved.problem}). Save a fresh set in the council settings` }
+      return withSeatModel(saved.choices, input.seat, input.model)
+    }
+    const planned = change()
+    if (planned.problem) return refused(`Not saved: ${planned.problem}.`)
+    // The model is looked up before anything is written, so a lookup that
+    // fails leaves the file as it was. The change is then made again to the
+    // file as it is after the wait, with no wait before the write, so a save
+    // that landed meanwhile is kept.
+    const model = (await seatModels([planned.seat], planned.choices, signal))[planned.seat]
+    const result = change()
     if (result.problem) return refused(`Not saved: ${result.problem}.`)
     writeChoices(result.choices)
-    const model = (await seatModels([result.seat], result.choices, signal))[result.seat]
     return { text: JSON.stringify({ saved: true, seat: result.seat, model }) }
   }
 

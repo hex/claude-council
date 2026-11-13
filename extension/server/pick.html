@@ -136,6 +136,8 @@ function seatRow(seat, box, saving, renamed) {
       label()
       if (was !== seat.provider) renamed(was)
       close()
+      // The chosen option is gone with the list; focus goes back where it opened.
+      button.focus()
     } catch (err) {
       const problem = err.message.startsWith('Not saved') ? err.message : `Not saved (${err.message}).`
       draw(provider, problem)
