@@ -114,7 +114,7 @@ setup() {
         const shapes = {
           strong: fill("**a "), underscores: fill("__a "), star: fill("*a "), underscore: fill(" _a"),
           ticks, heading: "# " + fill("# ") + "x", mixed: fill("**a `b *c _d __e "),
-          table: fill("|a", 1 / 3) + "\n" + fill("|-", 1 / 3) + "\n" + fill("|b\n", 1 / 3), pipes: fill("|`a"), escapes: fill("\\|`") + "\n|-|",
+          table: fill("|a", 1 / 3) + "\n" + fill("|-", 1 / 3) + "\n" + fill("|b\n", 1 / 3), pipes: ticks.replaceAll(" ", "|"), escapes: fill("\\|`") + "\n|-|",
         }
         const slow = []
         for (const [name, text] of Object.entries(shapes)) {
