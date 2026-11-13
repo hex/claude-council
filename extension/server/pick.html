@@ -58,7 +58,19 @@ function drawPicker(result) {
   const recount = () => {
     count.textContent = `${chosen.size} of ${data.seats.length} on`
     ask.disabled = chosen.size === 0
+    all.checked = chosen.size === data.seats.length
   }
+  const boxes = []
+  const all = element('input', { type: 'checkbox', className: 'switch', checked: true })
+  all.setAttribute('aria-label', 'All seats')
+  all.addEventListener('change', () => {
+    data.seats.forEach((seat, at) => {
+      boxes[at].checked = all.checked
+      if (all.checked) chosen.add(seat.provider); else chosen.delete(seat.provider)
+    })
+    recount()
+  })
+  controls.push(all)
   const rows = data.seats.map(seat => {
     const box = element('input', { type: 'checkbox', className: 'switch', checked: true })
     box.setAttribute('aria-label', `${seat.provider} (${seat.model})`)
@@ -67,6 +79,7 @@ function drawPicker(result) {
       recount()
     })
     controls.push(box)
+    boxes.push(box)
     return element('label', { className: 'seat' }, [element('span', {}, [document.createTextNode(seat.provider), element('small', { textContent: seat.model })]), box])
   })
   const choices = data.verbosities.map(level => {
@@ -92,7 +105,7 @@ function drawPicker(result) {
   recount()
   report('')
   picker.replaceChildren(
-    element('section', {}, [element('h2', {}, [document.createTextNode('Seats'), count]), ...rows]),
+    element('section', {}, [element('h2', {}, [document.createTextNode('Seats'), count]), element('label', { className: 'seat' }, [element('span', { textContent: 'All seats' }), all]), ...rows]),
     element('section', {}, [element('h2', {}, [document.createTextNode('Verbosity')]), element('div', { className: 'choices' }, choices)]),
     element('div', { className: 'act' }, [ask]),
   )
