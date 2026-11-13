@@ -21,6 +21,7 @@
   button { font: 600 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; color: var(--bg); background: var(--fg); border: 0; border-radius: 6px; padding: 6px 18px; cursor: pointer; }
   button:disabled, input:disabled { opacity: .5; cursor: default; }
   #picker { margin-bottom: 12px; }
+  .waiting { padding: 9px 14px; }
   #handoff { margin: 12px 4px 0; }
   #handoff code { font: 11px var(--mono); color: var(--dim); overflow-wrap: anywhere; }
 </style>
@@ -92,8 +93,8 @@ function drawPicker(result) {
   })
   ask.addEventListener('click', () => {
     for (const control of controls) control.disabled = true
-    const providers = data.seats.map(seat => seat.provider).filter(name => chosen.has(name))
-    run({ question: data.question, providers, verbosity }).catch(err => {
+    const picked = data.seats.filter(seat => chosen.has(seat.provider))
+    run({ question: data.question, providers: picked.map(seat => seat.provider), verbosity }, picked, ask).catch(err => {
       report('failed', true)
       seats.replaceChildren(element('p', { className: 'lead bad', textContent: `The panel could not show the answers (${err.message}).` }))
       host.reportSize()
@@ -115,12 +116,39 @@ function drawPicker(result) {
   host.reportSize()
 }
 
+// Until the council answers, which takes 20 to 60 seconds, the Ask button
+// and a card per picked seat say it is running, where the user is looking:
+// the header's status line has scrolled out of view by then. Returns the
+// function that ends it; the answers or the error replace the cards.
+function showWaiting(picked, button) {
+  button.textContent = 'Asking...'
+  const started = Date.now()
+  // Hidden from screen readers: #seats is a live region, and a count that
+  // changes every second would be read out every second.
+  const counts = picked.map(() => element('span', { ariaHidden: 'true' }))
+  // From the start time, not a counter: a frame out of view gets its timers slowed.
+  const tick = () => {
+    const seconds = `${Math.floor((Date.now() - started) / 1000)} s`
+    for (const count of counts) count.textContent = seconds
+  }
+  tick()
+  const timer = setInterval(tick, 1000)
+  seats.replaceChildren(...picked.map((seat, at) => element('section', {}, [
+    seatHeading(seat),
+    element('div', { className: 'note waiting' }, [document.createTextNode('waiting, '), counts[at]]),
+  ])))
+  host.reportSize()
+  return () => {
+    clearInterval(timer)
+    button.textContent = 'Ask'
+  }
+}
+
 // Runs the question through council_pick_ask, which is council_ask itself,
 // shows the answers and hands them to Claude. True once the council answered.
-async function run(args) {
+async function run(args, picked, button) {
   report('asking the council')
-  seats.replaceChildren()
-  host.reportSize()
+  const stopWaiting = showWaiting(picked, button)
   let result
   try {
     result = await host.request('tools/call', { name: 'council_pick_ask', arguments: args })
@@ -129,6 +157,9 @@ async function run(args) {
     seats.replaceChildren(element('p', { className: 'lead bad', textContent: `Claude Desktop did not run the question (${err.message}).` }))
     host.reportSize()
     return false
+  } finally {
+    // Here and not after the handoff below, whose requests Desktop may be slow to answer.
+    stopWaiting()
   }
   showAnswers(result, seats)
   if (result?.isError) return false

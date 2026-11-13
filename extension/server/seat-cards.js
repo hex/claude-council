@@ -34,8 +34,12 @@ function blockNode(block) {
   throw new Error(`unknown markdown block ${block.type}`)
 }
 
+function seatHeading(seat) {
+  return element('h2', {}, [document.createTextNode(seat.provider), element('small', { textContent: seat.model })])
+}
+
 function seatCard(seat) {
-  const heading = element('h2', {}, [document.createTextNode(seat.provider), element('small', { textContent: seat.model })])
+  const heading = seatHeading(seat)
   const body = seat.error !== undefined
     ? element('div', { className: 'note bad error', textContent: seat.error })
     : element('div', { className: 'answer' }, markdownBlocks(seat.answer).map(blockNode))
