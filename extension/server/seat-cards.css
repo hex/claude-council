@@ -13,8 +13,10 @@
 .answer .table { overflow-x: auto; }
 /* Words stay whole in a table: breaking anywhere would squeeze each column to one letter before the wrapper scrolls. */
 .answer table { border-collapse: collapse; font-size: 13px; overflow-wrap: normal; }
-.answer th, .answer td { padding: 5px 14px 5px 0; text-align: left; vertical-align: top; border-top: 1px dotted var(--rule); }
-.answer th { border-top: 0; color: var(--dim); font-weight: 600; }
+/* The rule is the row's, not its cells', so it spans a row with fewer cells than the header. */
+.answer tbody tr { border-top: 1px dotted var(--rule); }
+.answer th, .answer td { padding: 5px 14px 5px 0; text-align: left; vertical-align: top; }
+.answer th { color: var(--dim); font-weight: 600; }
 .error { padding: 9px 14px; white-space: pre-line; overflow-wrap: anywhere; }
 .shortened { margin: 0; padding: 0 14px 10px; }
 .seat-list p.lead { white-space: pre-line; overflow-wrap: anywhere; }

@@ -159,6 +159,9 @@ function markdownBlocks(markdown) {
         continue
       }
     } else {
+      // A row keeps the cells it has: dropping extra ones would lose model
+      // text, and padding short ones under a header thousands of cells wide
+      // would grow the data with the square of the answer's length.
       const cells = tableCells(line)
       if (cells) { table.rows.push(cells); continue }
       table = null

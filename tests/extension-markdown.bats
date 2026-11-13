@@ -18,8 +18,8 @@
 #   - lines that only look like a table drawn as one: pipes with no delimiter row, a
 #     delimiter row with a different number of cells, a table inside a code block
 #   - a pipe inside a code span, or written as \|, splitting its cell
-#   - a body row with fewer or more cells than the header padded or cut, so the
-#     reader invents cells or drops text the model wrote
+#   - a body row with fewer or more cells than the header cut, so the reader drops
+#     text the model wrote, or padded, which grows with the square of the input
 #   - a code fence never closed: the rest of the answer is code, not dropped
 #   - CRLF line ends left in the text
 #   - blank lines between list items split one list into several
@@ -95,6 +95,11 @@ setup() {
         '[{"type":"table","align":[null,null],"header":[[{"style":"text","text":"op"}],[{"style":"text","text":"means"}]],"rows":[[[{"style":"code","text":"a || b"}],[{"style":"text","text":"either"}]],[[{"style":"code","text":"x | y"}],[{"style":"text","text":"a | b"}]]]}]'
 }
 
+@test "extension markdown: a body row keeps the cells it has, fewer or more than the header" {
+    assert_eq "$(blocks $'| a | b |\n|---|---|\n| 1 |\n| 2 | 3 | 4 |')" \
+        '[{"type":"table","align":[null,null],"header":[[{"style":"text","text":"a"}],[{"style":"text","text":"b"}]],"rows":[[[{"style":"text","text":"1"}]],[[{"style":"text","text":"2"}],[{"style":"text","text":"3"}],[{"style":"text","text":"4"}]]]}]'
+}
+
 # A seat's answer is untrusted and unbounded, and the panel parses it on the
 # page's one thread: each of these 200 KB shapes, built to make a backtracking
 # reader rescan the rest of the line for every marker, must parse in under
@@ -103,12 +108,13 @@ setup() {
     run --separate-stderr node -e '
         const { markdownBlocks } = require(process.argv[1])
         const size = 200000
-        const fill = unit => unit.repeat(Math.ceil(size / unit.length))
+        const fill = (unit, share = 1) => unit.repeat(Math.ceil(size * share / unit.length))
         let ticks = ""
         for (let length = 1; ticks.length < size; length++) ticks += "`".repeat(length) + "a "
         const shapes = {
           strong: fill("**a "), underscores: fill("__a "), star: fill("*a "), underscore: fill(" _a"),
           ticks, heading: "# " + fill("# ") + "x", mixed: fill("**a `b *c _d __e "),
+          table: fill("|a", 1 / 3) + "\n" + fill("|-", 1 / 3) + "\n" + fill("|b\n", 1 / 3), pipes: fill("|`a"), escapes: fill("\\|`") + "\n|-|",
         }
         const slow = []
         for (const [name, text] of Object.entries(shapes)) {
