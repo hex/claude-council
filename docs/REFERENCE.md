@@ -637,8 +637,8 @@ Three more tools serve the panels: `council_models_data` and
 own function, so every check, limit, cancel and key removal
 applies to it alike. When a seat answered, the server keeps the run's text
 for `council_result` under a run id of 6 random hex digits and adds `run`
-to the `structuredContent`. The id is random, not a count, so an id left in
-the chat from before a restart never names a later run. A run in which no
+to the `structuredContent`. The id is random: a count would start again after
+a restart, so an id left in the chat would name a later run. A run in which no
 seat answered, a refused run and a cancelled one get no id.
 
 `council_models_save` takes either `selections`, every provider's choice at
@@ -714,7 +714,7 @@ such as a cancelled one, then ends in a line saying no answer came back, and
 Ask works again. When the run has an id, the panel sends one `ui/message`,
 as the user, with the text `Synthesise the council's answers (run <id>).`
 and no seat output, and shows "Press Enter in the message box to get
-Claude's synthesis." under the answers without waiting for Desktop's reply.
+Claude's synthesis of run <id>." under the answers without waiting for Desktop's reply.
 If Desktop refuses the message, the line becomes `Ask Claude: "synthesise
 council run <id>"`. When no seat answered, the line says so and Ask works
 again. The picker is drawn from the first tool result Desktop sends; a

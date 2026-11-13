@@ -118,8 +118,8 @@ const TOOLS = [
     description: 'Asks the council the question with the seats and verbosity chosen in the council picker. Used by the panel only.',
     inputSchema: { type: 'object', properties: { question: { type: 'string' }, providers: { type: 'array', items: { type: 'string' } }, verbosity: { type: 'string', enum: council.VERBOSITIES } }, required: ['question'], additionalProperties: false },
     _meta: { ui: { visibility: ['app'] } },
-    // council_ask's own function, so the panel's runs pass every check a
-    // model's do.
+    // council_ask's own function underneath, so the panel's runs pass every
+    // check a model's do.
     run: (args, signal) => theCouncil.pickAsk(args, signal),
   },
   {

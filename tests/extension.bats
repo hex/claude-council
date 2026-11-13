@@ -97,11 +97,11 @@
 #     every refusal and for an answer, a key in a seat's error removed, a cancel stopping its run
 #   - council_pick's description and text: when the user asks for the synthesis of a council run,
 #     call council_result; never a claim that the answers cannot be seen
-#   - council_pick gives the panel how long to wait for council_pick_ask: the run's limit plus the
-#     lookup and formatting limits, so a call the host never answers cannot hold the panel for good
+#   - council_pick gives the panel how long to wait for council_pick_ask: the run's limit, the
+#     formatting limit and a minute, so a call the host never answers cannot hold the panel for good
 #  council_result, the picker's answers handed to the model
-#   - a council_pick_ask run where a seat answered: a run id (6 hex digits, random, so an id from before
-#     a restart never names a later run) comes back in structuredContent beside the answers
+#   - a council_pick_ask run where a seat answered: a run id (6 hex digits, random, as a count would
+#     restart and let an id from before a restart name a later run) comes back in structuredContent
 #   - council_result with that id: council_ask's text for the same question, verbatim, not an error,
 #     with no structuredContent and no panel
 #   - council_result with no id: the latest run; with an unknown or malformed id: a sentence saying it
@@ -1232,17 +1232,20 @@ perplexity: sonar-test-1"
 }
 
 @test "extension: council_result keeps the latest 5 picker runs, forgetting the oldest" {
-    export COUNCIL_FAKE_BEHAVIOR=valid
+    install_fake_curl echo
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
     local requests=("$INIT") id
     for id in 1 2 3 4 5 6; do
-        requests+=("$(call "$id" council_pick_ask '{"question":"q","providers":["codex"]}')")
+        requests+=("$(call "$id" council_pick_ask "{\"question\":\"question ${id}\",\"providers\":[\"openrouter\"]}")")
     done
     mcp "${requests[@]}" "$(call 11 council_result '{"run":"{{1.result.structuredContent.run}}"}')" \
         "$(call 12 council_result '{"run":"{{2.result.structuredContent.run}}"}')" "$(call 16 council_result '{"run":"{{6.result.structuredContent.run}}"}')"
     assert_eq "$(result_error 11)" true
     [[ "$(result_text 11)" == "Council run \"$(reply 1 | jq -r '.result.structuredContent.run')\" is not held."* ]]
     assert_eq "$(result_error 12)" false
+    [[ "$(result_text 12)" == *"asked: question 2"* ]]
     assert_eq "$(result_text 12)" "$(result_text 2)"
+    [[ "$(result_text 16)" == *"asked: question 6"* ]]
     assert_eq "$(result_text 16)" "$(result_text 6)"
 }
 

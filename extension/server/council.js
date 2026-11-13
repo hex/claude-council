@@ -545,9 +545,9 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
   const pickedRuns = new Map()
 
   // council_ask for the picker's Ask button: a run in which a seat answered is
-  // held under a run id the panel gets beside the answers. The id is random,
-  // not a count, so an id still in the chat from before a restart never names
-  // a later run.
+  // held under a run id the panel gets beside the answers. The id is random:
+  // a count would start again after a restart, so an id still in the chat
+  // would name a later run.
   async function pickAsk(input, signal) {
     const outcome = await ask(input, signal)
     // A cancelled run comes back as an error too, so it is never held.

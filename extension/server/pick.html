@@ -340,7 +340,7 @@ async function run(args, picked, button, answerWithinMs) {
 // with text already in the box, Desktop asks the user whether to replace it
 // and answers late or never.
 function handOff(id) {
-  const line = element('p', { className: 'lead', textContent: 'Press Enter in the message box to get Claude\'s synthesis.' })
+  const line = element('p', { className: 'lead', textContent: `Press Enter in the message box to get Claude's synthesis of run ${id}.` })
   handoff.replaceChildren(line)
   host.reportSize()
   host.request('ui/message', { role: 'user', content: [{ type: 'text', text: `Synthesise the council's answers (run ${id}).` }] })
