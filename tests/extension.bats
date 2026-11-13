@@ -1117,8 +1117,10 @@ pick_setup() {
     pick_setup
     mcp "$INIT" "$(call 1 council_pick '{"question":"Which queue?"}')"
     assert_eq "$(result_error 1)" false
-    assert_eq "$(result_seats 1)" "{\"question\":\"Which queue?\",\"seats\":${PICK_SEATS},\"verbosities\":[\"brief\",\"standard\",\"detailed\"],\"verbosity\":\"standard\"}"
-    assert_eq "$(result_text 1)" 'The council picker is open in a panel with the question and 9 seats. The user picks the seats and the verbosity there and presses Ask, and the answers appear in the panel. Wait for the user: do not call council_ask for this question and do not answer it yourself.'
+    # The panel waits 11.5 minutes for its run: the run's 10, formatting's half
+    # minute, and one more for the stops and Desktop's relay.
+    assert_eq "$(result_seats 1)" "{\"question\":\"Which queue?\",\"seats\":${PICK_SEATS},\"verbosities\":[\"brief\",\"standard\",\"detailed\"],\"verbosity\":\"standard\",\"answerWithinMs\":690000}"
+    assert_eq "$(result_text 1)" 'The council picker is open in a panel with the question and 9 seats. The user picks the seats and the verbosity there and presses Ask, and the answers appear in the panel. Wait for the user: do not call council_ask for this question and do not answer it yourself. When the user then asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", call council_result with that run id: it gives you the answers the panel shows. Never say you cannot see them.'
     [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
 }
 
@@ -1272,4 +1274,12 @@ perplexity: sonar-test-1"
     assert_eq "$(result_text 1)" 'council_result has no argument "question"; it takes run'
     assert_eq "$(result_error 2)" true
     assert_eq "$(result_text 2)" 'run must be a run id such as 3f9a2c, not 7'
+}
+
+@test "extension: council_pick and council_result tell the model to fetch a picker run's answers when the user asks for its synthesis" {
+    mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+    local sentence='When the user then asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", call council_result with that run id: it gives you the answers the panel shows. Never say you cannot see them.'
+    [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_pick") | .description')" == *"$sentence"* ]]
+    assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_result") | .description')" \
+        'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. Show each seat'"'"'s answer, then write your own synthesis after them: where the seats agree, where they differ, and what you recommend.'
 }

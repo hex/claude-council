@@ -108,7 +108,7 @@ const TOOLS = [
   // Trial variant B: the picker panel and the tool its Ask button calls.
   {
     name: 'council_pick',
-    description: `Open the council picker: a panel in the chat with the question, each council seat with its model and a switch, a choice of verbosity and an Ask button. The council runs when the user presses Ask, and the answers appear in the panel. Use it when the user asks for the picker or to choose the seats in a panel. ${AS_ASKED}`,
+    description: `Open the council picker: a panel in the chat with the question, each council seat with its model and a switch, a choice of verbosity and an Ask button. The council runs when the user presses Ask, and the answers appear in the panel. Use it when the user asks for the picker or to choose the seats in a panel. ${AS_ASKED} ${council.AFTER_PICK}`,
     inputSchema: { type: 'object', properties: { question: { type: 'string', description: QUESTION_AS_ASKED } }, required: ['question'], additionalProperties: false },
     _meta: { ui: { resourceUri: PICK_PANEL.uri } },
     run: (args, signal) => theCouncil.pick(args, drawsPanel, signal),
@@ -124,7 +124,7 @@ const TOOLS = [
   },
   {
     name: 'council_result',
-    description: 'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, such as "Synthesise the council\'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you. Show each seat\'s answer, then write your own synthesis after them: where the seats agree, where they differ, and what you recommend.',
+    description: 'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, as in "Synthesise the council\'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. Show each seat\'s answer, then write your own synthesis after them: where the seats agree, where they differ, and what you recommend.',
     inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'The run id the user\'s message names, such as 3f9a2c. Leave out for the latest run.' } }, additionalProperties: false },
     run: (args, signal) => theCouncil.result(args, signal),
   },

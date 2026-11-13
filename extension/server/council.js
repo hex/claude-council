@@ -24,6 +24,9 @@ const ROSTER_MAX = 12
 const VERBOSITIES = ['brief', 'standard', 'detailed']
 // How long each kind of run may take before it is stopped.
 const TIMEOUTS_MS = { ask: 10 * 60 * 1000, status: 3 * 60 * 1000, script: 30 * 1000 }
+// What the model is told to do with the message the picker drafts once its
+// answers are in. The panel cannot hand the answers to the model itself.
+const AFTER_PICK = 'When the user then asks for the synthesis of a council run, as in "Synthesise the council\'s answers (run 3f9a2c)", call council_result with that run id: it gives you the answers the panel shows. Never say you cannot see them.'
 // How many of the picker's runs council_result can give the model, newest
 // kept. Each is the text of one run, which the run's stdout cap bounds.
 const RUNS_KEPT = 5
@@ -611,9 +614,14 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
     const { seats, notice } = await defaultSeats(signal)
     if (seats.length === 0) return refused(withNotice(notice, NO_SEATS))
     const text = drawsPanel
-      ? `The council picker is open in a panel with the question and ${seats.length} seat${seats.length === 1 ? '' : 's'}. The user picks the seats and the verbosity there and presses Ask, and the answers appear in the panel. Wait for the user: do not call council_ask for this question and do not answer it yourself.`
+      ? `The council picker is open in a panel with the question and ${seats.length} seat${seats.length === 1 ? '' : 's'}. The user picks the seats and the verbosity there and presses Ask, and the answers appear in the panel. Wait for the user: do not call council_ask for this question and do not answer it yourself. ${AFTER_PICK}`
       : `This app does not draw the council picker. Ask the user in one short message which of these seats to use and which verbosity (standard, brief or detailed), offering all seats at standard as the default, then call council_ask with their choice.\n${seatLines(seats)}`
-    return { text: withNotice(notice, text), structured: { question: input.question, seats, verbosities: VERBOSITIES, verbosity: 'standard' } }
+    // How long the panel waits for its council_pick_ask: the run and its
+    // formatting at their limits, and a minute for the stops and Desktop's
+    // relay. A call the host never answers, such as a cancelled one, would
+    // otherwise hold the panel for good.
+    const answerWithinMs = timeoutsMs.ask + timeoutsMs.script + 60 * 1000
+    return { text: withNotice(notice, text), structured: { question: input.question, seats, verbosities: VERBOSITIES, verbosity: 'standard', answerWithinMs } }
   }
 
   async function status(input, signal) {
@@ -704,4 +712,4 @@ function openCouncil({ root, keys, tooShort, timeoutsMs = TIMEOUTS_MS }) {
   return { ask, pickAsk, result, seatsText, pick, status, settingsText, panelData, saveFromPanel, stopRuns }
 }
 
-module.exports = { PROVIDERS, Refusal, VERBOSITIES, findPluginRoot, openCouncil, readKeys }
+module.exports = { AFTER_PICK, PROVIDERS, Refusal, VERBOSITIES, findPluginRoot, openCouncil, readKeys }
