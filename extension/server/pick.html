@@ -21,7 +21,13 @@
   button { font: 600 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; color: var(--bg); background: var(--fg); border: 0; border-radius: 6px; padding: 6px 18px; cursor: pointer; }
   button:disabled, input:disabled { opacity: .5; cursor: default; }
   #picker { margin-bottom: 12px; }
-  .waiting { padding: 9px 14px; }
+  .waiting { padding: 12px 14px 9px; }
+  /* Lines the shape of an answer, shimmering where it will appear. */
+  .skeleton { height: 10px; border-radius: 5px; margin-bottom: 8px; background: linear-gradient(90deg, var(--card-hover) 25%, var(--rule) 50%, var(--card-hover) 75%); background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
+  .skeleton:nth-child(2) { width: 82%; animation-delay: .15s; }
+  .skeleton:nth-child(3) { width: 64%; animation-delay: .3s; }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
   #handoff { margin: 12px 4px 0; }
   #handoff code { font: 11px var(--mono); color: var(--dim); overflow-wrap: anywhere; }
 </style>
@@ -136,7 +142,7 @@ function showWaiting(picked, button) {
   const timer = setInterval(tick, 1000)
   seats.replaceChildren(...picked.map((seat, at) => element('section', {}, [
     seatHeading(seat),
-    element('div', { className: 'note waiting' }, [document.createTextNode('waiting, '), counts[at]]),
+    element('div', { className: 'note waiting' }, [...[1, 2, 3].map(() => element('div', { className: 'skeleton' })), document.createTextNode('waiting, '), counts[at]]),
   ])))
   host.reportSize()
   return () => {
