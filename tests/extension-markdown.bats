@@ -80,6 +80,11 @@ setup() {
         '[{"type":"table","align":["left","center","right",null],"header":[[{"style":"text","text":"a"}],[{"style":"text","text":"b"}],[{"style":"text","text":"c"}],[{"style":"text","text":"d"}]],"rows":[[[{"style":"text","text":"1"}],[{"style":"text","text":"2"}],[{"style":"text","text":"3"}],[{"style":"text","text":"4"}]]]}]'
 }
 
+@test "extension markdown: a table straight after a paragraph line stands apart, and a line with no pipe ends it" {
+    assert_eq "$(blocks $'Compared:\nname | cost\n--- | ---\npg | low\nThat is all.')" \
+        '[{"type":"paragraph","runs":[{"style":"text","text":"Compared:"}]},{"type":"table","align":[null,null],"header":[[{"style":"text","text":"name"}],[{"style":"text","text":"cost"}]],"rows":[[[{"style":"text","text":"pg"}],[{"style":"text","text":"low"}]]]},{"type":"paragraph","runs":[{"style":"text","text":"That is all."}]}]'
+}
+
 # A seat's answer is untrusted and unbounded, and the panel parses it on the
 # page's one thread: each of these 200 KB shapes, built to make a backtracking
 # reader rescan the rest of the line for every marker, must parse in under
