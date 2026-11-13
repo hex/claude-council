@@ -9,11 +9,22 @@
 #   - an underscore inside a word (snake_case) read as italic
 #   - an ordered list straight after a bulleted one merged into it
 #   - a list item's indented continuation line lost, or nesting depth wrong
-#   - paragraph line breaks lost, so a table the reader does not draw runs together
+#   - paragraph line breaks lost, so lines the reader draws as text run together
+#   - a pipe table (header row, delimiter row, body rows) left as its raw pipe lines
+#     instead of a table block whose cells are styled runs
+#   - a column's alignment, from the colons in the delimiter row, lost
+#   - a table straight after a paragraph line merged into the paragraph, or a line
+#     with no pipe after the table taken as one of its rows
+#   - lines that only look like a table drawn as one: pipes with no delimiter row, a
+#     delimiter row with a different number of cells, a table inside a code block
+#   - a pipe inside a code span, or written as \|, splitting its cell
+#   - a body row with fewer or more cells than the header padded or cut, so the
+#     reader invents cells or drops text the model wrote
 #   - a code fence never closed: the rest of the answer is code, not dropped
 #   - CRLF line ends left in the text
 #   - blank lines between list items split one list into several
-#   - an answer shaped to make the reader backtrack takes time quadratic in its length
+#   - an answer shaped to make the reader backtrack takes time quadratic in its length,
+#     a table with a very wide header over very many short rows included
 
 load test_helper
 bats_require_minimum_version 1.5.0
@@ -57,6 +68,11 @@ setup() {
 @test "extension markdown: items separated by blank lines stay one list, and an indented paragraph stays in its item" {
     assert_eq "$(blocks $'1. a\n\n2. b\n\n   more of b\n\n3. c\n\n- x\n\n- y\n\nAfter.')" \
         '[{"type":"list","ordered":true,"items":[{"depth":0,"runs":[{"style":"text","text":"a"}]},{"depth":0,"runs":[{"style":"text","text":"b more of b"}]},{"depth":0,"runs":[{"style":"text","text":"c"}]}]},{"type":"list","ordered":false,"items":[{"depth":0,"runs":[{"style":"text","text":"x"}]},{"depth":0,"runs":[{"style":"text","text":"y"}]}]},{"type":"paragraph","runs":[{"style":"text","text":"After."}]}]'
+}
+
+@test "extension markdown: a pipe table becomes a table block whose cells are styled runs" {
+    assert_eq "$(blocks $'| Option | Cost |\n|---|---|\n| **Postgres** | low |\n| Redis | `high` |')" \
+        '[{"type":"table","align":[null,null],"header":[[{"style":"text","text":"Option"}],[{"style":"text","text":"Cost"}]],"rows":[[[{"style":"strong","text":"Postgres"}],[{"style":"text","text":"low"}]],[[{"style":"text","text":"Redis"}],[{"style":"code","text":"high"}]]]}]'
 }
 
 # A seat's answer is untrusted and unbounded, and the panel parses it on the

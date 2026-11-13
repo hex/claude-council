@@ -1,4 +1,4 @@
-// ABOUTME: Reads the small part of markdown the answers panel draws: headings, paragraphs, lists, code, rules
+// ABOUTME: Reads the small part of markdown the answers panel draws: headings, paragraphs, lists, code, rules, tables
 // ABOUTME: Returns plain data, never HTML, so the page builds every node itself and model text stays text
 'use strict'
 
@@ -6,6 +6,7 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/
 const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*)$/
 const ITEM = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+(.*)$/
 const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
+const DELIMITER_CELL = /^:?-+:?$/
 
 const isBlank = char => char === undefined || /\s/.test(char)
 const isWordChar = char => char !== undefined && /[A-Za-z0-9_]/.test(char)
@@ -88,16 +89,28 @@ function markdownInline(text) {
   return runs
 }
 
+// A line's table cells, or null when no pipe divides it. The pipes at either
+// end are optional: models write tables both ways.
+function tableCells(line) {
+  const text = line.trim()
+  if (!text.includes('|')) return null
+  const cells = text.split('|')
+  if (text.startsWith('|')) cells.shift()
+  if (text.endsWith('|')) cells.pop()
+  return cells.map(cell => cell.trim())
+}
+
 // The answer as blocks: heading {level, runs}, paragraph {runs}, list
-// {ordered, items: [{depth, runs}]}, code {text} and rule. A paragraph keeps
-// its line breaks, so a table or other markdown outside this set reads as
-// the lines the model wrote.
+// {ordered, items: [{depth, runs}]}, code {text}, rule and table {align,
+// header: [runs], rows: [[runs]]}. A paragraph keeps its line breaks, so
+// markdown outside this set reads as the lines the model wrote.
 function markdownBlocks(markdown) {
   const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n')
   const blocks = []
   let paragraph = null
   let list = null
-  const close = () => { paragraph = null; list = null }
+  let table = null
+  const close = () => { paragraph = null; list = null; table = null }
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index]
     const fence = line.match(FENCE)
@@ -111,7 +124,24 @@ function markdownBlocks(markdown) {
     }
     // A blank line ends a paragraph but not a list: models put one between
     // items, and an indented paragraph after one still belongs to its item.
-    if (line.trim() === '') { paragraph = null; continue }
+    if (line.trim() === '') { paragraph = null; table = null; continue }
+    // A table is a header row whose next line is a delimiter row with as
+    // many cells; anything less stays the lines the model wrote.
+    if (!table) {
+      const header = tableCells(line)
+      const delimiter = header && index + 1 < lines.length ? tableCells(lines[index + 1]) : null
+      if (header?.length > 0 && delimiter?.length === header.length && delimiter.every(cell => DELIMITER_CELL.test(cell))) {
+        close()
+        table = { type: 'table', align: header.map(() => null), header, rows: [] }
+        blocks.push(table)
+        index++
+        continue
+      }
+    } else {
+      const cells = tableCells(line)
+      if (cells) { table.rows.push(cells); continue }
+      table = null
+    }
     const heading = line.match(HEADING)
     if (heading) {
       close()
@@ -154,6 +184,7 @@ function markdownBlocks(markdown) {
   return blocks.map(block => {
     if (block.type === 'paragraph') return { type: 'paragraph', runs: markdownInline(block.text) }
     if (block.type === 'list') return { type: 'list', ordered: block.ordered, items: block.items.map(({ depth, text }) => ({ depth, runs: markdownInline(text) })) }
+    if (block.type === 'table') return { type: 'table', align: block.align, header: block.header.map(cell => markdownInline(cell)), rows: block.rows.map(row => row.map(cell => markdownInline(cell))) }
     return block
   })
 }

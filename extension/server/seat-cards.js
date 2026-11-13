@@ -16,6 +16,21 @@ function blockNode(block) {
       return node
     }))
   }
+  if (block.type === 'table') {
+    const cell = (tag, runs, at) => {
+      const node = element(tag, {}, runNodes(runs))
+      if (block.align[at]) node.style.textAlign = block.align[at]
+      return node
+    }
+    const header = element('tr', {}, block.header.map((runs, at) => {
+      const node = cell('th', runs, at)
+      node.scope = 'col'
+      return node
+    }))
+    const rows = block.rows.map(row => element('tr', {}, row.map((runs, at) => cell('td', runs, at))))
+    // The wrapper scrolls sideways, so a wide table never widens the panel.
+    return element('div', { className: 'table' }, [element('table', {}, [element('thead', {}, [header]), element('tbody', {}, rows)])])
+  }
   throw new Error(`unknown markdown block ${block.type}`)
 }
 
