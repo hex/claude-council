@@ -688,8 +688,10 @@ runs the same scripts the plugin does.
 
 The marks are their owners' trademarks, shown only to identify the service or
 model a seat runs. The path data and colours come unmodified from
-[simple-icons](https://simpleicons.org) 16.37.0, whose data is CC0-1.0
-(`https://unpkg.com/simple-icons@16.37.0/icons/<slug>.svg`); the colour is
+[simple-icons](https://simpleicons.org) 16.37.0
+(`https://unpkg.com/simple-icons@16.37.0/icons/<slug>.svg`), whose data is
+CC0-1.0 (https://unpkg.com/simple-icons@16.37.0/LICENSE.md, trademark notes in
+https://unpkg.com/simple-icons@16.37.0/DISCLAIMER.md); the colour is
 simple-icons' hex value, not checked against each vendor's own page. A black
 mark (simple-icons' `000000`, or Anthropic's `191919`) takes the text
 colour, so it stays visible in the dark theme.
@@ -714,9 +716,8 @@ colour, so it stays visible in the dark theme.
 | QWen (`qwen`) | maker `qwen/` | `#6950EF` | https://qwen.ai | CC0-1.0 data |
 
 `openai`, `codex`, `grok` and `grok-cli`, and OpenRouter models made by
-`openai/` or `x-ai/`, show no mark: simple-icons carries no OpenAI or xAI mark,
-and both vendors' brand pages answer a script with HTTP 403, so none came
-from a source this file can cite. OpenRouter seats with those makers show OpenRouter's
+`openai/` or `x-ai/`, show no mark: simple-icons 16.37.0 carries no OpenAI or
+xAI mark, so the extension carries none. OpenRouter seats with those makers show OpenRouter's
 mark.
 
 Packed, the scripts sit under `plugin/` beside `server/`; in a checkout the

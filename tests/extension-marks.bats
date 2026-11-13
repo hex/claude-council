@@ -4,6 +4,7 @@
 
 # Failure modes covered:
 #  - a seat drawn with another vendor's mark, or a CLI seat not sharing its vendor's mark
+#  - OpenAI's and xAI's seats drawing a mark, though none comes from a source the docs can cite
 #  - an OpenRouter seat drawn with OpenRouter's mark when its model's maker has one, a `~`
 #    alias prefix hiding the maker, or both of Meta's prefixes not recognised
 #  - a maker with no mark, a model id with no maker part, or no model at all, drawing nothing
@@ -58,15 +59,21 @@ marks_for() {
 
 @test "extension marks: an OpenRouter seat falls back to OpenRouter's mark" {
     assert_eq "$(marks_for 'openrouter-1 z-ai/glm-5' 'openrouter-2 openrouter/auto' 'openrouter-3 no-maker-part' \
-        'openrouter-4' 'openrouter' 'openrouter-5 constructor/x' 'openrouter-6 __proto__/x')" \
+        'openrouter-4' 'openrouter' 'openrouter-5 constructor/x' 'openrouter-6 __proto__/x' 'openrouter-7 openai/gpt-6-astra' \
+        'openrouter-8 ~x-ai/grok-latest')" \
         "$(printf '%s\n' openrouter-1=openrouter openrouter-2=openrouter openrouter-3=openrouter openrouter-4=openrouter \
-            openrouter=openrouter openrouter-5=openrouter openrouter-6=openrouter)"
+            openrouter=openrouter openrouter-5=openrouter openrouter-6=openrouter openrouter-7=openrouter openrouter-8=openrouter)"
 }
 
 @test "extension marks: an unknown seat shows no mark" {
     assert_eq "$(marks_for 'mystery deepseek/x' 'openrouter-x deepseek/x' 'openrouterx deepseek/x' 'constructor' \
         '__proto__' 'toString' '')" \
         "$(printf '%s\n' mystery= openrouter-x= openrouterx= constructor= __proto__= toString= =)"
+}
+
+@test "extension marks: OpenAI's and xAI's seats show no mark, having none from a source to cite" {
+    assert_eq "$(marks_for 'openai gpt-5.5' 'codex gpt-5.5' 'grok grok-latest' 'grok-cli grok-4')" \
+        "$(printf '%s\n' openai= codex= grok= grok-cli=)"
 }
 
 @test "extension marks: every mark the mapping can return has a drawing and a colour" {
