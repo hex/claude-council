@@ -85,6 +85,11 @@ setup() {
         '[{"type":"paragraph","runs":[{"style":"text","text":"Compared:"}]},{"type":"table","align":[null,null],"header":[[{"style":"text","text":"name"}],[{"style":"text","text":"cost"}]],"rows":[[[{"style":"text","text":"pg"}],[{"style":"text","text":"low"}]]]},{"type":"paragraph","runs":[{"style":"text","text":"That is all."}]}]'
 }
 
+@test "extension markdown: lines that only look like a table stay text, and a table in a code block stays code" {
+    assert_eq "$(blocks $'a | b\nc | d\n\n| x | y |\n|---|\n| 1 | 2 |\n\n```\n| p | q |\n|---|---|\n```')" \
+        '[{"type":"paragraph","runs":[{"style":"text","text":"a | b\nc | d"}]},{"type":"paragraph","runs":[{"style":"text","text":"| x | y |\n|---|\n| 1 | 2 |"}]},{"type":"code","text":"| p | q |\n|---|---|"}]'
+}
+
 # A seat's answer is untrusted and unbounded, and the panel parses it on the
 # page's one thread: each of these 200 KB shapes, built to make a backtracking
 # reader rescan the rest of the line for every marker, must parse in under
