@@ -651,8 +651,8 @@ started, and the server never answers that call.
 `ui://council/pick`. The answers panel shows the question and "asking the
 council" until the result arrives, then one card per seat: the answer drawn
 from a subset of markdown (headings, paragraphs, lists, fenced code, rules,
-bold, italic and inline code; anything else shows as the lines the model
-wrote), or the error in the error colour. The panel gets at most the first
+pipe tables, bold, italic and inline code; anything else shows as the lines
+the model wrote), or the error in the error colour. The panel gets at most the first
 100000 characters of a seat's answer or error, with `shortenedFrom` giving
 the full length, and the card says it was shortened; the text result always
 carries all of it. A cancelled call says so. No page uses `innerHTML` or
