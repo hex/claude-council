@@ -90,6 +90,11 @@ setup() {
         '[{"type":"paragraph","runs":[{"style":"text","text":"a | b\nc | d"}]},{"type":"paragraph","runs":[{"style":"text","text":"| x | y |\n|---|\n| 1 | 2 |"}]},{"type":"code","text":"| p | q |\n|---|---|"}]'
 }
 
+@test "extension markdown: a pipe inside a code span, or written as \\|, stays in its cell" {
+    assert_eq "$(blocks $'| op | means |\n|---|---|\n| `a || b` | either |\n| `x \\| y` | a \\| b |')" \
+        '[{"type":"table","align":[null,null],"header":[[{"style":"text","text":"op"}],[{"style":"text","text":"means"}]],"rows":[[[{"style":"code","text":"a || b"}],[{"style":"text","text":"either"}]],[[{"style":"code","text":"x | y"}],[{"style":"text","text":"a | b"}]]]}]'
+}
+
 # A seat's answer is untrusted and unbounded, and the panel parses it on the
 # page's one thread: each of these 200 KB shapes, built to make a backtracking
 # reader rescan the rest of the line for every marker, must parse in under

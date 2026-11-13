@@ -39,10 +39,10 @@ function nextPosition(positions) {
   }
 }
 
-// One line of text as styled runs: {style: 'text' | 'strong' | 'em' | 'code', text}.
-// Inline code comes first, so markers inside it stay literal; a run of
-// backticks closes only on a run of the same length.
-function markdownInline(text) {
+// Where each inline code span in `text` closes: a map from the length of a
+// run of backticks to a nextPosition over the runs of that length, since a
+// run closes only on a run of the same length.
+function tickClosers(text) {
   const tickRuns = new Map()
   for (let at = 0; at < text.length;) {
     if (text[at] !== '`') { at++; continue }
@@ -52,7 +52,13 @@ function markdownInline(text) {
     tickRuns.get(end - at).push(at)
     at = end
   }
-  const tickCloser = new Map([...tickRuns].map(([length, starts]) => [length, nextPosition(starts)]))
+  return new Map([...tickRuns].map(([length, starts]) => [length, nextPosition(starts)]))
+}
+
+// One line of text as styled runs: {style: 'text' | 'strong' | 'em' | 'code', text}.
+// Inline code comes first, so markers inside it stay literal.
+function markdownInline(text) {
+  const tickCloser = tickClosers(text)
   const closers = SPANS.map(span => {
     const positions = []
     for (let at = text.indexOf(span.marker); at !== -1; at = text.indexOf(span.marker, at + 1)) {
@@ -90,14 +96,28 @@ function markdownInline(text) {
 }
 
 // A line's table cells, or null when no pipe divides it. The pipes at either
-// end are optional: models write tables both ways.
+// end are optional: models write tables both ways. A pipe written as \| or
+// inside a code span stays in its cell, where models mean it as text.
 function tableCells(line) {
   const text = line.trim()
   if (!text.includes('|')) return null
-  const cells = text.split('|')
-  if (text.startsWith('|')) cells.shift()
-  if (text.endsWith('|')) cells.pop()
-  return cells.map(cell => cell.trim())
+  const tickCloser = tickClosers(text)
+  const dividers = []
+  for (let at = 0; at < text.length; at++) {
+    if (text[at] === '\\') at++
+    else if (text[at] === '|') dividers.push(at)
+    else if (text[at] === '`') {
+      let end = at
+      while (text[end] === '`') end++
+      const close = tickCloser.get(end - at)(end)
+      at = (close === -1 ? end : close + end - at) - 1
+    }
+  }
+  if (dividers.length === 0) return null
+  const cells = [...dividers, text.length].map((divider, at) => text.slice(at === 0 ? 0 : dividers[at - 1] + 1, divider))
+  if (dividers[0] === 0) cells.shift()
+  if (dividers[dividers.length - 1] === text.length - 1) cells.pop()
+  return cells.map(cell => cell.trim().replaceAll('\\|', '|'))
 }
 
 // The answer as blocks: heading {level, runs}, paragraph {runs}, list
