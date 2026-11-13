@@ -652,13 +652,17 @@ runs the same scripts the plugin does.
   with `panel-style.css` (colour tokens, card layout, switches),
   `panel-host.js` (the `postMessage` connection, the host's capabilities,
   theme and size reports), `panel-page.js` (element building and the status
-  line) and, for the two pages that show answers, `markdown.js`,
-  `seat-cards.js` and `seat-cards.css`, which draw a `council_ask` result as
-  one card per seat. The pages have no network access: the settings panel
+  line), for the settings panel and the picker, `model-list.js` and
+  `model-list.css` (a provider's models under a filter box) and, for the two
+  pages that show answers, `markdown.js`, `seat-cards.js` and
+  `seat-cards.css`, which draw a `council_ask` result as one card per seat. The pages have no network access: the settings panel
   loads and saves through two app-only tools, the answers panel draws the
   `structuredContent` of the `council_ask` result Desktop hands it, and the
   picker runs its question through the app-only `council_pick_ask`, whose
-  function is `council_ask`'s own. The `visibility: ["app"]` hint on those
+  function is `council_ask`'s own. The picker's model buttons load and save
+  through the settings panel's two tools; a save from the picker names one
+  seat, and the server changes that seat in the choices as saved at that
+  moment, so the page never sends, and cannot drop, the rest. The `visibility: ["app"]` hint on those
   tools is the host's to enforce: the server cannot tell a call from a panel
   from one by the model, so each validates every value as if the model had
   sent it.

@@ -93,7 +93,12 @@ a panel with the question, a switch per seat and the three verbosities. Press
 Ask: the answers appear in that panel, and the panel asks Claude for the
 synthesis. A line under the answers in small type names how it reached Claude
 (`handoff: context, message`, for example). When Desktop refuses both ways,
-the panel says to ask Claude to summarise the answers. Claude passes your
+the panel says to ask Claude to summarise the answers. On an API seat or an
+OpenRouter seat the model in grey is a button: click it to pick another model
+from that provider's live list (OpenRouter's has a filter box). The choice
+saves at once, as the settings panel's would, and applies to this question
+and the ones after it. An OpenRouter seat changes only its own model; adding
+or removing OpenRouter seats stays in the settings panel. Claude passes your
 question as you asked it, adding context only when it depends on earlier
 messages the council cannot see.
 
