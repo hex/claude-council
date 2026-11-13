@@ -9,3 +9,4 @@ extension.bats
 extension-build.bats
 extension-markdown.bats
 extension-models.bats
+extension-marks.bats

@@ -78,8 +78,9 @@ council's bash scripts.
 5. Ask Claude to put a question to the council. Desktop asks you to approve
    the tool call, and that approval is the only check before the question
    leaves your machine. A panel under the tool call shows each seat's answer,
-   or its error, in a card of its own, and Claude writes the synthesis below
-   it. Desktop waits for the whole run, from seconds to a few minutes.
+   or its error, in a card of its own headed by the seat's name and its
+   vendor's logo, and Claude writes the synthesis below it. Desktop waits for
+   the whole run, from seconds to a few minutes.
 
 Choosing the seats and the verbosity before a question is a trial, in two
 forms, and only one stays after it. Say "ask the council: which queue should

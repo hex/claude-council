@@ -673,6 +673,51 @@ runs the same scripts the plugin does.
   into plain data (blocks of styled runs). The page builds every DOM node from
   that data with `textContent`, so a model's answer can never become markup.
   `tests/extension-markdown.bats` runs it in node.
+- `server/marks.js` holds the vendor marks the three panels draw, 16 pixels
+  square, beside a seat's name: the picker's rows and waiting cards, the
+  answer cards, and the settings cards. `seatMark` maps a seat name and its
+  model id to a mark. A CLI seat shares its vendor's mark, and an OpenRouter
+  seat shows the mark of its model's maker, the part of the id before the
+  slash with any leading `~` dropped, or OpenRouter's own when the maker has
+  none here. A seat with no mark gets an empty box of the same size, so the
+  names stay in line. The page builds each mark with `createElementNS` from
+  the path data in this file; `tests/extension-marks.bats` runs the mapping in
+  node.
+
+#### Vendor marks
+
+The marks are their owners' trademarks, shown only to identify the service or
+model a seat runs. The path data and colours come unmodified from
+[simple-icons](https://simpleicons.org) 16.37.0, whose data is CC0-1.0
+(`https://unpkg.com/simple-icons@16.37.0/icons/<slug>.svg`); the colour is
+simple-icons' hex value, not checked against each vendor's own page. A black
+mark (simple-icons' `000000`, or Anthropic's `191919`) takes the text
+colour, so it stays visible in the dark theme.
+
+| Mark (`<slug>`) | Shown for | Colour | Source simple-icons cites | Usage terms |
+|---|---|---|---|---|
+| Google Gemini (`googlegemini`) | `gemini`, `antigravity` | `#8E75B2` | https://gemini.google.com | CC0-1.0 data |
+| Perplexity (`perplexity`) | `perplexity`, maker `perplexity/` | `#1FB8CD` | https://www.perplexity.ai | CC0-1.0 data |
+| Kimi (`kimi`) | `kimi`, `kimi-cli` | text colour | https://moonshotai.github.io/Branding-Guide | https://moonshotai.github.io/Branding-Guide |
+| Moonshot AI (`moonshotai`) | maker `moonshotai/` | text colour | https://www.moonshot.cn | CC0-1.0 data |
+| Cursor (`cursor`) | `cursor-cli` | text colour | https://cursor.com/brand | CC0-1.0 data |
+| GitHub Copilot (`githubcopilot`) | `copilot-cli` | text colour | https://primer.style/foundations/icons/copilot-24 | MIT (GitHub Primer), not CC0 |
+| OpenCode (`opencode`) | `opencode` | text colour | https://github.com/anomalyco/opencode/blob/1251a870cb384543c150c4a72fb101b55eec971b/packages/identity/mark.svg | CC0-1.0 data |
+| Claude (`claude`) | `claude-cli` | `#D97757` | https://claude.ai | CC0-1.0 data |
+| Anthropic (`anthropic`) | maker `anthropic/` | text colour | https://www.anthropic.com | CC0-1.0 data |
+| Ollama (`ollama`) | `ollama` | text colour | https://github.com/ollama/ollama/issues/2152#issuecomment-1905286922 | CC0-1.0 data |
+| OpenRouter (`openrouter`) | `openrouter-N` and `openrouter` with any other maker | `#94A3B8` | https://openrouter.ai | CC0-1.0 data |
+| DeepSeek (`deepseek`) | maker `deepseek/` | `#5786FE` | https://www.deepseek.com | CC0-1.0 data |
+| Meta (`meta`) | makers `meta/`, `meta-llama/` | `#0467DF` | https://www.meta.com | https://www.facebook.com/brand/resources/meta/company-brand |
+| Google (`google`) | maker `google/` | `#4285F4` | https://partnermarketinghub.withgoogle.com | https://about.google/brand-resource-center/brand-elements/ |
+| Mistral AI (`mistralai`) | maker `mistralai/` | `#FA520F` | https://chat.mistral.ai | CC0-1.0 data |
+| QWen (`qwen`) | maker `qwen/` | `#6950EF` | https://qwen.ai | CC0-1.0 data |
+
+`openai`, `codex`, `grok` and `grok-cli`, and OpenRouter models made by
+`openai/` or `x-ai/`, show no mark: simple-icons carries no OpenAI or xAI mark,
+and both vendors' brand pages answer a script with HTTP 403, so none came
+from a source this file can cite. OpenRouter seats with those makers show OpenRouter's
+mark.
 
 Packed, the scripts sit under `plugin/` beside `server/`; in a checkout the
 server finds them one directory up. `extension/build.sh` builds the package.

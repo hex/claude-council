@@ -658,6 +658,15 @@ the full length, and the card says it was shortened; the text result always
 carries all of it. A cancelled call says so. No page uses `innerHTML` or
 loads anything from the network.
 
+Beside each seat's name, in the picker, the answer cards and the settings
+cards, sits its vendor's mark in the vendor's colour, 16 pixels square. A
+CLI seat shares its vendor's mark. An OpenRouter seat shows the mark of its
+model's maker, read from the id before the slash with any leading `~`
+dropped (`~deepseek/deepseek-pro-latest` shows DeepSeek), or OpenRouter's
+mark when the maker has none. `openai`, `codex`, `grok` and `grok-cli` show
+no mark, and an empty box of the same size keeps their names in line.
+`docs/ARCHITECTURE.md` lists every mark, its source and its terms.
+
 The picker panel (a trial) shows the question, a switch per seat, all on, the
 verbosities with standard chosen, and an Ask button, disabled with every seat
 off. Ask calls `council_pick_ask` through Desktop with the seats left on, and
