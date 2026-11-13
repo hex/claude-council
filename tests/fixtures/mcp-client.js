@@ -8,6 +8,9 @@
 // it provokes (a parse error) still lands in order. After the last line the
 // server's input is closed, and the server must then exit on its own within
 // CLIENT_EXIT_WAIT_MS, or this exits 124.
+// A line may name a value from an earlier reply as {{<id>.<path>}}, such as
+// {{2.result.resources.0.uri}}, for a value the server makes up at run time
+// (a panel address, a run id); it is written in as a JSON string's content.
 // CLIENT_CONCURRENT=1 writes every line at once and then waits for all the
 // replies. CLIENT_CLOSE_WHEN=<path> writes every line at once and closes the
 // input as soon as that file exists, without waiting for any reply.
@@ -25,13 +28,14 @@ const replies = new Map()
 const waiting = new Map()
 readline.createInterface({ input: server.stdout }).on('line', line => {
   process.stdout.write(`${line}\n`)
-  let id
+  let parsed
   try {
-    id = JSON.parse(line).id
+    parsed = JSON.parse(line)
   } catch {
     return
   }
-  replies.set(id, true)
+  const id = parsed.id
+  replies.set(id, parsed)
   waiting.get(id)?.()
 })
 
@@ -40,6 +44,15 @@ function replyTo(id) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`no reply to request ${id} within ${REPLY_WAIT_MS} ms`)), REPLY_WAIT_MS)
     waiting.set(id, () => { clearTimeout(timer); waiting.delete(id); resolve() })
+  })
+}
+
+function filledIn(line) {
+  return line.replace(/\{\{([0-9]+)((?:\.[A-Za-z0-9_]+)+)\}\}/g, (named, id, path) => {
+    if (!replies.has(Number(id))) throw new Error(`${named} names request ${id}, which has had no reply`)
+    const value = path.slice(1).split('.').reduce((at, step) => at?.[step], replies.get(Number(id)))
+    if (typeof value !== 'string') throw new Error(`${named} is ${JSON.stringify(value)}, not a string`)
+    return JSON.stringify(value).slice(1, -1)
   })
 }
 
@@ -76,7 +89,7 @@ async function send() {
     return
   }
   for (const line of lines) {
-    server.stdin.write(`${line}\n`)
+    server.stdin.write(`${filledIn(line)}\n`)
     const id = idOf(line)
     if (id === undefined) await new Promise(resolve => setTimeout(resolve, 300))
     else await replyTo(id)

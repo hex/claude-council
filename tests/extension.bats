@@ -25,6 +25,9 @@
 #   - resources/read: the three panels (settings, answers, picker) with mimeType text/html;profile=mcp-app, the
 #     shared parts inlined (the vendor marks in all three, the model list in settings and picker); an unknown
 #     uri is an error naming it
+#   - a panel's address: carries the first 12 hex digits of the sha256 of the page as served, the same in
+#     tools/list, resources/list and resources/read, so a changed page is never shown from Desktop's cache;
+#     the address without the hash is not found
 #   - council_ask's description: where the app draws the answers panel it asks for the synthesis
 #     without repeating the answers, elsewhere it asks for the answers to be shown first
 #   - council_ask's description and question field: the user's question as they asked it, never
@@ -91,7 +94,24 @@
 #     argument are refused as council_ask refuses them
 #   - council_pick_ask, the tool the panel's Ask button calls: the same replies as council_ask for
 #     every refusal and for an answer, a key in a seat's error removed, a cancel stopping its run
-#   - the panel's handoff to Claude (context, message) runs only in a host; bats cannot reach it
+#   - council_pick's description and text: when the user asks for the synthesis of a council run,
+#     call council_result; never a claim that the answers cannot be seen
+#   - council_pick gives the panel how long to wait for council_pick_ask: the run's limit plus the
+#     lookup and formatting limits, so a call the host never answers cannot hold the panel for good
+#  council_result, the picker's answers handed to the model
+#   - a council_pick_ask run where a seat answered: a run id (6 hex digits, random, so an id from before
+#     a restart never names a later run) comes back in structuredContent beside the answers
+#   - council_result with that id: council_ask's text for the same question, verbatim, not an error,
+#     with no structuredContent and no panel
+#   - council_result with no id: the latest run; with an unknown or malformed id: a sentence saying it
+#     is not held and to ask the council again; before any run (as after a restart): the same sentence
+#   - more than 5 runs: the oldest is forgotten, the rest kept
+#   - a run where every seat failed, a refused run and a cancelled run: no id, nothing stored, the
+#     latest run stays the one before
+#   - a key quoted in a stored run's seat error: removed in council_result's text
+#   - council_result with an argument it does not take, or a run that is not a string: refused
+#   - the panel's handoff (one ui/message with no seat output, a line saying to press Enter, the
+#     fallback line when the host refuses it) runs only in a host; bats cannot reach it
 # Model-list parsing is in extension-models.bats, the package build in extension-build.bats.
 
 load test_helper
@@ -235,23 +255,23 @@ save_choices() {
 
 @test "extension: tools/list hides the three panel tools from the model and ties each panel to its tool" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-    assert_eq "$(reply 1 | jq -c '[.result.tools[] | {name, ui: ._meta.ui}]')" \
-        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers"}},{"name":"council_seats","ui":null},{"name":"council_pick","ui":{"resourceUri":"ui://council/pick"}},{"name":"council_pick_ask","ui":{"visibility":["app"]}},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
+    # Each address's hash is checked against its page in a test of its own.
+    assert_eq "$(reply 1 | jq -c '[.result.tools[] | {name, ui: ._meta.ui} | if .ui.resourceUri then .ui.resourceUri |= sub("/[0-9a-f]{12}$"; "/<hash>") end]')" \
+        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers/<hash>"}},{"name":"council_seats","ui":null},{"name":"council_pick","ui":{"resourceUri":"ui://council/pick/<hash>"}},{"name":"council_pick_ask","ui":{"visibility":["app"]}},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings/<hash>"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
 }
 
 @test "extension: the three panels are served as MCP App pages, the shared parts inlined" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"resources/list"}' \
-        '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"ui://council/settings"}}' \
-        '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://council/answers"}}' \
-        '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"ui://council/pick"}}'
-    assert_eq "$(reply 1 | jq -c '.result.resources')" \
-        '[{"uri":"ui://council/settings","name":"Council models","mimeType":"text/html;profile=mcp-app"},{"uri":"ui://council/answers","name":"Council answers","mimeType":"text/html;profile=mcp-app"},{"uri":"ui://council/pick","name":"Council picker","mimeType":"text/html;profile=mcp-app"}]'
-    assert_eq "$(reply 4 | jq -c '.result.contents[0] | {uri, mimeType}')" \
-        '{"uri":"ui://council/pick","mimeType":"text/html;profile=mcp-app"}'
-    assert_eq "$(reply 2 | jq -c '.result.contents[0] | {uri, mimeType}')" \
-        '{"uri":"ui://council/settings","mimeType":"text/html;profile=mcp-app"}'
-    assert_eq "$(reply 3 | jq -c '.result.contents[0] | {uri, mimeType}')" \
-        '{"uri":"ui://council/answers","mimeType":"text/html;profile=mcp-app"}'
+        '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"{{1.result.resources.0.uri}}"}}' \
+        '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"{{1.result.resources.1.uri}}"}}' \
+        '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"{{1.result.resources.2.uri}}"}}'
+    # Each address's hash is checked against its page in a test of its own.
+    assert_eq "$(reply 1 | jq -c '[.result.resources[] | .uri |= sub("/[0-9a-f]{12}$"; "/<hash>")]')" \
+        '[{"uri":"ui://council/settings/<hash>","name":"Council models","mimeType":"text/html;profile=mcp-app"},{"uri":"ui://council/answers/<hash>","name":"Council answers","mimeType":"text/html;profile=mcp-app"},{"uri":"ui://council/pick/<hash>","name":"Council picker","mimeType":"text/html;profile=mcp-app"}]'
+    local at
+    for at in 0 1 2; do
+        assert_eq "$(reply $((at + 2)) | jq -r '.result.contents[0].mimeType')" 'text/html;profile=mcp-app'
+    done
     local settings answers part
     settings=$(reply 2 | jq -r '.result.contents[0].text')
     answers=$(reply 3 | jq -r '.result.contents[0].text')
@@ -301,6 +321,26 @@ save_choices() {
     [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .description')" == *"$sentence"* ]]
     assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .inputSchema.properties.providers.description')" \
         'Seat names as council_seats lists them, such as codex or openrouter-2. Leave out to ask every seat.'
+}
+
+@test "extension: each panel's address carries the hash of its page as served, the same wherever it is named" {
+    mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' '{"jsonrpc":"2.0","id":2,"method":"resources/list"}' \
+        '{"jsonrpc":"2.0","id":10,"method":"resources/read","params":{"uri":"{{2.result.resources.0.uri}}"}}' \
+        '{"jsonrpc":"2.0","id":11,"method":"resources/read","params":{"uri":"{{2.result.resources.1.uri}}"}}' \
+        '{"jsonrpc":"2.0","id":12,"method":"resources/read","params":{"uri":"{{2.result.resources.2.uri}}"}}' \
+        '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://council/pick"}}'
+    source "${LIB_DIR}/hash.sh"
+    local at uri page
+    for at in 0 1 2; do
+        uri=$(reply 2 | jq -r --argjson at "$at" '.result.resources[$at].uri')
+        page=$(echo settings answers pick | cut -d' ' -f$((at + 1)))
+        [[ "$uri" =~ ^ui://council/${page}/[0-9a-f]{12}$ ]]
+        assert_eq "$(reply $((at + 10)) | jq -r '.result.contents[0].uri')" "$uri"
+        assert_eq "ui://council/${page}/$(reply $((at + 10)) | jq -j '.result.contents[0].text' | sha256_hex | cut -c1-12)" "$uri"
+    done
+    assert_eq "$(reply 1 | jq -c '[.result.tools[] | ._meta.ui.resourceUri | values]')" \
+        "$(reply 2 | jq -c '[.result.resources[1].uri, .result.resources[2].uri, .result.resources[0].uri]')"
+    assert_eq "$(reply 3)" '{"jsonrpc":"2.0","id":3,"error":{"code":-32002,"message":"resource not found: ui://council/pick"}}'
 }
 
 @test "extension: an unknown resource uri is an error naming it" {
@@ -771,12 +811,14 @@ In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configur
     # panel pages, none of which a key may change.
     local requests=("$INIT" '{"jsonrpc":"2.0","id":1,"method":"ping"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
         '{"jsonrpc":"2.0","id":3,"method":"resources/list"}'
-        '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"ui://council/settings"}}'
-        '{"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"ui://council/answers"}}'
+        '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"{{3.result.resources.0.uri}}"}}'
+        '{"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"{{3.result.resources.1.uri}}"}}'
         '{"jsonrpc":"2.0","id":6,"method":"sampling/fly"}' "$(call 7 council_fly)")
     mcp "${requests[@]}"
     local keyless="$output"
     [[ "$keyless" == *'"jsonrpc":"2.0"'*'council_settings'*'text/html;profile=mcp-app'* ]]
+    [[ "$(reply 4 | jq -r '.result.contents[0].text')" == '<!doctype html>'* ]]
+    [[ "$(reply 5 | jq -r '.result.contents[0].text')" == '<!doctype html>'* ]]
     OPENAI_API_KEY=2.0 GEMINI_API_KEY=x KIMI_API_KEY=council_settings OPENROUTER_API_KEY=text/html mcp "${requests[@]}"
     [ "$status" -eq 0 ]
     assert_eq "$output" "$keyless"

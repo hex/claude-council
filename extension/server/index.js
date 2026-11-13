@@ -1,6 +1,7 @@
 // ABOUTME: Claude Desktop extension server: the council as MCP tools over stdio, plus its two panels
 // ABOUTME: Tool results, errors and logs pass one chokepoint that removes the user's API keys from them
 'use strict'
+const crypto = require('node:crypto')
 const fs = require('node:fs')
 const path = require('node:path')
 const council = require('./council.js')
@@ -18,11 +19,16 @@ function panelPage(file) {
     (line, included) => fs.readFileSync(path.join(__dirname, included), 'utf8').trimEnd())
 }
 
-const PANELS = [
-  { uri: 'ui://council/settings', name: 'Council models', text: panelPage('settings.html') },
-  { uri: 'ui://council/answers', name: 'Council answers', text: panelPage('answers.html') },
-  { uri: 'ui://council/pick', name: 'Council picker', text: panelPage('pick.html') },
-]
+// A panel as served, at an address that ends in a hash of its page. Desktop
+// keeps a page by its address across an extension upgrade, so a page that
+// changes must change its address too, or the old page is shown.
+function panel(page, name) {
+  const text = panelPage(`${page}.html`)
+  const hash = crypto.createHash('sha256').update(text).digest('hex').slice(0, 12)
+  return { uri: `ui://council/${page}/${hash}`, name, text }
+}
+
+const PANELS = [panel('settings', 'Council models'), panel('answers', 'Council answers'), panel('pick', 'Council picker')]
 const [SETTINGS_PANEL, ANSWERS_PANEL, PICK_PANEL] = PANELS
 
 const { keys, tooShort } = council.readKeys(process.env)
