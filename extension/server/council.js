@@ -648,8 +648,13 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   // before it looks for the outcome a last time, so a waiter counted here
   // always finds it.
   function endPick(pick, text) {
-    writePrivate(path.join(pick.dir, 'outcome.txt'), text)
-    fs.rmSync(path.join(pick.dir, 'asking'), { force: true })
+    // `asking` goes even when the outcome cannot be written, so a waiter
+    // stops at once rather than at its deadline.
+    try {
+      writePrivate(path.join(pick.dir, 'outcome.txt'), text)
+    } finally {
+      fs.rmSync(path.join(pick.dir, 'asking'), { force: true })
+    }
     const now = Date.now()
     return fs.readdirSync(pick.dir).filter(name => name.startsWith('waiting-')).some(name => {
       try {
@@ -669,6 +674,16 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     const held = heldRuns(dir)
     writePrivate(path.join(dir, `${String(Date.now()).padStart(15, '0')}-${run}.txt`), redact(text))
     for (const [old] of held.slice(0, Math.max(0, held.length + 1 - RUNS_KEPT))) fs.rmSync(path.join(dir, old), { force: true })
+  }
+
+  // Ends a claimed picker whose run threw, with the error. Should ending it
+  // fail too, the two errors are thrown together, so neither hides the other.
+  function endFailedPick(pick, err) {
+    try {
+      endPick(pick, `Council run ${pick.run} from the picker failed: ${redact(String(err?.message ?? err))}`)
+    } catch (ending) {
+      throw new Error(`${err?.message ?? err}; and the picker's run could not be ended: ${ending?.message ?? ending}`)
+    }
   }
 
   // What Claude reads last after a picker run's answers, in the turn that
@@ -695,17 +710,18 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     const question = isObject ? Object.fromEntries(Object.entries(input).filter(([name]) => name !== 'run')) : input
     const pick = wanted === undefined ? undefined : claimPick(wanted)
     let outcome
+    let run
     try {
       outcome = await ask(question, signal)
+      // A cancelled run comes back as an error too, so it is never held.
+      const answered = !outcome.isError && outcome.structured.seats.some(seat => seat.error === undefined)
+      run = answered ? (pick?.run ?? freshRun()) : undefined
+      if (answered) holdRun(run, outcome.text)
     } catch (err) {
-      if (pick) endPick(pick, `Council run ${pick.run} from the picker failed: ${redact(String(err?.message ?? err))}`)
+      if (pick) endFailedPick(pick, err)
       throw err
     }
-    // A cancelled run comes back as an error too, so it is never held.
-    const answered = !outcome.isError && outcome.structured.seats.some(seat => seat.error === undefined)
-    const run = answered ? (pick?.run ?? freshRun()) : undefined
-    if (answered) holdRun(run, outcome.text)
-    const awaited = pick === undefined ? false : endPick(pick, answered
+    const awaited = pick === undefined ? false : endPick(pick, run !== undefined
       ? `${redact(outcome.text)}\n\n---\n${synthesisRequest(outcome.structured.seats)}`
       : `Council run ${pick.run} from the picker ended with no answer. Tell the user what failed.\n\n${redact(outcome.text)}`)
     if (!outcome.structured) return outcome
@@ -758,8 +774,11 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     if (text !== undefined) return { text }
     if (signal.aborted) return refused('The wait for the council run was cancelled.')
     const minutes = duration(answerWithinMs())
-    if (has(pick, 'asking')) return { text: `The council is still answering run ${pick.run} after ${minutes}. When it is done, the picker drafts a message asking for its synthesis; call council_result with run ${pick.run} then.` }
-    return { text: `The user has not pressed Ask in the council picker within ${minutes} of it opening. When they do, the picker drafts a message asking for the synthesis of run ${pick.run}; call council_result with that run then.` }
+    if (has(pick, 'open')) return { text: `The user has not pressed Ask in the council picker within ${minutes} of it opening. When they do, the picker drafts a message asking for the synthesis of run ${pick.run}; call council_result with that run then.` }
+    // Pressed, with no outcome yet: whether the run goes on or the copy of
+    // the server running it is gone cannot be told from here.
+    if (has(pick, 'asking')) return { text: `The user pressed Ask in the council picker, but run ${pick.run} had no outcome ${minutes} after the picker opened. If the picker shows its answers later, it drafts a message asking for their synthesis; call council_result with run ${pick.run} then.` }
+    return { text: `The user pressed Ask in the council picker, but run ${pick.run} ended without its outcome being written, so this call cannot give you its answers. The picker shows what happened; tell the user so.` }
   }
 
   // A picker run's text, by its id or the latest held when none is given. A
