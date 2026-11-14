@@ -791,7 +791,9 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     // Pressed, with no outcome yet: whether the run goes on or the copy of
     // the server running it is gone cannot be told from here.
     if (has(pick, 'asking')) return { text: `The user pressed Ask in the council picker, but run ${pick.run} had no outcome ${minutes} after the picker opened. If the picker shows its answers later, it drafts a message asking for their synthesis; call council_result with run ${pick.run} then.` }
-    return { text: `The user pressed Ask in the council picker, but run ${pick.run} ended without its outcome being written, so this call cannot give you its answers. The picker shows what happened; tell the user so.` }
+    // Read again: an ask that ended since the last look wrote its outcome
+    // before it removed `asking`.
+    return { text: outcomeOf(pick) ?? `The user pressed Ask in the council picker, but run ${pick.run} ended without its outcome being written, so this call cannot give you its answers. The picker shows what happened; tell the user so.` }
   }
 
   // A picker run's text, by its id or the latest held when none is given. A
