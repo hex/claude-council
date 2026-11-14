@@ -124,6 +124,7 @@
 #     and the seats asked, and that ask's result says it was awaited
 #   - every seat failing, a refused run: the waiter ends with what failed
 #   - the wait running out: a sentence saying the user has not pressed Ask, and no marker left
+#   - a waiting council_result cancelled: its marker removed at once, and never answered
 #   - a waiter that died: its marker goes stale and no ask counts it as waiting
 #   - council_result for an id council_pick never made, or with no id while a picker is open:
 #     answered at once (with no id, the latest held run), never waited on
@@ -676,12 +677,13 @@ stubborn_seat() {
     export PATH="${dir}:$PATH"
 }
 
-# Runs one server session: writes the request lines, waits for the file $1 to
-# appear, then does $2 to the server: "cancel <id>" sends notifications/cancelled
+# Runs one server session: writes the request lines, waits for a file matching
+# the glob $1 to appear, then does $2 to the server: "cancel <id>" sends notifications/cancelled
 # for that request and a ping with id 99, then holds the input open for
 # DRIVE_HOLD_MS so a reply the server should not send has time to arrive,
-# and just before closing it writes to $DRIVE_SEEN whether a process matching
-# DRIVE_WATCH (a pgrep -f pattern) was still running; "signal <NAME>" sends the server that signal. Leaves the server's stdout in
+# and just before closing it writes to $DRIVE_SEEN "there" or "gone": whether a process matching
+# DRIVE_WATCH (a pgrep -f pattern) was still running, or with DRIVE_FILES set,
+# whether a file matching that glob was still there; "signal <NAME>" sends the server that signal. Leaves the server's stdout in
 # $output and its exit code in $status, 128 plus the signal's number for a
 # signal it died of.
 drive() {
@@ -699,20 +701,22 @@ drive() {
         readline.createInterface({ input: child.stdout }).on("line", line => process.stdout.write(`${line}\n`))
         for (const line of fs.readFileSync(requests, "utf8").split("\n").filter(Boolean)) child.stdin.write(`${line}\n`)
         const limit = setTimeout(() => {
-          process.stderr.write(`no exit within 30 s; ${when} ${fs.existsSync(when) ? "appeared" : "never appeared"}\n`)
+          process.stderr.write(`no exit within 30 s; ${when} ${fs.globSync(when).length > 0 ? "appeared" : "never appeared"}\n`)
           child.kill("SIGKILL")
           process.exit(124)
         }, 30000)
         const poll = setInterval(() => {
-          if (!fs.existsSync(when)) return
+          if (fs.globSync(when).length === 0) return
           clearInterval(poll)
           const [verb, argument] = action.split(" ")
           if (verb === "signal") return child.kill(argument)
           child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: Number(argument) } })}\n`)
           child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 99, method: "ping" })}\n`)
           setTimeout(() => {
-            const watched = require("node:child_process").spawnSync("pgrep", ["-f", process.env.DRIVE_WATCH])
-            fs.writeFileSync(process.env.DRIVE_SEEN, watched.status === 0 ? "running" : "gone")
+            const there = process.env.DRIVE_FILES !== undefined
+              ? fs.globSync(process.env.DRIVE_FILES).length > 0
+              : require("node:child_process").spawnSync("pgrep", ["-f", process.env.DRIVE_WATCH]).status === 0
+            fs.writeFileSync(process.env.DRIVE_SEEN, there ? "there" : "gone")
             child.stdin.end()
           }, Number(process.env.DRIVE_HOLD_MS))
         }, 50)
@@ -1478,4 +1482,18 @@ ${asked}"
     [ "$status" -eq 0 ]
     assert_eq "$(result_error 3)" false
     assert_eq "$(result_text 3)" "$(result_text 1)"
+}
+
+@test "extension: a cancelled council_result waiting for a picker run removes its marker at once and is never answered" {
+    mcp "$INIT" "$(call 1 council_pick '{"question":"q"}')"
+    local picked
+    picked=$(result_seats 1 | jq -r '.run')
+    DRIVE_HOLD_MS=1000 DRIVE_FILES="${STATE_DIR}/picks/*/waiting-*" drive "${STATE_DIR}/picks/*-${picked}/waiting-*" "cancel 2" "$INIT" \
+        "$(call 2 council_result "{\"run\":\"${picked}\"}")"
+    [ "$status" -eq 0 ]
+    assert_eq "$(reply 2)" ''
+    assert_eq "$(reply 99)" '{"jsonrpc":"2.0","id":99,"result":{}}'
+    # Seen while the server was still serving, so the cancel removed it, not
+    # the server's exit.
+    assert_eq "$(cat "$DRIVE_SEEN")" gone
 }
