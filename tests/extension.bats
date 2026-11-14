@@ -125,7 +125,7 @@
 #   - every seat failing, a refused run: the waiter ends with what failed
 #   - the wait running out: a sentence saying the user has not pressed Ask, and no marker left
 #   - a waiting council_result cancelled: its marker removed at once, and never answered
-#   - a waiter that died: its marker goes stale and no ask counts it as waiting
+#   - a waiter that died: its marker, untouched for just over 2 seconds, is not counted as waiting
 #   - council_result for an id council_pick never made, or with no id while a picker is open:
 #     answered at once (with no id, the latest held run), never waited on
 #   - the panel's handoff (the picked run sent with each Ask until the server answers one; "Claude is writing the
@@ -167,6 +167,8 @@ teardown() {
     rm -rf "$TEST_CACHE_DIR"
     # A waiting session start_waiter left: its server exits when its input closes.
     if [[ -n "${WAITER_PID:-}" ]]; then kill "$WAITER_PID" 2>/dev/null || true; fi
+    # The dead-waiter test's process keeping a marker old.
+    if [[ -n "${AGER_PID:-}" ]]; then kill "$AGER_PID" 2>/dev/null || true; fi
     # The shutdown test's hung seat, should the server have failed to stop it.
     # SIGKILL, since some of them ignore SIGTERM.
     pkill -9 -f 'sleep 97.3[1-7]' || true
@@ -1461,16 +1463,37 @@ ${asked}"
     [ ! -e "$COUNCIL_FAKE_SENT_MODELS" ]
 }
 
-@test "extension: the marker of a waiter that died goes stale, and a picker ask then says nobody was waiting" {
+@test "extension: a waiter's marker untouched for just over 2 seconds is a dead waiter's, and a picker ask then says nobody was waiting" {
     install_fake_curl answer
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
     mcp "$INIT" "$(call 1 council_pick '{"question":"q"}')"
     local picked
     picked=$(result_seats 1 | jq -r '.run')
-    local marker
+    local marker ready="${BATS_TEST_TMPDIR}/aged" tick
     marker="$(compgen -G "${STATE_DIR}/picks/*-${picked}")/waiting-1-abcdef"
-    touch -t "$(date -v-1M +%Y%m%d%H%M.%S 2> /dev/null || date -d '1 minute ago' +%Y%m%d%H%M.%S)" "$marker"
+    : > "$marker"
+    # Keeps the marker 2.3 seconds old for as long as the ask runs, just past
+    # the 2 seconds after which a waiter counts as gone. Its life is bounded,
+    # should the test fail before it is stopped.
+    "$NODE" -e '
+        const fs = require("node:fs")
+        const [marker, ready] = process.argv.slice(1)
+        const age = () => { const at = (Date.now() - 2300) / 1000; fs.utimesSync(marker, at, at) }
+        age()
+        fs.writeFileSync(ready, "")
+        setInterval(age, 50)
+        setTimeout(() => process.exit(0), 60000)
+    ' "$marker" "$ready" 3>&- &
+    AGER_PID=$!
+    for tick in $(seq 1 100); do
+        [ -e "$ready" ] && break
+        sleep 0.1
+    done
+    [ -e "$ready" ]
     mcp "$INIT" "$(call 1 council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"${picked}\"}")"
+    kill "$AGER_PID"
+    wait "$AGER_PID" || true
+    AGER_PID=''
     assert_eq "$(result_seats 1 | jq -c '{run, awaited}')" "{\"run\":\"${picked}\",\"awaited\":false}"
 }
 
