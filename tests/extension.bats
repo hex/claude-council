@@ -1453,3 +1453,16 @@ ${asked}"
     [ ! -e "$STATE_DIR" ]
     [ ! -e "$COUNCIL_FAKE_SENT_MODELS" ]
 }
+
+@test "extension: the marker of a waiter that died goes stale, and a picker ask then says nobody was waiting" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_pick '{"question":"q"}')"
+    local picked
+    picked=$(result_seats 1 | jq -r '.run')
+    local marker
+    marker="$(compgen -G "${STATE_DIR}/picks/*-${picked}")/waiting-1-abcdef"
+    touch -t "$(date -v-1M +%Y%m%d%H%M.%S 2> /dev/null || date -d '1 minute ago' +%Y%m%d%H%M.%S)" "$marker"
+    mcp "$INIT" "$(call 1 council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"${picked}\"}")"
+    assert_eq "$(result_seats 1 | jq -c '{run, awaited}')" "{\"run\":\"${picked}\",\"awaited\":false}"
+}
