@@ -717,7 +717,9 @@ and ollama show their model as text. Ask calls `council_pick_ask` through
 Desktop with the seats left on, and the panel draws the answers as the answers panel does.
 It waits for the call at most `answerWithinMs`; a call Desktop never answers,
 such as a cancelled one, then ends in a line saying no answer came back, and
-Ask works again. The first Ask sends the picker's run id, later ones none.
+Ask works again. Each Ask sends the picker's run id until the server has
+answered one, since a call Desktop refused or let time out may never have
+reached it; later ones send none.
 When the call answers `awaited`, the panel shows "Claude is writing the
 synthesis." under the answers (or, when no seat answered, that Claude has
 the errors) and sends no message. Otherwise, when the run has an id, the

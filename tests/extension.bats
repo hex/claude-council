@@ -127,7 +127,7 @@
 #   - a waiter that died: its marker goes stale and no ask counts it as waiting
 #   - council_result for an id council_pick never made, or with no id while a picker is open:
 #     answered at once (with no id, the latest held run), never waited on
-#   - the panel's handoff (the picked run sent with the first Ask only; "Claude is writing the
+#   - the panel's handoff (the picked run sent with each Ask until the server answers one; "Claude is writing the
 #     synthesis" and no message when the ask was awaited; else one ui/message with no seat output,
 #     a line saying to press Enter, the fallback line when the host refuses it) runs only in a
 #     host; bats cannot reach it, and whether Desktop keeps the waiting call open is Desktop's

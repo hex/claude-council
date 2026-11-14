@@ -201,8 +201,9 @@ function drawPicker(result) {
   question.textContent = data.question
   const chosen = new Set(data.seats.map(seat => seat.provider))
   let verbosity = data.verbosity
-  // The run Claude may be waiting for, sent with the first Ask only: the
-  // server gives any later Ask a run of its own.
+  // The run Claude may be waiting for, sent with each Ask until the server
+  // has answered one: a call the host refused or let time out may never have
+  // reached it. The server gives any later Ask a run of its own.
   let pickedRun = data.run
   const count = element('small')
   const ask = element('button', { type: 'button', textContent: 'Ask' })
@@ -253,8 +254,7 @@ function drawPicker(result) {
     const picked = data.seats.filter(seat => chosen.has(seat.provider))
     const args = { question: data.question, providers: picked.map(seat => seat.provider), verbosity }
     if (pickedRun !== undefined) args.run = pickedRun
-    pickedRun = undefined
-    run(args, picked, ask, data.answerWithinMs).catch(err => {
+    run(args, picked, ask, data.answerWithinMs, () => { pickedRun = undefined }).catch(err => {
       report('failed', true)
       seats.replaceChildren(element('p', { className: 'lead bad', textContent: `The panel could not show the answers (${err.message}).` }))
       host.reportSize()
@@ -306,10 +306,11 @@ function showWaiting(picked, button) {
 
 // Runs the question through council_pick_ask, which is council_ask itself,
 // shows the answers, and asks Claude for the synthesis unless the server
-// says Claude is waiting for this run and has it already. True once a seat
+// says Claude was waiting for this run when it ended. True once a seat
 // answered; false to let the user press Ask again. Waits at most
-// `answerWithinMs`, the server's own bound on the run.
-async function run(args, picked, button, answerWithinMs) {
+// `answerWithinMs`, the server's own bound on the run, and calls `answered`
+// once the server's result has come back.
+async function run(args, picked, button, answerWithinMs, answered) {
   report('asking the council')
   handoff.replaceChildren()
   const stopWaiting = showWaiting(picked, button)
@@ -327,6 +328,7 @@ async function run(args, picked, button, answerWithinMs) {
   } finally {
     stopWaiting()
   }
+  answered()
   showAnswers(result, seats, WHOLE)
   if (result?.isError) return false
   // The server holds a run, and names it, only when a seat answered.
