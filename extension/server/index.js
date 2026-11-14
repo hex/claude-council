@@ -108,7 +108,7 @@ const TOOLS = [
   // Trial variant B: the picker panel and the tool its Ask button calls.
   {
     name: 'council_pick',
-    description: `Open the council picker: a panel in the chat with the question, each council seat with its model and a switch, a choice of verbosity and an Ask button. The council runs when the user presses Ask, and the answers appear in the panel. Use it when the user asks for the picker or to choose the seats in a panel. ${AS_ASKED} ${council.AFTER_PICK}`,
+    description: `Open the council picker: a panel in the chat with the question, each council seat with its model and a switch, a choice of verbosity and an Ask button. The council runs when the user presses Ask, and the answers appear in the panel. Its result names a council run: call council_result with it at once, in the same turn, and it gives you the answers when they are in. Use it when the user asks for the picker or to choose the seats in a panel. ${AS_ASKED} ${council.AFTER_PICK}`,
     inputSchema: { type: 'object', properties: { question: { type: 'string', description: QUESTION_AS_ASKED } }, required: ['question'], additionalProperties: false },
     _meta: { ui: { resourceUri: PICK_PANEL.uri } },
     run: (args, signal) => theCouncil.pick(args, drawsPanel, signal),
@@ -124,7 +124,7 @@ const TOOLS = [
   },
   {
     name: 'council_result',
-    description: 'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, as in "Synthesise the council\'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. The user has already read each seat\'s answer in the picker, so do not repeat them: write only your own synthesis, saying where the seats agree, where they differ, and what you recommend. The run holds only the seats the user chose in the picker, so the other seats of the council are not missing answers.',
+    description: 'Get the answers of a council run made in the council picker panel. Right after council_pick, call it with the run council_pick named, in the same turn and before you write anything: it waits until the user presses Ask and the council answers. Also call it when the user asks for the synthesis of a council run, as in "Synthesise the council\'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. The user has already read each seat\'s answer in the picker, so do not repeat them: write only your own synthesis, saying where the seats agree, where they differ, and what you recommend. The run holds only the seats the user chose in the picker, so the other seats of the council are not missing answers.',
     inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'The run id the user\'s message names, such as 3f9a2c. Leave out for the latest run.' } }, additionalProperties: false },
     run: (args, signal) => theCouncil.result(args, signal),
   },
@@ -158,17 +158,18 @@ const TOOLS = [
 ]
 
 // Each tool call still running, by request id, with the controller whose
-// abort stops the runs it started.
+// abort stops the runs it started and the promise of its outcome.
 const callsInFlight = new Map()
 
 async function callTool(id, params) {
   const tool = TOOLS.find(candidate => candidate.name === params?.name)
   if (!tool) return send({ id, error: { code: -32602, message: `unknown tool: ${String(params?.name)}` } })
   const controller = new AbortController()
-  callsInFlight.set(id, controller)
+  const outcomePromise = Promise.resolve().then(() => tool.run(params.arguments ?? {}, controller.signal))
+  callsInFlight.set(id, { controller, outcome: outcomePromise })
   let outcome
   try {
-    outcome = await tool.run(params.arguments ?? {}, controller.signal)
+    outcome = await outcomePromise
   } catch (err) {
     if (!(err instanceof council.Refusal)) throw err
     outcome = { text: err.message, isError: true }
@@ -219,7 +220,7 @@ function receive(line) {
   }
   // A notification is never answered, whether or not it is understood.
   if (message.id === undefined) {
-    if (message.method === 'notifications/cancelled') callsInFlight.get(message.params?.requestId)?.abort()
+    if (message.method === 'notifications/cancelled') callsInFlight.get(message.params?.requestId)?.controller.abort()
     return
   }
   handle(message).catch(err => {
@@ -275,12 +276,21 @@ function readLines(input, onLine, onEnd) {
 
 let shuttingDown = false
 
-// Exits once every council run still going has been stopped: a run is in a
-// process group of its own, so it would otherwise outlive the server.
+// How long the calls still going have, once their runs are stopped, to end:
+// a picker's ask to write its outcome for a council_result waiting in another
+// copy of the server, a waiting council_result to remove its marker.
+const CALLS_END_MS = 1000
+
+// Exits once every council run still going has been stopped, since a run is
+// in a process group of its own and would otherwise outlive the server, and
+// every call has ended or had its time to.
 async function shutDown(exitCode) {
   if (shuttingDown) return
   shuttingDown = true
   await theCouncil.stopRuns()
+  const calls = [...callsInFlight.values()]
+  for (const call of calls) call.controller.abort()
+  await Promise.race([Promise.allSettled(calls.map(call => call.outcome)), new Promise(done => setTimeout(done, CALLS_END_MS))])
   process.exit(exitCode)
 }
 
