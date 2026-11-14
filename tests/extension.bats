@@ -125,7 +125,8 @@
 #   - every seat failing, a refused run: the waiter ends with what failed
 #   - the wait running out: a sentence saying the user has not pressed Ask, and no marker left
 #   - a waiter that died: its marker goes stale and no ask counts it as waiting
-#   - council_result for an id council_pick never made: answered at once, never waited on
+#   - council_result for an id council_pick never made, or with no id while a picker is open:
+#     answered at once (with no id, the latest held run), never waited on
 #   - the panel's handoff (the picked run sent with the first Ask only; "Claude is writing the
 #     synthesis" and no message when the ask was awaited; else one ui/message with no seat output,
 #     a line saying to press Enter, the fallback line when the host refuses it) runs only in a
@@ -1328,7 +1329,7 @@ perplexity: sonar-test-1"
     local sentence='When the user then asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", call council_result with that run id: it gives you the answers the panel shows. Never say you cannot see them.'
     [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_pick") | .description')" == *"$sentence"* ]]
     assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_result") | .description')" \
-        'Get the answers of a council run made in the council picker panel. Right after council_pick, call it with the run council_pick named, in the same turn and before you write anything: it waits until the user presses Ask and the council answers. Also call it when the user asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. The user has already read each seat'"'"'s answer in the picker, so do not repeat them: write only your own synthesis, saying where the seats agree, where they differ, and what you recommend. The run holds only the seats the user chose in the picker, so the other seats of the council are not missing answers.'
+        'Get the answers of a council run made in the council picker panel. Right after council_pick, call it with the run council_pick named, in the same turn and before you write anything: it waits until the user presses Ask and the council answers. Also call it when the user asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", passing that run id, or with no run for the latest run held, which it gives at once without waiting. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. The user has already read each seat'"'"'s answer in the picker, so do not repeat them: write only your own synthesis, saying where the seats agree, where they differ, and what you recommend. The run holds only the seats the user chose in the picker, so the other seats of the council are not missing answers.'
 }
 
 # ============================================================================
@@ -1467,4 +1468,14 @@ ${asked}"
     touch -t "$(date -v-1M +%Y%m%d%H%M.%S 2> /dev/null || date -d '1 minute ago' +%Y%m%d%H%M.%S)" "$marker"
     mcp "$INIT" "$(call 1 council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"${picked}\"}")"
     assert_eq "$(result_seats 1 | jq -c '{run, awaited}')" "{\"run\":\"${picked}\",\"awaited\":false}"
+}
+
+@test "extension: council_result with no run gives the latest held run at once, while a picker is open" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    CLIENT_REPLY_WAIT_MS=30000 mcp "$INIT" "$(call 1 council_pick_ask '{"question":"q","providers":["openrouter"]}')" \
+        "$(call 2 council_pick '{"question":"q"}')" "$(call 3 council_result)"
+    [ "$status" -eq 0 ]
+    assert_eq "$(result_error 3)" false
+    assert_eq "$(result_text 3)" "$(result_text 1)"
 }

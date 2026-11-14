@@ -729,12 +729,11 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
 
   const has = (pick, name) => fs.existsSync(path.join(pick.dir, name))
 
-  // A picker whose run council_result can wait for: by id, or the newest
-  // when no id is given, still open or asking, before its deadline.
+  // The picker with the run id whose run council_result can wait for: still
+  // open or asking, before its deadline.
   function pendingPick(run) {
     const now = Date.now()
-    const pending = picks().filter(pick => pick.deadline > now && (has(pick, 'open') || has(pick, 'asking')))
-    return run === undefined ? pending.at(-1) : pending.find(pick => pick.run === run)
+    return picks().find(pick => pick.run === run && pick.deadline > now && (has(pick, 'open') || has(pick, 'asking')))
   }
 
   // Waits for a picker's run to end, its deadline or the call's cancellation,
@@ -763,8 +762,9 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     return { text: `The user has not pressed Ask in the council picker within ${minutes} of it opening. When they do, the picker drafts a message asking for the synthesis of run ${pick.run}; call council_result with that run then.` }
   }
 
-  // A picker run's text, by its id or the latest when none is given. A run a
-  // picker is still waiting on is waited for.
+  // A picker run's text, by its id or the latest held when none is given. A
+  // run named by a picker still waiting on it is waited for; with no id the
+  // call never waits.
   async function result(input, signal) {
     if (input === null || typeof input !== 'object' || Array.isArray(input)) return refused('council_result takes an object, with a run id or none')
     const unknown = Object.keys(input).find(name => name !== 'run')
@@ -772,7 +772,7 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     if (input.run !== undefined && typeof input.run !== 'string') return refused(`run must be a run id such as 3f9a2c, not ${shown(input.run)}`)
     // The picker is looked at before the held runs: its run is held before
     // the picker stops being pending, so a run between the two is found.
-    const pending = pendingPick(input.run)
+    const pending = input.run === undefined ? undefined : pendingPick(input.run)
     if (pending) return awaitPick(pending, signal)
     const kept = `The extension keeps the last ${RUNS_KEPT} picker runs in which a seat answered. Ask the council the question again.`
     const dir = heldDirectory()
