@@ -536,7 +536,12 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     const rendered = await runScript('format-output.sh', [], { cwd, env, input: result.stdout, timeoutMs: timeoutsMs.script, signal })
     if (rendered.stopped) return refused(stopText('formatting of the answers', rendered.stopped, timeoutsMs.script))
     if (rendered.exitCode !== 0) return refused(`The council's answers could not be formatted:\n${stripAnsi(rendered.stderr).trim()}`)
-    return { text: stripAnsi(rendered.stdout).trim(), structured: { question, seats: seatsOf(answers) } }
+    // format-output.sh ends on an empty synthesis heading, the terminal's cue
+    // for Claude to write one. In a chat Claude reads it as a section that
+    // came back empty and says so; each tool's description asks for the
+    // synthesis instead.
+    const text = stripAnsi(rendered.stdout).trim().replace(/\n+---\n## 🧭 Synthesis$/, '')
+    return { text, structured: { question, seats: seatsOf(answers) } }
   }
 
   // The picker's runs in which a seat answered, each a file named by when it

@@ -124,7 +124,7 @@ const TOOLS = [
   },
   {
     name: 'council_result',
-    description: 'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, as in "Synthesise the council\'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. The user has already read each seat\'s answer in the picker, so do not repeat them: write only your own synthesis, saying where the seats agree, where they differ, and what you recommend.',
+    description: 'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, as in "Synthesise the council\'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. The user has already read each seat\'s answer in the picker, so do not repeat them: write only your own synthesis, saying where the seats agree, where they differ, and what you recommend. The run holds only the seats the user chose in the picker, so the other seats of the council are not missing answers.',
     inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'The run id the user\'s message names, such as 3f9a2c. Leave out for the latest run.' } }, additionalProperties: false },
     run: (args, signal) => theCouncil.result(args, signal),
   },
@@ -187,6 +187,9 @@ async function handle(message) {
   const { id, method, params } = message
   if (method === 'initialize') {
     drawsPanel = Boolean(params?.capabilities?.extensions?.['io.modelcontextprotocol/ui'])
+    // Names only, for the host's log: which of sampling, elicitation and the
+    // panel extension this host offers decides what the server can ask of it.
+    log(`host capabilities: ${Object.keys(params?.capabilities ?? {}).join(', ') || 'none'}`)
     const protocolVersion = PROTOCOL_VERSIONS.includes(params?.protocolVersion) ? params.protocolVersion : PROTOCOL_VERSIONS[0]
     return send({ id, result: { protocolVersion, capabilities: { tools: {}, resources: {} }, serverInfo: { name: 'council', version: VERSION } } })
   }

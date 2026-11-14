@@ -1209,6 +1209,7 @@ perplexity: sonar-test-1"
     assert_eq "$(reply 2 | jq -c '.result | keys')" '["content","isError"]'
     [[ "$(result_text 2)" == *"## ● Codex - default"*"FAKE-CODEX-RESPONSE: deterministic answer"*"## ● Openrouter-1 - vendor/alpha"*"answer from vendor/alpha"* ]]
     assert_eq "$(result_text 2)" "$(result_text 3)"
+    assert_eq "$(result_text 2 | tail -n 1)" 'answer from vendor/alpha'
 }
 
 @test "extension: council_result with no run gives the latest; an unknown run, or none yet, is a sentence saying to ask again" {
@@ -1305,5 +1306,5 @@ perplexity: sonar-test-1"
     local sentence='When the user then asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", call council_result with that run id: it gives you the answers the panel shows. Never say you cannot see them.'
     [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_pick") | .description')" == *"$sentence"* ]]
     assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_result") | .description')" \
-        'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. The user has already read each seat'"'"'s answer in the picker, so do not repeat them: write only your own synthesis, saying where the seats agree, where they differ, and what you recommend.'
+        'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. The user has already read each seat'"'"'s answer in the picker, so do not repeat them: write only your own synthesis, saying where the seats agree, where they differ, and what you recommend. The run holds only the seats the user chose in the picker, so the other seats of the council are not missing answers.'
 }
