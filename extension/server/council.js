@@ -394,8 +394,10 @@ const NO_SEATS = 'No council seat is set up: no provider has a key and no CLI ag
 
 // The council as one object over a plugin root and what readKeys made of
 // the keys Desktop gave. Every tool function takes the call's AbortSignal
-// last; aborting it stops the runs the call started.
+// last; aborting it stops the runs the call started. `redact` removes the
+// keys from what a picker run writes to the state directory.
 function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS }) {
+  if (typeof redact !== 'function') throw new TypeError(`openCouncil needs redact, the function that removes the keys from text, not ${typeof redact}`)
   const running = new Set()
 
   function runScript(script, args, options) {

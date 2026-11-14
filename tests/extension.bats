@@ -779,7 +779,7 @@ drive() {
     printf '#!/bin/bash\nhead -c 1100000 /dev/zero | tr "\\0" x >&2\nexec sleep 97.36\n' > "${root}/scripts/check-status.sh"
     run --separate-stderr "$NODE" -e '
         const council = require(process.argv[1])
-        const theCouncil = council.openCouncil({ root: process.argv[2], keys: new Map(), tooShort: [] })
+        const theCouncil = council.openCouncil({ root: process.argv[2], keys: new Map(), tooShort: [], redact: text => text })
         theCouncil.status({}, new AbortController().signal)
           .then(outcome => process.stdout.write(JSON.stringify(outcome)))
     ' "${PROJECT_ROOT}/extension/server/council.js" "$root"
@@ -793,7 +793,7 @@ drive() {
     run --separate-stderr "$NODE" -e '
         const council = require(process.argv[1])
         const { keys, tooShort } = council.readKeys(process.env)
-        const theCouncil = council.openCouncil({ root: process.argv[2], keys, tooShort, timeoutsMs: { ask: 4000, status: 4000, script: 30000 } })
+        const theCouncil = council.openCouncil({ root: process.argv[2], keys, tooShort, redact: text => text, timeoutsMs: { ask: 4000, status: 4000, script: 30000 } })
         theCouncil.ask({ question: "q", providers: ["codex"] }, new AbortController().signal)
           .then(outcome => process.stdout.write(JSON.stringify(outcome)))
     ' "${PROJECT_ROOT}/extension/server/council.js" "$PROJECT_ROOT"
