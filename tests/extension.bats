@@ -111,6 +111,21 @@
 #     the one before (a cancelled run ends as a refusal, and is never answered)
 #   - a key quoted in a stored run's seat error: removed in council_result's text
 #   - council_result with an argument it does not take, or a run that is not a string: refused
+#  the synthesis in the turn that opened the picker
+#   - council_pick mints the run id and gives it to the panel and, in its text, to Claude with the
+#     words to call council_result with it now
+#   - council_pick_ask with that id and nobody waiting: the run is held under it, and the result
+#     says it was not awaited, so the panel drafts the message
+#   - a second Ask with the same id, an id already held, or a well-formed id council_pick never
+#     made: a fresh id, never awaited
+#   - a run id that is not six hex digits: refused before anything is run or written
+#   - council_result with a picked id, in one copy of the server, while another copy's
+#     council_pick_ask runs it: it waits, gets the answers with the words to synthesise them
+#     and the seats asked, and that ask's result says it was awaited
+#   - every seat failing, a refused run: the waiter ends with what failed
+#   - the wait running out: a sentence saying the user has not pressed Ask, and no marker left
+#   - a waiter that died: its marker goes stale and no ask counts it as waiting
+#   - council_result for an id council_pick never made: answered at once, never waited on
 #   - the panel's handoff (one ui/message with no seat output, a line saying to press Enter, the
 #     fallback line when the host refuses it) runs only in a host; bats cannot reach it
 # Model-list parsing is in extension-models.bats, the package build in extension-build.bats.
@@ -146,6 +161,8 @@ setup() {
 
 teardown() {
     rm -rf "$TEST_CACHE_DIR"
+    # A waiting session start_waiter left: its server exits when its input closes.
+    if [[ -n "${WAITER_PID:-}" ]]; then kill "$WAITER_PID" 2>/dev/null || true; fi
     # The shutdown test's hung seat, should the server have failed to stop it.
     # SIGKILL, since some of them ignore SIGTERM.
     pkill -9 -f 'sleep 97.3[1-7]' || true
@@ -1119,8 +1136,11 @@ pick_setup() {
     assert_eq "$(result_error 1)" false
     # The panel waits 11.5 minutes for its run: the run's 10, formatting's half
     # minute, and one more for the stops and Desktop's relay.
-    assert_eq "$(result_seats 1)" "{\"question\":\"Which queue?\",\"seats\":${PICK_SEATS},\"verbosities\":[\"brief\",\"standard\",\"detailed\"],\"verbosity\":\"standard\",\"answerWithinMs\":690000}"
-    assert_eq "$(result_text 1)" 'The council picker is open in a panel with the question and 9 seats. The user picks the seats and the verbosity there and presses Ask, and the answers appear in the panel. Wait for the user: do not call council_ask for this question and do not answer it yourself. When the user then asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", call council_result with that run id: it gives you the answers the panel shows. Never say you cannot see them.'
+    assert_eq "$(result_seats 1 | jq -c 'del(.run)')" "{\"question\":\"Which queue?\",\"seats\":${PICK_SEATS},\"verbosities\":[\"brief\",\"standard\",\"detailed\"],\"verbosity\":\"standard\",\"answerWithinMs\":690000}"
+    local run
+    run=$(result_seats 1 | jq -r '.run')
+    [[ "$run" =~ ^[0-9a-f]{6}$ ]]
+    assert_eq "$(result_text 1)" "The council picker is open in a panel with the question and 9 seats, as council run ${run}. Now, in this same turn and before you write anything, call council_result with run ${run}: it waits while the user picks the seats and the verbosity and presses Ask, and gives you the council's answers once they are in. Do not call council_ask for this question and do not answer it yourself. "'When the user then asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", call council_result with that run id: it gives you the answers the panel shows. Never say you cannot see them.'
     [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
 }
 
@@ -1166,10 +1186,10 @@ perplexity: sonar-test-1"
     mcp "${requests[@]}"
     for id in "${!cases[@]}"; do
         [ -n "$(reply $((id + 1)))" ]
-        assert_eq "$(reply $((id + 101)) | jq -c 'del(.id, .result.structuredContent.run)')" "$(reply $((id + 1)) | jq -c 'del(.id)')"
+        assert_eq "$(reply $((id + 101)) | jq -c 'del(.id, .result.structuredContent.run, .result.structuredContent.awaited)')" "$(reply $((id + 1)) | jq -c 'del(.id)')"
     done
     assert_eq "$(result_error 101)" true
-    assert_eq "$(result_seats 107 | jq -c 'del(.run)')" '{"question":"q","seats":[{"provider":"openrouter-1","model":"vendor/alpha","answer":"answer from vendor/alpha"}]}'
+    assert_eq "$(result_seats 107 | jq -c 'del(.run)')" '{"question":"q","seats":[{"provider":"openrouter-1","model":"vendor/alpha","answer":"answer from vendor/alpha"}],"awaited":false}'
     [[ "$(result_seats 107 | jq -r '.run')" =~ ^[0-9a-f]{6}$ ]]
 }
 
@@ -1307,4 +1327,74 @@ perplexity: sonar-test-1"
     [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_pick") | .description')" == *"$sentence"* ]]
     assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_result") | .description')" \
         'Get the answers of a council run made in the council picker panel. Call it when the user asks for the synthesis of a council run, as in "Synthesise the council'"'"'s answers (run 3f9a2c)", passing that run id, or with no run for the latest. The picker shows the answers to the user; this tool gives them to you, so never say you cannot see them. The user has already read each seat'"'"'s answer in the picker, so do not repeat them: write only your own synthesis, saying where the seats agree, where they differ, and what you recommend. The run holds only the seats the user chose in the picker, so the other seats of the council are not missing answers.'
+}
+
+# ============================================================================
+# The synthesis in the turn that opened the picker
+# ============================================================================
+
+# A council_pick_ask request for the run council_pick gave in request 1.
+ask_picked() {
+    call "$1" council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"{{1.result.structuredContent.run}}\"}"
+}
+
+@test "extension: a picked run asked with nobody waiting is held under its id and says it was not awaited; asked again it gets a fresh id" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    mcp "$INIT" "$(call 1 council_pick '{"question":"q"}')" "$(ask_picked 2)" "$(ask_picked 3)" \
+        "$(call 4 council_pick_ask '{"question":"q","providers":["openrouter"],"run":"000000"}')"
+    local picked
+    picked=$(result_seats 1 | jq -r '.run')
+    [[ "$picked" =~ ^[0-9a-f]{6}$ ]]
+    assert_eq "$(result_seats 2 | jq -c '{run, awaited}')" "{\"run\":\"${picked}\",\"awaited\":false}"
+    assert_eq "$(result_seats 3 | jq -r '.awaited')" false
+    [[ "$(result_seats 3 | jq -r '.run')" =~ ^[0-9a-f]{6}$ ]]
+    [ "$(result_seats 3 | jq -r '.run')" != "$picked" ]
+    [[ "$(result_seats 4 | jq -r '.run')" =~ ^[0-9a-f]{6}$ ]]
+    [ "$(result_seats 4 | jq -r '.run')" != 000000 ]
+    assert_eq "$(result_text 2)" "$(result_text 3)"
+}
+
+# Starts, in the background, a server session that opens the picker and then
+# waits in council_result for its run, as Claude does in the turn that opened
+# it. Returns once the waiter's marker is in the state directory, with the run
+# id in $PICKED_RUN; finish_waiter collects the session.
+start_waiter() {
+    local requests="${BATS_TEST_TMPDIR}/waiter.jsonl" tick
+    printf '%s\n' "$INIT" "$(call 1 council_pick '{"question":"q"}')" \
+        "$(call 2 council_result '{"run":"{{1.result.structuredContent.run}}"}')" > "$requests"
+    WAITER_OUT="${BATS_TEST_TMPDIR}/waiter.out"
+    "$NODE" "$CLIENT" "$SERVER" "$requests" > "$WAITER_OUT" 2> "${BATS_TEST_TMPDIR}/waiter.err" 3>&- &
+    WAITER_PID=$!
+    for tick in $(seq 1 300); do
+        compgen -G "${STATE_DIR}/picks/*/waiting-*" > /dev/null && break
+        sleep 0.1
+    done
+    compgen -G "${STATE_DIR}/picks/*/waiting-*" > /dev/null
+    PICKED_RUN=$(jq -r 'select(.id == 1) | .result.structuredContent.run' "$WAITER_OUT")
+}
+
+finish_waiter() {
+    local code=0
+    wait "$WAITER_PID" || code=$?
+    WAITER_PID=''
+    assert_eq "$code" 0
+    output=$(cat "$WAITER_OUT")
+}
+
+@test "extension: council_result waiting in one copy of the server gets the run another copy's picker ask made, and that ask says it was awaited" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    start_waiter
+    mcp "$INIT" "$(call 1 council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"${PICKED_RUN}\"}")"
+    assert_eq "$(result_seats 1 | jq -c '{run, awaited}')" "{\"run\":\"${PICKED_RUN}\",\"awaited\":true}"
+    local asked
+    asked=$(result_text 1)
+    finish_waiter
+    assert_eq "$(result_error 2)" false
+    assert_eq "$(result_text 2)" "${asked}
+
+---
+The user pressed Ask in the council picker, which asked openrouter, and has read every answer above in the panel. Do not repeat or summarise them seat by seat. Write your synthesis: where the seats agree, where they differ, and what you recommend."
+    run ! compgen -G "${STATE_DIR}/picks/*/waiting-*"
 }

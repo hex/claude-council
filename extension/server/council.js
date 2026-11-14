@@ -22,14 +22,23 @@ const PROVIDERS = [
 ]
 const ROSTER_MAX = 12
 const VERBOSITIES = ['brief', 'standard', 'detailed']
-// How long each kind of run may take before it is stopped.
-const TIMEOUTS_MS = { ask: 10 * 60 * 1000, status: 3 * 60 * 1000, script: 30 * 1000 }
+// How long each kind of run may take before it is stopped, and `relay`, the
+// time a panel allows past a run's own limits for the stops and Desktop's relay.
+const TIMEOUTS_MS = { ask: 10 * 60 * 1000, status: 3 * 60 * 1000, script: 30 * 1000, relay: 60 * 1000 }
 // What the model is told to do with the message the picker drafts once its
 // answers are in. The panel cannot hand the answers to the model itself.
 const AFTER_PICK = 'When the user then asks for the synthesis of a council run, as in "Synthesise the council\'s answers (run 3f9a2c)", call council_result with that run id: it gives you the answers the panel shows. Never say you cannot see them.'
 // How many of the picker's runs council_result can give the model, newest
 // kept. Each is the text of one run, which the run's stdout cap bounds.
 const RUNS_KEPT = 5
+// A run id: six hex digits, which a panel passes back and the server checks
+// before the id can name anything.
+const RUN_ID = /^[0-9a-f]{6}$/
+// How often a council_result waiting for a picker run looks for it, and how
+// recently its marker must have been touched to count as a waiter still
+// there: a waiter that died stops touching it.
+const WAIT_POLL_MS = 250
+const WAITER_LIVE_MS = 2000
 // The question reaches query-council.sh as one argument, and Linux refuses an
 // argument over 128 KiB; this leaves room under that.
 const QUESTION_MAX_BYTES = 100000
@@ -561,43 +570,222 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     })
   }
 
-  // council_ask for the picker's Ask button: a run in which a seat answered is
-  // held under a run id the panel gets beside the answers. The id is random:
-  // a count would start again after a restart, so an id still in the chat
-  // would name a later run.
-  async function pickAsk(input, signal) {
-    const outcome = await ask(input, signal)
-    // A cancelled run comes back as an error too, so it is never held.
-    if (outcome.isError || !outcome.structured.seats.some(seat => seat.error === undefined)) return outcome
-    const dir = heldDirectory()
-    const held = heldRuns(dir)
-    let run
-    do run = crypto.randomBytes(3).toString('hex'); while (held.some(([, other]) => other === run))
-    // Without the keys: a seat's error can quote the key it was sent, and no
-    // key may reach a file. Written whole or not at all, as the choices are.
-    const name = `${String(Date.now()).padStart(15, '0')}-${run}.txt`
-    const scratch = path.join(dir, `.${name}.${process.pid}`)
-    fs.writeFileSync(scratch, redact(outcome.text), { mode: 0o600, flag: 'wx' })
-    fs.renameSync(scratch, path.join(dir, name))
-    for (const [old] of held.slice(0, Math.max(0, held.length + 1 - RUNS_KEPT))) fs.rmSync(path.join(dir, old), { force: true })
-    return { ...outcome, structured: { ...outcome.structured, run } }
+  // How long the picker waits for its council_pick_ask: the run and its
+  // formatting at their limits, and the relay allowance. A call the host never
+  // answers, such as a cancelled one, would otherwise hold the panel for good.
+  // Claude waits as long in council_result, counted from when the picker
+  // opened, so choosing the seats and the run together stay inside it.
+  function answerWithinMs() {
+    return timeoutsMs.ask + timeoutsMs.script + timeoutsMs.relay
   }
 
-  // A picker run's text, by its id or the latest when none is given.
-  function result(input) {
+  // Each picker a panel drew, as a directory named by the time Claude stops
+  // waiting for its run and the run id. It holds `open` until the panel's Ask
+  // claims it, then `asking` while the run goes on; then `outcome.txt`, what a
+  // waiting council_result returns; and a `waiting-*` marker for each
+  // council_result waiting for it, touched as it waits.
+  function picksDirectory() {
+    return privateDirectory(path.join(privateDirectory(stateDirectory()), 'picks'))
+  }
+
+  // The pickers, oldest deadline first, as { dir, run, deadline }.
+  function picks() {
+    const dir = picksDirectory()
+    return fs.readdirSync(dir).sort().flatMap(name => {
+      const match = /^([0-9]{15})-([0-9a-f]{6})$/.exec(name)
+      return match ? [{ dir: path.join(dir, name), run: match[2], deadline: Number(match[1]) }] : []
+    })
+  }
+
+  // A run id no held run and no picker has.
+  function freshRun() {
+    const taken = new Set([...heldRuns(heldDirectory()).map(([, run]) => run), ...picks().map(pick => pick.run)])
+    let run
+    do run = crypto.randomBytes(3).toString('hex'); while (taken.has(run))
+    return run
+  }
+
+  // Writes the text whole or not at all, as the choices are, and never more
+  // than 0600.
+  function writePrivate(file, text) {
+    const scratch = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}`)
+    fs.writeFileSync(scratch, text, { mode: 0o600, flag: 'wx' })
+    fs.renameSync(scratch, file)
+  }
+
+  // Opens a picker: its run id, which Claude may wait for until the deadline.
+  // Pickers whose runs are long over are removed first.
+  function openPick() {
+    const now = Date.now()
+    for (const old of picks()) {
+      if (old.deadline + answerWithinMs() < now) fs.rmSync(old.dir, { recursive: true, force: true })
+    }
+    const run = freshRun()
+    const dir = path.join(picksDirectory(), `${String(now + answerWithinMs()).padStart(15, '0')}-${run}`)
+    fs.mkdirSync(dir, { mode: 0o700 })
+    fs.writeFileSync(path.join(dir, 'open'), '', { mode: 0o600, flag: 'wx' })
+    return run
+  }
+
+  // The picker for the run, claimed for one Ask, or undefined when the run is
+  // no picker's, its deadline has passed, or an Ask has claimed it already.
+  // The claim is a rename, so of two Asks at once only one gets it.
+  function claimPick(run) {
+    const pick = picks().find(candidate => candidate.run === run)
+    if (pick === undefined || pick.deadline <= Date.now()) return undefined
+    try {
+      fs.renameSync(path.join(pick.dir, 'open'), path.join(pick.dir, 'asking'))
+    } catch (err) {
+      if (err.code === 'ENOENT') return undefined
+      throw err
+    }
+    return pick
+  }
+
+  // Ends a claimed picker's run with the text a waiting council_result
+  // returns, and says whether one is waiting. The outcome is written before
+  // the markers are read, and a waiter that gives up removes its marker
+  // before it looks for the outcome a last time, so a waiter counted here
+  // always finds it.
+  function endPick(pick, text) {
+    writePrivate(path.join(pick.dir, 'outcome.txt'), text)
+    fs.rmSync(path.join(pick.dir, 'asking'), { force: true })
+    const now = Date.now()
+    return fs.readdirSync(pick.dir).filter(name => name.startsWith('waiting-')).some(name => {
+      try {
+        return now - fs.statSync(path.join(pick.dir, name)).mtimeMs < WAITER_LIVE_MS
+      } catch (err) {
+        if (err.code === 'ENOENT') return false
+        throw err
+      }
+    })
+  }
+
+  // Holds an answered run's text under the run id, forgetting the oldest
+  // past RUNS_KEPT. Without the keys: a seat's error can quote the key it
+  // was sent, and no key may reach a file.
+  function holdRun(run, text) {
+    const dir = heldDirectory()
+    const held = heldRuns(dir)
+    writePrivate(path.join(dir, `${String(Date.now()).padStart(15, '0')}-${run}.txt`), redact(text))
+    for (const [old] of held.slice(0, Math.max(0, held.length + 1 - RUNS_KEPT))) fs.rmSync(path.join(dir, old), { force: true })
+  }
+
+  // What Claude reads last after a picker run's answers, in the turn that
+  // opened the picker: a small model told only in a tool description repeats
+  // each answer instead of writing a synthesis.
+  function synthesisRequest(seats) {
+    const names = seats.map(seat => seat.provider).join(', ')
+    return `The user pressed Ask in the council picker, which asked ${names}, and has read every answer above in the panel. Do not repeat or summarise them seat by seat. Write your synthesis: where the seats agree, where they differ, and what you recommend.`
+  }
+
+  // council_ask for the picker's Ask button. A run in which a seat answered
+  // is held for council_result, under the run id the panel passes when it is
+  // the picker's, else under a fresh one. A picker's run, however it ends,
+  // also ends that picker, for a council_result waiting for it. The id is
+  // random: a count would start again after a restart, so an id still in the
+  // chat would name a later run.
+  async function pickAsk(input, signal) {
+    const isObject = input !== null && typeof input === 'object' && !Array.isArray(input)
+    const wanted = isObject ? input.run : undefined
+    // Checked before anything is read or written: the id comes from a page.
+    if (wanted !== undefined && (typeof wanted !== 'string' || !RUN_ID.test(wanted))) {
+      return refused(`run must be a run id of six hex digits, such as 3f9a2c, not ${shown(wanted)}`)
+    }
+    const question = isObject ? Object.fromEntries(Object.entries(input).filter(([name]) => name !== 'run')) : input
+    const pick = wanted === undefined ? undefined : claimPick(wanted)
+    let outcome
+    try {
+      outcome = await ask(question, signal)
+    } catch (err) {
+      if (pick) endPick(pick, `Council run ${pick.run} from the picker failed: ${redact(String(err?.message ?? err))}`)
+      throw err
+    }
+    // A cancelled run comes back as an error too, so it is never held.
+    const answered = !outcome.isError && outcome.structured.seats.some(seat => seat.error === undefined)
+    const run = answered ? (pick?.run ?? freshRun()) : undefined
+    if (answered) holdRun(run, outcome.text)
+    const awaited = pick === undefined ? false : endPick(pick, answered
+      ? `${redact(outcome.text)}\n\n---\n${synthesisRequest(outcome.structured.seats)}`
+      : `Council run ${pick.run} from the picker ended with no answer. Tell the user what failed.\n\n${redact(outcome.text)}`)
+    if (!outcome.structured) return outcome
+    return { ...outcome, structured: { ...outcome.structured, ...(run === undefined ? {} : { run }), awaited } }
+  }
+
+  const pause = (ms, signal) => new Promise(done => {
+    const stop = () => { clearTimeout(timer); done() }
+    const timer = setTimeout(() => { signal.removeEventListener('abort', stop); done() }, ms)
+    signal.addEventListener('abort', stop, { once: true })
+  })
+
+  function outcomeOf(pick) {
+    try {
+      return fs.readFileSync(path.join(pick.dir, 'outcome.txt'), 'utf8')
+    } catch (err) {
+      if (err.code === 'ENOENT') return undefined
+      throw err
+    }
+  }
+
+  const has = (pick, name) => fs.existsSync(path.join(pick.dir, name))
+
+  // A picker whose run council_result can wait for: by id, or the newest
+  // when no id is given, still open or asking, before its deadline.
+  function pendingPick(run) {
+    const now = Date.now()
+    const pending = picks().filter(pick => pick.deadline > now && (has(pick, 'open') || has(pick, 'asking')))
+    return run === undefined ? pending.at(-1) : pending.find(pick => pick.run === run)
+  }
+
+  // Waits for a picker's run to end, its deadline or the call's cancellation,
+  // with a marker in the picker that says a council_result is waiting.
+  async function awaitPick(pick, signal) {
+    const marker = path.join(pick.dir, `waiting-${process.pid}-${crypto.randomBytes(3).toString('hex')}`)
+    fs.writeFileSync(marker, '', { mode: 0o600, flag: 'wx' })
+    let text
+    try {
+      for (;;) {
+        text = outcomeOf(pick)
+        const left = pick.deadline - Date.now()
+        if (text !== undefined || signal.aborted || left <= 0 || !(has(pick, 'open') || has(pick, 'asking'))) break
+        const now = new Date()
+        fs.utimesSync(marker, now, now)
+        await pause(Math.min(WAIT_POLL_MS, left), signal)
+      }
+    } finally {
+      fs.rmSync(marker, { force: true })
+    }
+    text ??= outcomeOf(pick)
+    if (text !== undefined) return { text }
+    if (signal.aborted) return refused('The wait for the council run was cancelled.')
+    const minutes = duration(answerWithinMs())
+    if (has(pick, 'asking')) return { text: `The council is still answering run ${pick.run} after ${minutes}. When it is done, the picker drafts a message asking for its synthesis; call council_result with run ${pick.run} then.` }
+    return { text: `The user has not pressed Ask in the council picker within ${minutes} of it opening. When they do, the picker drafts a message asking for the synthesis of run ${pick.run}; call council_result with that run then.` }
+  }
+
+  // A picker run's text, by its id or the latest when none is given. A run a
+  // picker is still waiting on is waited for.
+  async function result(input, signal) {
     if (input === null || typeof input !== 'object' || Array.isArray(input)) return refused('council_result takes an object, with a run id or none')
     const unknown = Object.keys(input).find(name => name !== 'run')
     if (unknown !== undefined) return refused(`council_result has no argument ${shown(unknown)}; it takes run`)
     if (input.run !== undefined && typeof input.run !== 'string') return refused(`run must be a run id such as 3f9a2c, not ${shown(input.run)}`)
+    // The picker is looked at before the held runs: its run is held before
+    // the picker stops being pending, so a run between the two is found.
+    const pending = pendingPick(input.run)
+    if (pending) return awaitPick(pending, signal)
     const kept = `The extension keeps the last ${RUNS_KEPT} picker runs in which a seat answered. Ask the council the question again.`
     const dir = heldDirectory()
     const held = heldRuns(dir)
-    if (input.run === undefined && held.length === 0) return refused(`No council run from the picker is held. ${kept}`)
     // Matched against the names read from the directory, so the id the model
     // passes never becomes part of a path.
-    const file = input.run === undefined ? held.at(-1)[0] : held.find(([, run]) => run === input.run)?.[0]
-    if (file === undefined) return refused(`Council run ${shown(input.run)} is not held. ${kept}`)
-    return { text: fs.readFileSync(path.join(dir, file), 'utf8') }
+    const file = input.run === undefined ? held.at(-1)?.[0] : held.find(([, run]) => run === input.run)?.[0]
+    if (file !== undefined) return { text: fs.readFileSync(path.join(dir, file), 'utf8') }
+    const ended = input.run === undefined ? undefined : picks().find(pick => pick.run === input.run)
+    const failure = ended && outcomeOf(ended)
+    if (failure) return { text: failure }
+    if (input.run === undefined) return refused(`No council run from the picker is held. ${kept}`)
+    return refused(`Council run ${shown(input.run)} is not held. ${kept}`)
   }
 
   // The seats a question with no providers named would go to, each with the
@@ -640,15 +828,14 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     if (problem) return refused(problem)
     const { seats, notice } = await defaultSeats(signal)
     if (seats.length === 0) return refused(withNotice(notice, NO_SEATS))
-    const text = drawsPanel
-      ? `The council picker is open in a panel with the question and ${seats.length} seat${seats.length === 1 ? '' : 's'}. The user picks the seats and the verbosity there and presses Ask, and the answers appear in the panel. Wait for the user: do not call council_ask for this question and do not answer it yourself. ${AFTER_PICK}`
-      : `This app does not draw the council picker. Ask the user in one short message which of these seats to use and which verbosity (standard, brief or detailed), offering all seats at standard as the default, then call council_ask with their choice.\n${seatLines(seats)}`
-    // How long the panel waits for its council_pick_ask: the run and its
-    // formatting at their limits, and a minute for the stops and Desktop's
-    // relay. A call the host never answers, such as a cancelled one, would
-    // otherwise hold the panel for good.
-    const answerWithinMs = timeoutsMs.ask + timeoutsMs.script + 60 * 1000
-    return { text: withNotice(notice, text), structured: { question: input.question, seats, verbosities: VERBOSITIES, verbosity: 'standard', answerWithinMs } }
+    const structured = { question: input.question, seats, verbosities: VERBOSITIES, verbosity: 'standard', answerWithinMs: answerWithinMs() }
+    if (!drawsPanel) {
+      const text = `This app does not draw the council picker. Ask the user in one short message which of these seats to use and which verbosity (standard, brief or detailed), offering all seats at standard as the default, then call council_ask with their choice.\n${seatLines(seats)}`
+      return { text: withNotice(notice, text), structured }
+    }
+    const run = openPick()
+    const text = `The council picker is open in a panel with the question and ${seats.length} seat${seats.length === 1 ? '' : 's'}, as council run ${run}. Now, in this same turn and before you write anything, call council_result with run ${run}: it waits while the user picks the seats and the verbosity and presses Ask, and gives you the council's answers once they are in. Do not call council_ask for this question and do not answer it yourself. ${AFTER_PICK}`
+    return { text: withNotice(notice, text), structured: { ...structured, run } }
   }
 
   async function status(input, signal) {
