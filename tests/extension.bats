@@ -1398,3 +1398,20 @@ finish_waiter() {
 The user pressed Ask in the council picker, which asked openrouter, and has read every answer above in the panel. Do not repeat or summarise them seat by seat. Write your synthesis: where the seats agree, where they differ, and what you recommend."
     run ! compgen -G "${STATE_DIR}/picks/*/waiting-*"
 }
+
+@test "extension: a picker run in which every seat failed ends the waiting council_result with what failed, no key in it" {
+    install_fake_curl leak
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    start_waiter
+    mcp "$INIT" "$(call 1 council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"${PICKED_RUN}\"}")"
+    assert_eq "$(result_seats 1 | jq -c '{run, awaited}')" '{"run":null,"awaited":true}'
+    local asked
+    asked=$(result_text 1)
+    finish_waiter
+    assert_eq "$(result_text 2)" "Council run ${PICKED_RUN} from the picker ended with no answer. Tell the user what failed.
+
+${asked}"
+    [[ "$asked" == *'header = "Authorization: Bearer [key removed]"'* ]]
+    [[ "$output" != *"$SENTINEL_KEY"* ]]
+    run ! grep -rqF "$SENTINEL_KEY" "$STATE_DIR"
+}
