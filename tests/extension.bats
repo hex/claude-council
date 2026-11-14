@@ -1436,3 +1436,20 @@ ${asked}"
     [ -d "${STATE_DIR}/picks" ]
     run ! compgen -G "${STATE_DIR}/picks/*/waiting-*"
 }
+
+@test "extension: a picker ask whose run id is not six hex digits is refused before anything is run or written" {
+    install_fake_curl answer
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    local runs=('"../held/x"' '"ABCDEF"' '"3f9a2"' '"3f9a2c0"' '7' '""')
+    local requests=("$INIT") at
+    for at in "${!runs[@]}"; do
+        requests+=("$(call $((at + 1)) council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":${runs[$at]}}")")
+    done
+    mcp "${requests[@]}"
+    for at in "${!runs[@]}"; do
+        assert_eq "$(result_error $((at + 1)))" true
+        assert_eq "$(result_text $((at + 1)))" "run must be a run id of six hex digits, such as 3f9a2c, not ${runs[$at]}"
+    done
+    [ ! -e "$STATE_DIR" ]
+    [ ! -e "$COUNCIL_FAKE_SENT_MODELS" ]
+}
