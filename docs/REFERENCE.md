@@ -799,7 +799,10 @@ by side. The server stops a run after 10 minutes and a status check after
 group on a timeout, a cancelled call, a run that writes more than 8 MiB to
 stdout or 1 MiB to stderr, and its own exit (Desktop closing its input, or
 SIGTERM or SIGINT): SIGTERM first, then SIGKILL 2 seconds later for anything
-still running, and it exits only after that. `council_ask` refuses a question
+still running. On its own exit it sends that SIGKILL as soon as every run has
+closed, or after the 2 seconds, then gives the calls still going up to 1
+second more to end (a picker's ask writing its outcome, a waiting
+`council_result` removing its marker), and exits. `council_ask` refuses a question
 over 100000 bytes, since it reaches `query-council.sh` as one argument. A
 request line over 1 MiB is dropped with an invalid-request error. Desktop starts the server with a
 minimal `PATH`, so the server appends `~/.local/bin`, `~/bin`,
