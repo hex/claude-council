@@ -699,16 +699,24 @@ drive() {
         const os = require("node:os")
         const readline = require("node:readline")
         const [server, requests, when, action] = process.argv.slice(1)
+        // Whether a file matches the absolute pattern, whose only wildcard is
+        // *, matching within one path segment.
+        const matched = pattern => pattern.split("/").slice(1).reduce((found, part) => found.flatMap(dir => {
+          if (!part.includes("*")) return fs.existsSync(`${dir}/${part}`) ? [`${dir}/${part}`] : []
+          if (!fs.statSync(dir).isDirectory()) return []
+          const name = new RegExp(`^${part.split("*").map(piece => piece.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`)
+          return fs.readdirSync(dir).filter(entry => name.test(entry)).map(entry => `${dir}/${entry}`)
+        }), [""]).length > 0
         const child = spawn(process.execPath, [server], { stdio: ["pipe", "pipe", "inherit"] })
         readline.createInterface({ input: child.stdout }).on("line", line => process.stdout.write(`${line}\n`))
         for (const line of fs.readFileSync(requests, "utf8").split("\n").filter(Boolean)) child.stdin.write(`${line}\n`)
         const limit = setTimeout(() => {
-          process.stderr.write(`no exit within 30 s; ${when} ${fs.globSync(when).length > 0 ? "appeared" : "never appeared"}\n`)
+          process.stderr.write(`no exit within 30 s; ${when} ${matched(when) ? "appeared" : "never appeared"}\n`)
           child.kill("SIGKILL")
           process.exit(124)
         }, 30000)
         const poll = setInterval(() => {
-          if (fs.globSync(when).length === 0) return
+          if (!matched(when)) return
           clearInterval(poll)
           const [verb, argument] = action.split(" ")
           if (verb === "signal") return child.kill(argument)
@@ -716,7 +724,7 @@ drive() {
           child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 99, method: "ping" })}\n`)
           setTimeout(() => {
             const there = process.env.DRIVE_FILES !== undefined
-              ? fs.globSync(process.env.DRIVE_FILES).length > 0
+              ? matched(process.env.DRIVE_FILES)
               : require("node:child_process").spawnSync("pgrep", ["-f", process.env.DRIVE_WATCH]).status === 0
             fs.writeFileSync(process.env.DRIVE_SEEN, there ? "there" : "gone")
             child.stdin.end()
