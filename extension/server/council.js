@@ -643,10 +643,13 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   }
 
   // Ends a claimed picker's run with the text a waiting council_result
-  // returns, and says whether one is waiting. The outcome is written before
-  // the markers are read, and a waiter that gives up removes its marker
-  // before it looks for the outcome a last time, so a waiter counted here
-  // always finds it.
+  // returns, and says whether a waiter touched its marker in the last
+  // WAITER_LIVE_MS. The outcome is written before the markers are read, and a
+  // waiter that gives up removes its marker before it looks for the outcome a
+  // last time, so a waiter counted here that is still running finds it.
+  // Counted is not delivered: a waiter whose call was just cancelled, or
+  // whose server is exiting, finds the outcome and has its reply dropped, and
+  // one that died within WAITER_LIVE_MS is counted too.
   function endPick(pick, text) {
     // `asking` goes even when the outcome cannot be written, so a waiter
     // stops at once rather than at its deadline.

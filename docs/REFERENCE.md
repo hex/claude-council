@@ -644,8 +644,11 @@ Ask, an id already held or never picked, a picker past its wait) a fresh id
 of 6 random hex digits. The 5 newest are kept. A run in which no seat
 answered, a refused run and a cancelled one get no id. A claimed picker's run
 ends that picker however it ends, and `structuredContent` gets `awaited`:
-true when a `council_result` was waiting for it then, which the panel reads
-to skip its drafted message.
+true when a `council_result` waiting for it touched its marker in the 2
+seconds before, which the panel reads to skip its drafted message. A waiting
+call still running then returns the outcome to Claude; one cancelled, or
+ended by its server's exit or death, in those 2 seconds is counted too, and
+Claude gets nothing.
 
 `council_models_save` takes either `selections`, every provider's choice at
 once (the settings panel), and answers `{"saved":true}`, or `seat` and

@@ -704,8 +704,14 @@ runs the same scripts the plugin does.
   touched as it waits; the ask reads the markers after writing the outcome
   and answers the panel `awaited`, and a waiter that gives up removes its
   marker before it looks for the outcome a last time, so a waiter the ask
-  counted always gets the run. A marker untouched for 2 seconds is a dead
-  waiter's. The wait ends `answerWithinMs` after the picker opened, the bound
+  counted that is still running finds the run. Counted is not delivered: a
+  waiter whose call was just cancelled, or whose server is exiting, finds it
+  and has its reply dropped, and one that died less than 2 seconds before is
+  counted too, so for that run the panel drafts no message. Closing that
+  window would take an acknowledgement from the waiter after its reply, and
+  even a reply written to stdout does not prove Desktop handed it to the
+  model, so the server does not try. A marker untouched for 2 seconds is a
+  dead waiter's. The wait ends `answerWithinMs` after the picker opened, the bound
   the panel already puts on a run, so choosing and the run share it; then the
   panel drafts the message. The state directory, not memory, carries all of
   it, since the panel's calls and the model's land in different copies of the
