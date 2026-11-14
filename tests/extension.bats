@@ -126,8 +126,10 @@
 #   - the wait running out: a sentence saying the user has not pressed Ask, and no marker left
 #   - a waiter that died: its marker goes stale and no ask counts it as waiting
 #   - council_result for an id council_pick never made: answered at once, never waited on
-#   - the panel's handoff (one ui/message with no seat output, a line saying to press Enter, the
-#     fallback line when the host refuses it) runs only in a host; bats cannot reach it
+#   - the panel's handoff (the picked run sent with the first Ask only; "Claude is writing the
+#     synthesis" and no message when the ask was awaited; else one ui/message with no seat output,
+#     a line saying to press Enter, the fallback line when the host refuses it) runs only in a
+#     host; bats cannot reach it, and whether Desktop keeps the waiting call open is Desktop's
 # Model-list parsing is in extension-models.bats, the package build in extension-build.bats.
 
 load test_helper

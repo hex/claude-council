@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- ABOUTME: The council picker panel Claude Desktop draws under a council_pick call (an MCP App page, a trial) -->
-<!-- ABOUTME: The user picks seats and verbosity and presses Ask; the answers show here, then a message asks Claude to fetch them -->
+<!-- ABOUTME: The user picks seats and verbosity and presses Ask; the answers show here and reach Claude through council_result -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -65,8 +65,8 @@ const picker = document.getElementById('picker')
 const seats = document.getElementById('seats')
 const handoff = document.getElementById('handoff')
 
-// What a shortened answer's card says Claude has of it: the whole of it, once
-// the user sends the message the picker drafts and Claude calls council_result.
+// What a shortened answer's card says Claude has of it: the whole of it, which
+// council_result gives Claude.
 const WHOLE = 'Claude gets all of it when it writes the synthesis.'
 
 // The seats whose model the extension chooses, as the settings panel does: the
@@ -201,6 +201,9 @@ function drawPicker(result) {
   question.textContent = data.question
   const chosen = new Set(data.seats.map(seat => seat.provider))
   let verbosity = data.verbosity
+  // The run Claude may be waiting for, sent with the first Ask only: the
+  // server gives any later Ask a run of its own.
+  let pickedRun = data.run
   const count = element('small')
   const ask = element('button', { type: 'button', textContent: 'Ask' })
   const controls = [ask]
@@ -248,7 +251,10 @@ function drawPicker(result) {
     for (const control of controls) control.disabled = true
     for (const drawn of seatRows) drawn.close()
     const picked = data.seats.filter(seat => chosen.has(seat.provider))
-    run({ question: data.question, providers: picked.map(seat => seat.provider), verbosity }, picked, ask, data.answerWithinMs).catch(err => {
+    const args = { question: data.question, providers: picked.map(seat => seat.provider), verbosity }
+    if (pickedRun !== undefined) args.run = pickedRun
+    pickedRun = undefined
+    run(args, picked, ask, data.answerWithinMs).catch(err => {
       report('failed', true)
       seats.replaceChildren(element('p', { className: 'lead bad', textContent: `The panel could not show the answers (${err.message}).` }))
       host.reportSize()
@@ -299,7 +305,8 @@ function showWaiting(picked, button) {
 }
 
 // Runs the question through council_pick_ask, which is council_ask itself,
-// shows the answers and asks Claude for the synthesis. True once a seat
+// shows the answers, and asks Claude for the synthesis unless the server
+// says Claude is waiting for this run and has it already. True once a seat
 // answered; false to let the user press Ask again. Waits at most
 // `answerWithinMs`, the server's own bound on the run.
 async function run(args, picked, button, answerWithinMs) {
@@ -324,12 +331,19 @@ async function run(args, picked, button, answerWithinMs) {
   if (result?.isError) return false
   // The server holds a run, and names it, only when a seat answered.
   const id = result?.structuredContent?.run
+  const awaited = result?.structuredContent?.awaited === true
   if (id === undefined) {
-    handoff.replaceChildren(element('p', { className: 'lead', textContent: 'No seat answered. Press Ask to try again.' }))
+    const line = awaited ? 'No seat answered, and Claude has the errors. Press Ask to try again.' : 'No seat answered. Press Ask to try again.'
+    handoff.replaceChildren(element('p', { className: 'lead', textContent: line }))
     host.reportSize()
     return false
   }
-  handOff(id)
+  if (awaited) {
+    handoff.replaceChildren(element('p', { className: 'lead', textContent: 'Claude is writing the synthesis.' }))
+    host.reportSize()
+  } else {
+    handOff(id)
+  }
   return true
 }
 
