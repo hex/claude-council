@@ -1415,3 +1415,24 @@ ${asked}"
     [[ "$output" != *"$SENTINEL_KEY"* ]]
     run ! grep -rqF "$SENTINEL_KEY" "$STATE_DIR"
 }
+
+@test "extension: council_result's wait for a picker run runs out with a sentence saying Ask was not pressed, leaving no marker" {
+    # The picker's wait, and so this one, is the run's limit plus the
+    # formatting's plus the relay allowance: 7 seconds here.
+    run --separate-stderr "$NODE" -e '
+        const council = require(process.argv[1])
+        const theCouncil = council.openCouncil({ root: process.argv[2], keys: new Map(), tooShort: [], redact: text => text,
+          timeoutsMs: { ask: 1000, status: 1000, script: 5000, relay: 1000 } })
+        const signal = new AbortController().signal
+        theCouncil.pick({ question: "q" }, true, signal)
+          .then(picked => theCouncil.result({ run: picked.structured.run }, signal).then(waited => ({ run: picked.structured.run, waited })))
+          .then(outcome => process.stdout.write(JSON.stringify(outcome)))
+    ' "${PROJECT_ROOT}/extension/server/council.js" "$PROJECT_ROOT"
+    [ "$status" -eq 0 ]
+    local picked
+    picked=$(jq -r '.run' <<< "$output")
+    [[ "$picked" =~ ^[0-9a-f]{6}$ ]]
+    assert_eq "$(jq -c '.waited' <<< "$output")" "$(jq -cn --arg run "$picked" '{text: "The user has not pressed Ask in the council picker within 7 seconds of it opening. When they do, the picker drafts a message asking for the synthesis of run \($run); call council_result with that run then."}')"
+    [ -d "${STATE_DIR}/picks" ]
+    run ! compgen -G "${STATE_DIR}/picks/*/waiting-*"
+}
