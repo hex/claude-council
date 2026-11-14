@@ -624,8 +624,8 @@ built-in Node.js 18 or later and bash, so it supports macOS and Linux only.
 |---|---|---|
 | `council_ask` | `question` (required), `providers` (list of names, such as `openai` or `openrouter-2`), `verbosity` (`brief`, `standard`, `detailed`) | Runs `query-council.sh --no-pane` and returns two things: the transcript `format-output.sh` renders from its JSON, as text, and `structuredContent` of the form `{question, seats: [{provider, model, answer}` or `{provider, model, error}]}`, in the order the seats ran. Desktop draws the seats in the answers panel; the text, which orders seats by name, is what the model and an app with no panel get. The tool's description asks Claude for the synthesis, and not to repeat the answers when the app draws the panel. |
 | `council_seats` | none | Runs `query-council.sh --list-default-models` under the saved choices and lists each seat a question with no providers named goes to, as `<seat>: <model>`, then the three verbosities. Starts no provider and no CLI agent. With no seat at all it is an error saying where keys go. |
-| `council_pick` | `question` (required) | A trial. Lists the seats as `council_seats` does and returns `structuredContent` `{question, seats: [{provider, model}], verbosities, verbosity, answerWithinMs}` for the picker panel, where `answerWithinMs` is how long the panel waits for its run (the run's limit, the formatting limit and one minute: 690000). The text, and the description, tell the model to wait for the user, and to call `council_result` with the run id when the user asks for the synthesis of a council run, never saying it cannot see the answers. Where no panel is drawn, the text lists the seats and tells the model to ask in the chat and then call `council_ask`. Refuses an empty question and one over 100000 bytes as `council_ask` does. |
-| `council_result` | `run` (a run id such as `3f9a2c`; leave out for the latest) | Returns the text `council_ask` gave for one of the picker's runs, unchanged, with no `structuredContent` and no panel: the picker already shows the answers. Its description asks the model to show each seat's answer and then write the synthesis. The server keeps the last 5 picker runs in which a seat answered, in memory only. An unknown id, and any id before a run or after Desktop restarts the extension, is an error saying the run is not held and to ask the council again. |
+| `council_pick` | `question` (required) | A trial. Lists the seats as `council_seats` does and returns `structuredContent` `{question, seats: [{provider, model}], verbosities, verbosity, answerWithinMs}` for the picker panel, plus `run`, a run id of 6 random hex digits, where `answerWithinMs` is how long the panel waits for its run (the run's limit, the formatting limit and one minute: 690000). The text names the run and tells the model to call `council_result` with it at once, in the same turn, before writing anything, and not to call `council_ask` or answer the question itself. The text and the description also tell the model to call `council_result` with the run id when the user asks for the synthesis of a council run, never saying it cannot see the answers. The server records the picker under `picks/` in the state directory and removes pickers whose runs are long over when the next one opens. Where no panel is drawn, the text lists the seats and tells the model to ask in the chat and then call `council_ask`. Refuses an empty question and one over 100000 bytes as `council_ask` does. |
+| `council_result` | `run` (a run id such as `3f9a2c`; leave out for the latest) | For a picker still waiting for its Ask (by id, or the newest with no id), it waits, polling the state directory, until the run ends, `answerWithinMs` after the picker opened, or the call is cancelled. A run in which a seat answered returns `council_ask`'s text followed by a line asking for the synthesis: the user pressed Ask, the seats asked, has read every answer in the panel, so do not repeat or summarise them seat by seat, and write where they agree, where they differ and a recommendation. A run that ended otherwise (every seat failed, refused, cancelled, stopped) returns "Council run <id> from the picker ended with no answer. Tell the user what failed." and the run's own text. When the wait runs out it returns a sentence: the user has not pressed Ask, or the council is still answering, and the picker will draft the request. Otherwise it returns the text `council_ask` gave for one of the picker's runs, unchanged, with no `structuredContent` and no panel: the picker already shows the answers. Its description asks the model to call it right after `council_pick`, and for the synthesis without repeating the answers. The server keeps the last 5 picker runs in which a seat answered, as files in the state directory. An unknown id, and any id before a run, is an error saying the run is not held and to ask the council again; an id no picker made is answered at once, never waited on. |
 | `council_status` | none | Runs `check-status.sh`, then names any key field too short to be a key, says when the saved model choices could not be read, and says that keys go in Desktop's settings, not in exported variables. |
 | `council_settings` | none | Lists each provider's model in plain text, each line ending "key set" or "no key", and in Desktop opens the settings panel. |
 
@@ -633,13 +633,19 @@ Three more tools serve the panels: `council_models_data` and
 `council_models_save` the settings panel and the picker's model lists, and
 `council_pick_ask` the picker's Ask button. They carry
 `_meta.ui.visibility: ["app"]`, so Desktop hides them from the model.
-`council_pick_ask` takes `council_ask`'s arguments and runs `council_ask`'s
-own function, so every check, limit, cancel and key removal
-applies to it alike. When a seat answered, the server keeps the run's text
-for `council_result`, as a file under `held/` in the state directory, under
-a run id of 6 random hex digits and adds `run` to the `structuredContent`.
-The 5 newest are kept. A run in which no
-seat answered, a refused run and a cancelled one get no id.
+`council_pick_ask` takes `council_ask`'s arguments and `run`, and runs
+`council_ask`'s own function, so every check, limit, cancel and key removal
+applies to it alike. A `run` that is not 6 hex digits is refused before
+anything is run or written. When a seat answered, the server keeps the run's
+text for `council_result`, as a file under `held/` in the state directory,
+and adds `run` to the `structuredContent`. The run id is the one the panel
+sent when it names a picker still open, claimed once; otherwise (a second
+Ask, an id already held or never picked, a picker past its wait) a fresh id
+of 6 random hex digits. The 5 newest are kept. A run in which no seat
+answered, a refused run and a cancelled one get no id. A claimed picker's run
+ends that picker however it ends, and `structuredContent` gets `awaited`:
+true when a `council_result` was waiting for it then, which the panel reads
+to skip its drafted message.
 
 `council_models_save` takes either `selections`, every provider's choice at
 once (the settings panel), and answers `{"saved":true}`, or `seat` and
@@ -711,7 +717,11 @@ and ollama show their model as text. Ask calls `council_pick_ask` through
 Desktop with the seats left on, and the panel draws the answers as the answers panel does.
 It waits for the call at most `answerWithinMs`; a call Desktop never answers,
 such as a cancelled one, then ends in a line saying no answer came back, and
-Ask works again. When the run has an id, the panel sends one `ui/message`,
+Ask works again. The first Ask sends the picker's run id, later ones none.
+When the call answers `awaited`, the panel shows "Claude is writing the
+synthesis." under the answers (or, when no seat answered, that Claude has
+the errors) and sends no message. Otherwise, when the run has an id, the
+panel sends one `ui/message`,
 as the user, with the text `Synthesise the council's answers (run <id>).`
 and no seat output, and shows "Press Enter in the message box to get
 Claude's synthesis of run <id>." under the answers without waiting for Desktop's reply.
@@ -774,7 +784,9 @@ never followed.
 | Path | Contents |
 |---|---|
 | `models.json` | The saved choices, mode 0600, replaced whole through a temporary file. The server ignores a file that fails to parse, holds a bad value or is a symbolic link: runs use the defaults, and the `council_ask` result, `council_status`, `council_settings` and the panel each say so. |
-| `runs/` | The working directory of every council run, mode 0700. The response cache lands in `runs/.claude/council-cache/`. The server saves no transcript: the answers come back in the tool result. |
+| `runs/` | The working directory of every council run, mode 0700. The response cache lands in `runs/.claude/council-cache/`. The server saves no transcript of a `council_ask` run: the answers come back in the tool result. |
+| `held/` | The last 5 picker runs in which a seat answered, for `council_result`: one file each, mode 0600, keys removed, named by when it was held and its run id. |
+| `picks/` | One directory per picker opened, named by when Claude stops waiting for its run and the run id. It holds `open` until Ask claims it, `asking` while the run goes on, `outcome.txt` (what a waiting `council_result` returns, keys removed), and a `waiting-*` marker for each `council_result` waiting, touched every 250 ms; a marker untouched for 2 seconds counts as no waiter, so one left by a server that died never stops the panel's drafted message. Removed once its run is long over. |
 
 **Limits and environment.** Two `council_ask` calls made together run side
 by side. The server stops a run after 10 minutes and a status check after

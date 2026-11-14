@@ -89,17 +89,21 @@ we use?" and Claude first lists the seats with their models
 (standard, brief or detailed) you want, all at standard by default. Name them
 in your message, or say "just ask", and it runs at once. Say "ask the council
 with the picker: which queue should we use?" and Claude opens `council_pick`,
-a panel with the question, a switch per seat and the three verbosities. Press
-Ask: the answers appear in that panel, and Desktop puts "Synthesise the
-council's answers (run 3f9a2c)." in the message box, under a caution about
-malicious content. The line under the answers says to press
+a panel with the question, a switch per seat and the three verbosities. Claude
+then waits, in the same turn, in `council_result` for the picker's run. Press
+Ask: the answers appear in that panel, the line under them says "Claude is
+writing the synthesis", and Claude writes it with no message from you. When
+every seat fails, Claude says what failed. Claude waits at most 11.5 minutes
+from when the picker opened. If it has stopped waiting by the time the answers
+are in, or you press Ask a second time in the same panel, Desktop instead puts
+"Synthesise the council's answers (run 3f9a2c)." in the message box, under a
+caution about malicious content, and the line under the answers says to press
 Enter: Claude then fetches that run's answers with `council_result` and
-writes the synthesis. The panel cannot hand Claude the answers itself, and
-Desktop never sends its message for you. If Desktop refuses the message, the
-line instead gives the words to send yourself (`Ask Claude: "synthesise
-council run 3f9a2c"`). The extension keeps the last 5 runs in which a seat
-answered, until Desktop restarts it; after that, ask the council again. When
-no seat answers, the panel says so and Ask works again. On an API seat or an
+writes the synthesis. The panel cannot send that message itself. If Desktop
+refuses the message, the line instead gives the words to send yourself (`Ask
+Claude: "synthesise council run 3f9a2c"`). The extension keeps the last 5
+runs in which a seat answered; after that, ask the council again. When no
+seat answers, the panel says so and Ask works again. On an API seat or an
 OpenRouter seat the model in grey is a button: click it to pick another model
 from that provider's live list (OpenRouter's has a filter box). The choice
 saves at once, as the settings panel's would, and applies to this question

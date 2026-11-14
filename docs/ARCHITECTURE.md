@@ -670,8 +670,8 @@ runs the same scripts the plugin does.
   forms, each removable on its own. In the first, `council_ask`'s description
   has the model list the seats with `council_seats` and ask in the chat. In
   the second, `council_pick` opens the picker, which runs the question and
-  shows the answers itself; the model sees none of it until the user sends a
-  message.
+  shows the answers itself, while the model waits in `council_result` for
+  the run.
 - The picker's answers reach the model only as a tool result. Measured in
   Claude Desktop: `ui/update-model-context` answers `{}` and delivers nothing
   to the model, with a content array or with `structuredContent`. `ui/message`
@@ -692,6 +692,25 @@ runs the same scripts the plugin does.
   returns that run's text exactly as `council_ask` would have. The
   descriptions of `council_pick` and `council_result`, and `council_pick`'s
   result, tell the model to call it when the user asks for a run's synthesis.
+- That message is the fallback. Desktop draws a panel only once its tool's
+  result has arrived, and keeps it clickable while the model's next tool call
+  is pending, so `council_pick` returns at once with a run id and tells the
+  model to call `council_result` with it in the same turn. That call waits:
+  the picker's record under `picks/` in the state directory is claimed by the
+  first Ask (a rename, so only one Ask gets it), the ask writes the run's
+  outcome there however the run ends, and the waiter, polling, returns it
+  with a closing line asking for a synthesis rather than a repeat of the
+  answers, which a small model otherwise gives. The waiter keeps a marker
+  touched as it waits; the ask reads the markers after writing the outcome
+  and answers the panel `awaited`, and a waiter that gives up removes its
+  marker before it looks for the outcome a last time, so a waiter the ask
+  counted always gets the run. A marker untouched for 2 seconds is a dead
+  waiter's. The wait ends `answerWithinMs` after the picker opened, the bound
+  the panel already puts on a run, so choosing and the run share it; then the
+  panel drafts the message. The state directory, not memory, carries all of
+  it, since the panel's calls and the model's land in different copies of the
+  server. On exit the server aborts its waiting calls and gives a picker's
+  ask a second to write its outcome.
 - Desktop caches a panel page by its `ui://` address across an extension
   reinstall or upgrade, and only a full restart fetches it again. Each
   address ends in the first 12 hex digits of the SHA-256 of the page
