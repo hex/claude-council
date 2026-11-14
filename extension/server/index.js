@@ -188,9 +188,6 @@ async function handle(message) {
   const { id, method, params } = message
   if (method === 'initialize') {
     drawsPanel = Boolean(params?.capabilities?.extensions?.['io.modelcontextprotocol/ui'])
-    // Names only, for the host's log: which of sampling, elicitation and the
-    // panel extension this host offers decides what the server can ask of it.
-    log(`host capabilities: ${Object.keys(params?.capabilities ?? {}).join(', ') || 'none'}`)
     const protocolVersion = PROTOCOL_VERSIONS.includes(params?.protocolVersion) ? params.protocolVersion : PROTOCOL_VERSIONS[0]
     return send({ id, result: { protocolVersion, capabilities: { tools: {}, resources: {} }, serverInfo: { name: 'council', version: VERSION } } })
   }
