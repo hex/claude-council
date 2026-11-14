@@ -679,6 +679,14 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     const held = heldRuns(dir)
     writePrivate(path.join(dir, `${String(Date.now()).padStart(15, '0')}-${run}.txt`), redact(text))
     for (const [old] of held.slice(0, Math.max(0, held.length + 1 - RUNS_KEPT))) fs.rmSync(path.join(dir, old), { force: true })
+    // writePrivate's scratch files that a crash or a failed write left: no
+    // write between a scratch file and its rename takes a minute, so an
+    // older one is no live copy's.
+    const abandoned = Date.now() - 60 * 1000
+    for (const name of fs.readdirSync(dir)) {
+      const stamp = /^\.([0-9]{15})-[0-9a-f]{6}\.txt\.[0-9]+$/.exec(name)?.[1]
+      if (stamp !== undefined && Number(stamp) < abandoned) fs.rmSync(path.join(dir, name), { force: true })
+    }
   }
 
   // Ends a claimed picker whose run threw, with the error. Should ending it
