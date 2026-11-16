@@ -82,12 +82,10 @@ council's bash scripts.
    vendor's logo, and Claude writes the synthesis below it. Desktop waits for
    the whole run, from seconds to a few minutes.
 
-Say "ask the council: which queue should we use?" and Claude runs it at once
-on every default seat at standard verbosity, or on the seats and the verbosity
-(standard, brief or detailed) your message names. To choose them first, say
-"ask the council with the picker: which queue should we use?" (Claude also
-opens the picker when you have not said and the choice matters), and Claude
-opens `council_pick`,
+Name the seats or a verbosity (standard, brief or detailed) in your message,
+or say to just ask everyone, and Claude runs the question at once, on every
+default seat at standard unless you named others. Otherwise, as in "ask the
+council: which queue should we use?", Claude opens `council_pick`,
 a panel with the question, a switch per seat and the three verbosities. Claude
 then waits, in the same turn, in `council_result` for the picker's run. Press
 Ask: the answers appear in that panel, the line under them says "Claude is

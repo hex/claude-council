@@ -666,9 +666,10 @@ runs the same scripts the plugin does.
   from one by the model, so each validates every value as if the model had
   sent it.
 - Choosing the seats and verbosity before a question happens in the picker.
-  `council_ask` runs at once with what it is given, and its description sends
-  the model to `council_pick` when the user wants to choose. `council_pick`
-  opens the picker, which runs the question and shows the answers itself,
+  The two descriptions split the questions: `council_ask` when the user named
+  the seats or a verbosity or said to just ask everyone, running at once,
+  and `council_pick` for every other question. `council_pick` opens the
+  picker, which runs the question and shows the answers itself,
   while the model waits in `council_result` for the run.
 - The picker's answers reach the model only as a tool result. Measured in
   Claude Desktop: `ui/update-model-context` answers `{}` and delivers nothing

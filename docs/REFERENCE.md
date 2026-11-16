@@ -668,10 +668,12 @@ forms at once, and a models file that cannot be read.
 
 `council_ask`'s description tells the model to pass the user's question as
 they asked it, adding context only when it depends on earlier conversation
-the council cannot see. It also says the run starts at once with the seats
-and verbosity given, or every default seat at standard, and that when the
-user wants to choose the seats or the verbosity, or has not said and the
-choice matters, the model calls `council_pick` instead.
+the council cannot see. It also tells the model to use it when the user
+named the seats or a verbosity, or said to just ask everyone, and then it
+runs at once with what was given, or every default seat at standard; for
+any other question, or when the user asks to choose, the model calls
+`council_pick` instead. `council_pick`'s description says the same from its
+side.
 
 A `notifications/cancelled` for a tool call still running stops the runs it
 started, and the server never answers that call.
