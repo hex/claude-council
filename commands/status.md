@@ -1,6 +1,6 @@
 ---
 description: Check connectivity and configuration status of all council providers
-allowed-tools: Bash(bash */scripts/check-status.sh*), Bash(bash */scripts/run-council.sh *)
+allowed-tools: Bash(bash */scripts/check-status.sh*), Bash(bash */scripts/run-council.sh*)
 ---
 
 Check the status of all configured AI providers.
@@ -10,7 +10,7 @@ Check the status of all configured AI providers.
 Run the status check script:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/check-status.sh
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/check-status.sh"
 ```
 
 ## Output
@@ -29,7 +29,7 @@ No additional formatting needed - the script handles all presentation.
 Also list any background council jobs:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --jobs
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh" --jobs
 ```
 
 If the output is non-empty, present it as a table (job id, status, created)
