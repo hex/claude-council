@@ -25,7 +25,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-main { padding: 16px 16px 4px; }
+main { padding: 16px; }
 header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 4px 12px; }
 h1 { font-size: 15px; font-weight: 600; margin: 0; }
 #status { font: 11px var(--mono); color: var(--dim); }
