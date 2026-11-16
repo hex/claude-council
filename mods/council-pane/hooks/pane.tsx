@@ -15,7 +15,7 @@ import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLi
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
-import { choiceRequest, confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA, unknownSeats } from './tool'
+import { askableSeats, type Askable, choiceRequest, confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { ACTION_COLUMNS, isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
@@ -877,21 +877,24 @@ export const register: Register = (on, options) => {
     // `e` is flat: the tool's input fields sit beside `tool` and `tool_use_id`.
     // Its declared type is the union of the listed tools, none of them this one.
     const input = e as unknown as Record<string, unknown>
-    const parsed = councilArgs(input)
-    if ('deny' in parsed) return { deny: parsed.deny }
     const script = `${$.plugin.root}/scripts/run-council.sh`
     if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
     // The seats a default query runs, as /claude-council:ask offers them.
     const listed = await $.process.run(['bash', `${$.plugin.root}/scripts/query-council.sh`, '--list-default-models'], { timeoutMs: SEAT_INFO_MS })
     if (listed.exitCode !== 0) return { result: `Listing the council seats exited ${listed.exitCode}: ${listed.stderr.trim()}. Nothing was sent.`, isError: true }
     const seats = seatsFromList(listed.stdout)
-    // Refused before any question, so the user never answers for a call that cannot send.
-    if (Array.isArray(input.providers)) {
-      const unknown = unknownSeats(input.providers, seats.map(seat => seat.name), await providerScripts($))
-      if (unknown !== undefined) return { deny: unknown }
+    const defaults = seats.map(seat => seat.name)
+    let askable: Askable = { found: defaults, namedOnly: [] }
+    if (input.providers !== undefined) {
+      const discovered = await seatInfo($, 'discover')
+      if (discovered.exitCode !== 0) return { result: `Listing the council seats exited ${discovered.exitCode}: ${discovered.stderr.trim()}. Nothing was sent.`, isError: true }
+      askable = askableSeats(defaults, discovered.stdout.split(/\s+/).filter(name => name !== ''), await providerScripts($))
     }
+    // Refused before any question, so the user never answers for a call that cannot send.
+    const parsed = councilArgs(input, askable)
+    if ('deny' in parsed) return { deny: parsed.deny }
     const missing = missingChoices(input)
-    if (missing.length > 0) {
+    if (missing.length > 0 || parsed.seats === undefined) {
       if (seats.length === 0) return { result: 'No council seat is available on this machine, so nothing was sent. /claude-council:status shows each provider.', isError: true }
       return { result: choiceRequest(seats, missing) }
     }
@@ -899,7 +902,7 @@ export const register: Register = (on, options) => {
     // call; this gate holds even where the tool itself needs no permission.
     let answer: string | undefined
     try {
-      answer = await $.ui.ask(confirmQuestion(input), { header: 'Council', options: [SEND_LABEL, KEEP_LABEL] })
+      answer = await $.ui.ask(confirmQuestion(String(input.question), parsed.seats, String(input.verbosity)), { header: 'Council', options: [SEND_LABEL, KEEP_LABEL] })
     } catch {
       answer = undefined
     }
@@ -1094,19 +1097,15 @@ export const register: Register = (on, options) => {
           // bar or a note with no room is not drawn, so the row asks the
           // surface to shrink nothing. The model's cell takes the slack, so the bar, the
           // time and the action sit in the same columns on every row. An
-          // open seat's row is a header on its provider's colour, darkened, in
-          // white, so each answer starts where the eye can find it.
-          // Each cell's ink, chosen once: on the fill every cell is white.
-          const white = { color: COLOR.onFill }
-          const ink = section.open
-            ? { name: white, model: white, dim: white, state: white, label: white }
-            : { name: {}, model: { color: COLOR.hint }, dim: { dimColor: true }, state: { color: section.stateColor }, label: {} }
+          // open seat's row is drawn as a folded one is: its button reads
+          // `fold` and its answer follows.
+          const ink = { model: { color: COLOR.hint }, dim: { dimColor: true }, state: { color: section.stateColor } }
           return (
-            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: section.fill } : {})}>
+            <Box key={section.key} flexDirection="row" width={columns}>
               <Box flexShrink={0}>
                 <Text>
                   <Text color={section.vendor}>{EDGE_MARK}</Text>
-                  <Text bold {...ink.name}>{` ${section.name}  `}</Text>
+                  <Text bold>{` ${section.name}  `}</Text>
                 </Text>
               </Box>
               <Box flexDirection="row" flexGrow={1} flexShrink={1}>
@@ -1131,16 +1130,13 @@ export const register: Register = (on, options) => {
               <Box flexShrink={0} width={ACTION_COLUMNS} paddingLeft={2}>
                 {action ? (
                   // Not plain: a plain Button draws its hotkey beside the label, and
-                  // the row draws no number. A Button takes no colour of its own, so
-                  // the label is a Text child, white on a header fill.
+                  // the row draws no number.
                   <Button
                     key={`${action.press}:${action.seat}`}
                     label={action.press}
                     {...(section.digit ? { hotkey: section.digit } : {})}
                     onPress={() => (action.press === 'cancel' || action.press === 'retry' ? pressSeat($, state, action.press, action.seat) : toggleSection($, state, section.fold))}
-                  >
-                    <Text {...ink.label}>{action.press}</Text>
-                  </Button>
+                  />
                 ) : null}
               </Box>
             </Box>

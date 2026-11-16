@@ -8,7 +8,7 @@ How the mod looks, and why. Every colour lives in `hooks/theme.ts`, and no other
 - Colour carries meaning, and each meaning has one colour. Text or a glyph always says the same thing, so no state depends on colour alone.
 - Text a person reads meets 4.5:1 on a light and on a dark theme, with two exceptions: `info` is 4.4:1 on light, and the engine has no blue that does better; and the heads-up note's seat line, a seat row's model and the band's event use `hint` at 2.2:1 by choice, so they recede. Glyphs and lines meet 3:1.
 - A screen fits the terminal. A pane taller than the terminal hands the keyboard back to the prompt, so text stays short. A text a person needs to read wraps and is shown whole.
-- A folded section costs one line. A blank line is spent only around an open body, and an open seat's row is drawn on its provider's colour in white, so each answer starts at a header the eye can find and says whose it is.
+- A folded section costs one line. A blank line is spent only around an open body. An open seat's row is drawn as a folded one is, with no fill: its name is bold, its provider's `▌` edge says whose it is, and its button reads `fold`.
 
 ## Colour
 
@@ -30,7 +30,7 @@ Plain `dimColor` serves secondary text that is fine to fade: counts, times and h
 - **Fills under white letters** (`FILL`): the SYNTHESIS header and the heads-up badge. A theme key would turn light on a dark theme and lose the white letters, so these stay fixed.
   - `orange` `rgb(215,119,87)`, Claude's orange, the one fill: the SYNTHESIS header and the heads-up note's `!` or `?`. White on it is 3.1:1, a deliberate exception to 4.5:1 (Alex, 2026-10-23: the deeper brown is not used anywhere).
 - **Data colours** tell things apart without meaning anything, and a theme has too few hues for that.
-  - Vendor colours come from the council's config and draw the `▌` edge at the start of each seat row, and fill an open seat's row under white letters. Their contrast is the vendor palette's, not checked here.
+  - Vendor colours come from the council's config and draw the `▌` edge at the start of each seat row. Their contrast is the vendor palette's, not checked here.
 
 ## Type
 
@@ -64,4 +64,5 @@ Each glyph has one meaning.
 
 - **A narrow seat row loses its parts by two rules.** The bar, one width on every row, shortens from 14 cells to 5 before any model is cut, and is drawn only while those 5 fit beside the widest note on any row; without it the rows share the cells it held. Each row then cuts its own model to what is left beside its note, and drops the note whole, with the model, only when the note alone does not fit. With a 12-letter name, a 4-character time and a `fell back` seat the bar needs 50 columns and the note 43, so from 34 to 42 that row shows its name, time and button and nothing of its state. Under the 34 that the name, the time and the button take, the row runs past the pane's edge.
 - **Widths count UTF-16 code units, not terminal cells.** A model id in wide characters (CJK) takes two cells a character and is counted as one, so its row can run past the pane's edge.
-- **A council run is read from the command's text, not parsed.** A line inside a heredoc or a quoted multi-line string that starts with `bash <path>/run-council.sh` counts as a run and opens the pane, though nothing runs the script.
+- **A council run is read from the command's words, not by a shell parser.** The command is split into words and segments with quotes honored, and a segment counts as a run when it reads `NAME=value` words, runners with their options, bash, then the script. A heredoc body is read as commands, and so is the rest of a comment after a `;` in it, so `bash <path>/run-council.sh` there opens the pane though nothing runs the script. A run goes unseen when bash carries an option (`bash -x <script>`), when it follows a shell keyword or a wrapper the list does not hold (`then`, `!`, `{`, `sudo`, `xargs`), when a redirection comes before bash, when the script is run without bash or through a variable, in backquotes, inside `bash -c "…"`, or behind an option whose value the runner table does not list (`env -S`, `time -o`). The table holds the value-taking options of `timeout`, `env`, `nice` and `exec` only.
+- **The council tool's named-only seats are listed in the mod.** `claude-cli`, `copilot-cli` and `opencode` are named in `hooks/tool.ts` because discovery never lists them. A named-only seat added to the runner is refused by the tool until it is added there. The tool also cannot tell whether a named-only seat is logged in; the run reports that.

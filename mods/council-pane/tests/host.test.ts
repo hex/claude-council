@@ -60,6 +60,60 @@ test('isCouncilRun reads a bare Windows path, whose backslashes escape nothing',
   expect(isCouncilRun('bash C:\\x\\scripts\\run-council.sh --jobs')).toBe(false)
 })
 
+test('isCouncilRun answers within two seconds on a megabyte of anything', () => {
+  const run = 'bash /x/run-council.sh -- q'
+  const inputs: [string, boolean][] = [
+    ['(a;'.repeat(20_000), false],
+    ['(a;'.repeat(350_000), false],
+    [`${'(a;'.repeat(350_000)}cat run-council.sh`, false],
+    [`${';'.repeat(1_000_000)}cat run-council.sh`, false],
+    ['run-council.sh/'.repeat(70_000), false],
+    ['bash "run-council.sh '.repeat(50_000), false],
+    [`${'timeout 5 env X=1 '.repeat(60_000)}${run}`, true],
+    [`${'a/'.repeat(500_000)} ${run}`, false],
+    [`${'a/'.repeat(500_000)}bash /x/run-council.sh -- q`, true],
+    [`bash /x/run-council.sh ${'--list-'.repeat(140_000)}!`, true],
+    [`bash /x/run-council.sh ${'--list-x '.repeat(110_000)}`, false],
+    [`${'"$('.repeat(330_000)}cat run-council.sh`, false],
+    [`${'"$(a) '.repeat(160_000)}cat run-council.sh`, false],
+  ]
+  for (const [input, expected] of inputs) {
+    const started = performance.now()
+    expect(isCouncilRun(input)).toBe(expected)
+    expect(performance.now() - started).toBeLessThan(2000)
+  }
+}, 120_000)
+
+test('isCouncilRun skips the value a runner option takes, and a runner that only reports', () => {
+  expect(isCouncilRun('timeout -s KILL 600 bash /x/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('env -u FOO bash /x/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('env -i bash /x/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('nice -n 10 nohup bash /x/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('command -v bash /x/run-council.sh')).toBe(false)
+  expect(isCouncilRun('command -V bash /x/run-council.sh')).toBe(false)
+  expect(isCouncilRun('command bash /x/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('env echo bash /x/run-council.sh')).toBe(false)
+})
+
+test('isCouncilRun reads quotes: a separator or a flag inside them is text', () => {
+  expect(isCouncilRun('git commit -m "docs (timeout 5 bash scripts/run-council.sh)"')).toBe(false)
+  expect(isCouncilRun("echo 'a; bash /x/run-council.sh -- q'")).toBe(false)
+  expect(isCouncilRun('bash /x/run-council.sh -- "what does --help do"')).toBe(true)
+  expect(isCouncilRun('bash /x/run-council.sh --providers=codex -- --jobs')).toBe(true)
+  expect(isCouncilRun('bash /x/run-council.sh --jobs; bash /x/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('bash /x/run-council.sh \\\n  --jobs')).toBe(false)
+  expect(isCouncilRun('bash /x/run-council.sh \\\n  --providers=codex -- "q"')).toBe(true)
+  expect(isCouncilRun('bash /x/not-run-council.sh -- "q"')).toBe(false)
+})
+
+test('isCouncilRun reads a run captured inside double quotes', () => {
+  expect(isCouncilRun('OUT="$(bash "/x y/scripts/run-council.sh" --providers=codex -- "q")"')).toBe(true)
+  expect(isCouncilRun('echo "saved: $(timeout 600 bash /x/run-council.sh -- "q" | tail -1)"')).toBe(true)
+  expect(isCouncilRun('OUT="$(bash /x/run-council.sh --jobs)"')).toBe(false)
+  expect(isCouncilRun('echo "$(date) bash /x/run-council.sh -- q"')).toBe(false)
+  expect(isCouncilRun('echo "a $( (cd /x; ls) ) b; bash /x/run-council.sh -- q"')).toBe(false)
+})
+
 test('hostFrom reads a stored value or a dialog label, and nothing else', () => {
   expect(hostFrom('mod')).toBe('mod')
   expect(hostFrom('tmux')).toBe('tmux')

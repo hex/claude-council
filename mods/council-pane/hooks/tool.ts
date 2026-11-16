@@ -28,18 +28,19 @@ export const KEEP_LABEL = "Don't send"
 
 // The dialog shows a question of this many characters at most; the run still
 // receives the whole question.
-const QUOTED_MAX = 300
-// Past this many seats the dialog gives their count instead of their names.
-const NAMED_MAX = 4
+const SHOWN_MAX = 300
+// Line ends, tabs and control characters, the escape that starts a terminal
+// sequence among them.
+const NOT_ONE_LINE = /[\s\u0000-\u001f\u007f-\u009f]+/g
 
 // The confirmation the user answers before the question leaves the machine.
-// Called on input councilArgs has already accepted and that names both choices.
-export function confirmQuestion(input: Record<string, unknown>): string {
-  const question = String(input.question)
-  const quoted = question.length > QUOTED_MAX ? `${question.slice(0, QUOTED_MAX)}\u2026` : question
-  const seats = input.providers as string[]
-  const who = seats.length > NAMED_MAX ? `${seats.length} seats` : seats.join(', ')
-  return `Send "${quoted}" to ${who} at ${String(input.verbosity)} verbosity?`
+// Who receives it and how verbose come first, every seat by name, and the
+// question last on one line of its own, so nothing in the question can pass
+// for the recipients or push them out of view.
+export function confirmQuestion(question: string, seats: string[], verbosity: string): string {
+  const line = question.replace(NOT_ONE_LINE, ' ').trim()
+  const shown = line.length > SHOWN_MAX ? `${line.slice(0, SHOWN_MAX)}… (the first ${SHOWN_MAX} of ${line.length} characters; the whole question is sent)` : line
+  return `Send to ${seats.length} ${seats.length === 1 ? 'seat' : 'seats'} at ${verbosity} verbosity: ${seats.join(', ')}\nQuestion: ${shown}`
 }
 
 // Only the exact send label sends. `answer` is undefined when the dialog
@@ -128,28 +129,47 @@ export function choiceRequest(seats: Seat[], missing: Choice[]): string {
   return [ASK_FIRST, '', ...seatPart, ...(asksVerbosity ? [VERBOSITY_QUESTION] : [])].join('\n').trimEnd()
 }
 
-// A seat named outright may sit outside the default set: a shadowed API seat
-// such as openai, or an opt-in one such as claude-cli. The runner knows a name
-// when a providers/<name>.sh exists or it is one of the router's numbered seats.
-export function unknownSeats(named: string[], available: string[], scripts: string[]): string | undefined {
-  const unknown = named.filter(name => !available.includes(name) && !scripts.includes(name) && !ROUTER_SEAT.test(name))
-  if (unknown.length === 0) return undefined
-  const offer = available.length > 0 ? `The seats available now are ${available.join(', ')}.` : 'No seat is available now.'
-  return `Not council seats: ${unknown.join(', ')}. ${offer} Nothing was sent.`
+const SEAT_NAME = /^[a-z][a-z0-9-]*$/
+// Seats discovery never lists, because their program is on every PATH or each
+// question bills a plan: the runner seats them only when named
+// (discover_providers in scripts/lib/providers.sh). One missing here is
+// refused by the tool until it is added.
+const NAMED_ONLY = ['claude-cli', 'copilot-cli', 'opencode']
+
+export type Askable = { found: string[]; namedOnly: string[] }
+
+// The seats a call may name. Found: the ones a default query runs, and the
+// ones this machine has a key or a program for though a default query leaves
+// them out (an API seat its CLI shadows). Named-only: the ones the runner
+// ships and nothing here has checked, so a refusal does not offer them.
+// Every name passed on is one of these, so no other text reaches the runner.
+export function askableSeats(defaults: string[], discovered: string[], scripts: string[]): Askable {
+  const found = [...new Set([...defaults, ...discovered])].filter(name => SEAT_NAME.test(name))
+  return { found, namedOnly: NAMED_ONLY.filter(name => scripts.includes(name) && !found.includes(name)) }
 }
 
-export function councilArgs(input: Record<string, unknown>): { args: string[] } | { deny: string } {
+// `seats` is the named seats, each once: the one list the confirmation shows
+// and the run receives.
+export function councilArgs(input: Record<string, unknown>, askable: Askable): { args: string[]; seats: string[] | undefined } | { deny: string } {
   const { question, providers, verbosity } = input
   if (typeof question !== 'string' || question.trim() === '') return { deny: 'question must be a non-empty string' }
   const flags: string[] = []
+  let seats: string[] | undefined
   if (providers !== undefined) {
-    const isNames = Array.isArray(providers) && providers.length > 0 && providers.every(name => typeof name === 'string' && /^[a-z][a-z0-9-]*$/.test(name))
-    if (!isNames) return { deny: 'providers must be names like codex or openrouter-2' }
-    flags.push(`--providers=${(providers as string[]).join(',')}`)
+    if (!Array.isArray(providers) || providers.length === 0 || !providers.every(name => typeof name === 'string')) {
+      return { deny: 'providers must be a list of seat names, such as codex or openrouter-2' }
+    }
+    seats = [...new Set(providers as string[])]
+    const refused = seats.filter(name => !askable.found.includes(name) && !askable.namedOnly.includes(name))
+    if (refused.length > 0) {
+      const offer = askable.found.length > 0 ? `The seats found here are ${askable.found.join(', ')}.` : 'No seat was found here.'
+      return { deny: `Not seats the council can ask now: ${refused.join(', ')}. ${offer} Nothing was sent.` }
+    }
+    flags.push(`--providers=${seats.join(',')}`)
   }
   if (verbosity !== undefined) {
     if (typeof verbosity !== 'string' || !VERBOSITIES.includes(verbosity)) return { deny: 'verbosity must be brief, standard or detailed' }
     flags.push(`--verbosity=${verbosity}`)
   }
-  return { args: [...flags, '--', question] }
+  return { args: [...flags, '--', question], seats }
 }
