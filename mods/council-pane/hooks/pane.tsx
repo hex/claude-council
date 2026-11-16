@@ -18,7 +18,7 @@ import { readText, readView, type Files } from './snapshot'
 import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
-import { isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
+import { ACTION_COLUMNS, isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { parseCatalog } from './catalog'
 
@@ -44,9 +44,6 @@ const CLOSED_MARK = '\u25b8'
 const EDGE_MARK = '\u258c'
 // The bands above the prompt start where Claude Code's own footer lines do.
 const BAND_INDENT = 2
-// A seat row's action column: two cells of gap, then the widest a
-// bracketed Button draws, the longest verb inside its brackets.
-const ACTION_COLUMNS = 2 + '[ cancel ]'.length
 // The heads-up runner forks and returns its pid; anything slower is a fault.
 const HEADS_UP_LAUNCH_MS = 10_000
 // A seat question reads the provider scripts and a config file or two.
@@ -1031,7 +1028,7 @@ export const register: Register = (on, options) => {
       fits.set(text, fitted)
       return fitted
     }
-    const sections = paneSections(state.view, { ...settings, nowMs: state.nowMs, frame: state.frame, fitText, closed: state.closed })
+    const sections = paneSections(state.view, { ...settings, nowMs: state.nowMs, frame: state.frame, fitText, closed: state.closed, columns })
     state.tableFit = { columns, byText: fits }
     const fit = (sectionKey: string, text: string) => {
       const kept = state.fitted.get(sectionKey)
@@ -1058,8 +1055,11 @@ export const register: Register = (on, options) => {
           return <Text key={key} dimColor>{section.text}</Text>
         case 'seat': {
           const action = section.action
-          // The model takes the slack and gives way when narrow, so the bar,
-          // the time and the action sit in the same columns on every row. An
+          // The row arrives fitted to the pane's width (seatRowFit): the bar
+          // has given way first and then the model, cut to its cells, so the
+          // time and the action stay in view on a surface that shrinks no
+          // cell of its own. The model's cell takes the slack, so the bar, the
+          // time and the action sit in the same columns on every row. An
           // open seat's row is a header on its provider's colour, darkened, in
           // white, so each answer starts where the eye can find it.
           // Each cell's ink, chosen once: on the fill every cell is white.

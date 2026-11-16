@@ -1,7 +1,7 @@
 // ABOUTME: Tests for choosing which council run the pane shows and the markdown it draws
 // ABOUTME: Expected strings are written out by hand, never rebuilt from the code under test
 import { test, expect } from 'bun:test'
-import { isMoving, unseenRun, paneSections, parseColors, markdownBlocks, queryingSince, withinTextBudget, seatsToCancel, seatFolds } from '../hooks/view'
+import { isMoving, unseenRun, paneSections, parseColors, markdownBlocks, queryingSince, withinTextBudget, seatsToCancel, seatFolds, seatRowFit } from '../hooks/view'
 
 test('unseenRun names the first run dir not shown before, ignoring other entries', () => {
   const entries = [
@@ -467,3 +467,52 @@ test('queryingSince starts a clock when a provider queries and drops it when it 
   expect(queryingSince(failed, [{ name: 'grok', state: 'querying' }], 9000)).toEqual({ grok: 9000 })
 })
 
+
+test('seatRowFit keeps the whole bar and the whole model while the row has room', () => {
+  // name 12, time 4, the longest model 31: 16 + 31 + (2 + 14) + (2 + 4) + 12 = 81 cells
+  expect(seatRowFit(100, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 14, middleCells: 50 })
+  expect(seatRowFit(81, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 14, middleCells: 31 })
+})
+
+test('seatRowFit shrinks the bar first, down to five cells, and only then the model', () => {
+  expect(seatRowFit(80, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 13, middleCells: 31 })
+  expect(seatRowFit(72, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 31 })
+  expect(seatRowFit(60, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 19 })
+})
+
+test('seatRowFit leaves the model nothing on a pane narrower than the name, the bar, the time and the button', () => {
+  expect(seatRowFit(39, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 0 })
+  expect(seatRowFit(20, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 0 })
+})
+
+const NARROW_RUN = {
+  providers: [
+    { name: 'codex', state: 'complete', ms: 1700, model: 'gpt-5.5' },
+    { name: 'openrouter-3', state: 'querying', model: 'xiaomi/mimo-v2.6-pro-ultraspeed' },
+    { name: 'grok-cli', state: 'fallback', ms: 900, model: 'grok-4.6 via grok API' },
+  ],
+  responses: {},
+  errors: {},
+  colors: {},
+  isDone: false,
+}
+const seatRows = (columns: number) =>
+  paneSections(NARROW_RUN, { columns }).flatMap(section => (section.kind === 'seat' ? [{ name: section.name, model: section.model, note: section.note, bar: section.bar, time: section.time, press: section.action?.press }] : []))
+
+test('a narrow pane cuts the model with an ellipsis and keeps the name, the note, the time and the button', () => {
+  // 16 (edge and name) + 6 (time) + 12 (button) + 7 (bar) leave 19 cells; the fallen-back seat's note takes 12 of them.
+  expect(seatRows(60)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '━━━━━', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/mimo-v2.6-p…', note: '', bar: '····━', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: 'grok-4…', note: 'fell back', bar: '━━━━━', time: '0.9s', press: undefined },
+  ])
+})
+
+test('a pane with no room for a model draws none, and the bar keeps five cells', () => {
+  expect(seatRows(40).map(row => [row.model, row.bar, row.press])).toEqual([['', '━━━━━', undefined], ['', '····━', 'cancel'], ['', '━━━━━', undefined]])
+})
+
+test('a wide pane, or no width given, draws the whole model and the 14-cell bar', () => {
+  expect(seatRows(120).map(row => [row.model, row.bar.length])).toEqual([['gpt-5.5', 14], ['xiaomi/mimo-v2.6-pro-ultraspeed', 14], ['grok-4.6 via grok API', 14]])
+  expect(paneSections(NARROW_RUN).flatMap(section => (section.kind === 'seat' ? [[section.model, section.bar.length]] : []))).toEqual([['gpt-5.5', 14], ['xiaomi/mimo-v2.6-pro-ultraspeed', 14], ['grok-4.6 via grok API', 14]])
+})

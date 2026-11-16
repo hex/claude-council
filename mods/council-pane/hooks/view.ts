@@ -1,6 +1,6 @@
 // ABOUTME: Decides which council run the pane shows and turns its state into the markdown drawn there
 // ABOUTME: Pure functions over plain values, so they run without the engine
-import { bar, type BarFill } from './bar'
+import { bar, BAR_CELLS, type BarFill } from './bar'
 import { ANSWERED_STATES, count, type ProviderStatus } from './status'
 import { COLOR } from './theme'
 
@@ -137,6 +137,34 @@ export function queryingSince(since: Record<string, number>, providers: Provider
   return next
 }
 
+// A seat row's action column: two cells of gap, then the widest a
+// bracketed Button draws, the longest verb inside its brackets.
+export const ACTION_COLUMNS = 2 + '[ cancel ]'.length
+// The narrowest bar whose sweep still shows track on either side of its dash.
+const NARROW_BAR_CELLS = 5
+
+// How a seat row of `columns` cells shares them. The edge mark, the name, the
+// time and the action column are never cut. `middle` is the widest model with
+// its note on any row: the bar gives way to it first, down to its narrowest,
+// and only then is the middle cut. The bar is one width on every row, so the
+// rows' columns line up. A pane too narrow for the uncut parts leaves the
+// middle nothing and the row runs past the edge.
+export function seatRowFit(columns: number, cells: { name: number; time: number; middle: number }): { barCells: number; middleCells: number } {
+  const room = columns - (1 + 1 + cells.name + 2) - (2 + cells.time) - ACTION_COLUMNS - 2
+  const barCells = Math.min(BAR_CELLS, Math.max(NARROW_BAR_CELLS, room - cells.middle))
+  return { barCells, middleCells: Math.max(0, room - barCells) }
+}
+
+// The cells a row's note takes after its model, the separator included.
+const NOTE_GAP = ' \u00b7 '.length
+const ELLIPSIS = '\u2026'
+
+// A model cut to `cells` ends in an ellipsis; with room for the ellipsis alone it is not drawn.
+function cutModel(model: string, cells: number): string {
+  if (model.length <= cells) return model
+  return cells < 2 ? '' : model.slice(0, cells - 1) + ELLIPSIS
+}
+
 type SeatMarks = Pick<RunView, 'cancels' | 'retries' | 'retriable' | 'isDone'>
 
 // A seat still querying as far as the log knows, with its marker in the
@@ -158,7 +186,7 @@ export function isMoving(view: Pick<RunView, 'providers'> & SeatMarks): boolean 
 // when done, with the synthesis, the seats below it.
 export function paneSections(
   { providers, responses, errors, cancels = [], retries = [], retriable = [], colors, isDone, synthesis, queryingSinceMs = {} }: RunView,
-  { collapsesWhenDone = true, nowMs = 0, frame = 0, fitText = (text: string) => text, closed = new Set<string>() }: { collapsesWhenDone?: boolean; nowMs?: number; frame?: number; fitText?: (text: string) => string; closed?: ReadonlySet<string> } = {},
+  { collapsesWhenDone = true, nowMs = 0, frame = 0, fitText = (text: string) => text, closed = new Set<string>(), columns }: { collapsesWhenDone?: boolean; nowMs?: number; frame?: number; fitText?: (text: string) => string; closed?: ReadonlySet<string>; columns?: number } = {},
 ): Section[] {
   if (providers.length === 0) {
     return [{ kind: 'note', text: isDone ? 'Council finished with no answers.' : 'Waiting for the council...' }]
@@ -197,11 +225,20 @@ export function paneSections(
   const width = (texts: string[]) => Math.max(...texts.map(text => text.length))
   const names = width(providers.map(provider => provider.name))
   const times = width(providers.map(shownTime))
+  // The note is the seat's state in words and is never cut; the model beside it is.
+  const noteCells = (provider: ProviderStatus) => {
+    const { note } = SEAT_LOOKS[shownState(provider)] ?? LIVE
+    return note === '' ? 0 : note.length + (provider.model ? NOTE_GAP : 0)
+  }
+  // With no width given the row is drawn at its full size.
+  const fit = columns === undefined ? undefined
+    : seatRowFit(columns, { name: names, time: times, middle: Math.max(...providers.map(provider => (provider.model ?? '').length + noteCells(provider))) })
   const cancellable = seatsToCancel({ providers, cancels, isDone })
   const retriableNow = seatsToRetry({ providers, retries, retriable, isDone })
   const folds: string[] = []
   const seats = providers.flatMap((provider, index): Section[] => {
-    const { name, model } = provider
+    const { name } = provider
+    const model = fit ? cutModel(provider.model ?? '', fit.middleCells - noteCells(provider)) : provider.model ?? ''
     const key = jumpKey(name)
     const seatFold = fold('seat', key)
     const text = textOf(provider)
@@ -219,9 +256,9 @@ export function paneSections(
       vendor: rgb(colors[name] ?? NEUTRAL_RGB),
       fill: rgb(colors[name] ?? NEUTRAL_RGB, HEADER_SHADE),
       name: name.padEnd(names),
-      model: model ?? '',
+      model,
       note: look.note,
-      bar: bar(look.fill(frame + index * SWEEP_STAGGER)),
+      bar: bar(look.fill(frame + index * SWEEP_STAGGER), fit?.barCells),
       time: shownTime(provider).padStart(times),
       open,
       ...(press ? { action: { press, seat: name } } : {}),
