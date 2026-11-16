@@ -1056,9 +1056,9 @@ export const register: Register = (on, options) => {
         case 'seat': {
           const action = section.action
           // The row arrives fitted to the pane's width (seatRowFit): the bar
-          // has given way first and then the model, cut to its cells, so the
-          // time and the action stay in view on a surface that shrinks no
-          // cell of its own. The model's cell takes the slack, so the bar, the
+          // has given way first and then the model, cut to its cells, and a
+          // bar with no room is not drawn, so the row asks the surface to
+          // shrink nothing. The model's cell takes the slack, so the bar, the
           // time and the action sit in the same columns on every row. An
           // open seat's row is a header on its provider's colour, darkened, in
           // white, so each answer starts where the eye can find it.
@@ -1090,7 +1090,7 @@ export const register: Register = (on, options) => {
               </Box>
               <Box flexShrink={0}>
                 <Text>
-                  <Text {...ink.state}>{`  ${section.bar}`}</Text>
+                  {section.bar === '' ? null : <Text {...ink.state}>{`  ${section.bar}`}</Text>}
                   <Text {...ink.dim}>{`  ${section.time}`}</Text>
                 </Text>
               </Box>

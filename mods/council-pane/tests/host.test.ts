@@ -28,6 +28,8 @@ test('isCouncilRun reads a quoted script path with spaces in it', () => {
   expect(isCouncilRun('bash "/Users/alice/Library/Application Support/Claude/plugin_1/scripts/run-council.sh" --jobs')).toBe(false)
   expect(isCouncilRun('bash "/Users/alice/Library/Application Support/Claude/plugin_1/scripts/query-council.sh" --list-default-models')).toBe(false)
   expect(isCouncilRun('bash "/x/my scripts/check-status.sh"; cat "/x/my scripts/run-council.sh"')).toBe(false)
+  expect(isCouncilRun('bash /Users/alice/Library/Application\\ Support/Claude/plugin_1/scripts/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('bash /x/my\\ scripts/check-status.sh; cat /x/run-council.sh')).toBe(false)
 })
 
 test('hostFrom reads a stored value or a dialog label, and nothing else', () => {

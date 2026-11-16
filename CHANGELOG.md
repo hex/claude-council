@@ -8,7 +8,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ### Fixed
 - The council pane opens for `/claude-council:ask` in the Claude desktop app's Code tab. The app keeps plugins under `Application Support`, and the mod did not recognize a run whose script path held a space, so the run went ahead with no pane.
-- A seat row fits a narrow pane, such as the desktop app's side panel. The bar shortens first, from 14 cells to 5, then the model is cut and ends in `…`. The seat's name, its time and its button stay in view.
+- A seat row fits a narrow pane, such as the desktop app's side panel. The bar shortens first, from 14 cells to 5, then the model is cut and ends in `…`, and a pane narrower still draws no bar. The seat's name, its time and its button stay in view.
 - `run-council.sh` prints the saved transcript's whole path. It printed a path relative to the directory the run started in, and Claude could look for the file in the plugin folder first.
 
 ## 2026.11.1

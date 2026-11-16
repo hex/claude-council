@@ -143,26 +143,33 @@ export const ACTION_COLUMNS = 2 + '[ cancel ]'.length
 // The narrowest bar whose sweep still shows track on either side of its dash.
 const NARROW_BAR_CELLS = 5
 
+const BAR_GAP = 2
+
 // How a seat row of `columns` cells shares them. The edge mark, the name, the
 // time and the action column are never cut. `middle` is the widest model with
 // its note on any row: the bar gives way to it first, down to its narrowest,
-// and only then is the middle cut. The bar is one width on every row, so the
-// rows' columns line up. A pane too narrow for the uncut parts leaves the
-// middle nothing and the row runs past the edge.
+// and only then is the middle cut. Once the narrowest bar no longer fits
+// beside the uncut parts it is not drawn, and the middle has what is left.
+// The bar is one width on every row, so the rows' columns line up. Only a
+// pane narrower than the uncut parts runs a row past its edge.
 export function seatRowFit(columns: number, cells: { name: number; time: number; middle: number }): { barCells: number; middleCells: number } {
-  const room = columns - (1 + 1 + cells.name + 2) - (2 + cells.time) - ACTION_COLUMNS - 2
-  const barCells = Math.min(BAR_CELLS, Math.max(NARROW_BAR_CELLS, room - cells.middle))
-  return { barCells, middleCells: Math.max(0, room - barCells) }
+  const room = columns - (1 + 1 + cells.name + 2) - (2 + cells.time) - ACTION_COLUMNS
+  if (room < BAR_GAP + NARROW_BAR_CELLS) return { barCells: 0, middleCells: Math.max(0, room) }
+  const barCells = Math.min(BAR_CELLS, Math.max(NARROW_BAR_CELLS, room - BAR_GAP - cells.middle))
+  return { barCells, middleCells: room - BAR_GAP - barCells }
 }
 
 // The cells a row's note takes after its model, the separator included.
 const NOTE_GAP = ' \u00b7 '.length
 const ELLIPSIS = '\u2026'
 
-// A model cut to `cells` ends in an ellipsis; with room for the ellipsis alone it is not drawn.
+// The fewest cells a cut model is drawn in: three letters and the ellipsis.
+const CUT_MODEL_CELLS = 4
+
+// A model cut to `cells` ends in an ellipsis; with fewer cells than say whose model it is, none is drawn.
 function cutModel(model: string, cells: number): string {
   if (model.length <= cells) return model
-  return cells < 2 ? '' : model.slice(0, cells - 1) + ELLIPSIS
+  return cells < CUT_MODEL_CELLS ? '' : model.slice(0, cells - 1) + ELLIPSIS
 }
 
 type SeatMarks = Pick<RunView, 'cancels' | 'retries' | 'retriable' | 'isDone'>
@@ -258,7 +265,7 @@ export function paneSections(
       name: name.padEnd(names),
       model,
       note: look.note,
-      bar: bar(look.fill(frame + index * SWEEP_STAGGER), fit?.barCells),
+      bar: fit?.barCells === 0 ? '' : bar(look.fill(frame + index * SWEEP_STAGGER), fit?.barCells),
       time: shownTime(provider).padStart(times),
       open,
       ...(press ? { action: { press, seat: name } } : {}),

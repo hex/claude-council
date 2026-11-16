@@ -480,9 +480,13 @@ test('seatRowFit shrinks the bar first, down to five cells, and only then the mo
   expect(seatRowFit(60, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 19 })
 })
 
-test('seatRowFit leaves the model nothing on a pane narrower than the name, the bar, the time and the button', () => {
-  expect(seatRowFit(39, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 0 })
-  expect(seatRowFit(20, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 0 })
+test('seatRowFit drops the model, then the bar, before the name, the time or the button would be cut', () => {
+  // 16 (edge and name) + 6 (time) + 12 (button) = 34 cells are never cut; the narrow bar and its gap take 7 more.
+  expect(seatRowFit(42, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 1 })
+  expect(seatRowFit(41, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 0 })
+  expect(seatRowFit(40, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 0, middleCells: 6 })
+  expect(seatRowFit(34, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 0, middleCells: 0 })
+  expect(seatRowFit(20, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 0, middleCells: 0 })
 })
 
 const NARROW_RUN = {
@@ -509,7 +513,15 @@ test('a narrow pane cuts the model with an ellipsis and keeps the name, the note
 })
 
 test('a pane with no room for a model draws none, and the bar keeps five cells', () => {
-  expect(seatRows(40).map(row => [row.model, row.bar, row.press])).toEqual([['', '━━━━━', undefined], ['', '····━', 'cancel'], ['', '━━━━━', undefined]])
+  expect(seatRows(41).map(row => [row.model, row.bar, row.press])).toEqual([['', '━━━━━', undefined], ['', '····━', 'cancel'], ['', '━━━━━', undefined]])
+})
+
+test('a pane with no room for the bar draws none, and every row keeps its name, time and button', () => {
+  expect(seatRows(36)).toEqual([
+    { name: 'codex       ', model: '', note: '', bar: '', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: '', note: '', bar: '', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: '', note: 'fell back', bar: '', time: '0.9s', press: undefined },
+  ])
 })
 
 test('a wide pane, or no width given, draws the whole model and the 14-cell bar', () => {
