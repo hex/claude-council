@@ -71,7 +71,7 @@ const NO_ARGUMENTS = { type: 'object', properties: {}, additionalProperties: fal
 // council sees nothing else rewrites the question and adds angles of its own.
 const AS_ASKED = 'Pass the user\'s question as they asked it, adding context only when their message depends on earlier conversation the council cannot see.'
 const QUESTION_AS_ASKED = 'The user\'s question, as they asked it.'
-const RUNS_AT_ONCE = 'It runs at once with the seats and verbosity given, or with every default seat at standard when none are given. When the user wants to choose the seats or the verbosity, or has not said and the choice matters, call council_pick instead.'
+const RUNS_AT_ONCE = 'Use it when the user named the seats or a verbosity, or said to just ask everyone; it then runs at once with the seats and verbosity given, or with every default seat at standard. When the user asks without naming either, or asks to choose them, call council_pick instead.'
 
 const TOOLS = [
   {
@@ -101,7 +101,7 @@ const TOOLS = [
   // The picker panel and the tool its Ask button calls.
   {
     name: 'council_pick',
-    description: `Open the council picker: a panel in the chat with the question, each council seat with its model and a switch, a choice of verbosity and an Ask button. The council runs when the user presses Ask, and the answers appear in the panel. Its result names a council run: call council_result with it at once, in the same turn, and it gives you the answers when they are in. Use it when the user asks for the picker or to choose the seats in a panel. ${AS_ASKED} ${council.AFTER_PICK}`,
+    description: `Open the council picker: a panel in the chat with the question, each council seat with its model and a switch, a choice of verbosity and an Ask button. The council runs when the user presses Ask, and the answers appear in the panel. Its result names a council run: call council_result with it at once, in the same turn, and it gives you the answers when they are in. Use it when the user asks the council without naming the seats or a verbosity, or asks to choose them; when the user named them or said to just ask everyone, call council_ask instead. ${AS_ASKED} ${council.AFTER_PICK}`,
     inputSchema: { type: 'object', properties: { question: { type: 'string', description: QUESTION_AS_ASKED } }, required: ['question'], additionalProperties: false },
     _meta: { ui: { resourceUri: PICK_PANEL.uri } },
     run: (args, signal) => theCouncil.pick(args, drawsPanel, signal),

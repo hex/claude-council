@@ -33,8 +33,8 @@
 #     without repeating the answers, elsewhere it asks for the answers to be shown first
 #   - council_ask's description and question field: the user's question as they asked it, never
 #     "self-contained", which a model reads as leave to rewrite it
-#   - council_ask's description: it runs at once with the seats and verbosity given, or every
-#     default seat at standard, and sends the model to council_pick when the user wants to choose
+#   - council_ask's and council_pick's descriptions: council_ask when the user named the seats or a
+#     verbosity or said to just ask everyone, council_pick for every other question
 #  council_ask
 #   - an empty or blank question, an unknown or malformed provider, a bad verbosity, an unknown
 #     argument: refused with a sentence, nothing run
@@ -89,8 +89,9 @@
 #  the council picker
 #   - council_pick: the panel gets the question, each seat with its model and the three
 #     verbosities, standard chosen, and no agent is started; where no panel is drawn the text lists
-#     the seats and says to ask in the chat; an empty question, one over the cap and an unknown
-#     argument are refused as council_ask refuses them
+#     the seats and says to ask in the chat; with no key and no agent, a sentence saying where keys
+#     go; an empty question, one over the cap and an unknown argument are refused as council_ask
+#     refuses them
 #   - council_pick_ask, the tool the panel's Ask button calls: the same replies as council_ask for
 #     every refusal and for an answer, a key in a seat's error removed, a cancel stopping its run
 #   - council_pick's description and text: when the user asks for the synthesis of a council run,
@@ -337,10 +338,12 @@ save_choices() {
     [[ "$(reply 1)" != *'self-contained'* ]]
 }
 
-@test "extension: council_ask runs at once, and sends the model to council_pick when the user wants to choose" {
+@test "extension: council_ask runs at once on named seats or a verbosity, and council_pick takes every other question" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-    local sentence="It runs at once with the seats and verbosity given, or with every default seat at standard when none are given. When the user wants to choose the seats or the verbosity, or has not said and the choice matters, call council_pick instead."
-    [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .description')" == *"$sentence"* ]]
+    local ask="Use it when the user named the seats or a verbosity, or said to just ask everyone; it then runs at once with the seats and verbosity given, or with every default seat at standard. When the user asks without naming either, or asks to choose them, call council_pick instead."
+    local pick="Use it when the user asks the council without naming the seats or a verbosity, or asks to choose them; when the user named them or said to just ask everyone, call council_ask instead."
+    [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .description')" == *"$ask"* ]]
+    [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_pick") | .description')" == *"$pick"* ]]
     [[ "$(reply 1)" != *'council_seats'* ]]
     assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .inputSchema.properties.providers.description')" \
         'Seat names, such as codex or openrouter-2. Leave out to ask every default seat.'
@@ -1140,6 +1143,18 @@ ollama: local
 openrouter-1: vendor/alpha
 openrouter-2: vendor/beta
 perplexity: sonar-test-1"
+}
+
+@test "extension: council_pick with no key and no agent says where keys go" {
+    local dir
+    for dir in "${HOME}/.local/bin" "${HOME}/bin" /opt/homebrew/bin /usr/local/bin; do
+        for bin in codex agy grok kimi cursor-agent ollama; do
+            [[ -x "${dir}/${bin}" ]] && skip "${dir}/${bin} is installed, and the server searches ${dir} as Desktop's does"
+        done
+    done
+    PATH="$(dirname "$NODE"):/usr/bin:/bin" mcp "$INIT" "$(call 1 council_pick '{"question":"Which queue?"}')"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" 'No council seat is set up: no provider has a key and no CLI agent is installed. In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure.'
 }
 
 @test "extension: council_pick refuses an empty question, one over the cap and an unknown argument, as council_ask does" {
