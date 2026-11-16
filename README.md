@@ -9,6 +9,20 @@ choices.
 
 [![Tests](https://github.com/hex/claude-council/actions/workflows/tests.yml/badge.svg)](https://github.com/hex/claude-council/actions/workflows/tests.yml)
 
+## Where it runs
+
+| Where | What you get |
+| --- | --- |
+| Claude Code in a terminal | `/claude-council:ask`, every seat, and the pane beside the chat. |
+| Claude Desktop, Code tab | The same plugin and the same commands. The pane opens in Desktop's side panel. |
+
+In both, Claude can also call the council as a tool. It asks which seats and
+how verbose first, then shows a Send card, and nothing leaves your machine
+until you confirm it.
+
+claude.ai chat and Cowork run in a sandbox that can block calls to other
+providers, so the council does not work there.
+
 ## Install
 
 You need `curl` and `jq` on macOS, Linux, or Windows through Git Bash.
