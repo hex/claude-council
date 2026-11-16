@@ -27,10 +27,11 @@ export const HOST_LABELS: Record<PaneHost, string> = {
 // when its words are, in order: any `NAME=value` words; any runners, each with
 // its options, durations and assignments; bash, by name or path; the script,
 // by its file name; and no listing flag before a `--`, since what follows that
-// is the question.
+// is the question. A query told `--no-pane` before the `--` starts none.
 const SCRIPT_NAME = 'run-council.sh'
 const ASSIGNMENT = /^[A-Za-z_]\w*=/
 const NOT_A_QUERY = /^(?:-h$|--(?:result|cancel|jobs|help|list-[a-z-]+)(?:=|$))/
+const NO_PANE = '--no-pane'
 // Programs that run the command they are given, each with the options of its
 // own that take the next word as their value.
 const RUNNERS = new Map<string, readonly string[]>([
@@ -63,7 +64,7 @@ function isQuery(words: string[]): boolean {
   }
   if (baseName(words[at] ?? '') !== 'bash' || baseName(words[at + 1] ?? '') !== SCRIPT_NAME) return false
   for (let flag = at + 2; flag < words.length && words[flag] !== '--'; flag++) {
-    if (NOT_A_QUERY.test(words[flag]!)) return false
+    if (NOT_A_QUERY.test(words[flag]!) || words[flag] === NO_PANE) return false
   }
   return true
 }

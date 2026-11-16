@@ -24,6 +24,13 @@ test('isCouncilRun ignores the script being listed, asked for help, or only name
   expect(isCouncilRun('cd /x && bash "scripts/run-council.sh" --verbosity=brief -- "q"')).toBe(true)
 })
 
+test('isCouncilRun leaves a run that asks for no pane alone, wherever the flag sits before the separator', () => {
+  expect(isCouncilRun('bash /x/scripts/run-council.sh "q" --no-pane')).toBe(false)
+  expect(isCouncilRun('bash /x/scripts/run-council.sh --no-pane --providers=codex -- "q"')).toBe(false)
+  expect(isCouncilRun('bash /x/scripts/run-council.sh --providers=codex -- "what does --no-pane do"')).toBe(true)
+  expect(isCouncilRun('bash /x/scripts/run-council.sh -- q --no-pane')).toBe(true)
+})
+
 test('isCouncilRun reads a quoted script path with spaces in it', () => {
   expect(isCouncilRun('bash "/Users/alice/Library/Application Support/Claude/plugin_1/scripts/run-council.sh" -- "is water wet"')).toBe(true)
   expect(isCouncilRun("bash '/opt/my plugins/scripts/run-council.sh' --providers=codex -- 'q'")).toBe(true)
