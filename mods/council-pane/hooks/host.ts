@@ -19,10 +19,14 @@ export const HOST_LABELS: Record<PaneHost, string> = {
 // so may a bare one that escapes them; any other backslash in a bare path is
 // a Windows separator. bash counts only where a command starts: at the head
 // of a line or after `;`, `&`, `|` or `(`, behind any `NAME=value` words, so
-// a quoted mention handed to echo or a search is not a run.
-const COMMAND_START = String.raw`(?:^|[;&|(])\s*(?:[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|[^\s"']*)\s+)*`
+// a quoted mention handed to echo or a search is not a run. A program that
+// runs the command it is given (timeout, env and their kind) may stand before
+// bash with its options, durations and assignments, and bash may carry a path.
+const ASSIGNMENT = String.raw`[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|[^\s"']*)`
+const RUNNER = String.raw`(?:\S*/)?(?:timeout|env|nohup|time|nice|command|exec)(?:\s+(?:-\S+|\d\S*|${ASSIGNMENT}))*\s+`
+const COMMAND_START = String.raw`(?:^|[;&|(])\s*(?:${ASSIGNMENT}\s+)*(?:${RUNNER})*`
 const SCRIPT_PATH = String.raw`(?:"[^"]*run-council\.sh"|'[^']*run-council\.sh'|(?:\\\s|[^\s"'])*run-council\.sh\b)`
-const COUNCIL_SCRIPT_RUN = new RegExp(String.raw`${COMMAND_START}bash\s+${SCRIPT_PATH}`, 'm')
+const COUNCIL_SCRIPT_RUN = new RegExp(String.raw`${COMMAND_START}(?:\S*/)?bash\s+${SCRIPT_PATH}`, 'm')
 
 export function isCouncilRun(command: string): boolean {
   return COUNCIL_SCRIPT_RUN.test(command) && !/--(result|cancel|jobs|help|list-[a-z-]+)(=|\s|$)/.test(command)

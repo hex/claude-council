@@ -42,6 +42,18 @@ test('isCouncilRun counts bash only where a command starts', () => {
   expect(isCouncilRun('COUNCIL_TIMEOUT=500 GROK_MODEL="grok 4" bash "/x y/scripts/run-council.sh" -- "q"')).toBe(true)
 })
 
+test('isCouncilRun reads bash behind timeout or env, and by its own path', () => {
+  expect(isCouncilRun('timeout 600 bash "/x y/scripts/run-council.sh" -- "q"')).toBe(true)
+  expect(isCouncilRun('env X=1 bash /x/scripts/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('/bin/bash /x/scripts/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('/usr/bin/env bash "/x y/scripts/run-council.sh" -- "q"')).toBe(true)
+  expect(isCouncilRun('cd /x && timeout -k 5 300 /bin/bash scripts/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('timeout 600 bash /x/scripts/run-council.sh --jobs')).toBe(false)
+  expect(isCouncilRun('echo timeout 5 bash "do not run run-council.sh"')).toBe(false)
+  expect(isCouncilRun('echo /bin/bash "notes/run-council.sh"')).toBe(false)
+  expect(isCouncilRun('rg env bash "my notes/run-council.sh"')).toBe(false)
+})
+
 test('isCouncilRun reads a bare Windows path, whose backslashes escape nothing', () => {
   expect(isCouncilRun('bash C:\\x\\scripts\\run-council.sh --providers=codex -- "q"')).toBe(true)
   expect(isCouncilRun('bash "C:\\Program Files\\x\\scripts\\run-council.sh" -- "q"')).toBe(true)
