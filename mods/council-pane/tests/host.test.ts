@@ -32,6 +32,22 @@ test('isCouncilRun reads a quoted script path with spaces in it', () => {
   expect(isCouncilRun('bash /x/my\\ scripts/check-status.sh; cat /x/run-council.sh')).toBe(false)
 })
 
+test('isCouncilRun counts bash only where a command starts', () => {
+  expect(isCouncilRun('echo bash "do not run run-council.sh"')).toBe(false)
+  expect(isCouncilRun('rg bash "my notes/run-council.sh"')).toBe(false)
+  expect(isCouncilRun("grep -rn bash 'docs/run-council.sh'")).toBe(false)
+  expect(isCouncilRun('mkdir -p out\nbash "/x y/scripts/run-council.sh" -- "q"')).toBe(true)
+  expect(isCouncilRun('cd /x || exit; (bash scripts/run-council.sh -- "q")')).toBe(true)
+  expect(isCouncilRun('true | bash scripts/run-council.sh -- "q"')).toBe(true)
+  expect(isCouncilRun('COUNCIL_TIMEOUT=500 GROK_MODEL="grok 4" bash "/x y/scripts/run-council.sh" -- "q"')).toBe(true)
+})
+
+test('isCouncilRun reads a bare Windows path, whose backslashes escape nothing', () => {
+  expect(isCouncilRun('bash C:\\x\\scripts\\run-council.sh --providers=codex -- "q"')).toBe(true)
+  expect(isCouncilRun('bash "C:\\Program Files\\x\\scripts\\run-council.sh" -- "q"')).toBe(true)
+  expect(isCouncilRun('bash C:\\x\\scripts\\run-council.sh --jobs')).toBe(false)
+})
+
 test('hostFrom reads a stored value or a dialog label, and nothing else', () => {
   expect(hostFrom('mod')).toBe('mod')
   expect(hostFrom('tmux')).toBe('tmux')

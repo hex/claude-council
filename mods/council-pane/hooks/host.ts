@@ -16,9 +16,16 @@ export const HOST_LABELS: Record<PaneHost, string> = {
 // and asking for help do not, and neither does a command that only names the
 // script (a grep, a cat): the script has to be what bash is given to run.
 // A quoted path may hold spaces, as the desktop app's plugin folder does, and
-// so may a bare one that escapes them.
+// so may a bare one that escapes them; any other backslash in a bare path is
+// a Windows separator. bash counts only where a command starts: at the head
+// of a line or after `;`, `&`, `|` or `(`, behind any `NAME=value` words, so
+// a quoted mention handed to echo or a search is not a run.
+const COMMAND_START = String.raw`(?:^|[;&|(])\s*(?:[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|[^\s"']*)\s+)*`
+const SCRIPT_PATH = String.raw`(?:"[^"]*run-council\.sh"|'[^']*run-council\.sh'|(?:\\\s|[^\s"'])*run-council\.sh\b)`
+const COUNCIL_SCRIPT_RUN = new RegExp(String.raw`${COMMAND_START}bash\s+${SCRIPT_PATH}`, 'm')
+
 export function isCouncilRun(command: string): boolean {
-  return /\bbash\s+("[^"]*run-council\.sh"|'[^']*run-council\.sh'|(?:[^\s"'\\]|\\.)*run-council\.sh\b)/.test(command) && !/--(result|cancel|jobs|help|list-[a-z-]+)(=|\s|$)/.test(command)
+  return COUNCIL_SCRIPT_RUN.test(command) && !/--(result|cancel|jobs|help|list-[a-z-]+)(=|\s|$)/.test(command)
 }
 
 export function hostFrom(value: unknown): PaneHost | undefined {

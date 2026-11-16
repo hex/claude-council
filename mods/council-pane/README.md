@@ -18,7 +18,7 @@ Then run `/claude-council:ask` as usual. From a checkout, add `--plugin-dir .` t
 
 ## How it hooks in
 
-At session start the mod creates a directory under `$TMPDIR`. Just before Claude runs `run-council.sh` (as `bash <path>/run-council.sh`; a quoted path can hold spaces, as the desktop app's plugin folder does), the mod sets `COUNCIL_MOD_PANE_DIR` to that directory, or clears it when the pane belongs to tmux. The run inherits it.
+At session start the mod creates a directory under `$TMPDIR`. Just before Claude runs `run-council.sh` (as `bash <path>/run-council.sh` where a command starts: at the head of a line or after `;`, `&&`, `||`, `|` or `(`, with any `NAME=value` words before it; a quoted path can hold spaces, as the desktop app's plugin folder does, and a bare Windows path its backslashes; a command that only mentions the script, or runs it through `timeout` or another program, opens no pane), the mod sets `COUNCIL_MOD_PANE_DIR` to that directory, or clears it when the pane belongs to tmux. The run inherits it.
 
 When the variable is set, `run-council.sh` writes its watch directory there and skips tmux. The mod polls that directory twice a second and draws what it finds. The files are the same ones the tmux watcher reads, plus a few the mod needs:
 
