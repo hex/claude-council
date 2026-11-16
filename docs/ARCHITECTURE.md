@@ -854,7 +854,7 @@ claude-council/
 │   │   ├── heads-up-e2e.sh      # The heads-up side-check in a real Claude Code, driven through tmux, with the fake codex as the seat
 │   │   ├── heads-up-e2e.expected.txt
 │   │   ├── heads-up-codex-e2e.sh  # One real check against the logged-in codex on a session you name; sends that session off the machine
-│   │   ├── stored-keys-e2e.sh   # Keys stored in the plugin's config reach a Bash-tool command in a real claude -p session, over a shell export
+│   │   ├── stored-keys-e2e.sh   # Keys and the OpenRouter roster stored in the plugin's config reach a Bash-tool command in a real claude -p session, over a shell export
 │   │   ├── stored-keys-e2e.expected.txt
 │   ├── fixtures/
 │   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/cursor-agent/claude/copilot/opencode/ollama binaries on PATH
