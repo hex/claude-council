@@ -538,7 +538,7 @@ export COUNCIL_RETRY_WAIT=45             # seconds the pane's retry offer stays 
 
 Per-call opt-out via `--no-pane`. iTerm2 features no-op silently outside iTerm2; pane no-ops outside tmux.
 
-When a pane (tmux or the one inside Claude Code) streamed the answers, the chat does not reprint them afterwards. A pane inside Claude Code counts only once it is on screen: one that waits undrawn, as in a headless run or a terminal too narrow for a pane you did not open, leaves the answers to the chat. It shows one status line per provider, any `--debate` rebuttals, and the synthesis. The saved transcript still holds every answer. `run-council.sh` prints the transcript's whole path, so it can be read from any directory; the file is under the directory the run started in, never in the plugin folder.
+When a pane (tmux or the one inside Claude Code) streamed the answers, the chat does not reprint them afterwards. It shows one status line per provider, any `--debate` rebuttals, and the synthesis. The saved transcript still holds every answer. `run-council.sh` prints the transcript's whole path, so it can be read from any directory; the file is under the directory the run started in, never in the plugin folder.
 
 ### Pane inside Claude Code (experimental)
 

@@ -109,8 +109,6 @@ type PaneState = {
   closed: Set<string>
   // When the pane picked the live run up; the progress band's clock.
   runStartedMs?: number
-  // True once the live run was told its pane is on screen.
-  saidShown?: boolean
   // Each section's Markdown blocks, for the text they were cut from: a frame
   // redraws the tree, not the markdown.
   fitted: Map<string, { text: string; blocks: string[] }>
@@ -277,11 +275,9 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.closed = new Set()
     state.runStartedMs = now
     state.fitted.clear()
-    state.saidShown = false
     await $.ui.open({ id: PANE_ID, title: 'Council' })
   }
   const runDir = state.runDir
-  await sayShown($, state, runDir)
   state.view = await readView(files($), runDir)
   state.queryingSinceMs = queryingSince(state.queryingSinceMs, state.view.providers, now)
   state.view.queryingSinceMs = state.queryingSinceMs
@@ -321,18 +317,6 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.retry = undefined
     state.retryShown = undefined
   }
-}
-
-// Tells the run its answers can be read in the pane, by the `shown` file the
-// run looks for before it lets the chat skip them. An open pane can wait
-// undrawn (a narrow terminal, no surface attached) or sit behind another tab,
-// so the engine's record is asked on each poll until it says drawn.
-async function sayShown($: EngineInterface, state: PaneState, runDir: string): Promise<void> {
-  if (state.saidShown) return
-  const isDrawn = (await $.ui.panes()).some(pane => pane.id === PANE_ID && pane.isPlaced && pane.isShown)
-  if (!isDrawn) return
-  await $.fs.write(`${runDir}/shown`, '')
-  state.saidShown = true
 }
 
 // Advances the band's and the live seats' sweeps and the clock the elapsed
