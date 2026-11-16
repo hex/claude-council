@@ -21,7 +21,8 @@ export const HOST_LABELS: Record<PaneHost, string> = {
 // plugin folder reads as one path and a mention inside a commit message is
 // text. A backslash before a space keeps the space in the word, before a line
 // end joins the lines, and anywhere else is itself: a Windows separator.
-// `;`, `&`, `|`, `(`, `)` and a line end close a segment. A segment is a query
+// `;`, `&`, `|`, `(`, `)` and a line end close a segment, and so does a `$(`
+// inside double quotes, up to its `)`. A segment is a query
 // when its words are, in order: any `NAME=value` words; any runners, each with
 // its options, durations and assignments; bash, by name or path; the script,
 // by its file name; and no listing flag before a `--`, since what follows that
@@ -73,9 +74,16 @@ export function isCouncilRun(command: string): boolean {
   let words: string[] = []
   let word: string | undefined
   let quote = ''
-  const endWord = () => {
+  // One entry for each open parenthesis: true when it is a `$(` met inside
+  // double quotes, whose `)` returns to the quoted text.
+  const opened: boolean[] = []
+  const endsOnQuery = () => {
     if (word !== undefined) words.push(word)
     word = undefined
+    if (words.length === 0) return false
+    if (isQuery(words)) return true
+    words = []
+    return false
   }
   for (let at = 0; at < command.length; at++) {
     const char = command[at]!
@@ -83,7 +91,12 @@ export function isCouncilRun(command: string): boolean {
     if (quote !== '') {
       if (char === quote) quote = ''
       else if (quote === '"' && char === '\\' && next === '"') word += command[++at]!
-      else word += char
+      else if (quote === '"' && char === '$' && next === '(') {
+        at++
+        if (endsOnQuery()) return true
+        opened.push(true)
+        quote = ''
+      } else word += char
     } else if (char === '"' || char === "'") {
       quote = char
       word ??= ''
@@ -92,19 +105,20 @@ export function isCouncilRun(command: string): boolean {
     } else if (char === '\\' && (next === ' ' || next === '\t')) {
       word = (word ?? '') + command[++at]!
     } else if (char === ' ' || char === '\t' || char === '\r') {
-      endWord()
+      if (word !== undefined) words.push(word)
+      word = undefined
     } else if (';&|()\n'.includes(char)) {
-      endWord()
-      if (words.length > 0) {
-        if (isQuery(words)) return true
-        words = []
+      if (endsOnQuery()) return true
+      if (char === '(') opened.push(false)
+      else if (char === ')' && opened.pop() === true) {
+        quote = '"'
+        word = ''
       }
     } else {
       word = (word ?? '') + char
     }
   }
-  endWord()
-  return isQuery(words)
+  return endsOnQuery()
 }
 
 export function hostFrom(value: unknown): PaneHost | undefined {

@@ -74,6 +74,8 @@ test('isCouncilRun answers within two seconds on a megabyte of anything', () => 
     [`${'a/'.repeat(500_000)}bash /x/run-council.sh -- q`, true],
     [`bash /x/run-council.sh ${'--list-'.repeat(140_000)}!`, true],
     [`bash /x/run-council.sh ${'--list-x '.repeat(110_000)}`, false],
+    [`${'"$('.repeat(330_000)}cat run-council.sh`, false],
+    [`${'"$(a) '.repeat(160_000)}cat run-council.sh`, false],
   ]
   for (const [input, expected] of inputs) {
     const started = performance.now()
@@ -102,6 +104,14 @@ test('isCouncilRun reads quotes: a separator or a flag inside them is text', () 
   expect(isCouncilRun('bash /x/run-council.sh \\\n  --jobs')).toBe(false)
   expect(isCouncilRun('bash /x/run-council.sh \\\n  --providers=codex -- "q"')).toBe(true)
   expect(isCouncilRun('bash /x/not-run-council.sh -- "q"')).toBe(false)
+})
+
+test('isCouncilRun reads a run captured inside double quotes', () => {
+  expect(isCouncilRun('OUT="$(bash "/x y/scripts/run-council.sh" --providers=codex -- "q")"')).toBe(true)
+  expect(isCouncilRun('echo "saved: $(timeout 600 bash /x/run-council.sh -- "q" | tail -1)"')).toBe(true)
+  expect(isCouncilRun('OUT="$(bash /x/run-council.sh --jobs)"')).toBe(false)
+  expect(isCouncilRun('echo "$(date) bash /x/run-council.sh -- q"')).toBe(false)
+  expect(isCouncilRun('echo "a $( (cd /x; ls) ) b; bash /x/run-council.sh -- q"')).toBe(false)
 })
 
 test('hostFrom reads a stored value or a dialog label, and nothing else', () => {
