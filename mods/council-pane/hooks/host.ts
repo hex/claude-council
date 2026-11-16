@@ -30,7 +30,7 @@ export const HOST_LABELS: Record<PaneHost, string> = {
 // is the question.
 const SCRIPT_NAME = 'run-council.sh'
 const ASSIGNMENT = /^[A-Za-z_]\w*=/
-const NOT_A_QUERY = /^--(?:result|cancel|jobs|help|list-[a-z-]+)(?:=|$)/
+const NOT_A_QUERY = /^(?:-h$|--(?:result|cancel|jobs|help|list-[a-z-]+)(?:=|$))/
 // Programs that run the command they are given, each with the options of its
 // own that take the next word as their value.
 const RUNNERS = new Map<string, readonly string[]>([

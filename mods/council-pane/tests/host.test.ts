@@ -17,6 +17,8 @@ test('isCouncilRun ignores the script being listed, asked for help, or only name
   expect(isCouncilRun('bash /x/scripts/run-council.sh --help')).toBe(false)
   expect(isCouncilRun('bash /x/scripts/run-council.sh --list-available')).toBe(false)
   expect(isCouncilRun('bash /x/scripts/run-council.sh --list-default-models')).toBe(false)
+  expect(isCouncilRun('bash /x/scripts/run-council.sh -h')).toBe(false)
+  expect(isCouncilRun('bash /x/scripts/run-council.sh -- -h')).toBe(true)
   expect(isCouncilRun('grep -rn run-council.sh scripts/')).toBe(false)
   expect(isCouncilRun('cat scripts/run-council.sh')).toBe(false)
   expect(isCouncilRun('cd /x && bash "scripts/run-council.sh" --verbosity=brief -- "q"')).toBe(true)
