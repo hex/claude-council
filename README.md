@@ -33,8 +33,9 @@ key as its variable for the whole session, so every command Claude Code starts,
 in every project, gets the stored key in place of one your shell exports.
 The OpenRouter models row takes the model ids `OPENROUTER_MODELS` takes, so
 the router's seats need no export either.
-Stored keys need Claude Code 2.1.287 or later and never reach claude.ai chat or
-Cowork. [API keys](docs/REFERENCE.md#api-keys) covers where they are kept,
+Stored keys need Claude Code 2.1.287 or later. The desktop app's plugin
+Settings tab takes them too, for sessions on that computer. They never reach
+claude.ai chat or Cowork. [API keys](docs/REFERENCE.md#api-keys) covers where they are kept,
 when the mod does not load, and how a cleared key behaves.
 
 The `codex`, `agy` (Antigravity), `grok`, `kimi`, and `cursor-agent` CLIs use

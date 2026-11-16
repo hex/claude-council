@@ -196,7 +196,9 @@ value does not remove a stored key.
 Stored keys work only where the mod loads. It needs Claude Code 2.1.287 or
 later, and it does not load under `--safe-mode`, with `disableAllHooks` set, or
 where managed settings set `allowManagedHooksOnly` or `allowManagedModsOnly`.
-The desktop app's plugin page shows no fields for them, and the
+The desktop app's plugin Settings tab shows the same fields and keeps what you
+save on that computer, for sessions that run there and not for SSH, WSL or
+cloud sessions. The
 [platform-support page](https://claude.com/docs/plugins/platform-support) says
 Cowork does not prompt for plugin values, so stored keys never reach claude.ai
 chat or Cowork.
