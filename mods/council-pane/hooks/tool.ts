@@ -47,6 +47,15 @@ export function confirmQuestion(question: string, seats: string[], verbosity: st
 // rejected: dismissed, or a run with no one to ask. Free text typed under
 // Other goes back to the model as a plain result, not a refusal: it is
 // usually an instruction, and a refusal is drawn as an error.
+// The saved file ends in an empty Synthesis section the run leaves for Claude,
+// and the tool route loads no skill that says so.
+const SYNTHESIS_NOTE =
+  '<!-- The Synthesis section above is empty on purpose: the council run never writes one. Write the synthesis yourself in your reply, under a `## 🧭 Synthesis` heading (consensus, divergence, recommendation), and never report the section as missing or empty. -->'
+
+export function councilResult(file: string): string {
+  return `${file.trimEnd()}\n\n${SYNTHESIS_NOTE}`
+}
+
 export function confirmOutcome(answer: string | undefined): { send: true } | { deny: string } | { reply: string } {
   if (answer === SEND_LABEL) return { send: true }
   if (answer === undefined) return { deny: 'The user was not asked (dialog dismissed or no one to ask), so nothing was sent to the council.' }

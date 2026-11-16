@@ -15,7 +15,7 @@ import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLi
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
-import { askableSeats, type Askable, choiceRequest, confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
+import { askableSeats, type Askable, choiceRequest, confirmOutcome, confirmQuestion, councilArgs, councilResult, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { ACTION_COLUMNS, isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
@@ -913,7 +913,7 @@ export const register: Register = (on, options) => {
     const run = await $.process.run(['bash', script, ...parsed.args], { timeoutMs: RUN_TIMEOUT_MS })
     const saved = run.stdout.trim().split('\n').pop() ?? ''
     if (run.exitCode !== 0 || !saved) return { result: run.stderr || 'council run failed', isError: true }
-    return { result: await $.fs.read(saved) }
+    return { result: councilResult(await $.fs.read(saved)) }
   })
 
   on('command.run', { command: HEADS_UP_COMMAND }, async ($, e) => {

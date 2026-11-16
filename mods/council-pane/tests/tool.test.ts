@@ -1,7 +1,7 @@
 // ABOUTME: Tests for turning the council tool's input into run-council.sh arguments
 // ABOUTME: The input comes from the model, so every field is validated before it reaches a command line
 import { test, expect } from 'bun:test'
-import { askableSeats, confirmOutcome, confirmQuestion, councilArgs, choiceRequest, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL } from '../hooks/tool'
+import { askableSeats, confirmOutcome, confirmQuestion, councilArgs, choiceRequest, councilResult, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL } from '../hooks/tool'
 
 const NONE = { found: [], namedOnly: [] }
 
@@ -194,5 +194,11 @@ test('a lone seat is passed without a seat question', () => {
 test('a call missing only the verbosity is asked only that', () => {
   expect(choiceRequest([{ name: 'codex', model: 'gpt-6.1-sol' }, { name: 'gemini', model: 'g' }], ['verbosity'])).toBe(
     [ASK_FIRST, '', VERBOSITY_QUESTION].join('\n'),
+  )
+})
+
+test('the result tells Claude the empty synthesis section is its own to write', () => {
+  expect(councilResult('# Council\n\n## 🧭 Synthesis\n')).toBe(
+    '# Council\n\n## 🧭 Synthesis\n\n<!-- The Synthesis section above is empty on purpose: the council run never writes one. Write the synthesis yourself in your reply, under a `## 🧭 Synthesis` heading (consensus, divergence, recommendation), and never report the section as missing or empty. -->',
   )
 })
