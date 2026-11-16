@@ -31,6 +31,8 @@ fill in the API key rows, and choose Save configuration. Claude Code keeps them 
 its secure storage, not in a settings file. The council's mod sets each stored
 key as its variable for the whole session, so every command Claude Code starts,
 in every project, gets the stored key in place of one your shell exports.
+The OpenRouter models row takes the model ids `OPENROUTER_MODELS` takes, so
+the router's seats need no export either.
 Stored keys need Claude Code 2.1.287 or later and never reach claude.ai chat or
 Cowork. [API keys](docs/REFERENCE.md#api-keys) covers where they are kept,
 when the mod does not load, and how a cleared key behaves.
@@ -145,10 +147,10 @@ It writes files in that `$TMPDIR` directory, including `model.json` and
 That file is the heads-up switch. Claude Code itself does not read it.
 
 It sets environment variables in Claude Code's own process. With an API key
-stored in the plugin's config, it sets that key's variable, such as
-`OPENAI_API_KEY`, when the session starts. Every command Claude Code starts
-after that gets the stored key in place of the one your shell exports, the
-same as an export would. Before a council run it sets `COUNCIL_MOD_PANE_DIR`.
+or the OpenRouter models list stored in the plugin's config, it sets that
+variable, such as `OPENAI_API_KEY` or `OPENROUTER_MODELS`, when the session
+starts. Every command Claude Code starts after that gets the stored value in
+place of the one your shell exports, the same as an export would. Before a council run it sets `COUNCIL_MOD_PANE_DIR`.
 
 It touches the prompt in two places. With `wake_on_async_done` on, it
 submits `The background council job <id> has finished. Fetch it with

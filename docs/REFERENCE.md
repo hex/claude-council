@@ -209,6 +209,16 @@ To seat several routed models at once, list them instead:
 export OPENROUTER_MODELS="deepseek/deepseek-v3.2,z-ai/glm-5.3,qwen/qwen3-max"
 ```
 
+Or store the list in the plugin's config: the OpenRouter models field
+(`openrouter_models`) in `/plugin configure claude-council`. Separate the ids
+with commas or spaces. The list is not a secret, so Claude Code keeps it with
+the plugin's other options in `settings.json`, not in secure storage. When a
+session starts, the council's mod sets a non-blank value as
+`OPENROUTER_MODELS` the way it sets a [stored key](#api-keys): it wins over a
+shell export, a blank field leaves the export alone, and a list removed from
+the config stays in the session until Claude Code restarts. It needs the mod,
+as stored keys do.
+
 Each entry becomes its own council member — `openrouter-1`, `openrouter-2`,
 `openrouter-3` — with its own header, model label, cache entry and role, all
 sharing the one key. `--providers=openrouter-2` picks one out. The list replaces

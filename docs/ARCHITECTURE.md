@@ -926,7 +926,7 @@ claude-council/
 | `COPILOT_CLI_MODEL` | (unset) | Model passed to `copilot --model`, only when set (else the CLI's automatic pick, which can change per question; a plan can reject every named model) |
 | `OPENCODE_MODEL` | (unset) | `provider/model` passed to `opencode run -m` (else the `model` from the user's `opencode.json`; with neither, no `-m` and the CLI's built-in default) |
 | `OPENROUTER_MODEL` | `anthropic/claude-fable-5.1` | Any id from openrouter.ai/models (single seat) |
-| `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat |
+| `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat. The council-pane mod sets it from a non-blank `openrouter_models` option at `session.start`, over a shell export |
 | `OPENROUTER_<N>_MODEL` | (unset) | Overrides roster seat N's entry, as `<PROVIDER>_MODEL` does for any provider; the exit-3 degrade path sets it so a roster entry never resends the model that just failed |
 | `COUNCIL_SEAT` | (set by the orchestrator) | Which seat a provider script is running as; only the router reads it |
 | `OPENROUTER_REASONING_TOKENS` | 8000 | Thinking budget sent as `reasoning.max_tokens` on every routed request; `0` sends none and the model decides. Bounds the thinking alone, where `max_tokens` bounds thinking plus answer: a routed model that would think for 20k tokens on a long prompt otherwise outlasts `COUNCIL_TIMEOUT`. Effort-only upstreams map the number to an effort level; adaptive models ignore it |
@@ -953,7 +953,7 @@ claude-council/
 | `COUNCIL_DEBUG` | - | Enable debug output |
 | `COUNCIL_NO_PANE` | - | Set to `1` to disable the streaming tmux pane globally |
 | `COUNCIL_MOD_PANE_DIR` | - | An existing directory a run writes its watch dir into, opening no tmux pane. Only the council-pane mod sets it; `COUNCIL_NO_PANE` still wins |
-| `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `heads_up` | ask, on, off, on, off | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each |
+| `/config` rows `pane_host`, `collapse_when_done`, `wake_on_async_done`, `council_tool`, `heads_up`, `openrouter_models` | ask, on, off, on, off, empty | The council-pane mod's settings, read from the plugin's `userConfig`; `mods/council-pane/README.md` describes each. `openrouter_models` sits in `mods/council-pane/hooks/stored-variables.ts` beside the keys below, and the mod sets it as `OPENROUTER_MODELS` the same way |
 | `/plugin configure` fields `gemini_api_key`, `openai_api_key`, `xai_api_key`, `perplexity_api_key`, `kimi_api_key`, `openrouter_api_key` | unset | Provider API keys in Claude Code's secure storage (`sensitive` in `userConfig`, so no `/config` row). `mods/council-pane/hooks/stored-variables.ts` maps each to its variable, and at `session.start`, before anything else, the mod sets it with `$.env.set` in Claude Code's own process, over a shell export. The mod writes no key to a file; `lib/retry.sh` still writes a seat's auth header to a mode-600 temp file per request, as for an exported key. Only where the mod loads; `tests/e2e/stored-keys-e2e.sh` checks it in a real session |
 | `COUNCIL_HEADS_UP_SEAT_SECONDS` | 60 | The heads-up seat's deadline per check (s) |
 | `COUNCIL_HEADS_UP_TURNS` | 5 | Prompts (typed, or submitted by cs/cs-rotate) the heads-up digest window covers, from the Nth-last to the end |
