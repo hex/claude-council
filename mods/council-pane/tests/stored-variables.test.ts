@@ -1,18 +1,18 @@
-// ABOUTME: Tests for the provider keys stored in plugin config and the variable each becomes
+// ABOUTME: Tests for the plugin config options the mod sets as environment variables, and the variable each becomes
 // ABOUTME: Covers parsing the options register receives and agreement with plugin.json and pane.tsx
 import { test, expect } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { PROVIDER_KEYS, storedKeys } from '../hooks/keys'
+import { STORED_VARIABLES, storedValues } from '../hooks/stored-variables'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
 
 test('no stored keys: nothing to hand on', () => {
-  expect(storedKeys({})).toEqual([])
+  expect(storedValues({})).toEqual([])
 })
 
 test('each stored key becomes its provider variable, in table order', () => {
-  expect(storedKeys({
+  expect(storedValues({
     openrouter_api_key: 'example-openrouter',
     gemini_api_key: 'example-gemini',
     openai_api_key: 'example-openai',
@@ -30,23 +30,23 @@ test('each stored key becomes its provider variable, in table order', () => {
 })
 
 test('a key pasted with surrounding whitespace is handed on without it', () => {
-  expect(storedKeys({ openai_api_key: '  example-openai\n' })).toEqual([{ variable: 'OPENAI_API_KEY', value: 'example-openai' }])
+  expect(storedValues({ openai_api_key: '  example-openai\n' })).toEqual([{ variable: 'OPENAI_API_KEY', value: 'example-openai' }])
 })
 
 test('an empty, blank or non-string value is not a key, and other options are ignored', () => {
-  expect(storedKeys({ gemini_api_key: '', openai_api_key: '   ', xai_api_key: true, kimi_api_key: 42, pane_host: 'tmux', heads_up: true })).toEqual([])
+  expect(storedValues({ gemini_api_key: '', openai_api_key: '   ', xai_api_key: true, kimi_api_key: 42, pane_host: 'tmux', heads_up: true })).toEqual([])
 })
 
 test('plugin.json declares exactly the table, each one optional, sensitive and titled alike', () => {
   const manifest = JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'plugin.json'), 'utf8')) as { userConfig: Record<string, Record<string, unknown>> }
   const sensitive = Object.entries(manifest.userConfig).filter(([, field]) => field.sensitive === true)
   expect(sensitive.map(([option, field]) => ({ option, title: field.title, type: field.type, required: field.required, default: field.default }))).toEqual(
-    PROVIDER_KEYS.map(({ option, title }) => ({ option, title, type: 'string', required: undefined, default: undefined })),
+    STORED_VARIABLES.map(({ option, title }) => ({ option, title, type: 'string', required: undefined, default: undefined })),
   )
 })
 
 test('pane.tsx spells a $.env.set for every variable, the only way the engine lets it write one', () => {
   const source = readFileSync(join(ROOT, 'mods', 'council-pane', 'hooks', 'pane.tsx'), 'utf8')
   const written = [...source.matchAll(/\$\.env\.set\('([A-Z_]+)'/g)].map(match => match[1])
-  expect(PROVIDER_KEYS.filter(({ variable }) => !written.includes(variable))).toEqual([])
+  expect(STORED_VARIABLES.filter(({ variable }) => !written.includes(variable))).toEqual([])
 })

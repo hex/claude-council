@@ -1,7 +1,7 @@
-// ABOUTME: The provider API keys a person can store in the plugin's config, and the variable each one becomes
-// ABOUTME: Option names match plugin.json's sensitive userConfig; a missing, blank or mistyped value is no key
+// ABOUTME: The plugin config options the mod sets as environment variables, and the variable each one becomes
+// ABOUTME: Option names match plugin.json's userConfig; a missing, blank or mistyped value sets nothing
 
-export const PROVIDER_KEYS = [
+export const STORED_VARIABLES = [
   { option: 'gemini_api_key', variable: 'GEMINI_API_KEY', title: 'Gemini API key' },
   { option: 'openai_api_key', variable: 'OPENAI_API_KEY', title: 'OpenAI API key' },
   { option: 'xai_api_key', variable: 'XAI_API_KEY', title: 'xAI API key (Grok)' },
@@ -10,12 +10,12 @@ export const PROVIDER_KEYS = [
   { option: 'openrouter_api_key', variable: 'OPENROUTER_API_KEY', title: 'OpenRouter API key' },
 ] as const
 
-export type KeyVariable = (typeof PROVIDER_KEYS)[number]['variable']
+export type StoredVariable = (typeof STORED_VARIABLES)[number]['variable']
 
-export type StoredKey = { variable: KeyVariable; value: string }
+export type StoredValue = { variable: StoredVariable; value: string }
 
-export function storedKeys(options: Record<string, unknown>): StoredKey[] {
-  return PROVIDER_KEYS.flatMap(({ option, variable }) => {
+export function storedValues(options: Record<string, unknown>): StoredValue[] {
+  return STORED_VARIABLES.flatMap(({ option, variable }) => {
     const value = typeof options[option] === 'string' ? options[option].trim() : ''
     return value !== '' ? [{ variable, value }] : []
   })
