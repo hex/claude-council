@@ -458,6 +458,17 @@ display_pane_open() {
     printf '%s' "$watch_dir"
 }
 
+# Whether anyone could read the pane behind a watch dir. A tmux pane is on
+# screen from the moment it opens. A mod's pane can wait undrawn for the whole
+# run (a terminal too narrow for a pane nobody asked for, a headless run, an
+# app that places none), so the mod drops `shown` in the dir once it is drawn.
+# Args: watch_dir
+display_pane_was_drawn() {
+    local watch_dir="$1"
+    [[ -n "${COUNCIL_MOD_PANE_DIR:-}" && "$watch_dir" == "$COUNCIL_MOD_PANE_DIR"/* ]] || return 0
+    [[ -f "$watch_dir/shown" ]]
+}
+
 # Signals the watcher to stop polling and switch to interactive close prompt.
 display_pane_close() {
     local pane_dir="$1"
