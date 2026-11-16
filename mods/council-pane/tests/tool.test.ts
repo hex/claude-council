@@ -81,6 +81,16 @@ test('a question cannot draw lines of its own in the confirmation', () => {
   })
 })
 
+test('a question cannot reorder or hide text in the confirmation with characters that draw nothing', () => {
+  const hidden = 'ask\u202e codex\u200b now\u2066!\u2069 a\u200d\u061c\u2060\ufeffb'
+  expect(confirmQuestion(hidden, ['openai'], 'brief')).toBe('Send to 1 seat at brief verbosity: openai\nQuestion: ask codex now! ab')
+  expect(confirmQuestion(`${'x'.repeat(299)}\u202e\u200by`, ['openai'], 'brief')).toBe(`Send to 1 seat at brief verbosity: openai\nQuestion: ${'x'.repeat(299)}y`)
+  expect(councilArgs({ question: hidden, providers: ['openai'], verbosity: 'brief' }, { found: ['openai'], namedOnly: [] })).toEqual({
+    args: ['--providers=openai', '--verbosity=brief', '--', hidden],
+    seats: ['openai'],
+  })
+})
+
 test('a long question is cut in the confirmation, which says so, never in what is sent', () => {
   const question = 'x'.repeat(500)
   expect(confirmQuestion(question, ['codex'], 'brief')).toBe(

@@ -12,6 +12,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ### Fixed
 - The council pane no longer opens for `run-council.sh -h`, which prints the usage and asks nobody.
+- The send dialog shows the question without direction overrides and zero-width characters, so a question cannot reorder or hide text there. The providers still receive the question as written.
 - The mod leaves a run given `--no-pane` alone. In tmux it could ask where the pane should open for a run that draws none.
 - The council pane opens for a run that follows a quoted string ending in an escaped backslash, such as `echo "a\\"; bash <path>/run-council.sh -- "q"`. The mod read the closing quote as escaped and took the rest of the command for quoted text.
 - The council pane opens for a run whose script path is built inside double quotes, such as `bash "$(pwd)/scripts/run-council.sh" -- "q"`. The mod dropped the words before the `$(`, `bash` among them, and opened no pane.

@@ -32,13 +32,16 @@ const SHOWN_MAX = 300
 // Line ends, tabs and control characters, the escape that starts a terminal
 // sequence among them.
 const NOT_ONE_LINE = /[\s\u0000-\u001f\u007f-\u009f]+/g
+// Format characters: the direction overrides and isolates that reorder the
+// text after them, and the zero-width ones that hide inside a word.
+const DRAWS_NOTHING = /\p{Cf}/gu
 
 // The confirmation the user answers before the question leaves the machine.
 // Who receives it and how verbose come first, every seat by name, and the
 // question last on one line of its own, so nothing in the question can pass
 // for the recipients or push them out of view.
 export function confirmQuestion(question: string, seats: string[], verbosity: string): string {
-  const line = question.replace(NOT_ONE_LINE, ' ').trim()
+  const line = question.replace(DRAWS_NOTHING, '').replace(NOT_ONE_LINE, ' ').trim()
   const shown = line.length > SHOWN_MAX ? `${line.slice(0, SHOWN_MAX)}… (the first ${SHOWN_MAX} of ${line.length} characters; the whole question is sent)` : line
   return `Send to ${seats.length} ${seats.length === 1 ? 'seat' : 'seats'} at ${verbosity} verbosity: ${seats.join(', ')}\nQuestion: ${shown}`
 }
