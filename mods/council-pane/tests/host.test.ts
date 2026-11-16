@@ -22,6 +22,14 @@ test('isCouncilRun ignores the script being listed, asked for help, or only name
   expect(isCouncilRun('cd /x && bash "scripts/run-council.sh" --verbosity=brief -- "q"')).toBe(true)
 })
 
+test('isCouncilRun reads a quoted script path with spaces in it', () => {
+  expect(isCouncilRun('bash "/Users/alice/Library/Application Support/Claude/plugin_1/scripts/run-council.sh" -- "is water wet"')).toBe(true)
+  expect(isCouncilRun("bash '/opt/my plugins/scripts/run-council.sh' --providers=codex -- 'q'")).toBe(true)
+  expect(isCouncilRun('bash "/Users/alice/Library/Application Support/Claude/plugin_1/scripts/run-council.sh" --jobs')).toBe(false)
+  expect(isCouncilRun('bash "/Users/alice/Library/Application Support/Claude/plugin_1/scripts/query-council.sh" --list-default-models')).toBe(false)
+  expect(isCouncilRun('bash "/x/my scripts/check-status.sh"; cat "/x/my scripts/run-council.sh"')).toBe(false)
+})
+
 test('hostFrom reads a stored value or a dialog label, and nothing else', () => {
   expect(hostFrom('mod')).toBe('mod')
   expect(hostFrom('tmux')).toBe('tmux')

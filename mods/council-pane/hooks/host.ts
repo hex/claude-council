@@ -15,8 +15,9 @@ export const HOST_LABELS: Record<PaneHost, string> = {
 // A query starts a pane; fetching, cancelling or listing jobs, listing models
 // and asking for help do not, and neither does a command that only names the
 // script (a grep, a cat): the script has to be what bash is given to run.
+// A quoted path may hold spaces, as the desktop app's plugin folder does.
 export function isCouncilRun(command: string): boolean {
-  return /\bbash\s+["']?[^\s"']*run-council\.sh\b/.test(command) && !/--(result|cancel|jobs|help|list-[a-z-]+)(=|\s|$)/.test(command)
+  return /\bbash\s+("[^"]*run-council\.sh"|'[^']*run-council\.sh'|[^\s"']*run-council\.sh\b)/.test(command) && !/--(result|cancel|jobs|help|list-[a-z-]+)(=|\s|$)/.test(command)
 }
 
 export function hostFrom(value: unknown): PaneHost | undefined {
