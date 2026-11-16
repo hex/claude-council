@@ -542,11 +542,11 @@ test('a pane with no room for the bar beside a note draws no bar on any row, and
   ])
 })
 
-test('a pane too narrow for a row\'s note draws that row with no note and no model, and every row keeps its name, time and button', () => {
+test('a pane too narrow for a row\'s note draws that row\'s model in the cells left, and every row keeps its name, time and button', () => {
   expect(seatRows(42)).toEqual([
     { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '', time: '1.7s', press: undefined },
     { name: 'openrouter-3', model: 'xiaomi/…', note: '', bar: '', time: '    ', press: 'cancel' },
-    { name: 'grok-cli    ', model: '', note: '', bar: '', time: '0.9s', press: undefined },
+    { name: 'grok-cli    ', model: 'grok-4.…', note: '', bar: '', time: '0.9s', press: undefined },
   ])
   expect(seatRows(36)).toEqual([
     { name: 'codex       ', model: '', note: '', bar: '', time: '1.7s', press: undefined },

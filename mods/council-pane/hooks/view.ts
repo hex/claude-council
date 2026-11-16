@@ -239,14 +239,14 @@ export function paneSections(
   // With no width given the row is drawn at its full size.
   const fit = columns === undefined ? undefined
     : seatRowFit(columns, { name: names, time: times, middle: Math.max(...providers.map(provider => (provider.model ?? '').length + noteCells(provider))), note: width(providers.map(noteOf)) })
-  // A note the row has no room for is not drawn, whole or cut, and its row draws no model.
+  // A note the row has no room for is not drawn, whole or cut; its cells go to the model.
   const shownNote = (provider: ProviderStatus) => (fit && noteOf(provider).length > fit.middleCells ? '' : noteOf(provider))
   const cancellable = seatsToCancel({ providers, cancels, isDone })
   const retriableNow = seatsToRetry({ providers, retries, retriable, isDone })
   const folds: string[] = []
   const seats = providers.flatMap((provider, index): Section[] => {
     const { name } = provider
-    const model = fit ? cutModel(provider.model ?? '', fit.middleCells - noteCells(provider)) : provider.model ?? ''
+    const model = fit ? cutModel(provider.model ?? '', fit.middleCells - (shownNote(provider) === '' ? 0 : noteCells(provider))) : provider.model ?? ''
     const key = jumpKey(name)
     const seatFold = fold('seat', key)
     const text = textOf(provider)

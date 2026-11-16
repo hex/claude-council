@@ -11,6 +11,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - The council tool asks which seats and how verbose before it sends, as `/claude-council:ask` does. A call without `providers` or `verbosity` sends nothing: its result lists the seats a default run uses and has Claude ask you both in one AskUserQuestion dialog, then call again with your answers. The send dialog opens with every seat's name and the verbosity, then the question on one line; a question longer than 300 characters is cut there with a note of its full length, and the providers still receive all of it. A seat named twice is asked once. A seat the council cannot ask now, such as a router seat past your roster or a provider with no key, is refused with the seats found on this machine. When your message already named the seats or said to ask every seat, Claude skips the questions and sends at standard verbosity.
 
 ### Fixed
+- A council pane row too narrow for its note (`cached`, `fell back`) shows a shortened model name in the space left, where it showed neither.
 - The council pane no longer opens for `run-council.sh -h`, which prints the usage and asks nobody.
 - The send dialog shows the question without direction overrides and zero-width characters, so a question cannot reorder or hide text there. The providers still receive the question as written.
 - The mod leaves a run given `--no-pane` alone. In tmux it could ask where the pane should open for a run that draws none.
