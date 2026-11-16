@@ -15,7 +15,7 @@ import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLi
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
-import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
+import { choiceRequest, confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA, unknownSeats } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { ACTION_COLUMNS, isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
@@ -445,8 +445,12 @@ async function notASeat($: EngineInterface, seat: string): Promise<string | unde
   const ok = await seatInfo($, 'allowlisted', seat)
   if (ok.exitCode === 0) return undefined
   if (ok.exitCode !== 1) return `checking ${JSON.stringify(seat)} exited ${ok.exitCode}: ${ok.stderr.trim()}`
-  const names = (await $.fs.list(`${$.plugin.root}/scripts/providers`)).map(entry => entry.name).filter(name => name.endsWith('.sh')).map(name => name.slice(0, -3)).sort()
-  return `${JSON.stringify(seat)} is not a council seat; one of ${names.join(', ')}`
+  return `${JSON.stringify(seat)} is not a council seat; one of ${(await providerScripts($)).join(', ')}`
+}
+
+// The runner's registry: one providers/<name>.sh per provider it can run.
+async function providerScripts($: EngineInterface): Promise<string[]> {
+  return (await $.fs.list(`${$.plugin.root}/scripts/providers`)).map(entry => entry.name).filter(name => name.endsWith('.sh')).map(name => name.slice(0, -3)).sort()
 }
 
 // The project file is the consent and the only switch; it is read at each
@@ -861,6 +865,18 @@ export const register: Register = (on, options) => {
     if ('deny' in parsed) return { deny: parsed.deny }
     const script = `${$.plugin.root}/scripts/run-council.sh`
     if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
+    // The seats a default query runs, as /claude-council:ask offers them.
+    const listed = await $.process.run(['bash', `${$.plugin.root}/scripts/query-council.sh`, '--list-default-models'], { timeoutMs: SEAT_INFO_MS })
+    if (listed.exitCode !== 0) return { result: `Listing the council seats exited ${listed.exitCode}: ${listed.stderr.trim()}. Nothing was sent.`, isError: true }
+    const seats = seatsFromList(listed.stdout)
+    const missing = missingChoices(input)
+    if (missing.length > 0) {
+      if (seats.length === 0) return { result: 'No council seat is available on this machine, so nothing was sent. /claude-council:status shows each provider.', isError: true }
+      return { result: choiceRequest(seats, missing) }
+    }
+    // councilArgs accepted providers as an array of names.
+    const unknown = unknownSeats(input.providers as string[], seats.map(seat => seat.name), await providerScripts($))
+    if (unknown !== undefined) return { deny: unknown }
     // The question goes to third-party providers, so the user confirms every
     // call; this gate holds even where the tool itself needs no permission.
     let answer: string | undefined
