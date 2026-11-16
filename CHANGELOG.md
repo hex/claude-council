@@ -6,6 +6,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Changed
+- The council tool asks which seats and how verbose before it sends, as `/claude-council:ask` does. A call without `providers` or `verbosity` sends nothing: its result lists the seats a default run uses and has Claude ask you both in one AskUserQuestion dialog, then call again with your answers. The send dialog names the seats, or their count past four, and the verbosity. A seat name the runner does not know is refused with the list. When your message already named the seats or said to ask every seat, Claude skips the questions and sends at standard verbosity.
+
 ### Fixed
 - The council pane opens for `/claude-council:ask` in the Claude desktop app's Code tab. The app keeps plugins under `Application Support`, and the mod did not recognize a run whose script path held a space, so the run went ahead with no pane.
 - A seat row fits a narrow pane, such as the desktop app's side panel. The bar shortens first, from 14 cells to 5, then the model is cut and ends in `…`, and a pane narrower still draws no bar. A `cached` or `fell back` note counts toward the fit: the bar goes before the note does, and the note goes whole on a row with no room for it. The seat's name, its time and its button stay in view.

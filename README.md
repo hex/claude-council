@@ -117,6 +117,9 @@ script. Your text reaches model providers only through the first two:
   refresh reaches your login (without one, your `CODEX_API_KEY` or
   `OPENAI_API_KEY` signs codex in), and none of your plugins, hooks,
   `AGENTS.md`, skills or MCP servers.
+- `bash scripts/query-council.sh --list-default-models` when Claude calls
+  the council tool, to list the seats it may offer you and to check the
+  seats it names. It reads your configuration and sends nothing.
 - `bash scripts/seat-info.sh discover`, `model <seat>` or
   `allowlisted <seat>` during `/heads-up setup` and `/heads-up on <seat>`.
   It checks which seats this machine can run and sends nothing.
