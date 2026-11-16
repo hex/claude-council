@@ -16,6 +16,8 @@ choices.
 | Claude Code in a terminal | `/claude-council:ask`, every seat, and the pane beside the chat. |
 | Claude Desktop, Code tab | The same plugin and the same commands. The pane opens in Desktop's side panel. |
 
+![Claude Desktop's Code tab: Claude's synthesis of a primary-key question on the left, the Council pane with each seat's answer on the right](assets/desktop-code-tab.png)
+
 In both, Claude can also call the council as a tool. It asks which seats and
 how verbose first, then shows a Send card, and nothing leaves your machine
 until you confirm it.
