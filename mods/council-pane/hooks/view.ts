@@ -39,7 +39,7 @@ export type Section =
   // One row per seat, its status and its fold header at once, with the name
   // padded to the column and the action's seat unpadded. A closed seat, or one
   // with nothing to show, is the row alone: no reason or body follows it.
-  | { kind: 'seat'; key: string; fold: string; digit: string; stateColor: string; vendor: string; fill: string; name: string; model: string; note: SeatNote; bar: string; time: string; open: boolean; action?: SeatAction }
+  | { kind: 'seat'; key: string; fold: string; digit: string; stateColor: string; vendor: string; name: string; model: string; note: SeatNote; bar: string; time: string; open: boolean; action?: SeatAction }
   | { kind: 'reason'; text: string }
   | { kind: 'body'; text: string }
   | { kind: 'synthesis'; key: string; fold: string; open: true; text: string }
@@ -74,13 +74,9 @@ const SWEEP_STAGGER = 7
 // A provider with no colour of its own; a data colour, like the vendors' own.
 const NEUTRAL_RGB = '113;113;122'
 
-// An open seat's header fill is its provider's colour at seven tenths, so
-// white letters on it clear 4.5:1 for the vendor palette's mid-tones.
-const HEADER_SHADE = 0.7
-
-// A provider's `r;g;b` as a colour, scaled toward black by `shade`.
-function rgb(triple: string, shade = 1): string {
-  return `rgb(${triple.split(';').map(part => Math.round(Number(part) * shade)).join(',')})`
+// A provider's `r;g;b` as a colour.
+function rgb(triple: string): string {
+  return `rgb(${triple.split(';').join(',')})`
 }
 
 const jumpKey = (name: string) => `jump:${name}`
@@ -266,7 +262,6 @@ export function paneSections(
       digit: index < 10 ? String((index + 1) % 10) : '',
       stateColor: look.color,
       vendor: rgb(colors[name] ?? NEUTRAL_RGB),
-      fill: rgb(colors[name] ?? NEUTRAL_RGB, HEADER_SHADE),
       name: name.padEnd(names),
       model,
       note: shownNote(provider),

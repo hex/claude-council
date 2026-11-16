@@ -7,6 +7,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 ## Unreleased
 
 ### Changed
+- An open seat's row in the Claude Code pane has no colored fill. It looks like a folded row, and its button reads `fold`. The fill was heavy in the desktop app's side pane.
 - The council tool asks which seats and how verbose before it sends, as `/claude-council:ask` does. A call without `providers` or `verbosity` sends nothing: its result lists the seats a default run uses and has Claude ask you both in one AskUserQuestion dialog, then call again with your answers. The send dialog names the seats, or their count past four, and the verbosity. A seat name the runner does not know is refused with the list. When your message already named the seats or said to ask every seat, Claude skips the questions and sends at standard verbosity.
 
 ### Fixed

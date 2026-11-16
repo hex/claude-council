@@ -1078,19 +1078,15 @@ export const register: Register = (on, options) => {
           // bar or a note with no room is not drawn, so the row asks the
           // surface to shrink nothing. The model's cell takes the slack, so the bar, the
           // time and the action sit in the same columns on every row. An
-          // open seat's row is a header on its provider's colour, darkened, in
-          // white, so each answer starts where the eye can find it.
-          // Each cell's ink, chosen once: on the fill every cell is white.
-          const white = { color: COLOR.onFill }
-          const ink = section.open
-            ? { name: white, model: white, dim: white, state: white, label: white }
-            : { name: {}, model: { color: COLOR.hint }, dim: { dimColor: true }, state: { color: section.stateColor }, label: {} }
+          // open seat's row is drawn as a folded one is: its button reads
+          // `fold` and its answer follows.
+          const ink = { model: { color: COLOR.hint }, dim: { dimColor: true }, state: { color: section.stateColor } }
           return (
-            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: section.fill } : {})}>
+            <Box key={section.key} flexDirection="row" width={columns}>
               <Box flexShrink={0}>
                 <Text>
                   <Text color={section.vendor}>{EDGE_MARK}</Text>
-                  <Text bold {...ink.name}>{` ${section.name}  `}</Text>
+                  <Text bold>{` ${section.name}  `}</Text>
                 </Text>
               </Box>
               <Box flexDirection="row" flexGrow={1} flexShrink={1}>
@@ -1115,16 +1111,13 @@ export const register: Register = (on, options) => {
               <Box flexShrink={0} width={ACTION_COLUMNS} paddingLeft={2}>
                 {action ? (
                   // Not plain: a plain Button draws its hotkey beside the label, and
-                  // the row draws no number. A Button takes no colour of its own, so
-                  // the label is a Text child, white on a header fill.
+                  // the row draws no number.
                   <Button
                     key={`${action.press}:${action.seat}`}
                     label={action.press}
                     {...(section.digit ? { hotkey: section.digit } : {})}
                     onPress={() => (action.press === 'cancel' || action.press === 'retry' ? pressSeat($, state, action.press, action.seat) : toggleSection($, state, section.fold))}
-                  >
-                    <Text {...ink.label}>{action.press}</Text>
-                  </Button>
+                  />
                 ) : null}
               </Box>
             </Box>
