@@ -470,23 +470,23 @@ test('queryingSince starts a clock when a provider queries and drops it when it 
 
 test('seatRowFit keeps the whole bar and the whole model while the row has room', () => {
   // name 12, time 4, the longest model 31: 16 + 31 + (2 + 14) + (2 + 4) + 12 = 81 cells
-  expect(seatRowFit(100, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 14, middleCells: 50 })
-  expect(seatRowFit(81, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 14, middleCells: 31 })
+  expect(seatRowFit(100, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 14, middleCells: 50 })
+  expect(seatRowFit(81, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 14, middleCells: 31 })
 })
 
 test('seatRowFit shrinks the bar first, down to five cells, and only then the model', () => {
-  expect(seatRowFit(80, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 13, middleCells: 31 })
-  expect(seatRowFit(72, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 31 })
-  expect(seatRowFit(60, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 19 })
+  expect(seatRowFit(80, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 13, middleCells: 31 })
+  expect(seatRowFit(72, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 5, middleCells: 31 })
+  expect(seatRowFit(60, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 5, middleCells: 19 })
 })
 
 test('seatRowFit drops the model, then the bar, before the name, the time or the button would be cut', () => {
   // 16 (edge and name) + 6 (time) + 12 (button) = 34 cells are never cut; the narrow bar and its gap take 7 more.
-  expect(seatRowFit(42, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 1 })
-  expect(seatRowFit(41, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 5, middleCells: 0 })
-  expect(seatRowFit(40, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 0, middleCells: 6 })
-  expect(seatRowFit(34, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 0, middleCells: 0 })
-  expect(seatRowFit(20, { name: 12, time: 4, middle: 31 })).toEqual({ barCells: 0, middleCells: 0 })
+  expect(seatRowFit(42, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 5, middleCells: 1 })
+  expect(seatRowFit(41, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 5, middleCells: 0 })
+  expect(seatRowFit(40, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 0, middleCells: 6 })
+  expect(seatRowFit(34, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 0, middleCells: 0 })
+  expect(seatRowFit(20, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 0, middleCells: 0 })
 })
 
 const NARROW_RUN = {
@@ -512,16 +512,58 @@ test('a narrow pane cuts the model with an ellipsis and keeps the name, the note
   ])
 })
 
-test('a pane with no room for a model draws none, and the bar keeps five cells', () => {
-  expect(seatRows(41).map(row => [row.model, row.bar, row.press])).toEqual([['', '━━━━━', undefined], ['', '····━', 'cancel'], ['', '━━━━━', undefined]])
+test('seatRowFit keeps the bar only while it fits beside the widest note', () => {
+  // 34 cells are never cut; a 9-cell note beside the 7 of the narrow bar and its gap needs 50.
+  expect(seatRowFit(50, { name: 12, time: 4, middle: 33, note: 9 })).toEqual({ barCells: 5, middleCells: 9 })
+  expect(seatRowFit(49, { name: 12, time: 4, middle: 33, note: 9 })).toEqual({ barCells: 0, middleCells: 15 })
+  expect(seatRowFit(43, { name: 12, time: 4, middle: 33, note: 9 })).toEqual({ barCells: 0, middleCells: 9 })
+  expect(seatRowFit(42, { name: 12, time: 4, middle: 33, note: 9 })).toEqual({ barCells: 0, middleCells: 8 })
 })
 
-test('a pane with no room for the bar draws none, and every row keeps its name, time and button', () => {
+test('the narrowest pane that holds the bar beside a note draws that row with no model', () => {
+  expect(seatRows(50)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '━━━━━', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/m…', note: '', bar: '····━', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: '', note: 'fell back', bar: '━━━━━', time: '0.9s', press: undefined },
+  ])
+})
+
+test('a pane with no room for the bar beside a note draws no bar on any row, and the note stays', () => {
+  expect(seatRows(49)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/mimo-v2…', note: '', bar: '', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: '', note: 'fell back', bar: '', time: '0.9s', press: undefined },
+  ])
+  // 16 + 9 (the note) + 6 + 12 = 43: the narrowest pane the note fits.
+  expect(seatRows(43)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/m…', note: '', bar: '', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: '', note: 'fell back', bar: '', time: '0.9s', press: undefined },
+  ])
+})
+
+test('a pane too narrow for a row\'s note draws that row with no note and no model, and every row keeps its name, time and button', () => {
+  expect(seatRows(42)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/…', note: '', bar: '', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: '', note: '', bar: '', time: '0.9s', press: undefined },
+  ])
   expect(seatRows(36)).toEqual([
     { name: 'codex       ', model: '', note: '', bar: '', time: '1.7s', press: undefined },
     { name: 'openrouter-3', model: '', note: '', bar: '', time: '    ', press: 'cancel' },
-    { name: 'grok-cli    ', model: '', note: 'fell back', bar: '', time: '0.9s', press: undefined },
+    { name: 'grok-cli    ', model: '', note: '', bar: '', time: '0.9s', press: undefined },
   ])
+})
+
+test('no seat row is wider than its pane, from the 34 cells that are never cut upward', () => {
+  // The edge mark and a space, the name and two spaces, the model, the note after its separator, the bar and the time after two spaces each, the 12-cell button column.
+  const cells = (row: ReturnType<typeof seatRows>[number]) =>
+    2 + row.name.length + 2 + row.model.length + (row.note === '' ? 0 : (row.model === '' ? 0 : 3) + row.note.length) + (row.bar === '' ? 0 : 2 + row.bar.length) + 2 + row.time.length + 12
+  const overruns: string[] = []
+  for (let columns = 34; columns <= 90; columns++) {
+    for (const row of seatRows(columns)) if (cells(row) > columns) overruns.push(`${row.name.trim()} takes ${cells(row)} of ${columns}`)
+  }
+  expect(overruns).toEqual([])
 })
 
 test('a wide pane, or no width given, draws the whole model and the 14-cell bar', () => {

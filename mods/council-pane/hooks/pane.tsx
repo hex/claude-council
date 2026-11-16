@@ -1057,8 +1057,8 @@ export const register: Register = (on, options) => {
           const action = section.action
           // The row arrives fitted to the pane's width (seatRowFit): the bar
           // has given way first and then the model, cut to its cells, and a
-          // bar with no room is not drawn, so the row asks the surface to
-          // shrink nothing. The model's cell takes the slack, so the bar, the
+          // bar or a note with no room is not drawn, so the row asks the
+          // surface to shrink nothing. The model's cell takes the slack, so the bar, the
           // time and the action sit in the same columns on every row. An
           // open seat's row is a header on its provider's colour, darkened, in
           // white, so each answer starts where the eye can find it.

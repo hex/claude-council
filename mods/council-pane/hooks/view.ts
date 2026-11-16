@@ -147,14 +147,16 @@ const BAR_GAP = 2
 
 // How a seat row of `columns` cells shares them. The edge mark, the name, the
 // time and the action column are never cut. `middle` is the widest model with
-// its note on any row: the bar gives way to it first, down to its narrowest,
-// and only then is the middle cut. Once the narrowest bar no longer fits
-// beside the uncut parts it is not drawn, and the middle has what is left.
-// The bar is one width on every row, so the rows' columns line up. Only a
-// pane narrower than the uncut parts runs a row past its edge.
-export function seatRowFit(columns: number, cells: { name: number; time: number; middle: number }): { barCells: number; middleCells: number } {
+// its note on any row, `note` the widest note alone: the bar gives way to the
+// middle first, down to its narrowest, and only then is the middle cut, the
+// model before the note. Once the narrowest bar no longer fits beside the
+// uncut parts and the widest note it is not drawn, and the middle has what is
+// left; a note wider than that is not drawn either. The bar is one width on
+// every row, so the rows' columns line up. Only a pane narrower than the
+// uncut parts runs a row past its edge.
+export function seatRowFit(columns: number, cells: { name: number; time: number; middle: number; note: number }): { barCells: number; middleCells: number } {
   const room = columns - (1 + 1 + cells.name + 2) - (2 + cells.time) - ACTION_COLUMNS
-  if (room < BAR_GAP + NARROW_BAR_CELLS) return { barCells: 0, middleCells: Math.max(0, room) }
+  if (room < BAR_GAP + NARROW_BAR_CELLS + cells.note) return { barCells: 0, middleCells: Math.max(0, room) }
   const barCells = Math.min(BAR_CELLS, Math.max(NARROW_BAR_CELLS, room - BAR_GAP - cells.middle))
   return { barCells, middleCells: room - BAR_GAP - barCells }
 }
@@ -233,13 +235,16 @@ export function paneSections(
   const names = width(providers.map(provider => provider.name))
   const times = width(providers.map(shownTime))
   // The note is the seat's state in words and is never cut; the model beside it is.
+  const noteOf = (provider: ProviderStatus) => (SEAT_LOOKS[shownState(provider)] ?? LIVE).note
   const noteCells = (provider: ProviderStatus) => {
-    const { note } = SEAT_LOOKS[shownState(provider)] ?? LIVE
+    const note = noteOf(provider)
     return note === '' ? 0 : note.length + (provider.model ? NOTE_GAP : 0)
   }
   // With no width given the row is drawn at its full size.
   const fit = columns === undefined ? undefined
-    : seatRowFit(columns, { name: names, time: times, middle: Math.max(...providers.map(provider => (provider.model ?? '').length + noteCells(provider))) })
+    : seatRowFit(columns, { name: names, time: times, middle: Math.max(...providers.map(provider => (provider.model ?? '').length + noteCells(provider))), note: width(providers.map(noteOf)) })
+  // A note the row has no room for is not drawn, whole or cut, and its row draws no model.
+  const shownNote = (provider: ProviderStatus) => (fit && noteOf(provider).length > fit.middleCells ? '' : noteOf(provider))
   const cancellable = seatsToCancel({ providers, cancels, isDone })
   const retriableNow = seatsToRetry({ providers, retries, retriable, isDone })
   const folds: string[] = []
@@ -264,7 +269,7 @@ export function paneSections(
       fill: rgb(colors[name] ?? NEUTRAL_RGB, HEADER_SHADE),
       name: name.padEnd(names),
       model,
-      note: look.note,
+      note: shownNote(provider),
       bar: fit?.barCells === 0 ? '' : bar(look.fill(frame + index * SWEEP_STAGGER), fit?.barCells),
       time: shownTime(provider).padStart(times),
       open,
