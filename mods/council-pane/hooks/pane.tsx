@@ -869,14 +869,16 @@ export const register: Register = (on, options) => {
     const listed = await $.process.run(['bash', `${$.plugin.root}/scripts/query-council.sh`, '--list-default-models'], { timeoutMs: SEAT_INFO_MS })
     if (listed.exitCode !== 0) return { result: `Listing the council seats exited ${listed.exitCode}: ${listed.stderr.trim()}. Nothing was sent.`, isError: true }
     const seats = seatsFromList(listed.stdout)
+    // Refused before any question, so the user never answers for a call that cannot send.
+    if (Array.isArray(input.providers)) {
+      const unknown = unknownSeats(input.providers, seats.map(seat => seat.name), await providerScripts($))
+      if (unknown !== undefined) return { deny: unknown }
+    }
     const missing = missingChoices(input)
     if (missing.length > 0) {
       if (seats.length === 0) return { result: 'No council seat is available on this machine, so nothing was sent. /claude-council:status shows each provider.', isError: true }
       return { result: choiceRequest(seats, missing) }
     }
-    // councilArgs accepted providers as an array of names.
-    const unknown = unknownSeats(input.providers as string[], seats.map(seat => seat.name), await providerScripts($))
-    if (unknown !== undefined) return { deny: unknown }
     // The question goes to third-party providers, so the user confirms every
     // call; this gate holds even where the tool itself needs no permission.
     let answer: string | undefined

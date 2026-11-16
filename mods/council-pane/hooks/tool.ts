@@ -109,7 +109,7 @@ function seatQuestion(seats: Seat[]): string[] {
     all,
     ...split,
     '- "Let me pick individually": choose exact seats',
-    'On "Let me pick individually", make a second AskUserQuestion call splitting the seats above across up to 4 multiSelect questions of at most 4 options each, labelled as listed, and pass the union.',
+    'On "Let me pick individually", make a second AskUserQuestion call splitting the seats above across up to 4 multiSelect questions of 2 to 4 options each, labelled as listed, and pass the union.',
     pass,
   ]
 }

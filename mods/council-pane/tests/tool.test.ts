@@ -3,7 +3,7 @@
 import { test, expect } from 'bun:test'
 import { confirmOutcome, confirmQuestion, councilArgs, choiceRequest, KEEP_LABEL, missingChoices, seatsFromList, unknownSeats, SEND_LABEL } from '../hooks/tool'
 
-test('a question alone runs with the defaults', () => {
+test('a question alone becomes the run arguments, after the separator', () => {
   expect(councilArgs({ question: 'postgres or sqlite?' })).toEqual({ args: ['--', 'postgres or sqlite?'] })
 })
 
@@ -120,7 +120,7 @@ test('four or more seats are grouped, and the router seats split from the direct
     '- "Direct seats only": codex, gemini, grok-cli',
     '- "Routed models only": openrouter-1, openrouter-2',
     '- "Let me pick individually": choose exact seats',
-    'On "Let me pick individually", make a second AskUserQuestion call splitting the seats above across up to 4 multiSelect questions of at most 4 options each, labelled as listed, and pass the union.',
+    'On "Let me pick individually", make a second AskUserQuestion call splitting the seats above across up to 4 multiSelect questions of 2 to 4 options each, labelled as listed, and pass the union.',
     'Pass the chosen seat names as providers; for All, pass every name above.',
   ].join('\n'))
 })
