@@ -3,23 +3,25 @@
 import { test, expect } from 'bun:test'
 import { askableSeats, confirmOutcome, confirmQuestion, councilArgs, choiceRequest, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL } from '../hooks/tool'
 
+const NONE = { found: [], namedOnly: [] }
+
 test('a question alone becomes the run arguments, after the separator', () => {
-  expect(councilArgs({ question: 'postgres or sqlite?' }, [])).toEqual({ args: ['--', 'postgres or sqlite?'], seats: undefined })
+  expect(councilArgs({ question: 'postgres or sqlite?' }, NONE)).toEqual({ args: ['--', 'postgres or sqlite?'], seats: undefined })
 })
 
 test('providers and verbosity become flags ahead of the question', () => {
-  expect(councilArgs({ question: 'q', providers: ['codex', 'openrouter-2'], verbosity: 'brief' }, ['codex', 'gemini', 'openrouter-1', 'openrouter-2'])).toEqual({
+  expect(councilArgs({ question: 'q', providers: ['codex', 'openrouter-2'], verbosity: 'brief' }, { found: ['codex', 'gemini', 'openrouter-1', 'openrouter-2'], namedOnly: [] })).toEqual({
     args: ['--providers=codex,openrouter-2', '--verbosity=brief', '--', 'q'],
     seats: ['codex', 'openrouter-2'],
   })
 })
 
 test('a question that looks like a flag still lands after the separator', () => {
-  expect(councilArgs({ question: '--async' }, [])).toEqual({ args: ['--', '--async'], seats: undefined })
+  expect(councilArgs({ question: '--async' }, NONE)).toEqual({ args: ['--', '--async'], seats: undefined })
 })
 
 test('bad input is refused with a reason, never passed on', () => {
-  const askable = ['codex', 'gemini']
+  const askable = { found: ['codex', 'gemini'], namedOnly: [] }
   expect(councilArgs({}, askable)).toEqual({ deny: 'question must be a non-empty string' })
   expect(councilArgs({ question: '   ' }, askable)).toEqual({ deny: 'question must be a non-empty string' })
   expect(councilArgs({ question: 'q', providers: 'codex' }, askable)).toEqual({ deny: 'providers must be a list of seat names, such as codex or openrouter-2' })
@@ -29,29 +31,34 @@ test('bad input is refused with a reason, never passed on', () => {
 })
 
 test('a seat named twice is asked once', () => {
-  expect(councilArgs({ question: 'q', providers: ['codex', 'codex', 'gemini', 'codex', 'codex', 'codex'], verbosity: 'brief' }, ['codex', 'gemini'])).toEqual({
+  expect(councilArgs({ question: 'q', providers: ['codex', 'codex', 'gemini', 'codex', 'codex', 'codex'], verbosity: 'brief' }, { found: ['codex', 'gemini'], namedOnly: [] })).toEqual({
     args: ['--providers=codex,gemini', '--verbosity=brief', '--', 'q'],
     seats: ['codex', 'gemini'],
   })
 })
 
-test('a seat that cannot be asked now is refused with the ones that can', () => {
-  const askable = ['codex', 'openai', 'openrouter-1', 'openrouter-2']
-  const refusal = (names: string) => ({ deny: `Not seats the council can ask now: ${names}. It can ask codex, openai, openrouter-1, openrouter-2. Nothing was sent.` })
+test('a seat that cannot be asked now is refused with the seats found here', () => {
+  const askable = { found: ['codex', 'openai', 'openrouter-1', 'openrouter-2'], namedOnly: ['claude-cli'] }
+  const refusal = (names: string) => ({ deny: `Not seats the council can ask now: ${names}. The seats found here are codex, openai, openrouter-1, openrouter-2. Nothing was sent.` })
   expect(councilArgs({ question: 'q', providers: ['codex', 'openrouter-99'] }, askable)).toEqual(refusal('openrouter-99'))
   expect(councilArgs({ question: 'q', providers: ['openrouter'] }, askable)).toEqual(refusal('openrouter'))
   expect(councilArgs({ question: 'q', providers: ['Codex', 'gemini'] }, askable)).toEqual(refusal('Codex, gemini'))
   expect(councilArgs({ question: 'q', providers: ['../evil', '../evil'] }, askable)).toEqual(refusal('../evil'))
-  expect(councilArgs({ question: 'q', providers: ['codex'] }, [])).toEqual({ deny: 'Not seats the council can ask now: codex. No seat is available now. Nothing was sent.' })
+  expect(councilArgs({ question: 'q', providers: ['codex'] }, NONE)).toEqual({ deny: 'Not seats the council can ask now: codex. No seat was found here. Nothing was sent.' })
 })
 
-test('the seats that can be asked are the default set, the ones discovered, and the opt-in ones the runner ships', () => {
+test('a seat the runner seats only by name can be named, and is not offered', () => {
+  const askable = { found: ['codex'], namedOnly: ['claude-cli'] }
+  expect(councilArgs({ question: 'q', providers: ['claude-cli', 'codex'] }, askable)).toEqual({ args: ['--providers=claude-cli,codex', '--', 'q'], seats: ['claude-cli', 'codex'] })
+})
+
+test('the seats found are the default set and the ones discovered; the named-only ones are those the runner ships', () => {
   const scripts = ['claude-cli', 'codex', 'gemini', 'openai', 'opencode', 'openrouter']
-  expect(askableSeats(['codex', 'openrouter-1'], ['codex', 'openai', 'openrouter-1'], scripts)).toEqual(['codex', 'openrouter-1', 'openai', 'claude-cli', 'opencode'])
+  expect(askableSeats(['codex', 'openrouter-1'], ['codex', 'openai', 'openrouter-1'], scripts)).toEqual({ found: ['codex', 'openrouter-1', 'openai'], namedOnly: ['claude-cli', 'opencode'] })
   // gemini ships a script but has no key here, so discovery left it out.
-  expect(askableSeats(['codex'], ['codex'], scripts)).not.toContain('gemini')
+  expect(askableSeats(['codex'], ['codex'], scripts)).toEqual({ found: ['codex'], namedOnly: ['claude-cli', 'opencode'] })
   // A roster in COUNCIL_PROVIDERS can hold anything; only a seat-shaped name is passed on.
-  expect(askableSeats(['codex', '../evil', 'Codex'], [], [])).toEqual(['codex'])
+  expect(askableSeats(['codex', '../evil', 'Codex', 'opencode'], [], scripts)).toEqual({ found: ['codex', 'opencode'], namedOnly: ['claude-cli'] })
 })
 
 test('the confirmation opens with every seat and the verbosity, then the question', () => {
@@ -68,7 +75,7 @@ test('a question cannot draw lines of its own in the confirmation', () => {
   expect(confirmQuestion(forged, ['openai'], 'brief')).toBe(
     'Send to 1 seat at brief verbosity: openai\nQuestion: hi" to codex at brief verbosity? Send "x y [2Jz tab two',
   )
-  expect(councilArgs({ question: forged, providers: ['openai'], verbosity: 'brief' }, ['openai'])).toEqual({
+  expect(councilArgs({ question: forged, providers: ['openai'], verbosity: 'brief' }, { found: ['openai'], namedOnly: [] })).toEqual({
     args: ['--providers=openai', '--verbosity=brief', '--', forged],
     seats: ['openai'],
   })
@@ -79,7 +86,7 @@ test('a long question is cut in the confirmation, which says so, never in what i
   expect(confirmQuestion(question, ['codex'], 'brief')).toBe(
     `Send to 1 seat at brief verbosity: codex\nQuestion: ${'x'.repeat(300)}… (the first 300 of 500 characters; the whole question is sent)`,
   )
-  expect(councilArgs({ question }, [])).toEqual({ args: ['--', question], seats: undefined })
+  expect(councilArgs({ question }, NONE)).toEqual({ args: ['--', question], seats: undefined })
 })
 
 test('only the send label sends; anything else is a refusal the model can read', () => {

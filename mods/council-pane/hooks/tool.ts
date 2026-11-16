@@ -136,18 +136,21 @@ const SEAT_NAME = /^[a-z][a-z0-9-]*$/
 // refused by the tool until it is added.
 const NAMED_ONLY = ['claude-cli', 'copilot-cli', 'opencode']
 
-// The seats a call may name: the ones a default query runs, the ones this
-// machine has a key or a program for though a default query leaves them out
-// (an API seat its CLI shadows), and the named-only ones the runner ships.
+export type Askable = { found: string[]; namedOnly: string[] }
+
+// The seats a call may name. Found: the ones a default query runs, and the
+// ones this machine has a key or a program for though a default query leaves
+// them out (an API seat its CLI shadows). Named-only: the ones the runner
+// ships and nothing here has checked, so a refusal does not offer them.
 // Every name passed on is one of these, so no other text reaches the runner.
-export function askableSeats(defaults: string[], discovered: string[], scripts: string[]): string[] {
-  const names = [...defaults, ...discovered, ...NAMED_ONLY.filter(name => scripts.includes(name))]
-  return [...new Set(names)].filter(name => SEAT_NAME.test(name))
+export function askableSeats(defaults: string[], discovered: string[], scripts: string[]): Askable {
+  const found = [...new Set([...defaults, ...discovered])].filter(name => SEAT_NAME.test(name))
+  return { found, namedOnly: NAMED_ONLY.filter(name => scripts.includes(name) && !found.includes(name)) }
 }
 
 // `seats` is the named seats, each once: the one list the confirmation shows
 // and the run receives.
-export function councilArgs(input: Record<string, unknown>, askable: string[]): { args: string[]; seats: string[] | undefined } | { deny: string } {
+export function councilArgs(input: Record<string, unknown>, askable: Askable): { args: string[]; seats: string[] | undefined } | { deny: string } {
   const { question, providers, verbosity } = input
   if (typeof question !== 'string' || question.trim() === '') return { deny: 'question must be a non-empty string' }
   const flags: string[] = []
@@ -157,9 +160,9 @@ export function councilArgs(input: Record<string, unknown>, askable: string[]): 
       return { deny: 'providers must be a list of seat names, such as codex or openrouter-2' }
     }
     seats = [...new Set(providers as string[])]
-    const refused = seats.filter(name => !askable.includes(name))
+    const refused = seats.filter(name => !askable.found.includes(name) && !askable.namedOnly.includes(name))
     if (refused.length > 0) {
-      const offer = askable.length > 0 ? `It can ask ${askable.join(', ')}.` : 'No seat is available now.'
+      const offer = askable.found.length > 0 ? `The seats found here are ${askable.found.join(', ')}.` : 'No seat was found here.'
       return { deny: `Not seats the council can ask now: ${refused.join(', ')}. ${offer} Nothing was sent.` }
     }
     flags.push(`--providers=${seats.join(',')}`)

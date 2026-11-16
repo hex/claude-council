@@ -15,7 +15,7 @@ import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLi
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
-import { askableSeats, choiceRequest, confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
+import { askableSeats, type Askable, choiceRequest, confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { ACTION_COLUMNS, isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
@@ -868,7 +868,7 @@ export const register: Register = (on, options) => {
     if (listed.exitCode !== 0) return { result: `Listing the council seats exited ${listed.exitCode}: ${listed.stderr.trim()}. Nothing was sent.`, isError: true }
     const seats = seatsFromList(listed.stdout)
     const defaults = seats.map(seat => seat.name)
-    let askable = defaults
+    let askable: Askable = { found: defaults, namedOnly: [] }
     if (input.providers !== undefined) {
       const discovered = await seatInfo($, 'discover')
       if (discovered.exitCode !== 0) return { result: `Listing the council seats exited ${discovered.exitCode}: ${discovered.stderr.trim()}. Nothing was sent.`, isError: true }
