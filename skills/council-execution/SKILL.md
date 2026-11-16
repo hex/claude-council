@@ -11,7 +11,7 @@ description: Executes council queries by running the query pipeline across selec
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --providers=gemini,openai -- "Your question"
 ```
 
-This outputs the path to the saved file (e.g., `.claude/council-cache/council-1734567890.md`).
+This outputs the whole path to the saved file, under the current working directory (e.g., `/path/to/project/.claude/council-cache/council-1734567890.md`). Read exactly that path; the file is never in the plugin folder.
 
 **Flag syntax**: Use `=` with no spaces: `--providers=gemini,openai`
 

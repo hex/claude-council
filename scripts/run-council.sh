@@ -53,7 +53,8 @@ run_sync() {
     if bash "${SCRIPT_DIR}/query-council.sh" "${PASS[@]+"${PASS[@]}"}" 2>"$logfile" \
         | bash "${SCRIPT_DIR}/format-output.sh" > "$outfile"; then
         rm -f "$logfile"
-        echo "$outfile"
+        # The whole path: whoever reads it may not share this directory.
+        echo "${PWD}/${outfile}"
     else
         echo "Council query failed:" >&2
         tail -n 20 "$logfile" >&2 2>/dev/null || true
