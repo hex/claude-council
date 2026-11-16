@@ -123,6 +123,12 @@ test('isCouncilRun reads a script path built from a command inside double quotes
   expect(isCouncilRun('echo "$(pwd)" bash /x/run-council.sh -- q')).toBe(false)
 })
 
+test('isCouncilRun reads an escaped backslash inside double quotes as one backslash, so the quote after it closes', () => {
+  expect(isCouncilRun(String.raw`echo "a\\"; bash "/x y/scripts/run-council.sh" -- "q"`)).toBe(true)
+  expect(isCouncilRun(String.raw`echo "a\\" bash /x/run-council.sh -- q`)).toBe(false)
+  expect(isCouncilRun(String.raw`echo "a\"; bash /x/run-council.sh -- q"`)).toBe(false)
+})
+
 test('hostFrom reads a stored value or a dialog label, and nothing else', () => {
   expect(hostFrom('mod')).toBe('mod')
   expect(hostFrom('tmux')).toBe('tmux')

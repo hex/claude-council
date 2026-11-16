@@ -91,7 +91,7 @@ export function isCouncilRun(command: string): boolean {
     const next = command[at + 1]
     if (quote !== '') {
       if (char === quote) quote = ''
-      else if (quote === '"' && char === '\\' && next === '"') word += command[++at]!
+      else if (quote === '"' && char === '\\' && (next === '"' || next === '\\')) word += command[++at]!
       else if (quote === '"' && char === '$' && next === '(') {
         at++
         opened.push({ words, word })
