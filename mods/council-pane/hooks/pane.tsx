@@ -384,6 +384,7 @@ function setVariable($: EngineInterface, variable: StoredVariable, value: string
     case 'PERPLEXITY_API_KEY': return $.env.set('PERPLEXITY_API_KEY', value)
     case 'KIMI_API_KEY': return $.env.set('KIMI_API_KEY', value)
     case 'OPENROUTER_API_KEY': return $.env.set('OPENROUTER_API_KEY', value)
+    case 'OPENROUTER_MODELS': return $.env.set('OPENROUTER_MODELS', value)
   }
 }
 

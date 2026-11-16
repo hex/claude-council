@@ -37,11 +37,16 @@ test('an empty, blank or non-string value is not a key, and other options are ig
   expect(storedValues({ gemini_api_key: '', openai_api_key: '   ', xai_api_key: true, kimi_api_key: 42, pane_host: 'tmux', heads_up: true })).toEqual([])
 })
 
-test('plugin.json declares exactly the table, each one optional, sensitive and titled alike', () => {
+test('a stored roster is set as OPENROUTER_MODELS, trimmed; a blank one sets nothing', () => {
+  expect(storedValues({ openrouter_models: '  deepseek/deepseek-v3.2, z-ai/glm-5.3\n' })).toEqual([{ variable: 'OPENROUTER_MODELS', value: 'deepseek/deepseek-v3.2, z-ai/glm-5.3' }])
+  expect(storedValues({ openrouter_models: ' \t\n' })).toEqual([])
+})
+
+test('plugin.json declares exactly the table and every sensitive field in it, each an optional string titled alike', () => {
   const manifest = JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'plugin.json'), 'utf8')) as { userConfig: Record<string, Record<string, unknown>> }
-  const sensitive = Object.entries(manifest.userConfig).filter(([, field]) => field.sensitive === true)
-  expect(sensitive.map(([option, field]) => ({ option, title: field.title, type: field.type, required: field.required, default: field.default }))).toEqual(
-    STORED_VARIABLES.map(({ option, title }) => ({ option, title, type: 'string', required: undefined, default: undefined })),
+  const declared = Object.entries(manifest.userConfig).filter(([option, field]) => field.sensitive === true || STORED_VARIABLES.some(row => row.option === option))
+  expect(declared.map(([option, field]) => ({ option, title: field.title, type: field.type, sensitive: field.sensitive === true, required: field.required, default: field.default }))).toEqual(
+    STORED_VARIABLES.map(({ option, title, sensitive }) => ({ option, title, type: 'string', sensitive, required: undefined, default: undefined })),
   )
 })
 
