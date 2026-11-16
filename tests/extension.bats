@@ -33,8 +33,8 @@
 #     without repeating the answers, elsewhere it asks for the answers to be shown first
 #   - council_ask's description and question field: the user's question as they asked it, never
 #     "self-contained", which a model reads as leave to rewrite it
-#   - council_ask's description (trial variant A): unless the user chose, list the seats with
-#     council_seats and ask which seats and verbosity in one message, all at standard by default
+#   - council_ask's description: it runs at once with the seats and verbosity given, or every
+#     default seat at standard, and sends the model to council_pick when the user wants to choose
 #  council_ask
 #   - an empty or blank question, an unknown or malformed provider, a bad verbosity, an unknown
 #     argument: refused with a sentence, nothing run
@@ -84,11 +84,9 @@
 #   - council_status: the scripts' report, then where keys go in Desktop
 #   - council_settings: each provider's model in plain text, defaults as the scripts resolve them,
 #     every line saying "key set" or "no key"
-#   - council_seats: each seat a question with no providers named goes to, with its model under the
-#     saved choices, starting no agent; with no key and no agent, a sentence saying where keys go
 #   - panel data: a provider with no key is never contacted; one with a key is, and only its own
 #     endpoint, and a failed list says so without the key
-#  trial variant B, the council picker
+#  the council picker
 #   - council_pick: the panel gets the question, each seat with its model and the three
 #     verbosities, standard chosen, and no agent is started; where no panel is drawn the text lists
 #     the seats and says to ask in the chat; an empty question, one over the cap and an unknown
@@ -281,7 +279,7 @@ save_choices() {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
     # Each address's hash is checked against its page in a test of its own.
     assert_eq "$(reply 1 | jq -c '[.result.tools[] | {name, ui: ._meta.ui} | if .ui.resourceUri then .ui.resourceUri |= sub("/[0-9a-f]{12}$"; "/<hash>") end]')" \
-        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers/<hash>"}},{"name":"council_seats","ui":null},{"name":"council_pick","ui":{"resourceUri":"ui://council/pick/<hash>"}},{"name":"council_pick_ask","ui":{"visibility":["app"]}},{"name":"council_result","ui":null},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings/<hash>"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
+        '[{"name":"council_ask","ui":{"resourceUri":"ui://council/answers/<hash>"}},{"name":"council_pick","ui":{"resourceUri":"ui://council/pick/<hash>"}},{"name":"council_pick_ask","ui":{"visibility":["app"]}},{"name":"council_result","ui":null},{"name":"council_status","ui":null},{"name":"council_settings","ui":{"resourceUri":"ui://council/settings/<hash>"}},{"name":"council_models_data","ui":{"visibility":["app"]}},{"name":"council_models_save","ui":{"visibility":["app"]}}]'
 }
 
 @test "extension: the three panels are served as MCP App pages, the shared parts inlined" {
@@ -339,12 +337,13 @@ save_choices() {
     [[ "$(reply 1)" != *'self-contained'* ]]
 }
 
-@test "extension: council_ask tells the model to offer the seats and a verbosity first, unless the user chose" {
+@test "extension: council_ask runs at once, and sends the model to council_pick when the user wants to choose" {
     mcp "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-    local sentence="Unless the user named the seats or a verbosity, or said to just ask, first call council_seats and ask the user in one short message which seats to use, naming each with its model, and which verbosity (standard, brief or detailed), offering all seats at standard as the default; then call this tool with their choice. When the user named them or said to just ask, call this tool at once."
+    local sentence="It runs at once with the seats and verbosity given, or with every default seat at standard when none are given. When the user wants to choose the seats or the verbosity, or has not said and the choice matters, call council_pick instead."
     [[ "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .description')" == *"$sentence"* ]]
+    [[ "$(reply 1)" != *'council_seats'* ]]
     assert_eq "$(reply 1 | jq -r '.result.tools[] | select(.name == "council_ask") | .inputSchema.properties.providers.description')" \
-        'Seat names as council_seats lists them, such as codex or openrouter-2. Leave out to ask every seat.'
+        'Seat names, such as codex or openrouter-2. Leave out to ask every default seat.'
 }
 
 @test "extension: each panel's address carries the hash of its page as served, the same wherever it is named" {
@@ -1088,41 +1087,6 @@ This app does not show the settings panel, so these models cannot be changed her
     assert_eq "$(result_text 1 | sed -n 2p)" "Gemini: $(script_default gemini) (default, no key)"
 }
 
-@test "extension: council_seats lists each seat a question would go to, with its model, and the verbosities" {
-    export OPENROUTER_API_KEY="$SENTINEL_KEY" PERPLEXITY_API_KEY="${SENTINEL_KEY}-pplx" PERPLEXITY_MODEL=inherited-model
-    save_choices '{"perplexity":"sonar-test-1","openrouter":["vendor/alpha","vendor/beta"]}'
-    mcp "$INIT" "$(call 1 council_seats)"
-    assert_eq "$(result_error 1)" false
-    # The fake CLIs stand in for installed agents; claude, copilot and opencode
-    # are never seated by discovery.
-    assert_eq "$(result_text 1)" "The council's seats, each with the model it uses:
-antigravity: default
-codex: default
-cursor-cli: default
-grok-cli: default
-kimi-cli: default
-ollama: local
-openrouter-1: vendor/alpha
-openrouter-2: vendor/beta
-perplexity: sonar-test-1
-
-Verbosity: standard (the default), brief or detailed."
-    # Listing starts no agent.
-    [ ! -e "${COUNCIL_FAKE_STATE_DIR}/calls.jsonl" ]
-}
-
-@test "extension: council_seats with no key and no agent says where keys go" {
-    local dir
-    for dir in "${HOME}/.local/bin" "${HOME}/bin" /opt/homebrew/bin /usr/local/bin; do
-        for bin in codex agy grok kimi cursor-agent ollama; do
-            [[ -x "${dir}/${bin}" ]] && skip "${dir}/${bin} is installed, and the server searches ${dir} as Desktop's does"
-        done
-    done
-    PATH="$(dirname "$NODE"):/usr/bin:/bin" mcp "$INIT" "$(call 1 council_seats)"
-    assert_eq "$(result_error 1)" true
-    assert_eq "$(result_text 1)" 'No council seat is set up: no provider has a key and no CLI agent is installed. In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure.'
-}
-
 @test "extension: council_status gives the scripts' report, then where keys go in Desktop" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     mcp "$INIT" "$(call 1 council_status)"
@@ -1135,7 +1099,7 @@ Verbosity: standard (the default), brief or detailed."
 }
 
 # ============================================================================
-# Trial variant B: the council picker panel
+# The council picker panel
 # ============================================================================
 
 # The seats the fake CLIs, a Perplexity key with a saved model and a saved

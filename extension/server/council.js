@@ -844,15 +844,7 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     return seats.map(seat => `${seat.provider}: ${seat.model}`).join('\n')
   }
 
-  async function seatsText(input, signal) {
-    const { seats, notice } = await defaultSeats(signal)
-    if (seats.length === 0) {
-      return refused(withNotice(notice, NO_SEATS))
-    }
-    return { text: withNotice(notice, `The council's seats, each with the model it uses:\n${seatLines(seats)}\n\nVerbosity: standard (the default), brief or detailed.`) }
-  }
-
-  // Trial variant B: the question and the seats for the picker panel, where
+  // The question and the seats for the picker panel, where
   // the user chooses and presses Ask, which runs council_pick_ask.
   async function pick(input, drawsPanel, signal) {
     if (input === null || typeof input !== 'object' || Array.isArray(input)) return refused('council_pick takes an object with a question')
@@ -957,7 +949,7 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     return { text: JSON.stringify({ saved: true, seat: result.seat, model }) }
   }
 
-  return { ask, pickAsk, result, seatsText, pick, status, settingsText, panelData, saveFromPanel, stopRuns }
+  return { ask, pickAsk, result, pick, status, settingsText, panelData, saveFromPanel, stopRuns }
 }
 
 module.exports = { AFTER_PICK, PROVIDERS, Refusal, VERBOSITIES, findPluginRoot, openCouncil, readKeys }

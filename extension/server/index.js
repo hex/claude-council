@@ -71,8 +71,7 @@ const NO_ARGUMENTS = { type: 'object', properties: {}, additionalProperties: fal
 // council sees nothing else rewrites the question and adds angles of its own.
 const AS_ASKED = 'Pass the user\'s question as they asked it, adding context only when their message depends on earlier conversation the council cannot see.'
 const QUESTION_AS_ASKED = 'The user\'s question, as they asked it.'
-// How the model offers the choice the terminal command asks for before a run.
-const CHOOSE_FIRST = 'Unless the user named the seats or a verbosity, or said to just ask, first call council_seats and ask the user in one short message which seats to use, naming each with its model, and which verbosity (standard, brief or detailed), offering all seats at standard as the default; then call this tool with their choice. When the user named them or said to just ask, call this tool at once.'
+const RUNS_AT_ONCE = 'It runs at once with the seats and verbosity given, or with every default seat at standard when none are given. When the user wants to choose the seats or the verbosity, or has not said and the choice matters, call council_pick instead.'
 
 const TOOLS = [
   {
@@ -80,7 +79,7 @@ const TOOLS = [
     // Read when tools/list is answered, after initialize said whether the
     // app draws the answers panel.
     get description() {
-      const about = `Ask the council, several other AI models, one question and get each one's answer. The question goes to third-party providers (Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter, and any CLI agents installed) on the user's own API keys, and they see nothing but the question. ${AS_ASKED} ${CHOOSE_FIRST} The result has one section per council seat.`
+      const about = `Ask the council, several other AI models, one question and get each one's answer. The question goes to third-party providers (Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter, and any CLI agents installed) on the user's own API keys, and they see nothing but the question. ${AS_ASKED} ${RUNS_AT_ONCE} The result has one section per council seat.`
       const synthesis = 'where the seats agree, where they differ, and what you recommend. A run can take several minutes.'
       return drawsPanel
         ? `${about} Claude Desktop shows every seat's answer in a panel above your reply, so do not repeat the answers: write your synthesis of them, ${synthesis}`
@@ -91,7 +90,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         question: { type: 'string', description: QUESTION_AS_ASKED },
-        providers: { type: 'array', items: { type: 'string' }, description: 'Seat names as council_seats lists them, such as codex or openrouter-2. Leave out to ask every seat.' },
+        providers: { type: 'array', items: { type: 'string' }, description: 'Seat names, such as codex or openrouter-2. Leave out to ask every default seat.' },
         verbosity: { type: 'string', enum: council.VERBOSITIES, description: 'How long the answers should be. Defaults to standard.' },
       },
       required: ['question'],
@@ -99,13 +98,7 @@ const TOOLS = [
     },
     run: (args, signal) => theCouncil.ask(args, signal),
   },
-  {
-    name: 'council_seats',
-    description: 'List the council\'s seats, each with the model it uses, and the verbosities a question can ask for. Quick: it starts no provider and no CLI agent.',
-    inputSchema: NO_ARGUMENTS,
-    run: (args, signal) => theCouncil.seatsText(args, signal),
-  },
-  // Trial variant B: the picker panel and the tool its Ask button calls.
+  // The picker panel and the tool its Ask button calls.
   {
     name: 'council_pick',
     description: `Open the council picker: a panel in the chat with the question, each council seat with its model and a switch, a choice of verbosity and an Ask button. The council runs when the user presses Ask, and the answers appear in the panel. Its result names a council run: call council_result with it at once, in the same turn, and it gives you the answers when they are in. Use it when the user asks for the picker or to choose the seats in a panel. ${AS_ASKED} ${council.AFTER_PICK}`,
