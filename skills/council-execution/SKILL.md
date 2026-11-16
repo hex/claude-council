@@ -53,7 +53,9 @@ Simply copy-paste the entire file content into your response.
 
 ## Step 3: Complete the Synthesis Section
 
-The file ends with a `## 🧭 Synthesis` header. Read
+The file ends with a `## 🧭 Synthesis` header and nothing under it. The script
+never writes a synthesis: the empty section is yours to fill, so never report
+it as missing or empty. Read
 `${CLAUDE_PLUGIN_ROOT}/prompts/synthesis.md` and write your synthesis UNDER
 that header following its structure (Consensus / Divergence / Recommendation)
 and calibration rules.

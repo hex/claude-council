@@ -311,6 +311,12 @@ synthesis happens when the result is fetched.
 
 ### If Standard Mode (default)
 
+**Invoke the `council-execution` skill first** and follow its instructions to
+run the query pipeline and display output. Do not run `run-council.sh` before
+the skill has loaded: the skill holds the call's timeout, the rules for showing
+each answer, and what the transcript's closing `## 🧭 Synthesis` heading is for.
+The rules below shape the flags of the call the skill makes.
+
 **CRITICAL - Flag Syntax**: All script flags use `=` with NO spaces:
 - CORRECT: `--providers=gemini,openai`
 - WRONG: `--providers "gemini,openai"`
@@ -333,8 +339,6 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh" --debate --roles=security,pe
 
 `--debate` is what activates two-round debate mode; if the user passed it, it
 MUST reach the script, or Step 3's debate synthesis has nothing to summarize.
-
-**Invoke the `council-execution` skill** and follow its instructions to run the query pipeline and display output.
 
 ## Step 3: Generate Synthesis (standard mode only)
 
