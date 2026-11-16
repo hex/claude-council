@@ -114,6 +114,15 @@ test('isCouncilRun reads a run captured inside double quotes', () => {
   expect(isCouncilRun('echo "a $( (cd /x; ls) ) b; bash /x/run-council.sh -- q"')).toBe(false)
 })
 
+test('isCouncilRun reads a script path built from a command inside double quotes', () => {
+  expect(isCouncilRun('bash "$(pwd)/scripts/run-council.sh" -- "q"')).toBe(true)
+  expect(isCouncilRun('bash "$(dirname "$0")/run-council.sh" -- q')).toBe(true)
+  expect(isCouncilRun('timeout 600 bash "$(cd /x; pwd)/scripts/run-council.sh" --providers=codex -- "q"')).toBe(true)
+  expect(isCouncilRun('bash "$(pwd)/scripts/run-council.sh" --jobs')).toBe(false)
+  expect(isCouncilRun('cat "$(pwd)/scripts/run-council.sh"')).toBe(false)
+  expect(isCouncilRun('echo "$(pwd)" bash /x/run-council.sh -- q')).toBe(false)
+})
+
 test('hostFrom reads a stored value or a dialog label, and nothing else', () => {
   expect(hostFrom('mod')).toBe('mod')
   expect(hostFrom('tmux')).toBe('tmux')

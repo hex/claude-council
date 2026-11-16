@@ -21,8 +21,9 @@ export const HOST_LABELS: Record<PaneHost, string> = {
 // plugin folder reads as one path and a mention inside a commit message is
 // text. A backslash before a space keeps the space in the word, before a line
 // end joins the lines, and anywhere else is itself: a Windows separator.
-// `;`, `&`, `|`, `(`, `)` and a line end close a segment, and so does a `$(`
-// inside double quotes, up to its `)`. A segment is a query
+// `;`, `&`, `|`, `(`, `)` and a line end close a segment. A `$(` inside double
+// quotes holds segments of its own up to its `)`, and the word around it goes
+// on from there with nothing in its place. A segment is a query
 // when its words are, in order: any `NAME=value` words; any runners, each with
 // its options, durations and assignments; bash, by name or path; the script,
 // by its file name; and no listing flag before a `--`, since what follows that
@@ -74,9 +75,9 @@ export function isCouncilRun(command: string): boolean {
   let words: string[] = []
   let word: string | undefined
   let quote = ''
-  // One entry for each open parenthesis: true when it is a `$(` met inside
-  // double quotes, whose `)` returns to the quoted text.
-  const opened: boolean[] = []
+  // One entry for each open parenthesis: for a `$(` met inside double quotes,
+  // the segment it interrupted, which its `)` returns to; nothing for a bare one.
+  const opened: ({ words: string[]; word: string | undefined } | undefined)[] = []
   const endsOnQuery = () => {
     if (word !== undefined) words.push(word)
     word = undefined
@@ -93,8 +94,9 @@ export function isCouncilRun(command: string): boolean {
       else if (quote === '"' && char === '\\' && next === '"') word += command[++at]!
       else if (quote === '"' && char === '$' && next === '(') {
         at++
-        if (endsOnQuery()) return true
-        opened.push(true)
+        opened.push({ words, word })
+        words = []
+        word = undefined
         quote = ''
       } else word += char
     } else if (char === '"' || char === "'") {
@@ -109,10 +111,14 @@ export function isCouncilRun(command: string): boolean {
       word = undefined
     } else if (';&|()\n'.includes(char)) {
       if (endsOnQuery()) return true
-      if (char === '(') opened.push(false)
-      else if (char === ')' && opened.pop() === true) {
-        quote = '"'
-        word = ''
+      if (char === '(') opened.push(undefined)
+      else if (char === ')') {
+        const outer = opened.pop()
+        if (outer) {
+          words = outer.words
+          word = outer.word
+          quote = '"'
+        }
       }
     } else {
       word = (word ?? '') + char
