@@ -11,6 +11,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - In the extension's council picker, an API seat's or an OpenRouter seat's model is a button that opens that provider's live models under the row, with a filter box for long lists such as OpenRouter's. A choice saves at once as the saved default, the same file the settings panel writes, and applies to this question and the next ones; the row shows the new model and its maker's logo. An OpenRouter seat changes only its own place in the roster, and with no roster saved the first choice starts one. The lists load the first time you open a model, so the picker still draws at once. A failed list or save says so on the row and keeps its model.
 - In the extension's panels each seat's name carries its vendor's logo in the vendor's colour: the picker, the answer cards and the settings cards. An OpenRouter seat shows the logo of its model's maker, DeepSeek for `deepseek/deepseek-v4.1-flash` for example, and OpenRouter's own when the maker has none. `docs/ARCHITECTURE.md` lists each logo's source.
 
+### Changed
+- `/claude-council:ask` in a chat with no shell hands the question to the Claude Council extension's `council_pick` tool when the extension is installed. In a Claude Desktop chat the command used to load, find no shell, and say the council could not run, with the extension sitting unused.
+
 ## 2026.11.1
 
 ### Fixed

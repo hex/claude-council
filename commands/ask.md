@@ -19,6 +19,17 @@ asks for a terse answer still produces a full council display of terse answers.
 Never answer the question yourself in place of running the council. If no
 provider is available, say so; do not substitute your own answer for theirs.
 
+## A chat with no shell
+
+This command runs shell scripts. An ordinary Claude Desktop or claude.ai chat
+has no shell, and there the Claude Council extension does the same work through
+its own tools. When you have no shell tool, look for the tools `council_pick`
+and `council_ask` (search your tools for "council" if tools load on demand) and
+call `council_pick` with the question, then follow that tool's result.
+Say the council cannot run only when the chat has neither a shell nor those
+tools, and then name both ways to get it: Claude Code, or the Claude Council
+extension for Claude Desktop.
+
 ## A provider named in the request
 
 A request can name providers instead of the council: "check with grok", "ask
