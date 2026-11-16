@@ -637,9 +637,8 @@ runs the same scripts the plugin does.
   questions asked together run side by side, as two plugin runs can. The
   defaults the panel shows come from `get_model` run under the same
   environment as a run with nothing chosen, so the two cannot disagree. The
-  seat list (`council_seats`, and the picker's rows) comes from
-  `query-council.sh --list-default-models` under that same environment, which
-  starts no agent.
+  picker's seat rows come from `query-council.sh --list-default-models` under
+  that same environment, which starts no agent.
 - `server/models.js` asks each keyed provider for its model list and parses the
   answer. The parsing is pure, so `tests/extension-models.bats` checks it
   against recorded and documented answers.
@@ -666,12 +665,11 @@ runs the same scripts the plugin does.
   tools is the host's to enforce: the server cannot tell a call from a panel
   from one by the model, so each validates every value as if the model had
   sent it.
-- Choosing the seats and verbosity before a question is a trial with two
-  forms, each removable on its own. In the first, `council_ask`'s description
-  has the model list the seats with `council_seats` and ask in the chat. In
-  the second, `council_pick` opens the picker, which runs the question and
-  shows the answers itself, while the model waits in `council_result` for
-  the run.
+- Choosing the seats and verbosity before a question happens in the picker.
+  `council_ask` runs at once with what it is given, and its description sends
+  the model to `council_pick` when the user wants to choose. `council_pick`
+  opens the picker, which runs the question and shows the answers itself,
+  while the model waits in `council_result` for the run.
 - The picker's answers reach the model only as a tool result. Measured in
   Claude Desktop: `ui/update-model-context` answers `{}` and delivers nothing
   to the model, with a content array or with `structuredContent`. `ui/message`
@@ -942,7 +940,7 @@ claude-council/
 │       ├── models.js            # Live model lists and their parsing
 │       ├── settings.html        # Settings panel drawn in the chat (MCP App)
 │       ├── answers.html         # One card per seat under a council_ask call (MCP App)
-│       ├── pick.html            # Trial: choose seats and verbosity, ask, hand the answers to Claude
+│       ├── pick.html            # Choose seats and verbosity, ask, hand the answers to Claude
 │       ├── panel-style.css      # Colour tokens, card layout and switches every panel inlines
 │       ├── panel-host.js        # Every panel's connection to Desktop
 │       ├── panel-page.js        # Element building and the status line every panel uses

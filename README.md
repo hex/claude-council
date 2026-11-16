@@ -51,9 +51,9 @@ the models share your description and its assumptions.
 ## Claude Desktop
 
 The plugin needs Claude Code. For an ordinary Claude Desktop chat there is a
-Desktop extension, `council-<version>.mcpb`, that gives Claude six tools:
-`council_ask`, `council_seats`, `council_pick`, `council_result`,
-`council_status` and `council_settings`. It runs on macOS and Linux only, because it starts the
+Desktop extension, `council-<version>.mcpb`, that gives Claude five tools:
+`council_ask`, `council_pick`, `council_result`, `council_status` and
+`council_settings`. It runs on macOS and Linux only, because it starts the
 council's bash scripts.
 
 1. Build the package with `bash extension/build.sh` in a clean checkout. It
@@ -82,13 +82,12 @@ council's bash scripts.
    vendor's logo, and Claude writes the synthesis below it. Desktop waits for
    the whole run, from seconds to a few minutes.
 
-Choosing the seats and the verbosity before a question is a trial, in two
-forms, and only one stays after it. Say "ask the council: which queue should
-we use?" and Claude first lists the seats with their models
-(`council_seats`) and asks in the chat which seats and which verbosity
-(standard, brief or detailed) you want, all at standard by default. Name them
-in your message, or say "just ask", and it runs at once. Say "ask the council
-with the picker: which queue should we use?" and Claude opens `council_pick`,
+Say "ask the council: which queue should we use?" and Claude runs it at once
+on every default seat at standard verbosity, or on the seats and the verbosity
+(standard, brief or detailed) your message names. To choose them first, say
+"ask the council with the picker: which queue should we use?" (Claude also
+opens the picker when you have not said and the choice matters), and Claude
+opens `council_pick`,
 a panel with the question, a switch per seat and the three verbosities. Claude
 then waits, in the same turn, in `council_result` for the picker's run. Press
 Ask: the answers appear in that panel, the line under them says "Claude is
