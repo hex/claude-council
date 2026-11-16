@@ -1100,8 +1100,13 @@ export const register: Register = (on, options) => {
           // open seat's row is drawn as a folded one is: its button reads
           // `fold` and its answer follows.
           const ink = { model: { color: COLOR.hint }, dim: { dimColor: true }, state: { color: section.stateColor } }
+          // A hairline sets an open seat's row apart from the answer under it.
+          // A terminal draws one from cells; a page's own rule spans the pane
+          // whatever its font, where a row of cells would wrap.
+          const answerFollows = sections[index + 1]?.kind === 'body' || sections[index + 1]?.kind === 'reason'
           return (
-            <Box key={section.key} flexDirection="row" width={columns}>
+            <Box key={section.key} flexDirection="column" width={columns}>
+            <Box flexDirection="row" width={columns}>
               <Box flexShrink={0}>
                 <Text>
                   <Text color={section.vendor}>{EDGE_MARK}</Text>
@@ -1140,6 +1145,8 @@ export const register: Register = (on, options) => {
                 ) : null}
               </Box>
             </Box>
+            {!answerFollows ? null : e.surface === 'terminal' ? <Text color={COLOR.hint} dimColor>{'─'.repeat(columns)}</Text> : <Markdown text="---" />}
+            </Box>
           )
         }
         case 'summary':
@@ -1171,10 +1178,10 @@ export const register: Register = (on, options) => {
           )
         case 'body':
           // The text arrives fitted to the pane's width and within its budget.
-          // A fallback's reason already took the blank line above it. A blank
+          // The seat's hairline stands where a blank line would. A blank
           // line follows when another section does; the footer brings its own.
           return (
-            <Box key={key} flexDirection="column" marginTop={sections[index - 1]?.kind === 'reason' ? 0 : 1} marginBottom={sections[index + 1] !== undefined && sections[index + 1]?.kind !== 'footer' ? 1 : 0}>
+            <Box key={key} flexDirection="column" marginBottom={sections[index + 1] !== undefined && sections[index + 1]?.kind !== 'footer' ? 1 : 0}>
               {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
@@ -1182,7 +1189,7 @@ export const register: Register = (on, options) => {
           )
         case 'reason':
           return (
-            <Box key={key} marginTop={1}>
+            <Box key={key}>
               <Text color={COLOR.muted}>{section.text}</Text>
             </Box>
           )
