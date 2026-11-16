@@ -15,7 +15,7 @@ import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLi
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
-import { choiceRequest, confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA, unknownSeats } from './tool'
+import { askableSeats, choiceRequest, confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
 import { ACTION_COLUMNS, isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
@@ -861,21 +861,24 @@ export const register: Register = (on, options) => {
     // `e` is flat: the tool's input fields sit beside `tool` and `tool_use_id`.
     // Its declared type is the union of the listed tools, none of them this one.
     const input = e as unknown as Record<string, unknown>
-    const parsed = councilArgs(input)
-    if ('deny' in parsed) return { deny: parsed.deny }
     const script = `${$.plugin.root}/scripts/run-council.sh`
     if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
     // The seats a default query runs, as /claude-council:ask offers them.
     const listed = await $.process.run(['bash', `${$.plugin.root}/scripts/query-council.sh`, '--list-default-models'], { timeoutMs: SEAT_INFO_MS })
     if (listed.exitCode !== 0) return { result: `Listing the council seats exited ${listed.exitCode}: ${listed.stderr.trim()}. Nothing was sent.`, isError: true }
     const seats = seatsFromList(listed.stdout)
-    // Refused before any question, so the user never answers for a call that cannot send.
-    if (Array.isArray(input.providers)) {
-      const unknown = unknownSeats(input.providers, seats.map(seat => seat.name), await providerScripts($))
-      if (unknown !== undefined) return { deny: unknown }
+    const defaults = seats.map(seat => seat.name)
+    let askable = defaults
+    if (input.providers !== undefined) {
+      const discovered = await seatInfo($, 'discover')
+      if (discovered.exitCode !== 0) return { result: `Listing the council seats exited ${discovered.exitCode}: ${discovered.stderr.trim()}. Nothing was sent.`, isError: true }
+      askable = askableSeats(defaults, discovered.stdout.split(/\s+/).filter(name => name !== ''), await providerScripts($))
     }
+    // Refused before any question, so the user never answers for a call that cannot send.
+    const parsed = councilArgs(input, askable)
+    if ('deny' in parsed) return { deny: parsed.deny }
     const missing = missingChoices(input)
-    if (missing.length > 0) {
+    if (missing.length > 0 || parsed.seats === undefined) {
       if (seats.length === 0) return { result: 'No council seat is available on this machine, so nothing was sent. /claude-council:status shows each provider.', isError: true }
       return { result: choiceRequest(seats, missing) }
     }
@@ -883,7 +886,7 @@ export const register: Register = (on, options) => {
     // call; this gate holds even where the tool itself needs no permission.
     let answer: string | undefined
     try {
-      answer = await $.ui.ask(confirmQuestion(input), { header: 'Council', options: [SEND_LABEL, KEEP_LABEL] })
+      answer = await $.ui.ask(confirmQuestion(String(input.question), parsed.seats, String(input.verbosity)), { header: 'Council', options: [SEND_LABEL, KEEP_LABEL] })
     } catch {
       answer = undefined
     }
