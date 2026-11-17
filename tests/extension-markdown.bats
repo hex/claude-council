@@ -18,6 +18,8 @@
 #   - lines that only look like a table drawn as one: pipes with no delimiter row, a
 #     delimiter row with a different number of cells, a table inside a code block
 #   - a pipe inside a code span, or written as \|, splitting its cell
+#   - a backslash before a run of backticks, on a line with a pipe, stops the reader
+#     with an error, and the panel then draws no seat's answer
 #   - a body row with fewer or more cells than the header cut, so the reader drops
 #     text the model wrote, or padded, which grows with the square of the input
 #   - a code fence never closed: the rest of the answer is code, not dropped
@@ -98,6 +100,34 @@ setup() {
 @test "extension markdown: a body row keeps the cells it has, fewer or more than the header" {
     assert_eq "$(blocks $'| a | b |\n|---|---|\n| 1 |\n| 2 | 3 | 4 |')" \
         '[{"type":"table","align":[null,null],"header":[[{"style":"text","text":"a"}],[{"style":"text","text":"b"}]],"rows":[[[{"style":"text","text":"1"}]],[[{"style":"text","text":"2"}],[{"style":"text","text":"3"}],[{"style":"text","text":"4"}]]]}]'
+}
+
+@test "extension markdown: a backslash before a run of backticks, on a line with a pipe, is read as text" {
+    local prose=$'Use \\`` or | here'
+    local table=$'| Marker | Meaning |\n|---|---|\n| \\``` | opens a fence |'
+    assert_eq "$(blocks "$prose")" \
+        '[{"type":"paragraph","runs":[{"style":"text","text":"Use \\`` or | here"}]}]'
+    assert_eq "$(blocks "$table")" \
+        '[{"type":"table","align":[null,null],"header":[[{"style":"text","text":"Marker"}],[{"style":"text","text":"Meaning"}]],"rows":[[[{"style":"text","text":"\\```"}],[{"style":"text","text":"opens a fence"}]]]}]'
+}
+
+# Every line of up to six characters drawn from the ones the reader acts on.
+@test "extension markdown: no short line of backslashes, backticks, pipes and styling markers throws" {
+    run --separate-stderr node -e '
+        const { markdownBlocks } = require(process.argv[1])
+        const alphabet = ["\\", "`", "|", "*", "_", " ", "a"]
+        const thrown = []
+        let lines = [""]
+        for (let length = 0; length <= 6; length++) {
+          for (const line of lines) {
+            try { markdownBlocks(line) } catch (error) { thrown.push(JSON.stringify(line)) }
+          }
+          lines = lines.flatMap(line => alphabet.map(char => line + char))
+        }
+        process.stdout.write(thrown.length === 0 ? "" : `${thrown.length} lines throw, the first ${thrown[0]}`)
+    ' "${PROJECT_ROOT}/extension/server/markdown.js"
+    [ "$status" -eq 0 ]
+    assert_eq "$output" ''
 }
 
 # A seat's answer is untrusted and unbounded, and the panel parses it on the

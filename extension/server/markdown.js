@@ -109,7 +109,9 @@ function tableCells(line) {
     else if (text[at] === '`') {
       let end = at
       while (text[end] === '`') end++
-      const close = tickCloser.get(end - at)(end)
+      // A backslash before a run skips its first backtick, and the line may
+      // hold no run as long as what is left: that has no closer.
+      const close = tickCloser.get(end - at)?.(end) ?? -1
       at = (close === -1 ? end : close + end - at) - 1
     }
   }
