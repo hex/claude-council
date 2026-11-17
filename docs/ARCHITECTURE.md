@@ -912,6 +912,7 @@ claude-council/
 │   ├── dependabot.yml           # Weekly bumps for the pinned GitHub Actions
 │   └── workflows/
 │       ├── announce-release.yml # On a published release, starts the private marketplace's sync so claude.ai picks it up
+│       ├── release-extension.yml # On a published release, builds the Desktop extension from its tag and attaches it
 │       ├── stale.yml            # Closes idle issues and PRs
 │       └── tests.yml            # bats on ubuntu, macos and 4 windows shards; shellcheck blocks a merge
 ├── agents/

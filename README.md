@@ -84,8 +84,10 @@ Desktop extension, `council-<version>.mcpb`, that gives Claude five tools:
 `council_settings`. It runs on macOS and Linux only, because it starts the
 council's bash scripts.
 
-1. Build the package with `bash extension/build.sh` in a clean checkout. It
-   needs `npm` and writes `dist/council-<version>.mcpb`.
+1. Download `council-<version>.mcpb` from the
+   [latest release](https://github.com/hex/claude-council/releases/latest).
+   To build it yourself, run `bash extension/build.sh` in a clean checkout.
+   It needs `npm` and writes `dist/council-<version>.mcpb`.
 2. Double-click the file. Desktop warns that the extension gets access to
    everything on your computer and is not verified by Anthropic. Both hold for
    any extension installed from a file: its server runs as you, with your files
