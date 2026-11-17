@@ -308,12 +308,16 @@ function forPanel(field, text) {
 }
 
 // Each seat's answer or error from query-council.sh's JSON, in the order the
-// council ran them, for the answers panel.
-function seatsOf(answers) {
+// council ran them, for the answers panel. `redact` removes the keys from a
+// text before it is cut: a key the cut ran through would leave its first
+// part behind, which nothing later could tell from the answer. Colour codes
+// go first, since one inside a key would hide it from `redact`.
+function seatsOf(answers, redact) {
+  const whole = text => redact(stripAnsi(String(text)))
   return Object.entries(answers.round1).map(([provider, seat]) => {
     const model = stripAnsi(String(seat.model))
-    if (seat.status === 'success') return { provider, model, ...forPanel('answer', stripAnsi(String(seat.response))) }
-    if (seat.status === 'error') return { provider, model, ...forPanel('error', stripAnsi(String(seat.error))) }
+    if (seat.status === 'success') return { provider, model, ...forPanel('answer', whole(seat.response)) }
+    if (seat.status === 'error') return { provider, model, ...forPanel('error', whole(seat.error)) }
     return { provider, model, error: `the seat returned status ${JSON.stringify(seat.status)} with no answer` }
   })
 }
@@ -395,7 +399,8 @@ const NO_SEATS = 'No council seat is set up: no provider has a key and no CLI ag
 // The council as one object over a plugin root and what readKeys made of
 // the keys Desktop gave. Every tool function takes the call's AbortSignal
 // last; aborting it stops the runs the call started. `redact` removes the
-// keys from what a picker run writes to the state directory.
+// keys from what a picker run writes to the state directory, and from a text
+// before it is cut short.
 function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS }) {
   if (typeof redact !== 'function') throw new TypeError(`openCouncil needs redact, the function that removes the keys from text, not ${typeof redact}`)
   const running = new Set()
@@ -552,7 +557,7 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     // came back empty and says so; each tool's description asks for the
     // synthesis instead.
     const text = stripAnsi(rendered.stdout).trim().replace(/\n+---\n## 🧭 Synthesis$/, '')
-    return { text, structured: { question, seats: seatsOf(answers) } }
+    return { text, structured: { question, seats: seatsOf(answers, redact) } }
   }
 
   // The picker's runs in which a seat answered, each a file named by when it

@@ -43,6 +43,8 @@
 #   - a seat error reaches structuredContent as an error, never as an answer
 #   - an answer too long for the panel: the model gets it whole, the panel its first 100000
 #     characters with the full length beside them
+#   - a key in a long answer where the panel's cut falls: replaced whole before the cut, so no
+#     part of it reaches structuredContent
 #   - every seat failing: still a result, with every seat's error, that the panel can draw
 #   - ANSI colour codes in a seat's answer or error: none in the text or in structuredContent
 #   - a failed run: the scripts' own error comes back as the tool error
@@ -381,7 +383,8 @@ save_choices() {
 # A curl that stands in for the provider APIs, first on PATH. "answer" replies
 # to a chat request with the model it was asked for and appends that model to
 # $COUNCIL_FAKE_SENT_MODELS; "leak" fails the transfer after printing its --config file,
-# which holds the Authorization header, to stderr.
+# which holds the Authorization header, to stderr; "keyed" answers with
+# $COUNCIL_FAKE_PAD characters, then the OpenRouter key it was started with.
 install_fake_curl() {
     local dir="${BATS_TEST_TMPDIR}/curlbin"
     mkdir -p "$dir"
@@ -410,6 +413,9 @@ elif [[ "$COUNCIL_FAKE_CURL_MODE" == huge ]]; then
     jq -cn '{choices: [{message: {content: ("x" * 9000000)}}]}' > "$out"
 elif [[ "$COUNCIL_FAKE_CURL_MODE" == long ]]; then
     jq -cn '{choices: [{message: {content: ("start " + ("x" * 150000) + " end")}}]}' > "$out"
+elif [[ "$COUNCIL_FAKE_CURL_MODE" == keyed ]]; then
+    jq -cn --argjson pad "$COUNCIL_FAKE_PAD" --arg key "$OPENROUTER_API_KEY" \
+        '{choices: [{message: {content: (("x" * $pad) + $key + " tail")}}]}' > "$out"
 elif [[ "$COUNCIL_FAKE_CURL_MODE" == colour ]]; then
     jq -cn --arg m "$model" '{choices: [{message: {content: ("\u001b[1manswer\u001b[0m from " + $m)}}]}' > "$out"
 else
@@ -502,6 +508,16 @@ result_seats() {
     [[ "$(result_text 1)" == *"start xxx"*"xxx end"* ]]
     assert_eq "$(result_seats 1 | jq -c '.seats[0] | {length: (.answer | length), shortenedFrom, tail: .answer[-3:]}')" \
         '{"length":100000,"shortenedFrom":150010,"tail":"xxx"}'
+}
+
+@test "extension: a key where the panel's cut falls in a long answer is removed whole, no part of it left" {
+    install_fake_curl keyed
+    export OPENROUTER_API_KEY="$SENTINEL_KEY" COUNCIL_FAKE_PAD=99990
+    mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["openrouter"]}')"
+    assert_eq "$(result_error 1)" false
+    # 99990 characters, then the 13 of "[key removed]" and " tail": 100008, cut at 100000.
+    assert_eq "$(result_seats 1 | jq -c '.seats[0] | {length: (.answer | length), shortenedFrom, tail: .answer[-13:]}')" \
+        '{"length":100000,"shortenedFrom":100008,"tail":"xxx[key remov"}'
 }
 
 @test "extension: colour codes in a seat's answer or error reach neither the text nor the seats" {
