@@ -39,13 +39,27 @@ function seatHeading(seat) {
   return element('h2', {}, [element('span', {}, [markIcon(seat.provider, seat.model), document.createTextNode(seat.provider)]), element('small', { textContent: seat.model })])
 }
 
+// A seat's answer as its markdown. One the reader stops on is drawn as the
+// text the seat wrote, under the reader's error, so the cards after it are
+// still drawn.
+function answerNode(answer) {
+  try {
+    return element('div', { className: 'answer' }, markdownBlocks(answer).map(blockNode))
+  } catch (error) {
+    return element('div', { className: 'answer' }, [
+      element('p', { className: 'note bad', textContent: `This answer's markdown could not be read (${error.message}), so it is shown as written.` }),
+      element('pre', {}, [element('code', { textContent: answer })]),
+    ])
+  }
+}
+
 // `whole` says what Claude has of an answer the card shortened, which differs
 // by panel.
 function seatCard(seat, whole) {
   const heading = seatHeading(seat)
   const body = seat.error !== undefined
     ? element('div', { className: 'note bad error', textContent: seat.error })
-    : element('div', { className: 'answer' }, markdownBlocks(seat.answer).map(blockNode))
+    : answerNode(seat.answer)
   const parts = [heading, body]
   if (seat.shortenedFrom !== undefined) {
     const shown = (seat.answer ?? seat.error).length
