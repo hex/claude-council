@@ -143,8 +143,8 @@ const TOOLS = [
   },
   {
     name: 'council_models_save',
-    description: 'Saves the model choices made in the council settings panel (selections), or one seat\'s model chosen in the council picker (seat and model). Used by the panels only.',
-    inputSchema: { type: 'object', properties: { selections: { type: 'object' }, seat: { type: 'string' }, model: { type: 'string' } }, additionalProperties: false },
+    description: 'Saves a change made in the council settings panel, the model of each provider named (selections) or one model added to or taken out of the OpenRouter roster (roster), or one seat\'s model chosen in the council picker (seat and model). Every other saved choice is kept. Used by the panels only.',
+    inputSchema: { type: 'object', properties: { selections: { type: 'object' }, roster: { type: 'object' }, seat: { type: 'string' }, model: { type: 'string' } }, additionalProperties: false },
     _meta: { ui: { visibility: ['app'] } },
     run: (args, signal) => theCouncil.saveFromPanel(args, signal),
   },
