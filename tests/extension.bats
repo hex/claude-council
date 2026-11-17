@@ -180,7 +180,7 @@ teardown() {
     if [[ -n "${AGER_PID:-}" ]]; then kill "$AGER_PID" 2>/dev/null || true; fi
     # The shutdown test's hung seat, should the server have failed to stop it.
     # SIGKILL, since some of them ignore SIGTERM.
-    pkill -9 -f 'sleep 97.3[1-7]' || true
+    pkill -9 -f 'sleep 97.3[1-9]' || true
     # No test, whatever it calls, may open a listening socket.
     if grep -q '"listen"' "$COUNCIL_FENCE_LOG" 2>/dev/null; then
         echo "the server tried to listen on a socket" >&2
@@ -811,10 +811,10 @@ drive() {
 }
 
 @test "extension: a reply that cannot be written, the server's output closed, stops the run's whole group before the server exits" {
-    stubborn_seat 97.37
+    stubborn_seat 97.38
     drive "$STUBBORN_STARTED" "deafen" "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
     [ "$status" -eq 1 ]
-    run ! pgrep -f 'sleep 97.37'
+    run ! pgrep -f 'sleep 97.38'
 }
 
 @test "extension: a cancelled council question stops its run and is never answered; another goes on" {
