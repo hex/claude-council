@@ -610,8 +610,10 @@ counter capped at max_iterations. Reviewer failure => allow.
 
 ### Claude Desktop extension (`extension/`)
 
-A Claude Desktop chat has no shell and no keys, so the plugin's commands and
-skills cannot run there. The extension is a local stdio MCP server that Desktop
+A Claude Desktop chat has no shell and no keys, so the plugin's scripts cannot
+run there. `/claude-council:ask` still loads in such a chat: finding no shell,
+it hands the question to the extension's `council_pick` tool when the
+extension is installed. The extension is a local stdio MCP server that Desktop
 starts with its built-in Node.js, plain CommonJS with no dependencies, which
 runs the same scripts the plugin does.
 
@@ -909,6 +911,7 @@ claude-council/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
 ├── .github/
+│   ├── FUNDING.yml              # The GitHub Sponsors button
 │   ├── dependabot.yml           # Weekly bumps for the pinned GitHub Actions
 │   └── workflows/
 │       ├── announce-release.yml # On a published release, starts the private marketplace's sync so claude.ai picks it up
@@ -920,6 +923,7 @@ claude-council/
 ├── assets/
 │   ├── banner.svg               # Plugin name and description
 │   ├── council-run.svg          # Captured run inside Claude Code
+│   ├── desktop-code-tab.png     # The council in Claude Desktop's Code tab, shown in the README
 │   ├── heads-up.svg             # Captured note and unsent draft
 │   ├── tmux-pane.svg            # Captured streaming tmux pane
 │   ├── capture/                 # Capture scripts, converter, raw frames, provenance
@@ -1049,13 +1053,17 @@ claude-council/
 │   ├── shards/                  # Which bats files each Windows CI shard runs
 │   ├── test_helper.bash         # Shared test utilities
 │   ├── e2e/                     # Run by hand, not by run_tests.sh; each script has a recorded passing run
+│   │   ├── extension-e2e.sh     # The Desktop extension's server against the real provider APIs, with the keys in your environment
 │   │   ├── heads-up-e2e.sh      # The heads-up side-check in a real Claude Code, driven through tmux, with the fake codex as the seat
 │   │   ├── heads-up-e2e.expected.txt
 │   │   ├── heads-up-codex-e2e.sh  # One real check against the logged-in codex on a session you name; sends that session off the machine
 │   │   ├── stored-keys-e2e.sh   # Keys and the OpenRouter roster stored in the plugin's config reach a Bash-tool command in a real claude -p session, over a shell export
 │   │   ├── stored-keys-e2e.expected.txt
 │   ├── fixtures/
+│   │   ├── extension/           # Model-list responses for the extension's tests, one per provider
+│   │   ├── extension-fence.js   # Loaded into the extension's server under test: records and refuses every outbound request and listening socket
 │   │   ├── fake-clis.bash       # Fake codex/agy/grok/kimi/cursor-agent/claude/copilot/opencode/ollama binaries on PATH
+│   │   ├── mcp-client.js        # Drives the extension's server over stdio with a list of requests
 │   │   └── status-fakes.bash    # Recording curl + jq for the check-status tests
 │   ├── agent-analysis.bats
 │   ├── argmax.bats              # ARG_MAX marshalling round-trip guards
@@ -1066,6 +1074,11 @@ claude-council/
 │   ├── deadline.bats            # run_with_deadline: stdin passthrough, own status, 143 at the deadline
 │   ├── display.bats
 │   ├── export.bats
+│   ├── extension.bats           # The Desktop extension's server, driven over stdio
+│   ├── extension-build.bats     # extension/build.sh in a clone
+│   ├── extension-markdown.bats  # The answers panel's Markdown reader
+│   ├── extension-marks.bats     # Which vendor mark each seat shows
+│   ├── extension-models.bats    # The panels' model lists
 │   ├── fake-clis.bats
 │   ├── format-output.bats
 │   ├── heads-up.bats            # heads-up.sh with the fake CLIs: one seat, result.json, deadlines, refusals before the fork

@@ -491,7 +491,7 @@ export COUNCIL_CACHE_DIR=".claude/council-cache"  # Cache location (default)
 export COUNCIL_CACHE_TTL=3600                      # Cache lifetime in seconds (default: 1 hour)
 ```
 
-Cached responses show `cached` instead of `success` in the status output. Cache is keyed by prompt + provider + model + role, so:
+Cached responses show `cached` instead of `success` in the status output. Cache is keyed by provider, model, verbosity, the `COUNCIL_MAX_TOKENS` cap, the attached image and the prompt, which carries the role, so:
 - Changing models invalidates the cache
 - Using `--roles` creates separate cache entries (same prompt with different role = cache miss)
 - Debate mode round 2 rebuttals are not cached (they depend on round 1 content) — with one exception: if a CLI provider fails in round 2 and falls back to its API sibling, that fallback rebuttal is cached, keyed on the full debate prompt (which already includes the round 1 answers)

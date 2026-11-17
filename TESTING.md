@@ -140,7 +140,7 @@ what a provider sends and never what the endpoint does with it. A payload that
 cannot succeed passes every one of them: Moonshot accepts no temperature but 1,
 and `kimi.sh` sent 0.7 for as long as nothing called the real API.
 
-Eleven tests close that gap, skipped by default and run with the gate set:
+Twelve tests close that gap, skipped by default and run with the gate set:
 
 ```bash
 COUNCIL_E2E=1 bats tests/providers.bats tests/cli-providers.bats
@@ -750,7 +750,7 @@ export COUNCIL_DEBUG=1
 | Cache bypass | `--no-cache` | [ ] |
 | Auto-context | Query with keywords | [ ] |
 | No auto-context | `--no-auto-context` | [ ] |
-| Roles | `--roles=security,perf` | [ ] |
+| Roles | `--roles=security,performance` | [ ] |
 | Role preset | `--roles=balanced` | [ ] |
 | Debate | `--debate` | [ ] |
 | Combined flags | Multiple flags | [ ] |
@@ -780,7 +780,10 @@ Release checklist:
 2. Test locally
 3. Bump version in `.claude-plugin/plugin.json`
 4. Commit and push
-5. Users update via `/plugin update claude-council`
+5. Publish a GitHub release tagged `v` followed by that version. The
+   `release-extension.yml` workflow attaches the Desktop extension's package
+   to it, and stops when the tag and the version differ.
+6. Users update via `/plugin update claude-council`
 
 ## Adding New Providers
 
