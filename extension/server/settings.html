@@ -28,16 +28,20 @@
 // @include marks.js
 // @include model-list.js
 const root = document.getElementById('providers')
-const state = {}
 let rosterMax = 0
 
-async function save() {
+// Sends the one change the user made: the server applies it to the choices as
+// saved at that moment, so a choice saved since this panel loaded is kept.
+// Answers whether the change was saved.
+async function save(change) {
   report('saving')
   try {
-    await host.tool('council_models_save', { selections: state })
+    await host.tool('council_models_save', change)
     report('saved')
+    return true
   } catch (err) {
     report(err.message, true)
+    return false
   }
 }
 
@@ -53,14 +57,12 @@ function single(row) {
   const ids = row.selected === '' || row.models.includes(row.selected) ? row.models : [row.selected, ...row.models]
   for (const id of ids) select.append(element('option', { value: id, textContent: id }))
   select.value = row.selected
-  state[row.name] = row.selected
-  select.addEventListener('change', () => { state[row.name] = select.value; save() })
+  select.addEventListener('change', () => save({ selections: { [row.name]: select.value } }))
   return [heading(row, row.hasKey ? '' : 'no key'), element('div', { className: 'line' }, [element('span', { textContent: 'Model' }), select])]
 }
 
 function roster(row) {
   const chosen = new Set(row.selected)
-  state[row.name] = [...chosen]
   const title = heading(row, '')
   const count = title.querySelector('small')
   function label() {
@@ -74,12 +76,13 @@ function roster(row) {
     disabled: !row.hasKey,
     row: id => {
       const box = element('input', { type: 'checkbox', className: 'switch', checked: chosen.has(id), disabled: !row.hasKey })
-      box.addEventListener('change', () => {
-        if (box.checked && chosen.size >= rosterMax) { box.checked = false; return report(`at most ${rosterMax} OpenRouter seats`, true) }
-        if (box.checked) chosen.add(id); else chosen.delete(id)
-        state[row.name] = [...chosen]
+      // The server holds the roster and its limit, so the switch and the
+      // count follow what it saved: a refused change puts the switch back.
+      box.addEventListener('change', async () => {
+        const add = box.checked
+        if (!(await save({ roster: add ? { add: id } : { remove: id } }))) { box.checked = !add; return }
+        if (add) chosen.add(id); else chosen.delete(id)
         label()
-        save()
       })
       return element('label', {}, [element('span', { textContent: id }), box])
     },

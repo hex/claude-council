@@ -53,8 +53,14 @@ run_sync() {
     if bash "${SCRIPT_DIR}/query-council.sh" "${PASS[@]+"${PASS[@]}"}" 2>"$logfile" \
         | bash "${SCRIPT_DIR}/format-output.sh" > "$outfile"; then
         rm -f "$logfile"
-        # The whole path: whoever reads it may not share this directory.
-        echo "${PWD}/${outfile}"
+        # The whole path: whoever reads it may not share this directory. Under
+        # Git Bash PWD is the MSYS form (/c/Users/...), which a native Windows
+        # program such as Claude Code cannot open, so the path is printed as
+        # cygpath -m gives it (C:/Users/...), a form bash opens too. A cygpath
+        # that fails or prints nothing leaves the path as bash has it.
+        local saved="${PWD}/${outfile}" native
+        if native=$(cygpath -m "$saved" 2>/dev/null) && [[ -n "$native" ]]; then saved=$native; fi
+        echo "$saved"
     else
         echo "Council query failed:" >&2
         tail -n 20 "$logfile" >&2 2>/dev/null || true

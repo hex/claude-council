@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "council",
   "display_name": "Claude Council",
-  "version": "2026.11.1",
+  "version": "2026.11.2",
   "description": "Ask other AI models one question from a Claude Desktop chat, on your own API keys.",
   "long_description": "Claude Council sends one question to several other AI model providers (Gemini, OpenAI, xAI, Perplexity, Kimi and any model OpenRouter routes to) and returns each answer to the chat, where Claude compares them. Enter an API key for each provider you want on the council under Configure; a provider without a key is left out. The CLI agents found on this machine also receive the question: codex, agy, grok, kimi, cursor-agent and ollama, and claude, copilot or opencode when a question names them. They answer on their own logins (ollama on a local model); codex, agy, grok and kimi also receive their own vendor's key from this form, and in a council question no CLI agent receives another vendor's key. A status check starts each installed CLI agent but claude and opencode with every key set. To pick models, ask Claude to open the council settings. The question leaves your machine for every provider with a key and every CLI agent that answers, on your keys and logins and at your cost.",
   "icon": "icon.png",

@@ -233,9 +233,43 @@ wait_for_job() {
     export COUNCIL_FAKE_BEHAVIOR=valid
     run bash "$RUN_COUNCIL" --providers=codex -- "test question"
     [ "$status" -eq 0 ]
-    [ "${output#"$PWD"/.claude/council-cache/council-}" != "$output" ]
+    # Under Git Bash the path is in the form a native Windows program opens,
+    # not PWD's /c/... form.
+    case "$(uname -s)" in
+        MINGW* | MSYS* | CYGWIN*) [[ "$output" =~ ^[A-Za-z]:/.*/\.claude/council-cache/council-[0-9]+\.md$ ]] || false ;;
+        *) [[ "${output#"$PWD"/.claude/council-cache/council-}" =~ ^[0-9]+\.md$ ]] || false ;;
+    esac
     cd /
     grep -q "FAKE-CODEX-RESPONSE" "$output"
+}
+
+@test "run-council: where cygpath exists, the saved file's path is printed as cygpath -m gives it" {
+    local bin="${BATS_TEST_TMPDIR}/cygbin" asked="${BATS_TEST_TMPDIR}/cygpath-asked"
+    mkdir -p "$bin"
+    printf '#!/bin/bash\nprintf "%%s\\n" "$*" > "%s"\nprintf "N:/native%%s\\n" "$2"\n' "$asked" > "${bin}/cygpath"
+    chmod +x "${bin}/cygpath"
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    PATH="${bin}:${PATH}" run bash "$RUN_COUNCIL" --providers=codex -- "test question"
+    [ "$status" -eq 0 ]
+    local name="${output#"N:/native${PWD}/.claude/council-cache/"}"
+    [[ "$name" =~ ^council-[0-9]+\.md$ ]] || false
+    assert_eq "$(cat "$asked")" "-m ${PWD}/.claude/council-cache/${name}"
+    grep -q "FAKE-CODEX-RESPONSE" ".claude/council-cache/${name}"
+}
+
+@test "run-council: a cygpath that fails or prints nothing leaves the saved file's path as bash has it" {
+    local bin="${BATS_TEST_TMPDIR}/cygbin" body name
+    mkdir -p "$bin"
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    for body in 'echo "cygpath: cannot convert" >&2; exit 1' 'exit 0'; do
+        printf '#!/bin/bash\n%s\n' "$body" > "${bin}/cygpath"
+        chmod +x "${bin}/cygpath"
+        PATH="${bin}:${PATH}" run --separate-stderr bash "$RUN_COUNCIL" --providers=codex -- "test question"
+        assert_eq "$status" 0
+        name="${output#"${PWD}/.claude/council-cache/"}"
+        [[ "$name" =~ ^council-[0-9]+\.md$ ]] || { echo "printed: ${output}" >&2; false; }
+        assert_eq "$stderr" ""
+    done
 }
 
 @test "run-council: sync drops a self-ignoring .gitignore even under --no-cache" {

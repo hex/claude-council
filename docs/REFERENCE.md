@@ -204,7 +204,7 @@ Cowork does not prompt for plugin values, so stored keys never reach claude.ai
 chat or Cowork.
 
 `openrouter` seats whatever model `OPENROUTER_MODEL` names, defaulting to
-`anthropic/claude-fable-5.1` — the one vendor the council has no direct seat for.
+`anthropic/claude-fable-5.2` — the one vendor the council has no direct seat for.
 To seat several routed models at once, list them instead:
 
 ```bash
@@ -341,7 +341,7 @@ export KIMI_VISION=1                                # only needed when KIMI_MODE
 export COUNCIL_AGENT_MODEL="sonnet"                 # default: the model the --agents
                                                     # ANALYSTS run on (sonnet/opus/haiku/fable).
                                                     # Not a provider model — see below.
-export OPENROUTER_MODEL="anthropic/claude-fable-5.1"  # default (single seat)
+export OPENROUTER_MODEL="anthropic/claude-fable-5.2"  # default (single seat)
 export OPENROUTER_MODELS="a/b,c/d,e/f"              # or: one seat per entry
 export OPENROUTER_2_MODEL="c/d-pinned"              # overrides roster seat 2's entry;
                                                     # what the exit-3 degrade path sets
@@ -394,7 +394,7 @@ in the response header:
 | perplexity | `low` | `fast` |
 | kimi | `kimi-k3` | `kimi-k2.6` |
 | ollama | first local model (`OLLAMA_MODEL` to pin) | — |
-| openrouter | `anthropic/claude-fable-5.1` | `anthropic/claude-opus-5.5` |
+| openrouter | `anthropic/claude-fable-5.2` | `anthropic/claude-opus-5.5` |
 
 The same substitution is also noted on stderr and folded into the synthesis,
 so it's visible even in quiet mode or a headless run. Setting `<PROVIDER>_MODEL`
@@ -491,7 +491,7 @@ export COUNCIL_CACHE_DIR=".claude/council-cache"  # Cache location (default)
 export COUNCIL_CACHE_TTL=3600                      # Cache lifetime in seconds (default: 1 hour)
 ```
 
-Cached responses show `cached` instead of `success` in the status output. Cache is keyed by prompt + provider + model + role, so:
+Cached responses show `cached` instead of `success` in the status output. Cache is keyed by provider, model, verbosity, the `COUNCIL_MAX_TOKENS` cap, the attached image and the prompt, which carries the role, so:
 - Changing models invalidates the cache
 - Using `--roles` creates separate cache entries (same prompt with different role = cache miss)
 - Debate mode round 2 rebuttals are not cached (they depend on round 1 content) — with one exception: if a CLI provider fails in round 2 and falls back to its API sibling, that fallback rebuttal is cached, keyed on the full debate prompt (which already includes the round 1 answers)

@@ -80,6 +80,9 @@
 #     directory found with looser permissions is tightened
 #   - a state directory that is a symbolic link: refused with a sentence, the target left as it was
 #   - a models file that is a symbolic link: not read, and the answer says the defaults ran
+#   - a settings save: only the providers it names change, or one model joins or leaves the saved
+#     OpenRouter roster; a choice the picker saved since the panel loaded is kept; a roster change
+#     past the seat limit, with a bad id, or naming no single model is refused, the file as it was
 #   - one seat's model saved from the picker: only that provider's choice or that roster position
 #     changes, every other choice and the roster order kept; Default clears the choice and the
 #     answer names the scripts' default
@@ -136,6 +139,8 @@
 #     and the seats asked, and that ask's result says it was awaited
 #   - every seat failing, a refused run: the waiter ends with what failed
 #   - the wait running out: a sentence saying the user has not pressed Ask, and no marker left
+#   - council_result for a run still going past its picker's deadline: a sentence saying to call
+#     again shortly and not to ask again; once the run ends, its answers
 #   - a waiting council_result cancelled: its marker removed at once, and never answered
 #   - a waiter that died: its marker, untouched for just over 2 seconds, is not counted as waiting
 #   - council_result for an id council_pick never made, or with no id while a picker is open:
@@ -507,7 +512,7 @@ result_seats() {
     mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex","openrouter"]}')"
     assert_eq "$(result_error 1)" false
     assert_eq "$(result_seats 1 | jq -c '[.seats[] | {provider, answer, error: (.error != null)}]')" \
-        '[{"provider":"codex","answer":null,"error":true},{"provider":"openrouter","answer":"answer from anthropic/claude-fable-5.1","error":false}]'
+        '[{"provider":"codex","answer":null,"error":true},{"provider":"openrouter","answer":"answer from anthropic/claude-fable-5.2","error":false}]'
     assert_eq "$(result_seats 1 | jq -r '.seats[0].error')" 'Error from codex CLI: Error: fake provider failure'
 }
 
@@ -1087,6 +1092,72 @@ mode_of() {
         '{"gemini":"gemini-3-pro","openai":"","grok":"","perplexity":"sonar-test-1","kimi":"","openrouter":["vendor/alpha","vendor/delta","vendor/gamma"]}'
 }
 
+@test "extension: a settings save changes only the providers it names, a model the picker saved since the panel loaded kept" {
+    save_choices '{"openai":"gpt-test-1","perplexity":"sonar-test-1","openrouter":["vendor/alpha","vendor/beta"]}'
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"gemini","model":"gemini-3-pro"}')" \
+        "$(call 2 council_models_save '{"selections":{"openai":"gpt-test-2"}}')"
+    assert_eq "$(result_text 2)" '{"saved":true}'
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"gemini-3-pro","openai":"gpt-test-2","grok":"","perplexity":"sonar-test-1","kimi":"","openrouter":["vendor/alpha","vendor/beta"]}'
+}
+
+@test "extension: a settings save adds one model to the end of the saved OpenRouter roster or takes one out, a seat the picker changed kept" {
+    save_choices '{"openai":"gpt-test-1","openrouter":["vendor/alpha","vendor/beta","vendor/gamma"]}'
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"openrouter-2","model":"vendor/delta"}')" \
+        "$(call 2 council_models_save '{"roster":{"remove":"vendor/gamma"}}')" \
+        "$(call 3 council_models_save '{"roster":{"add":"vendor/epsilon"}}')" \
+        "$(call 4 council_models_save '{"roster":{"add":"vendor/alpha"}}')" \
+        "$(call 5 council_models_save '{"roster":{"remove":"vendor/never"}}')"
+    local id
+    for id in 2 3 4 5; do
+        assert_eq "$(result_text "$id")" '{"saved":true}'
+    done
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"","openai":"gpt-test-1","grok":"","perplexity":"","kimi":"","openrouter":["vendor/alpha","vendor/delta","vendor/epsilon"]}'
+}
+
+@test "extension: a settings save is refused when the saved choices cannot be opened, the file left as it was" {
+    [ "$(id -u)" -ne 0 ] || skip "root opens a file of mode 000"
+    save_choices '{"openai":"gpt-x"}'
+    chmod 000 "${STATE_DIR}/models.json"
+    mcp "$INIT" "$(call 1 council_models_save '{"roster":{"add":"a/3"}}')" \
+        "$(call 2 council_models_save '{"selections":{"gemini":"gemini-x"}}')"
+    chmod 600 "${STATE_DIR}/models.json"
+    local id
+    for id in 1 2; do
+        assert_eq "$(result_error "$id")" true
+        assert_eq "$(result_text "$id")" "Not saved: the saved model choices in ${STATE_DIR}/models.json could not be read (the file could not be opened: EACCES)."
+    done
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" '{"openai":"gpt-x"}'
+}
+
+@test "extension: a roster change the choices cannot take is refused with a sentence, the file left as it was" {
+    local full='{"openrouter":["a/1","a/2","a/3","a/4","a/5","a/6","a/7","a/8","a/9","a/10","a/11","a/12"]}'
+    save_choices "$full"
+    mcp "$INIT" "$(call 1 council_models_save '{"roster":{"add":"a/13"}}')" \
+        "$(call 2 council_models_save '{"roster":{"remove":"a/1,a/2"}}')" \
+        "$(call 3 council_models_save '{"roster":{"add":"a/13","remove":"a/1"}}')" \
+        "$(call 4 council_models_save '{"roster":["a/13"]}')" \
+        "$(call 5 council_models_save '{"roster":{"remove":7}}')" \
+        "$(call 6 council_models_save '{"roster":{"remove":"a/1"},"selections":{}}')"
+    assert_eq "$(result_text 1)" 'Not saved: OpenRouter: 13 models chosen, at most 12 seats.'
+    assert_eq "$(result_text 2)" '{"saved":true}'
+    assert_eq "$(result_text 3)" 'Not saved: expected one model id to add or one to remove, got {"add":"a/13","remove":"a/1"}.'
+    assert_eq "$(result_text 4)" 'Not saved: expected one model id to add or one to remove, got ["a/13"].'
+    assert_eq "$(result_text 5)" 'Not saved: expected one model id to add or one to remove, got {"remove":7}.'
+    assert_eq "$(result_text 6)" 'Not saved: council_models_save takes selections, a roster change, or a seat and its model, one of them.'
+    local id
+    for id in 1 3 4 5 6; do
+        assert_eq "$(result_error "$id")" true
+    done
+    assert_eq "$(jq -c '.openrouter' "${STATE_DIR}/models.json")" "$(jq -c '.openrouter' <<< "$full")"
+    save_choices '{"openrouter":["a/1"]}'
+    mcp "$INIT" "$(call 1 council_models_save '{"roster":{"add":"a/2,a/3"}}')"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" 'Not saved: OpenRouter: "a/2,a/3" is not a model id.'
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" '{"openrouter":["a/1"]}'
+}
+
 @test "extension: with no roster saved, a model chosen for the openrouter seat starts the roster as openrouter-1" {
     install_fake_curl answer
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
@@ -1125,7 +1196,7 @@ mode_of() {
     assert_eq "$(result_text 7)" 'Not saved: Gemini: "gemini 3; rm -rf ~" is not a model id.'
     assert_eq "$(result_text 8)" 'Not saved: OpenRouter: "a/1,a/2" is not a model id.'
     assert_eq "$(result_text 9)" 'Not saved: expected a seat name and a model id, got "gemini" and undefined.'
-    assert_eq "$(result_text 10)" 'Not saved: council_models_save takes either selections or a seat and its model, not both.'
+    assert_eq "$(result_text 10)" 'Not saved: council_models_save takes selections, a roster change, or a seat and its model, one of them.'
     local id
     for id in 1 2 3 4 5 6 7 8 9 10; do assert_eq "$(result_error $id)" true; done
     assert_eq "$(jq -c . "${STATE_DIR}/models.json")" "$saved"
@@ -1550,6 +1621,39 @@ ${asked}"
     assert_eq "$(jq -c '.waited' <<< "$output")" "$(jq -cn --arg run "$picked" '{text: "The user has not pressed Ask in the council picker within 7 seconds of it opening. When they do, the picker drafts a message asking for the synthesis of run \($run); call council_result with that run then."}')"
     [ -d "${STATE_DIR}/picks" ]
     run ! compgen -G "${STATE_DIR}/picks/*/waiting-*"
+}
+
+@test "extension: council_result for a picker run still going past the picker's deadline says to call again, never to ask again, and then gives its answers" {
+    install_fake_curl echo
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    # The picker's deadline is 10 seconds after it opens. Ask is pressed 8.5
+    # seconds in and its seat takes 2 seconds, so the run ends after the deadline.
+    run --separate-stderr "$NODE" -e '
+        const council = require(process.argv[1])
+        const { keys, tooShort } = council.readKeys(process.env)
+        const theCouncil = council.openCouncil({ root: process.argv[2], keys, tooShort, redact: text => text,
+          timeoutsMs: { ask: 6000, status: 1000, script: 3000, relay: 1000 } })
+        const signal = new AbortController().signal
+        const sleep = ms => new Promise(done => setTimeout(done, ms))
+        const main = async () => {
+          const run = (await theCouncil.pick({ question: "q" }, true, signal)).structured.run
+          await sleep(8500)
+          const asking = theCouncil.pickAsk({ question: "q", providers: ["openrouter"], run }, signal)
+          await sleep(1800)
+          const during = await theCouncil.result({ run }, signal)
+          const asked = await asking
+          const after = await theCouncil.result({ run }, signal)
+          process.stdout.write(JSON.stringify({ run, during, asked: asked.text, after }))
+        }
+        main()
+    ' "${PROJECT_ROOT}/extension/server/council.js" "$PROJECT_ROOT"
+    [ "$status" -eq 0 ]
+    local picked
+    picked=$(jq -r '.run' <<< "$output")
+    [[ "$picked" =~ ^[0-9a-f]{6}$ ]] || false
+    assert_eq "$(jq -c '.during' <<< "$output")" "$(jq -cn --arg run "$picked" '{text: "The user pressed Ask in the council picker, and run \($run) has no outcome yet. Its answers may be seconds away: call council_result with run \($run) again shortly, and do not ask the council the question again."}')"
+    assert_eq "$(jq -r '.after.text' <<< "$output")" "$(jq -r '.asked' <<< "$output")"
+    [[ "$(jq -r '.asked' <<< "$output")" == *'asked: q'* ]]
 }
 
 @test "extension: a picker ask whose run id is not six hex digits is refused before anything is run or written" {

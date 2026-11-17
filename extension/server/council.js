@@ -150,9 +150,10 @@ function choiceProblem(provider, choice) {
 
 // Saved choices are parsed whole: every value ends up in the scripts'
 // environment, so one bad value rejects the set rather than being repaired.
-function parseChoices(value) {
+// A provider the value does not name keeps its choice in `onto`.
+function parseChoices(value, onto = noChoices()) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return { problem: 'expected an object of provider names' }
-  const choices = noChoices()
+  const choices = { ...onto }
   for (const [name, choice] of Object.entries(value)) {
     const provider = PROVIDERS.find(candidate => candidate.name === name)
     if (!provider) return { problem: `${shown(name)} is not a provider the settings cover` }
@@ -202,6 +203,20 @@ function withSeatModel(choices, seat, model) {
   return problem ? { problem } : { choices: { ...choices, openrouter: next }, seat }
 }
 
+// The choices with one model added to the end of the OpenRouter roster
+// (`add`) or taken out of it (`remove`), as the settings panel's switches save
+// it: every other choice and position kept. A model already seated is not
+// added twice, and one not seated is not missed.
+function withRosterChange(choices, change) {
+  const names = change !== null && typeof change === 'object' && !Array.isArray(change) ? Object.keys(change) : []
+  const id = names.length === 1 && (names[0] === 'add' || names[0] === 'remove') ? change[names[0]] : undefined
+  if (typeof id !== 'string') return { problem: `expected one model id to add or one to remove, got ${shown(change)}` }
+  const roster = choices.openrouter
+  const next = names[0] === 'remove' ? roster.filter(seated => seated !== id) : roster.includes(id) ? roster : [...roster, id]
+  const problem = choiceProblem(PROVIDERS.find(provider => provider.roster), next)
+  return problem ? { problem } : { choices: { ...choices, openrouter: next } }
+}
+
 function choicesFile() {
   return path.join(stateDirectory(), 'models.json')
 }
@@ -209,11 +224,13 @@ function choicesFile() {
 // The saved choices, or the defaults with a notice saying why the file was
 // ignored: a run on defaults the user did not choose may cost more, so every
 // tool that reads the choices passes the notice on. `problem` is why, for a
-// save that must not replace the file.
+// save that must not replace the file. `unopened` marks a file the system
+// would not open or read: its contents may be good, so no save replaces it.
 function readChoices() {
-  const ignored = problem => ({
+  const ignored = (problem, unopened = false) => ({
     choices: noChoices(),
     problem,
+    unopened,
     notice: `The saved model choices in ${choicesFile()} could not be read (${problem}), so every provider uses its default model.`,
   })
   let fd
@@ -222,13 +239,13 @@ function readChoices() {
   } catch (err) {
     if (err.code === 'ENOENT') return { choices: noChoices(), notice: '' }
     if (err.code === 'ELOOP') return ignored('the file is a symbolic link, which is not followed')
-    return ignored(`the file could not be opened: ${err.code}`)
+    return ignored(`the file could not be opened: ${err.code}`, true)
   }
   let text
   try {
     text = fs.readFileSync(fd, 'utf8')
   } catch (err) {
-    return ignored(`the file could not be read: ${err.code}`)
+    return ignored(`the file could not be read: ${err.code}`, true)
   } finally {
     fs.closeSync(fd)
   }
@@ -623,10 +640,11 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   }
 
   // Writes the text whole or not at all, as the choices are, and never more
-  // than 0600.
+  // than 0600. Without the keys: a seat's error can quote the key it was
+  // sent, and this is the one way a run's text reaches a file.
   function writePrivate(file, text) {
     const scratch = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}`)
-    fs.writeFileSync(scratch, text, { mode: 0o600, flag: 'wx' })
+    fs.writeFileSync(scratch, redact(text), { mode: 0o600, flag: 'wx' })
     fs.renameSync(scratch, file)
   }
 
@@ -687,12 +705,11 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   }
 
   // Holds an answered run's text under the run id, forgetting the oldest
-  // past RUNS_KEPT. Without the keys: a seat's error can quote the key it
-  // was sent, and no key may reach a file.
+  // past RUNS_KEPT.
   function holdRun(run, text) {
     const dir = heldDirectory()
     const held = heldRuns(dir)
-    writePrivate(path.join(dir, `${String(Date.now()).padStart(15, '0')}-${run}.txt`), redact(text))
+    writePrivate(path.join(dir, `${String(Date.now()).padStart(15, '0')}-${run}.txt`), text)
     for (const [old] of held.slice(0, Math.max(0, held.length + 1 - RUNS_KEPT))) fs.rmSync(path.join(dir, old), { force: true })
     // writePrivate's scratch files that a crash or a failed write left: no
     // write between a scratch file and its rename takes a minute, so an
@@ -812,8 +829,9 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   }
 
   // A picker run's text, by its id or the latest held when none is given. A
-  // run named by a picker still waiting on it is waited for; with no id the
-  // call never waits.
+  // run named by a picker still waiting on it is waited for; one still going
+  // past its picker's deadline is answered with a sentence saying to call
+  // again; with no id the call never waits.
   async function result(input, signal) {
     if (input === null || typeof input !== 'object' || Array.isArray(input)) return refused('council_result takes an object, with a run id or none')
     const unknown = Object.keys(input).find(name => name !== 'run')
@@ -823,6 +841,10 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     // the picker stops being pending, so a run between the two is found.
     const pending = input.run === undefined ? undefined : pendingPick(input.run)
     if (pending) return awaitPick(pending, signal)
+    // A run claimed before its picker's deadline may go on past it, for no
+    // longer than the picker waits for a run. Looked at before the held runs
+    // are read, so a run that ends in between is found among them.
+    const unended = input.run !== undefined && picks().some(pick => pick.run === input.run && has(pick, 'asking') && pick.deadline + answerWithinMs() > Date.now())
     const kept = `The extension keeps the last ${RUNS_KEPT} picker runs in which a seat answered. Ask the council the question again.`
     const dir = heldDirectory()
     const held = heldRuns(dir)
@@ -833,6 +855,7 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     const ended = input.run === undefined ? undefined : picks().find(pick => pick.run === input.run)
     const failure = ended && outcomeOf(ended)
     if (failure) return { text: failure }
+    if (unended) return { text: `The user pressed Ask in the council picker, and run ${input.run} has no outcome yet. Its answers may be seconds away: call council_result with run ${input.run} again shortly, and do not ask the council the question again.` }
     if (input.run === undefined) return refused(`No council run from the picker is held. ${kept}`)
     return refused(`Council run ${shown(input.run)} is not held. ${kept}`)
   }
@@ -937,17 +960,25 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     return { text: JSON.stringify({ providers: rows, rosterMax: ROSTER_MAX, problem: notice }) }
   }
 
-  // The settings panel saves every provider's choice at once (selections);
-  // the picker saves one seat's model (seat and model), changed in the
-  // choices as saved at that moment, and is told the model the seat now uses.
+  // The settings panel saves the choice of each provider it names
+  // (selections) or one model added to or taken out of the OpenRouter roster
+  // (roster); the picker saves one seat's model (seat and model) and is told
+  // the model the seat now uses. Each is a change to the choices as saved at
+  // that moment, so a panel never writes back what it loaded. The settings
+  // panel's change is made to the defaults when the file's contents are not
+  // choices: a save there is how such a file is replaced. A file the system
+  // would not open is left alone.
   async function saveFromPanel(input, signal) {
+    const given = ['selections', 'roster'].filter(name => input?.[name] !== undefined).length + (input?.seat !== undefined || input?.model !== undefined ? 1 : 0)
+    if (given > 1) return refused('Not saved: council_models_save takes selections, a roster change, or a seat and its model, one of them.')
     if (input?.seat === undefined && input?.model === undefined) {
-      const result = parseChoices(input?.selections)
+      const saved = readChoices()
+      if (saved.unopened) return refused(`Not saved: the saved model choices in ${choicesFile()} could not be read (${saved.problem}).`)
+      const result = input?.roster !== undefined ? withRosterChange(saved.choices, input.roster) : parseChoices(input?.selections, saved.choices)
       if (result.problem) return refused(`Not saved: ${result.problem}.`)
       writeChoices(result.choices)
       return { text: JSON.stringify({ saved: true }) }
     }
-    if (input.selections !== undefined) return refused('Not saved: council_models_save takes either selections or a seat and its model, not both.')
     const change = () => {
       const saved = readChoices()
       if (saved.problem) return { problem: `the saved model choices in ${choicesFile()} could not be read (${saved.problem}). Save a fresh set in the council settings` }

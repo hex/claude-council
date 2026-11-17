@@ -15,6 +15,7 @@ choices.
 | --- | --- |
 | Claude Code in a terminal | `/claude-council:ask`, every seat, and the pane beside the chat. |
 | Claude Desktop, Code tab | The same plugin and the same commands. The pane opens in Desktop's side panel. |
+| Claude Desktop, an ordinary chat | The [Desktop extension](#claude-desktop): five tools, a seat picker and an answers panel in the chat. macOS and Linux. |
 
 ![Claude Desktop's Code tab: Claude's synthesis of a primary-key question on the left, the Council pane with each seat's answer on the right](assets/desktop-code-tab.png)
 

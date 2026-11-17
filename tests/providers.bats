@@ -1011,12 +1011,12 @@ Raw response: <html>gateway</html>" ]
 }
 
 @test "openrouter: extracts content and posts the pinned default to the router" {
-    FAKE_BODY='{"choices":[{"message":{"content":"OR_OK"}}],"model":"anthropic/claude-fable-5.1"}'
+    FAKE_BODY='{"choices":[{"message":{"content":"OR_OK"}}],"model":"anthropic/claude-fable-5.2"}'
     run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k
     [ "$status" -eq 0 ]
     [ "$output" = "OR_OK" ]
     grep -qF "https://openrouter.ai/api/v1/chat/completions" "$ARGV_FILE"
-    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-fable-5.1" ]]
+    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-fable-5.2" ]]
 }
 
 @test "openrouter: a numbered seat posts its own roster model, not the default" {
@@ -1037,7 +1037,7 @@ Raw response: <html>gateway</html>" ]
     FAKE_BODY='{"choices":[{"message":{"content":"x"}}]}'
     run_provider openrouter.sh "hi" OPENROUTER_API_KEY=k COUNCIL_SEAT=gemini
     [ "$status" -eq 0 ]
-    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-fable-5.1" ]]
+    [[ "$(jq -r '.model' "$DATA_FILE")" == "anthropic/claude-fable-5.2" ]]
 }
 
 @test "openrouter: sends a reasoning budget by default" {
@@ -1156,7 +1156,7 @@ Raw response: <html>gateway</html>" ]
         [ "$status" -eq 0 ]
         assert_blank "$stderr"
         echo "seat=$seat sent model=$(jq -r '.model' "$DATA_FILE")"
-        [[ "$(jq -r '.model' "$DATA_FILE")" == 'anthropic/claude-fable-5.1' ]]
+        [[ "$(jq -r '.model' "$DATA_FILE")" == 'anthropic/claude-fable-5.2' ]]
     done
 }
 

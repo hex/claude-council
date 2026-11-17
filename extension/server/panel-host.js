@@ -7,8 +7,6 @@ class HostTimeout extends Error {}
 const host = {
   nextId: 1,
   pending: new Map(),
-  // What the host said it offers, in its answer to ui/initialize.
-  capabilities: {},
   post(message) { window.parent.postMessage(message, '*') },
   // With `waitMs`, a request the host has not answered by then fails with a
   // HostTimeout, and a late answer to it is ignored: the host may never
@@ -55,7 +53,6 @@ const host = {
       }
     })
     const hello = await host.request('ui/initialize', { appInfo: { name: appName, version: '1' }, appCapabilities: {}, protocolVersion: '2026-01-26' })
-    host.capabilities = hello?.hostCapabilities ?? {}
     host.theme(hello?.hostContext)
     host.post({ jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {} })
     new ResizeObserver(host.reportSize).observe(document.body)
