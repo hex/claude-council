@@ -927,7 +927,8 @@ export const register: Register = (on, options) => {
     if ('deny' in parsed) return { deny: parsed.deny }
     const missing = missingChoices(input)
     if (missing.length > 0 || parsed.seats === undefined) {
-      if (seats.length === 0) return { result: 'No council seat is available on this machine, so nothing was sent. /claude-council:status shows each provider.', isError: true }
+      // A call that named its seats needs none listed: only its verbosity is asked.
+      if (seats.length === 0 && missing.includes('seats')) return { result: 'No council seat is available on this machine, so nothing was sent. /claude-council:status shows each provider.', isError: true }
       return { result: choiceRequest(seats, missing) }
     }
     // The question goes to third-party providers, so the user confirms every

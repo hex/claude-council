@@ -205,6 +205,8 @@ test('a call missing only the verbosity is asked only that', () => {
   expect(choiceRequest([{ name: 'codex', model: 'gpt-6.1-sol' }, { name: 'gemini', model: 'g' }], ['verbosity'])).toBe(
     [ASK_FIRST, '', VERBOSITY_QUESTION].join('\n'),
   )
+  // The call named a seat discovery never lists, on a machine where a default query seats nobody.
+  expect(choiceRequest([], ['verbosity'])).toBe([ASK_FIRST, '', VERBOSITY_QUESTION].join('\n'))
 })
 
 test('the result tells Claude the empty synthesis section is its own to write', () => {

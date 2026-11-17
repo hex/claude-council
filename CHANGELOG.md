@@ -41,6 +41,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - `/claude-council:ask` loads the `council-execution` skill before it runs the query. The command printed the run call itself, so a model could run it without the skill, never learn that the transcript's closing `## 🧭 Synthesis` heading is where its own synthesis goes, and report the synthesis as empty while paraphrasing the answers.
 - `run-council.sh` prints the saved transcript's whole path. It printed a path relative to the directory the run started in, and Claude could look for the file in the plugin folder first.
 - The Desktop answers panel draws every seat's answer when one holds a backslash before two or more backticks on a line with a pipe, such as a table cell showing ```` \``` ````. The markdown reader stopped with an error there, and the panel drew no seat's card.
+- The council tool asks for the verbosity when a call names `claude-cli`, `copilot-cli` or `opencode` and leaves the verbosity out on a machine where a default query seats nobody. It answered that no council seat is available.
 
 ### Security
 - No seat receives the `CLAUDE_PLUGIN_OPTION_*` variables any more, a custom seat named `claude` included, unless `COUNCIL_PASS_ENV` names one. Claude Code gives a hook every stored plugin option under that prefix, and the Stop gate starts its seat from a hook, so that seat would otherwise have received every stored API key. A seat still gets its own key through its vendor's variables.
