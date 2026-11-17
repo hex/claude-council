@@ -507,7 +507,7 @@ result_seats() {
     mcp "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex","openrouter"]}')"
     assert_eq "$(result_error 1)" false
     assert_eq "$(result_seats 1 | jq -c '[.seats[] | {provider, answer, error: (.error != null)}]')" \
-        '[{"provider":"codex","answer":null,"error":true},{"provider":"openrouter","answer":"answer from anthropic/claude-fable-5.1","error":false}]'
+        '[{"provider":"codex","answer":null,"error":true},{"provider":"openrouter","answer":"answer from anthropic/claude-fable-5.2","error":false}]'
     assert_eq "$(result_seats 1 | jq -r '.seats[0].error')" 'Error from codex CLI: Error: fake provider failure'
 }
 

@@ -18,6 +18,7 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - CI no longer runs the HOL plugin scanner. Its workflow is gone, and so are the weekly Dependabot bumps of its action.
 
 ### Changed
+- The OpenRouter seat's default model is `anthropic/claude-fable-5.2`. It was `anthropic/claude-fable-5.1`. The fallback stays `anthropic/claude-opus-5.5`.
 - `/claude-council:ask` in a chat with no shell hands the question to the Claude Council extension's `council_pick` tool when the extension is installed. In a Claude Desktop chat the command used to load, find no shell, and say the council could not run, with the extension sitting unused.
 - `/claude-council:status` and the no-providers message name `/plugin configure claude-council` next to the shell export, and the no-providers message names all six key variables.
 - The docs no longer say the council-pane mod needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. Claude Code 2.1.287 and later loads mods by default and ignores that variable.

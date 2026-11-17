@@ -41,7 +41,7 @@ lib() {
     export OPENROUTER_MODELS="deepseek/deepseek-v3.2,z-ai/glm-5.3"
     run lib 'get_model openrouter'
     [ "$status" -eq 0 ]
-    [ "$output" = "anthropic/claude-fable-5.1" ]
+    [ "$output" = "anthropic/claude-fable-5.2" ]
 }
 
 @test "get_model: a per-seat override wins over the list" {

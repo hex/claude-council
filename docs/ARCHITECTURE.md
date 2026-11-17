@@ -1123,7 +1123,7 @@ claude-council/
 | `CLAUDE_CLI_MODEL` | (unset) | Model passed to `claude --model`, only when set (else the account's default model; the seat does not read `settings.json`) |
 | `COPILOT_CLI_MODEL` | (unset) | Model passed to `copilot --model`, only when set (else the CLI's automatic pick, which can change per question; a plan can reject every named model) |
 | `OPENCODE_MODEL` | (unset) | `provider/model` passed to `opencode run -m` (else the `model` from the user's `opencode.json`; with neither, no `-m` and the CLI's built-in default) |
-| `OPENROUTER_MODEL` | `anthropic/claude-fable-5.1` | Any id from openrouter.ai/models (single seat) |
+| `OPENROUTER_MODEL` | `anthropic/claude-fable-5.2` | Any id from openrouter.ai/models (single seat) |
 | `OPENROUTER_MODELS` | (unset) | Comma-separated ids; each becomes a seat `openrouter-N`, replacing the single seat. The council-pane mod sets it from a non-blank `openrouter_models` option at `session.start`, over a shell export |
 | `OPENROUTER_<N>_MODEL` | (unset) | Overrides roster seat N's entry, as `<PROVIDER>_MODEL` does for any provider; the exit-3 degrade path sets it so a roster entry never resends the model that just failed |
 | `COUNCIL_SEAT` | (set by the orchestrator) | Which seat a provider script is running as; only the router reads it |
