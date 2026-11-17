@@ -1,7 +1,7 @@
 ---
 description: Put the current conversation to the council — resolve this session's transcript, digest a bounded window of it, show what would leave the machine, and only then ask external providers for advice on it. Use when the user asks the council to look at what we have been doing, wants a second opinion on this session's approach rather than on a question typed fresh, or says they are stuck and the reasoning so far is the thing worth reviewing. Prefer /claude-council:ask when the question stands on its own without the conversation behind it.
 argument-hint: '[--turns=last:N] [--providers=list] [--verbosity=brief|standard|detailed] "what to ask about it"'
-allowed-tools: Bash(bash */scripts/session-transcript.sh *), Bash(bash */scripts/transcript-digest.sh *), Bash(bash */scripts/query-council.sh *), Bash(wc:*), Bash(head:*), Bash(mktemp:*), Bash(rm:*), Read, AskUserQuestion
+allowed-tools: Bash(bash */scripts/session-transcript.sh*), Bash(bash */scripts/transcript-digest.sh*), Bash(bash */scripts/query-council.sh*), Bash(wc:*), Bash(head:*), Bash(mktemp:*), Bash(rm:*), Read, AskUserQuestion
 ---
 
 Ask the council about this conversation.
@@ -20,7 +20,7 @@ It is also why every run shows you the payload before anything is sent.
 The session id is substituted into this file at invocation:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/session-transcript.sh ${CLAUDE_SESSION_ID}
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/session-transcript.sh" ${CLAUDE_SESSION_ID}
 ```
 
 If that fails, stop and report why. Do not search for a transcript by
@@ -34,7 +34,7 @@ available but say plainly that it sends the whole conversation.
 
 ```bash
 DIGEST=$(mktemp "${TMPDIR:-/tmp}/council-digest.XXXXXX")
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/transcript-digest.sh --turns last:25 "<path>" > "$DIGEST" \
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/transcript-digest.sh" --turns last:25 "<path>" > "$DIGEST" \
   || { echo "digest failed"; rm -f "$DIGEST"; }
 wc -c "$DIGEST"
 ```
@@ -81,7 +81,7 @@ retained by them, and cannot be recalled.
 ## Step 4: Query the council
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh \
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh" \
   --file="$DIGEST" --no-auto-context \
   -- "<the user's question>"
 ```

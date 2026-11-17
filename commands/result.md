@@ -1,7 +1,7 @@
 ---
 description: Fetch, list, or cancel background council jobs started with --async
 argument-hint: '[job-id] | list | cancel <job-id>'
-allowed-tools: Bash(bash */scripts/run-council.sh *), Read
+allowed-tools: Bash(bash */scripts/run-council.sh*), Read
 ---
 
 Manage background council jobs.
@@ -15,7 +15,7 @@ Manage background council jobs.
 ## List Jobs
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --jobs
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh" --jobs
 ```
 
 Present the output as a table (job id, status, created). If empty, tell the
@@ -25,7 +25,7 @@ with `--async` starts one.
 ## Cancel a Job
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --cancel=<job-id>
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh" --cancel=<job-id>
 ```
 
 Relay the confirmation verbatim.
@@ -33,7 +33,7 @@ Relay the confirmation verbatim.
 ## Fetch a Result
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --result=<job-id>
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh" --result=<job-id>
 ```
 
 - **Exit 0**: stdout is the output file path. Read the file and display its

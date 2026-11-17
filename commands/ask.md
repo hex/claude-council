@@ -1,7 +1,7 @@
 ---
 description: Query multiple AI agents (Gemini, OpenAI, Grok, Perplexity, Kimi, any model OpenRouter routes to, and a local ollama model) for diverse perspectives on architecture decisions, technology choices, debugging dead-ends, and security tradeoffs. Use this whenever the user names the council directly, whatever the topic — ask the council, council review, full council review, what does the council think, get a second opinion from the council, run this past the council — including reviews of code, documents, plans or artifacts. Also suggest it unprompted when the user is choosing between competing approaches (e.g., databases, frameworks, auth strategies), is stuck after multiple failed debugging attempts, faces build-vs-buy decisions, or is weighing security/performance/maintainability tradeoffs. Do NOT suggest it unprompted for simple implementation tasks, quick fixes, or questions with clear single answers; a direct request for the council overrides that exclusion.
 argument-hint: '[--file=path] [--image=path] [--providers=list] [--roles=list] [--verbosity=brief|standard|detailed] [--debate] [--agents] [--local] [--async] [--output=path] [--quiet] [--no-cache] [--no-auto-context] [--no-pane] "question"'
-allowed-tools: Agent, Workflow, Bash(bash */scripts/query-council.sh *), Bash(bash */scripts/run-council.sh *), Bash(bash */scripts/lib/export.sh *), Bash(head:*), Bash(mkdir -p .claude/council-cache*), Read, Glob, Grep, Write, AskUserQuestion, TaskCreate, TaskUpdate
+allowed-tools: Agent, Workflow, Bash(bash */scripts/query-council.sh*), Bash(bash */scripts/run-council.sh*), Bash(bash */scripts/lib/export.sh*), Bash(head:*), Bash(mkdir -p .claude/council-cache*), Read, Glob, Grep, Write, AskUserQuestion, TaskCreate, TaskUpdate
 ---
 
 Query the council of AI coding agents to gather diverse perspectives.
@@ -63,7 +63,7 @@ any provider questions:
 
 2. **Otherwise, check what providers are configured:**
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default 2>&1 | head -1
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh" --list-default 2>&1 | head -1
    ```
    - If this lists one or more providers → continue with the normal flow below.
    - If it is empty or reports `No providers configured` → do NOT hard-fail.
@@ -100,7 +100,7 @@ is the right set here, NOT `--list-available`, which includes shadowed API
 siblings that won't run):
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default-models
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh" --list-default-models
 ```
 
 One `<provider>\t<model>` per line. Build every option label from this output —
@@ -302,7 +302,7 @@ Skip Step 3 (synthesis) - the deep-execution skill generates its own enhanced sy
 Run the query as a detached background job instead of blocking:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --async --providers=<list> -- "question"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh" --async --providers=<list> -- "question"
 ```
 
 The first stdout line is the job id. Tell the user the job started and that
@@ -310,6 +310,12 @@ The first stdout line is the job id. Tell the user the job started and that
 synthesis happens when the result is fetched.
 
 ### If Standard Mode (default)
+
+**Invoke the `council-execution` skill first** and follow its instructions to
+run the query pipeline and display output. Do not run `run-council.sh` before
+the skill has loaded: the skill holds the call's timeout, the rules for showing
+each answer, and what the transcript's closing `## 🧭 Synthesis` heading is for.
+The rules below shape the flags of the call the skill makes.
 
 **CRITICAL - Flag Syntax**: All script flags use `=` with NO spaces:
 - CORRECT: `--providers=gemini,openai`
@@ -328,13 +334,11 @@ case where the default cannot apply, such as a pane outside tmux. For example, a
 `--debate --roles=…` query becomes:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh --debate --roles=security,performance --providers=<list> -- "question"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-council.sh" --debate --roles=security,performance --providers=<list> -- "question"
 ```
 
 `--debate` is what activates two-round debate mode; if the user passed it, it
 MUST reach the script, or Step 3's debate synthesis has nothing to summarize.
-
-**Invoke the `council-execution` skill** and follow its instructions to run the query pipeline and display output.
 
 ## Step 3: Generate Synthesis (standard mode only)
 
@@ -356,7 +360,7 @@ Step 2 (its path was printed by `run-council.sh`). Pass that file as the body
 source (the command has no stdin to pipe):
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/lib/export.sh --write "<output_path>" "<prompt>" "<providers>" "<council_cache_file>"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/lib/export.sh" --write "<output_path>" "<prompt>" "<providers>" "<council_cache_file>"
 ```
 
 Confirm: `Exported to: <output_path>`

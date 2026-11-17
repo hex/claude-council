@@ -816,6 +816,38 @@ EOF
     assert_json_eq "$output" '.metadata.pane_shown' 'false'
 }
 
+# A run aimed at the mod's watch root, as the mod's env export aims it. The
+# stub stands in for the mod when told to: it drops the file the mod writes
+# once its pane is on screen.
+run_council_in_mod_root() {
+    local drawn="$1"; shift
+    MOD_ROOT="${BATS_TEST_TMPDIR}/mod-root"
+    mkdir -p "$MOD_ROOT"
+    cat > "$STUB_DIR/gemini.sh" <<EOF
+#!/bin/bash
+[[ "$drawn" != drawn ]] || find "$MOD_ROOT" -maxdepth 1 -name 'run.*' -exec touch {}/shown \\;
+printf '%s\\n' ANSWER-FROM-gemini
+EOF
+    chmod +x "$STUB_DIR/gemini.sh"
+    run --separate-stderr env -u COUNCIL_NO_PANE PROVIDERS_DIR="$STUB_DIR" COUNCIL_MOD_PANE_DIR="$MOD_ROOT" \
+        "$HOST_BASH" "$SCRIPT" --no-cache --no-auto-context --providers=gemini "q"
+}
+
+@test "metadata: pane_shown is false when the mod never drew its pane" {
+    # A headless run or a narrow terminal leaves the pane undrawn, so the chat
+    # must not skip the answers.
+    run_council_in_mod_root undrawn
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.round1.gemini.response' 'ANSWER-FROM-gemini'
+    assert_json_eq "$output" '.metadata.pane_shown' 'false'
+}
+
+@test "metadata: pane_shown is true once the mod says it drew its pane" {
+    run_council_in_mod_root drawn
+    [ "$status" -eq 0 ]
+    assert_json_eq "$output" '.metadata.pane_shown' 'true'
+}
+
 @test "metadata: pane_shown is false for a detached --async job" {
     setup_pane
     write_stub gemini

@@ -6,8 +6,8 @@ question** — build it with the canonical injector so the wording matches the
 cross-vendor flow exactly:
 
 ```bash
-source ${CLAUDE_PLUGIN_ROOT}/scripts/lib/prompts.sh
-source ${CLAUDE_PLUGIN_ROOT}/scripts/lib/roles.sh
+source "${CLAUDE_PLUGIN_ROOT}/scripts/lib/prompts.sh"
+source "${CLAUDE_PLUGIN_ROOT}/scripts/lib/roles.sh"
 build_prompt_with_role "{QUESTION_WITH_CONTEXT}" "{ROLE}"
 ```
 

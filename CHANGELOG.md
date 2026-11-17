@@ -4,6 +4,28 @@ All notable changes to claude-council are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
+## Unreleased
+
+### Changed
+- An open seat's row in the Claude Code pane has no colored fill. It looks like a folded row, and its button reads `fold`. The fill was heavy in the desktop app's side pane. A thin rule under the row sets it apart from its answer.
+- The council tool asks which seats and how verbose before it sends, as `/claude-council:ask` does. A call without `providers` or `verbosity` sends nothing: its result lists the seats a default run uses and has Claude ask you both in one AskUserQuestion dialog, then call again with your answers. The send dialog opens with every seat's name and the verbosity, then the question on one line; a question longer than 300 characters is cut there with a note of its full length, and the providers still receive all of it. A seat named twice is asked once. A seat the council cannot ask now, such as a router seat past your roster or a provider with no key, is refused with the seats found on this machine. When your message already named the seats or said to ask every seat, Claude skips the questions and sends at standard verbosity.
+
+### Fixed
+- A council pane row too narrow for its note (`cached`, `fell back`) shows a shortened model name in the space left, where it showed neither.
+- The council pane no longer opens for `run-council.sh -h`, which prints the usage and asks nobody.
+- The send dialog shows the question without direction overrides and zero-width characters, so a question cannot reorder or hide text there. The providers still receive the question as written.
+- The mod leaves a run given `--no-pane` alone. In tmux it could ask where the pane should open for a run that draws none.
+- The council pane opens for a run that follows a quoted string ending in an escaped backslash, such as `echo "a\\"; bash <path>/run-council.sh -- "q"`. The mod read the closing quote as escaped and took the rest of the command for quoted text.
+- The council pane opens for a run whose script path is built inside double quotes, such as `bash "$(pwd)/scripts/run-council.sh" -- "q"`. The mod dropped the words before the `$(`, `bash` among them, and opened no pane.
+- The council tool's result says the empty Synthesis section is Claude's to write, so Claude no longer reports that the synthesis "came back empty" when the tool ran the council.
+- The council pane opens for a question that mentions a flag such as `--help`. The mod took the mention for the flag and opened no pane. It no longer opens for a command that only mentions a run: an `echo`, a search, a commit message, or `command -v bash <path>/run-council.sh`.
+- The council pane opens for `/claude-council:ask` in the Claude desktop app's Code tab. The app keeps plugins under `Application Support`, and the mod did not recognize a run whose script path held a space, so the run went ahead with no pane.
+- A seat row fits a narrow pane, such as the desktop app's side panel. The bar shortens first, from 14 cells to 5, then the model is cut and ends in `…`, and a pane narrower still draws no bar. A `cached` or `fell back` note counts toward the fit: the bar goes before the note does, and the note goes whole on a row with no room for it. The seat's name, its time and its button stay in view.
+- The commands run without a permission prompt when the plugin folder's path holds a space, as it does in the desktop app. The commands and skills now print each script path in quotes, and each command's `allowed-tools` rule accepts the quoted form. The rules ended in `.sh *`, which a quoted path (`.sh" --jobs`) does not match, so `/claude-council:result` stopped to ask before listing jobs; the rules of `:status`, `:ask` and `:advise` had the same shape.
+- The answers reach the chat when the council pane was never drawn. A run aimed at the mod's pane marked its transcript as already shown as soon as the pane was requested, so in a headless run, or in a terminal too narrow for a pane nobody opened, Claude listed each seat as `answered` and printed no answer. The mod now tells the run once the pane is on screen, and only then is the transcript marked. The tests cover the run's side; that the mod reports a drawn pane is confirmed only by a manual run.
+- `/claude-council:ask` loads the `council-execution` skill before it runs the query. The command printed the run call itself, so a model could run it without the skill, never learn that the transcript's closing `## 🧭 Synthesis` heading is where its own synthesis goes, and report the synthesis as empty while paraphrasing the answers.
+- `run-council.sh` prints the saved transcript's whole path. It printed a path relative to the directory the run started in, and Claude could look for the file in the plugin folder first.
+
 ## 2026.11.1
 
 ### Fixed
