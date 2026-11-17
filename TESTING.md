@@ -221,18 +221,6 @@ why on the line above:
 ls -t "$dir"/*.json
 ```
 
-## Plugin scanner (HOL)
-
-CI also runs the HOL plugin scanner on every push to main and every pull
-request (`.github/workflows/hol-plugin-scanner.yml`). It fails on a high finding
-or a score under 80. Score a `git archive HEAD` export, not the working
-directory, where untracked session files read as findings:
-
-```bash
-git archive HEAD | tar -x -C "$dir"
-pipx run plugin-scanner lint "$dir" --format text
-```
-
 ## Plugin Evals (`claude plugin eval`)
 
 `evals/` holds a nine-case suite for when the council comes up. Seven cases
