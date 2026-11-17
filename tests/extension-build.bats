@@ -66,7 +66,7 @@ setup() {
     local file
     for file in icon.png server/index.js server/council.js server/models.js server/settings.html server/answers.html server/pick.html \
         server/panel-style.css server/panel-host.js server/panel-page.js server/marks.js server/markdown.js server/seat-cards.js server/seat-cards.css \
-        server/model-list.js server/model-list.css \
+        server/model-list.js server/model-list.css server/THIRD-PARTY-NOTICES.md \
         plugin/scripts/run-council.sh plugin/scripts/check-status.sh plugin/scripts/providers/openrouter.sh \
         plugin/config/roles.json plugin/prompts/synthesis.md plugin/schemas/agent-analysis.schema.json; do
         [ -f "${unpacked}/${file}" ] || { echo "missing from the package: $file" >&2; return 1; }

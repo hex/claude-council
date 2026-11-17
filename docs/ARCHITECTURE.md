@@ -739,7 +739,8 @@ runs the same scripts the plugin does.
 #### Vendor marks
 
 The marks are their owners' trademarks, shown only to identify the service or
-model a seat runs. The path data and colours come unmodified from
+model a seat runs. The package carries that statement and the licence of
+the path data in `server/THIRD-PARTY-NOTICES.md`. The path data and colours come unmodified from
 [simple-icons](https://simpleicons.org) 16.37.0
 (`https://unpkg.com/simple-icons@16.37.0/icons/<slug>.svg`), whose data is
 CC0-1.0 (https://unpkg.com/simple-icons@16.37.0/LICENSE.md, trademark notes in
