@@ -949,7 +949,11 @@ claude-council/
 │       ├── panel-page.js        # Element building and the status line every panel uses
 │       ├── seat-cards.js        # A council_ask result as one card per seat
 │       ├── seat-cards.css       # The seat cards' look
-│       └── markdown.js          # The markdown subset the seat cards draw, as data
+│       ├── markdown.js          # The markdown subset the seat cards draw, as data
+│       ├── marks.js             # The vendor mark drawn beside each seat's name
+│       ├── model-list.js        # A provider's models under a filter box, in settings and the picker
+│       ├── model-list.css       # The model list's look
+│       └── THIRD-PARTY-NOTICES.md  # The marks' trademark statement and LobeHub's licence
 ├── hooks/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/
