@@ -534,7 +534,9 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   // answer or error apart, then renders that JSON as text with the same
   // format-output.sh the plugin's transcripts come from.
   async function runAsk({ question, providers, verbosity }, choices, signal) {
-    const flags = ['--no-pane']
+    // No response cache: it would keep the question and each answer, keys an
+    // answer quoted included, in a file under the run's directory.
+    const flags = ['--no-pane', '--no-cache']
     if (providers) flags.push(`--providers=${providers.join(',')}`)
     if (verbosity) flags.push(`--verbosity=${verbosity}`)
     const cwd = runDirectory()

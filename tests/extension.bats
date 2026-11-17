@@ -50,6 +50,8 @@
 #   - a failed run: the scripts' own error comes back as the tool error
 #   - a seat whose error text carries the key: the key is replaced in the text and in
 #     structuredContent, and is in no state file
+#   - an answered run: the response cache is off, so neither the question nor an answer that
+#     quotes the key is in any file under the state directory
 #   - openrouter-N past the saved roster: refused before any run
 #   - the saved roster reaches the run as one seat per model
 #   - a model variable inherited from Desktop's environment: dropped, the scripts' default is used
@@ -565,6 +567,23 @@ result_seats() {
     [ -d "${STATE_DIR}/runs" ]
     run grep -rqF "$SENTINEL_KEY" "$STATE_DIR"
     [ "$status" -eq 1 ]
+}
+
+@test "extension: an answered run leaves neither its question nor a key its answer quoted under the state directory" {
+    install_fake_curl keyed
+    export OPENROUTER_API_KEY="$SENTINEL_KEY" COUNCIL_FAKE_PAD=0
+    # As in Desktop, where nothing names a cache directory and the scripts'
+    # own default is under the run's working directory.
+    unset COUNCIL_CACHE_DIR
+    mcp "$INIT" "$(call 1 council_ask '{"question":"Which ledger holds zebra-7431?","providers":["openrouter"]}')"
+    assert_eq "$(result_error 1)" false
+    assert_eq "$(result_seats 1 | jq -r '.seats[0].answer')" '[key removed] tail'
+    # grep exits 1 for no match, and 2 for a directory that is not there.
+    [ -d "${STATE_DIR}/runs" ]
+    run grep -rlF "$SENTINEL_KEY" "$STATE_DIR"
+    assert_eq "$status $output" '1 '
+    run grep -rlF 'zebra-7431' "$STATE_DIR"
+    assert_eq "$status $output" '1 '
 }
 
 @test "extension: a seat past the saved OpenRouter roster is refused before anything runs" {
