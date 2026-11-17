@@ -98,32 +98,52 @@ council's bash scripts.
    vendor's logo, and Claude writes the synthesis below it. Desktop waits for
    the whole run, from seconds to a few minutes.
 
-Name the seats or a verbosity (standard, brief or detailed) in your message,
-or say to just ask everyone, and Claude runs the question at once, on every
-default seat at standard unless you named others. Otherwise, as in "ask the
-council: which queue should we use?", Claude opens `council_pick`,
-a panel with the question, a switch per seat and the three verbosities. Claude
-then waits, in the same turn, in `council_result` for the picker's run. Press
-Ask: the answers appear in that panel, the line under them says "Claude is
-writing the synthesis", and Claude writes it with no message from you. When
-every seat fails, Claude says what failed. Claude waits at most 11.5 minutes
-from when the picker opened. If it has stopped waiting by the time the answers
-are in, or you press Ask a second time in the same panel, Desktop instead puts
-"Synthesise the council's answers (run 3f9a2c)." in the message box, under a
-caution about malicious content, and the line under the answers says to press
-Enter: Claude then fetches that run's answers with `council_result` and
-writes the synthesis. The panel cannot send that message itself. If Desktop
-refuses the message, the line instead gives the words to send yourself (`Ask
-Claude: "synthesise council run 3f9a2c"`). The extension keeps the last 5
-runs in which a seat answered; after that, ask the council again. When no
-seat answers, the panel says so and Ask works again. On an API seat or an
-OpenRouter seat the model in grey is a button: click it to pick another model
-from that provider's live list (OpenRouter's has a filter box). The choice
-saves at once, as the settings panel's would, and applies to this question
-and the ones after it. An OpenRouter seat changes only its own model; adding
-or removing OpenRouter seats stays in the settings panel. Claude passes your
-question as you asked it, adding context only when it depends on earlier
-messages the council cannot see.
+### Asking at once
+
+Name the seats or a verbosity (standard, brief or
+detailed) in your message, or say to just ask everyone, and Claude runs the
+question at once, on every default seat at standard unless you named others.
+Claude passes your question as you asked it, adding context only when it
+depends on earlier messages the council cannot see.
+
+### The picker
+
+Otherwise, as in "ask the council: which queue should we
+use?", Claude opens `council_pick`, a panel with the question, a switch per
+seat and the three verbosities. Claude then waits, in the same turn, in
+`council_result` for the picker's run.
+
+1. Press Ask. The answers appear in that panel, and the line under them says
+   "Claude is writing the synthesis".
+2. Claude writes the synthesis with no message from you. When every seat
+   fails, Claude says what failed.
+
+When no seat answers, the panel says so and Ask works again.
+
+### Changing a model in the picker
+
+On an API seat or an OpenRouter seat the
+model in grey is a button: click it to pick another model from that
+provider's live list (OpenRouter's has a filter box). The choice saves at
+once, as the settings panel's would, and applies to this question and the
+ones after it. An OpenRouter seat changes only its own model; adding or
+removing OpenRouter seats stays in the settings panel.
+
+### When Claude is no longer waiting
+
+Claude waits at most 11.5 minutes from
+when the picker opened. If it has stopped waiting by the time the answers are
+in, or you press Ask a second time in the same panel:
+
+- Desktop puts "Synthesise the council's answers (run 3f9a2c)." in the
+  message box, under a caution about malicious content, and the line under
+  the answers says to press Enter. The panel cannot send that message itself.
+- Claude then fetches that run's answers with `council_result` and writes the
+  synthesis.
+- If Desktop refuses the message, the line instead gives the words to send
+  yourself (`Ask Claude: "synthesise council run 3f9a2c"`).
+- The extension keeps the last 5 runs in which a seat answered; after that,
+  ask the council again.
 
 A question with no providers named goes to every provider with a key and to
 every CLI agent the scripts find (`codex`, `agy`, `grok`, `kimi`,
