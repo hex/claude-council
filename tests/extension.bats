@@ -311,26 +311,26 @@ save_choices() {
     local settings answers part
     settings=$(reply 2 | jq -r '.result.contents[0].text')
     answers=$(reply 3 | jq -r '.result.contents[0].text')
-    [[ "$settings" == '<!doctype html>'* && "$answers" == '<!doctype html>'* ]]
-    [[ "$settings" != *'@include'* && "$answers" != *'@include'* ]]
+    [[ "$settings" == '<!doctype html>'* && "$answers" == '<!doctype html>'* ]] || false
+    [[ "$settings" != *'@include'* && "$answers" != *'@include'* ]] || false
     for part in panel-style.css panel-host.js panel-page.js marks.js markdown.js seat-cards.js seat-cards.css model-list.js model-list.css; do
         [ -s "${PROJECT_ROOT}/extension/server/${part}" ]
     done
     for part in panel-style.css panel-host.js panel-page.js marks.js; do
-        [[ "$settings" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
-        [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
+        [[ "$settings" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]] || false
+        [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]] || false
     done
     local pick
     pick=$(reply 4 | jq -r '.result.contents[0].text')
-    [[ "$pick" == '<!doctype html>'* && "$pick" != *'@include'* ]]
+    [[ "$pick" == '<!doctype html>'* && "$pick" != *'@include'* ]] || false
     for part in panel-style.css panel-host.js panel-page.js marks.js markdown.js seat-cards.js seat-cards.css model-list.js model-list.css; do
-        [[ "$pick" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
+        [[ "$pick" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]] || false
     done
     for part in model-list.js model-list.css; do
-        [[ "$settings" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
+        [[ "$settings" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]] || false
     done
     for part in markdown.js seat-cards.js seat-cards.css; do
-        [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]]
+        [[ "$answers" == *"$(cat "${PROJECT_ROOT}/extension/server/${part}")"* ]] || false
     done
 }
 
@@ -373,7 +373,7 @@ save_choices() {
     for at in 0 1 2; do
         uri=$(reply 2 | jq -r --argjson at "$at" '.result.resources[$at].uri')
         page=$(echo settings answers pick | cut -d' ' -f$((at + 1)))
-        [[ "$uri" =~ ^ui://council/${page}/[0-9a-f]{12}$ ]]
+        [[ "$uri" =~ ^ui://council/${page}/[0-9a-f]{12}$ ]] || false
         assert_eq "$(reply $((at + 10)) | jq -r '.result.contents[0].uri')" "$uri"
         assert_eq "ui://council/${page}/$(reply $((at + 10)) | jq -j '.result.contents[0].text' | sha256_hex | cut -c1-12)" "$uri"
     done
@@ -933,9 +933,9 @@ In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configur
         '{"jsonrpc":"2.0","id":6,"method":"sampling/fly"}' "$(call 7 council_fly)")
     mcp "${requests[@]}"
     local keyless="$output"
-    [[ "$keyless" == *'"jsonrpc":"2.0"'*'council_settings'*'text/html;profile=mcp-app'* ]]
-    [[ "$(reply 4 | jq -r '.result.contents[0].text')" == '<!doctype html>'* ]]
-    [[ "$(reply 5 | jq -r '.result.contents[0].text')" == '<!doctype html>'* ]]
+    [[ "$keyless" == *'"jsonrpc":"2.0"'*'council_settings'*'text/html;profile=mcp-app'* ]] || false
+    [[ "$(reply 4 | jq -r '.result.contents[0].text')" == '<!doctype html>'* ]] || false
+    [[ "$(reply 5 | jq -r '.result.contents[0].text')" == '<!doctype html>'* ]] || false
     OPENAI_API_KEY=2.0 GEMINI_API_KEY=x KIMI_API_KEY=council_settings OPENROUTER_API_KEY=text/html mcp "${requests[@]}"
     [ "$status" -eq 0 ]
     assert_eq "$output" "$keyless"
