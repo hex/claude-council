@@ -40,7 +40,6 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - The answers reach the chat when the council pane was never drawn. A run aimed at the mod's pane marked its transcript as already shown as soon as the pane was requested, so in a headless run, or in a terminal too narrow for a pane nobody opened, Claude listed each seat as `answered` and printed no answer. The mod now tells the run once the pane is on screen, and only then is the transcript marked. The tests cover the run's side; that the mod reports a drawn pane is confirmed only by a manual run.
 - `/claude-council:ask` loads the `council-execution` skill before it runs the query. The command printed the run call itself, so a model could run it without the skill, never learn that the transcript's closing `## 🧭 Synthesis` heading is where its own synthesis goes, and report the synthesis as empty while paraphrasing the answers.
 - `run-council.sh` prints the saved transcript's whole path. It printed a path relative to the directory the run started in, and Claude could look for the file in the plugin folder first. Under Git Bash on Windows the path is in the `C:/...` form, which Claude Code can open.
-
 - Several seats of one CLI starting at once on a machine where that CLI's seat home does not exist yet all start. One could fail with `could not link ... for the seat's login` when it looked for the login link at the moment another seat was replacing it.
 
 ### Security
