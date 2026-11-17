@@ -6,6 +6,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Removed
+- CI no longer runs the HOL plugin scanner. Its workflow is gone, and so are the weekly Dependabot bumps of its action.
+
 ### Changed
 - An open seat's row in the Claude Code pane has no colored fill. It looks like a folded row, and its button reads `fold`. The fill was heavy in the desktop app's side pane. A thin rule under the row sets it apart from its answer.
 - The council tool asks which seats and how verbose before it sends, as `/claude-council:ask` does. A call without `providers` or `verbosity` sends nothing: its result lists the seats a default run uses and has Claude ask you both in one AskUserQuestion dialog, then call again with your answers. The send dialog opens with every seat's name and the verbosity, then the question on one line; a question longer than 300 characters is cut there with a note of its full length, and the providers still receive all of it. A seat named twice is asked once. A seat the council cannot ask now, such as a router seat past your roster or a provider with no key, is refused with the seats found on this machine. When your message already named the seats or said to ask every seat, Claude skips the questions and sends at standard verbosity.
