@@ -161,17 +161,23 @@ async function callTool(id, params) {
   const outcomePromise = Promise.resolve().then(() => tool.run(params.arguments ?? {}, controller.signal))
   callsInFlight.set(id, { controller, outcome: outcomePromise })
   let outcome
+  let failure
   try {
     outcome = await outcomePromise
   } catch (err) {
-    if (!(err instanceof council.Refusal)) throw err
-    outcome = { text: err.message, isError: true }
+    if (err instanceof council.Refusal) outcome = { text: err.message, isError: true }
+    else failure = err
   } finally {
     callsInFlight.delete(id)
   }
   // A cancelled request is never answered, and neither is one cut short by
-  // the server's own exit.
-  if (controller.signal.aborted || shuttingDown) return
+  // the server's own exit, however its tool ended; a tool's failure is then
+  // only logged.
+  if (controller.signal.aborted || shuttingDown) {
+    if (failure !== undefined) log(`council extension: ${tool.name} failed in a call that is never answered: ${failure?.stack ?? failure}`)
+    return
+  }
+  if (failure !== undefined) throw failure
   const result = { content: [{ type: 'text', text: redact(outcome.text) }], isError: Boolean(outcome.isError) }
   if (outcome.structured) result.structuredContent = redact(outcome.structured)
   send({ id, result })

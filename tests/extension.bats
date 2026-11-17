@@ -18,6 +18,8 @@
 #   - a council run past its time limit: stopped the same way, and the tool says so
 #   - notifications/cancelled for a council question in flight: its run is stopped and the
 #     request never answered, while a question asked beside it is answered
+#   - a cancelled call whose tool then fails with an error of the server's own (a picker's ask
+#     whose picker was removed under it): still never answered, and the error is logged
 #   - a request line over 1 MiB: dropped with one invalid request error, serving goes on
 #   - a question over 100000 bytes (one argv entry): refused before any run
 #   - a run writing more than 8 MiB to stdout, or 1 MiB to stderr: stopped, and the tool says so
@@ -1299,6 +1301,26 @@ perplexity: sonar-test-1"
 # ============================================================================
 # council_result: the picker's answers handed to the model
 # ============================================================================
+
+@test "extension: a cancelled council_pick_ask that then fails to end its picker is still never answered, and the failure is logged" {
+    # A picker open for another ten minutes, and a codex seat that removes it
+    # once running, so the cancelled ask finds no picker to write its outcome in.
+    local pick
+    pick="${STATE_DIR}/picks/$(printf '%015d' $((($(date +%s) + 600) * 1000)))-3f9a2c"
+    mkdir -p "$pick"
+    : > "${pick}/open"
+    stubborn_seat 97.39
+    printf '#!/bin/bash\ntrap "" TERM\nrm -rf "%s"\n: > "%s"\nexec sleep 97.39\n' "$pick" "$STUBBORN_STARTED" > "${BATS_TEST_TMPDIR}/stubborn/codex"
+    DRIVE_HOLD_MS=4000 DRIVE_WATCH='sleep 97.39' drive "$STUBBORN_STARTED" "cancel 1" "$INIT" \
+        "$(call 1 council_pick_ask '{"question":"q","providers":["codex"],"run":"3f9a2c"}')"
+    local logged="$stderr"
+    [ "$status" -eq 0 ]
+    assert_eq "$(reply 1)" ''
+    assert_eq "$(reply 99)" '{"jsonrpc":"2.0","id":99,"result":{}}'
+    run grep -cF 'council extension: council_pick_ask failed in a call that is never answered: Error: ENOENT' <<< "$logged"
+    assert_eq "$output" 1
+    run ! pgrep -f 'sleep 97.39'
+}
 
 @test "extension: council_result gives a picker run's answers by its id, as council_ask's own text" {
     install_fake_curl answer
