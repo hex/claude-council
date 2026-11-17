@@ -298,10 +298,8 @@ async function shutDown(exitCode) {
 }
 
 // Ends the server for an error nothing handled, by the same exit as any
-// other, so no run outlives it. Said once: the log itself may be what failed,
-// and its error comes back here.
+// other, so no run outlives it.
 function crash(err) {
-  if (shuttingDown) return
   log(`council extension: exiting on an error: ${err?.stack ?? err}`)
   shutDown(1)
 }
@@ -310,6 +308,9 @@ function crash(err) {
 // fail; with no reader left there is nothing to serve.
 process.stdout.on('error', crash)
 process.on('uncaughtException', crash)
+// A log that cannot be written ends the server too, without a line about it:
+// the log is what failed.
+process.stderr.on('error', () => shutDown(1))
 
 // Desktop ends the server by closing its input; a signal ends it as usual.
 readLines(process.stdin, receive, () => shutDown(0))
