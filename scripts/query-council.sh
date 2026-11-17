@@ -1166,10 +1166,11 @@ fi
 # Whether a pane (tmux or the Claude Code mod) streamed round 1 as it arrived.
 # The caller uses it to avoid reprinting answers the user has already read, so
 # it is claimed only when the watch dir still exists (closing the pane removes
-# it, and later answers go nowhere) and the run is not a detached --async job,
-# whose result is fetched later by someone who may never have watched it.
+# it, and later answers go nowhere), the pane was drawn, and the run is not a
+# detached --async job, whose result is fetched later by someone who may never
+# have watched it.
 PANE_SHOWN=false
-[[ -d "${COUNCIL_PANE_DIR:-}/responses" && -z "${COUNCIL_JOB_ID:-}" ]] && PANE_SHOWN=true
+[[ -d "${COUNCIL_PANE_DIR:-}/responses" && -z "${COUNCIL_JOB_ID:-}" ]] && display_pane_was_drawn "$COUNCIL_PANE_DIR" && PANE_SHOWN=true
 # The prompt (large with file context) reaches jq as a raw string via STDIN,
 # not argv: -Rs slurps it to a JSON string exactly as --rawfile would, with no
 # argv-bounded path. See merge_result for the ARG_MAX rationale.

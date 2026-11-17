@@ -9,6 +9,22 @@ choices.
 
 [![Tests](https://github.com/hex/claude-council/actions/workflows/tests.yml/badge.svg)](https://github.com/hex/claude-council/actions/workflows/tests.yml)
 
+## Where it runs
+
+| Where | What you get |
+| --- | --- |
+| Claude Code in a terminal | `/claude-council:ask`, every seat, and the pane beside the chat. |
+| Claude Desktop, Code tab | The same plugin and the same commands. The pane opens in Desktop's side panel. |
+
+![Claude Desktop's Code tab: Claude's synthesis of a primary-key question on the left, the Council pane with each seat's answer on the right](assets/desktop-code-tab.png)
+
+In both, Claude can also call the council as a tool. It asks which seats and
+how verbose first, then shows a Send card, and nothing leaves your machine
+until you confirm it.
+
+claude.ai chat and Cowork run in a sandbox that can block calls to other
+providers, so the council does not work there.
+
 ## Install
 
 You need `curl` and `jq` on macOS, Linux, or Windows through Git Bash.
@@ -129,6 +145,9 @@ script. Your text reaches model providers only through the first two:
   refresh reaches your login (without one, your `CODEX_API_KEY` or
   `OPENAI_API_KEY` signs codex in), and none of your plugins, hooks,
   `AGENTS.md`, skills or MCP servers.
+- `bash scripts/query-council.sh --list-default-models` when Claude calls
+  the council tool, to list the seats it may offer you and to check the
+  seats it names. It reads your configuration and sends nothing.
 - `bash scripts/seat-info.sh discover`, `model <seat>` or
   `allowlisted <seat>` during `/heads-up setup` and `/heads-up on <seat>`.
   It checks which seats this machine can run and sends nothing.
