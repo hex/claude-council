@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- ABOUTME: The council answers panel Claude Desktop draws under a council_ask call (an MCP App page) -->
+<!-- ABOUTME: One card per seat with its answer or its error; the data arrives as the tool's result -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Council answers</title>
+<style>
+  /* @include panel-style.css */
+  /* @include seat-cards.css */
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Council answers</h1><span id="status" role="status"></span></header>
+  <p class="lead" id="question">Waiting for the question.</p>
+  <div id="seats" class="seat-list" aria-live="polite"></div>
+</main>
+<script>
+'use strict'
+// @include panel-host.js
+// @include panel-page.js
+// @include marks.js
+// @include markdown.js
+// @include seat-cards.js
+const question = document.getElementById('question')
+const seats = document.getElementById('seats')
+
+function showResult(result) {
+  if (!result?.isError && Array.isArray(result?.structuredContent?.seats) && result.structuredContent.question) question.textContent = result.structuredContent.question
+  showAnswers(result, seats, 'Claude received all of it.')
+}
+
+host.connect('council-answers', {
+  'ui/notifications/tool-input': params => {
+    if (typeof params?.arguments?.question === 'string') question.textContent = params.arguments.question
+    report('asking the council')
+    host.reportSize()
+  },
+  'ui/notifications/tool-result': showResult,
+  'ui/notifications/tool-cancelled': () => {
+    report('cancelled', true)
+    seats.replaceChildren(element('p', { className: 'lead', textContent: 'The council question was cancelled before the answers came back.' }))
+    host.reportSize()
+  },
+}).catch(err => { seats.replaceChildren(element('p', { className: 'lead bad', textContent: `Could not connect to Claude Desktop (${err.message}).` })) })
+</script>
+</body>
+</html>

@@ -660,3 +660,211 @@ bash scripts/query-council.sh --list-default-models
 ```
 
 `model_fallback` names the preferred model when it was unavailable and a fallback model answered. A CLI seat answered by its API sibling also carries `fallback` (the sibling's name) and `fallback_reason` (the CLI's error text, or that the image went to a vision model).
+
+## Claude Desktop extension
+
+`extension/` holds a Claude Desktop extension (a `.mcpb` package with a local
+stdio MCP server) that runs the same scripts from a Desktop chat. The
+[README](../README.md#claude-desktop) covers installing it. It needs Desktop's
+built-in Node.js 18 or later and bash, so it supports macOS and Linux only.
+
+**Tools.**
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `council_ask` | `question` (required), `providers` (list of names, such as `openai` or `openrouter-2`), `verbosity` (`brief`, `standard`, `detailed`) | Runs `query-council.sh --no-pane --no-cache` and returns two things: the transcript `format-output.sh` renders from its JSON, as text, and `structuredContent` of the form `{question, seats: [{provider, model, answer}` or `{provider, model, error}]}`, in the order the seats ran. Desktop draws the seats in the answers panel; the text, which orders seats by name, is what the model and an app with no panel get. The tool's description asks Claude for the synthesis, and not to repeat the answers when the app draws the panel. |
+| `council_pick` | `question` (required) | Runs `query-council.sh --list-default-models` under the saved choices for the seats a question with no providers named goes to, starting no provider and no CLI agent; with no seat at all it is an error saying where keys go. Returns `structuredContent` `{question, seats: [{provider, model}], verbosities, verbosity, answerWithinMs}` for the picker panel, plus `run`, a run id of 6 random hex digits, where `answerWithinMs` is how long the panel waits for its run (the run's limit, the formatting limit and one minute: 690000). The text names the run and tells the model to call `council_result` with it at once, in the same turn, before writing anything, and not to call `council_ask` or answer the question itself. The text and the description also tell the model to call `council_result` with the run id when the user asks for the synthesis of a council run, never saying it cannot see the answers. The server records the picker under `picks/` in the state directory and removes pickers whose runs are long over when the next one opens. Where no panel is drawn, the text lists the seats and tells the model to ask in the chat and then call `council_ask`. Refuses an empty question and one over 100000 bytes as `council_ask` does. |
+| `council_result` | `run` (a run id such as `3f9a2c`; leave out for the latest) | For a picker still waiting for its Ask, named by its id, it waits, polling the state directory, until the run ends, `answerWithinMs` after the picker opened, or the call is cancelled. A run in which a seat answered returns `council_ask`'s text followed by a line asking for the synthesis: the user pressed Ask, the seats asked, has read every answer in the panel, so do not repeat or summarise them seat by seat, and write where they agree, where they differ and a recommendation. A run that ended otherwise (every seat failed, refused, cancelled, stopped) returns "Council run <id> from the picker ended with no answer. Tell the user what failed." and the run's own text. A run whose outcome could not be written (a full disk, say) returns a sentence saying so. When the wait runs out it returns a sentence: the user has not pressed Ask, and the picker drafts the request when they do; or the user pressed Ask but the run had no outcome by then (it may still be going, or the copy of the server running it may be gone), and the picker drafts the request if it shows answers later. Otherwise it returns the text `council_ask` gave for one of the picker's runs, unchanged, with no `structuredContent` and no panel: the picker already shows the answers. Its description asks the model to call it right after `council_pick`, and for the synthesis without repeating the answers. The server keeps the last 5 picker runs in which a seat answered, as files in the state directory. An unknown id, and any id before a run, is an error saying the run is not held and to ask the council again; an id no picker made, and a call with no id, is answered at once, never waited on. |
+| `council_status` | none | Runs `check-status.sh`, then names any key field too short to be a key, says when the saved model choices could not be read, and says that keys go in Desktop's settings, not in exported variables. |
+| `council_settings` | none | Lists each provider's model in plain text, each line ending "key set" or "no key", and in Desktop opens the settings panel. |
+
+Three more tools serve the panels: `council_models_data` and
+`council_models_save` the settings panel and the picker's model lists, and
+`council_pick_ask` the picker's Ask button. They carry
+`_meta.ui.visibility: ["app"]`, so Desktop hides them from the model.
+`council_pick_ask` takes `council_ask`'s arguments and `run`, and runs
+`council_ask`'s own function, so every check, limit, cancel and key removal
+applies to it alike. A `run` that is not 6 hex digits is refused before
+anything is run or written. When a seat answered, the server keeps the run's
+text for `council_result`, as a file under `held/` in the state directory,
+and adds `run` to the `structuredContent`. The run id is the one the panel
+sent when it names a picker still open, claimed once; otherwise (a second
+Ask, an id already held or never picked, a picker past its wait) a fresh id
+of 6 random hex digits. The 5 newest are kept. A run in which no seat
+answered, a refused run and a cancelled one get no id. A claimed picker's run
+ends that picker however it ends, and `structuredContent` gets `awaited`:
+true when a `council_result` waiting for it touched its marker in the 2
+seconds before, which the panel reads to skip its drafted message. A waiting
+call still running then returns the outcome to Claude; one cancelled, or
+ended by its server's exit or death, in those 2 seconds is counted too, and
+Claude gets nothing.
+
+`council_models_save` takes either `selections`, every provider's choice at
+once (the settings panel), and answers `{"saved":true}`, or `seat` and
+`model`, one seat's model (the picker), and answers
+`{"saved":true,"seat":"<seat>","model":"<model>"}` with the model `get_model`
+resolves for the seat under the saved choices. A seat save looks the model
+up before it writes, so a refusal or failure always leaves the file as it
+was, and changes the choices as saved at the moment of the write and nothing
+else: `gemini`, `openai`, `grok`,
+`perplexity` and `kimi` take a model id or `""` for the default, and
+`openrouter-N` replaces position N of the roster, order kept. With no roster
+saved, a model for the single `openrouter` seat starts the roster with it,
+and the answer names the seat `openrouter-1`, the name a run gives it. It
+refuses, with a sentence and the file left as it was, a seat past the
+roster, a model already on another roster seat, `""` for a roster seat,
+`openrouter` beside a saved roster, any other seat, a bad model id, both
+forms at once, and a models file that cannot be read.
+
+`council_ask`'s description tells the model to pass the user's question as
+they asked it, adding context only when it depends on earlier conversation
+the council cannot see. It also tells the model to use it when the user
+named the seats or a verbosity, or said to just ask everyone, and then it
+runs at once with what was given, or every default seat at standard; for
+any other question, or when the user asks to choose, the model calls
+`council_pick` instead. `council_pick`'s description says the same from its
+side.
+
+A `notifications/cancelled` for a tool call still running stops the runs it
+started, and the server never answers that call.
+
+**Panels.** All three are MCP App pages with mimeType
+`text/html;profile=mcp-app`. `council_settings` names
+`ui://council/settings/<hash>`, `council_ask` names
+`ui://council/answers/<hash>`, and `council_pick` names
+`ui://council/pick/<hash>`, where `<hash>` is the first 12 hex digits of the
+SHA-256 of the page as served, computed when the server starts. Desktop keeps
+a page by its address across an extension upgrade, so a changed page gets a
+new address. Any other address, the one without the hash included, is
+"resource not found". The answers panel shows the question and "asking the
+council" until the result arrives, then one card per seat: the answer drawn
+from a subset of markdown (headings, paragraphs, lists, fenced code, rules,
+pipe tables, bold, italic and inline code; anything else shows as the lines
+the model wrote), or the error in the error colour. The panel gets at most the first
+100000 characters of a seat's answer or error, with `shortenedFrom` giving
+the full length, and the card says it was shortened; the text result always
+carries all of it. The answers panel's card says Claude received all of it,
+and the picker's that Claude gets all of it when it writes the synthesis. A cancelled call says so. No page uses `innerHTML` or
+loads anything from the network.
+
+Beside each seat's name, in the picker, the answer cards and the settings
+cards, sits its vendor's mark in the vendor's colour, 16 pixels square. A
+CLI seat shares its vendor's mark. An OpenRouter seat shows the mark of its
+model's maker, read from the id before the slash with any leading `~`
+dropped (`~deepseek/deepseek-pro-latest` shows DeepSeek), or OpenRouter's
+mark when the maker has none. A seat with no mark gets an empty box of the
+same size, which keeps the names in line.
+`docs/ARCHITECTURE.md` lists every mark, its source and its terms.
+
+The picker panel shows the question, a switch per seat, all on, the
+verbosities with standard chosen, and an Ask button, disabled with every seat
+off. On an API seat or an OpenRouter seat the model is a button that opens
+the provider's models under the row: "Default (<model>)" first, except on an
+`openrouter-N` seat, then the live list, with a filter box past 20 entries.
+The lists load through `council_models_data` the first time the user opens or
+focuses a model, not when the picker opens. A choice saves through
+`council_models_save` with the seat and model, and the row takes the seat's
+name, model and vendor mark from the answer. A failed list or save says so in
+a line under the row and leaves its model. Ask waits for a save in flight,
+and a run disables the model buttons, as it does the switches. CLI seats
+and ollama show their model as text. Ask calls `council_pick_ask` through
+Desktop with the seats left on, and the panel draws the answers as the answers panel does.
+It waits for the call at most `answerWithinMs`; a call Desktop never answers,
+such as a cancelled one, then ends in a line saying no answer came back, and
+Ask works again. Each Ask sends the picker's run id until the server has
+answered one, since a call Desktop refused or let time out may never have
+reached it; later ones send none.
+When the call answers `awaited`, the panel shows "Claude is writing the
+synthesis." under the answers (or, when no seat answered, that Claude has
+the errors) and sends no message. Otherwise, when the run has an id, the
+panel sends one `ui/message`,
+as the user, with the text `Synthesise the council's answers (run <id>).`
+and no seat output, and shows "Press Enter in the message box to get
+Claude's synthesis of run <id>." under the answers without waiting for Desktop's reply.
+If Desktop refuses the message, the line becomes `Ask Claude: "synthesise
+council run <id>"`. When no seat answered, the line says so and Ask works
+again. The picker is drawn from the first tool result Desktop sends; a
+repeated one is ignored, so it never wipes a run in progress or the answers.
+The spec lets a host ask the user before it sends a panel's message, and
+before it runs a panel's tool call.
+
+**Keys.** Six optional, sensitive fields in Desktop's settings form reach the
+server as `GEMINI_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`,
+`PERPLEXITY_API_KEY`, `KIMI_API_KEY` and `OPENROUTER_API_KEY`. A field left
+empty arrives as an empty string or as its unsubstituted `${user_config.x}`
+placeholder, and both count as no key. The server drops `GROK_API_KEY` and
+`MOONSHOT_API_KEY` from the environment Desktop starts it with, so keys come
+only from the form. A value under 8 characters is too short to be any
+provider's key: it counts as no key, and `council_status` names the field that
+holds it. In every tool result, error message and log line the server writes,
+each key value is replaced by `[key removed]`, which covers a provider error
+that quotes the key. The server's own text (the JSON-RPC envelope, tool names,
+schemas and panel pages) is never changed.
+
+Each council seat starts with its own vendor's key and no other, whether it
+is an API seat or a CLI agent: `codex` gets `OPENAI_API_KEY`, `agy`
+`GEMINI_API_KEY`, `grok` `XAI_API_KEY` (and `GROK_API_KEY`, set from it),
+`kimi` `KIMI_API_KEY`, and `cursor-agent`, `claude`, `copilot`, `opencode`
+and `ollama` none. `council_status` is different: `check-status.sh` probes
+`codex`, `agy`, `grok`, `kimi`, `cursor-agent`, `copilot` and `ollama` with
+every key in their environment, and only the `claude` and `opencode` probes
+with their seat's own.
+
+**Models.** The panel lists each keyed provider's models live when it opens:
+Gemini (models that support `generateContent`), OpenAI, xAI (plus
+`grok-latest`, which xAI serves but does not list), Kimi and OpenRouter from
+their list endpoints, each with that provider's key, and Perplexity's presets
+`fast`, `low`, `medium`, `high` and `xhigh`, with no request. A provider with no
+key is never contacted. A list request gives up after 15 seconds. The lists
+include models a council seat cannot use, such as speech, image and embedding
+models. "Default" means the model `get_model` resolves with nothing chosen.
+
+The saved choices set `GEMINI_MODEL`, `OPENAI_MODEL`, `GROK_MODEL`,
+`PERPLEXITY_MODEL`, `KIMI_MODEL` and `OPENROUTER_MODELS` for each run. The
+server drops those variables, `OPENROUTER_MODEL` and every
+`OPENROUTER_<N>_MODEL` from the environment Desktop starts it with. A model id must match
+`^~?[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`, on save and on read, and none of its
+`/`-separated parts may be empty, `.` or `..`, since `gemini.sh` puts the id
+in a URL path. OpenRouter takes
+at most 12 models, one seat each, named `openrouter-1` to `openrouter-12`;
+`council_ask` refuses a seat number past the saved roster before running
+anything.
+
+**Files.** The extension keeps its state in
+`$XDG_CONFIG_HOME/council-extension`, or `~/.config/council-extension` when
+`XDG_CONFIG_HOME` is unset or relative. The directory is mode 0700, and the
+server sets it back to 0700 when it finds it looser. A state directory, or
+its `runs/`, that is a symbolic link is refused with a sentence naming it,
+never followed.
+
+| Path | Contents |
+|---|---|
+| `models.json` | The saved choices, mode 0600, replaced whole through a temporary file. The server ignores a file that fails to parse, holds a bad value or is a symbolic link: runs use the defaults, and the `council_ask` result, `council_status`, `council_settings` and the panel each say so. |
+| `runs/` | The working directory of every council run, mode 0700. The extension runs the council with the response cache off, so a run leaves no file here. The server saves no transcript of a `council_ask` run: the answers come back in the tool result. |
+| `held/` | The last 5 picker runs in which a seat answered, for `council_result`: one file each, mode 0600, keys removed, named by when it was held and its run id. |
+| `picks/` | One directory per picker opened, named by when Claude stops waiting for its run and the run id. It holds `open` until Ask claims it, `asking` while the run goes on, `outcome.txt` (what a waiting `council_result` returns, keys removed), and a `waiting-*` marker for each `council_result` waiting, touched every 250 ms; a marker untouched for 2 seconds counts as no waiter, so one left by a server that died never stops the panel's drafted message. Removed once its run is long over. |
+
+**Limits and environment.** Two `council_ask` calls made together run side
+by side. The server stops a run after 10 minutes and a status check after
+3. Each run starts in a process group of its own. The server stops the whole
+group on a timeout, a cancelled call, a run that writes more than 8 MiB to
+stdout or 1 MiB to stderr, and its own exit (Desktop closing its input,
+SIGTERM or SIGINT, or an error it did not handle, such as a reply it cannot
+write because Desktop closed its output, after which it exits 1): SIGTERM first, then SIGKILL 2 seconds later for anything
+still running. On its own exit it sends that SIGKILL as soon as every run has
+closed, or after the 2 seconds, then gives the calls still going up to 1
+second more to end (a picker's ask writing its outcome, a waiting
+`council_result` removing its marker), and exits. `council_ask` refuses a question
+over 100000 bytes, since it reaches `query-council.sh` as one argument. A
+request line over 1 MiB is dropped with an invalid-request error. Desktop starts the server with a
+minimal `PATH`, so the server appends `~/.local/bin`, `~/bin`,
+`/opt/homebrew/bin` and `/usr/local/bin`, in that order, after the `PATH`
+Desktop gives it. The server never opens a listening socket.
+
+**Building.** `bash extension/build.sh` packs the committed tree (`git archive
+HEAD`) and stops when a packed file has uncommitted changes. It stages
+`scripts/` (without `scripts/dev/`), `config/`, `prompts/` and `schemas/` under
+`plugin/`, adds `extension/manifest.json`, `extension/server/` and the icon,
+sets the manifest's version to `.claude-plugin/plugin.json`'s, runs `mcpb
+validate`, and packs with `@anthropic-ai/mcpb` 2.1.2 into
+`dist/council-<version>.mcpb`.

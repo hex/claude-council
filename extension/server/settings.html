@@ -1,0 +1,109 @@
+<!doctype html>
+<!-- ABOUTME: The council settings panel Claude Desktop draws in the chat (an MCP App page) -->
+<!-- ABOUTME: Picks each provider's model; all data and saves go through the extension's tools -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Council models</title>
+<style>
+  /* @include panel-style.css */
+  /* @include model-list.css */
+  .line { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 38px; }
+  .line > span:first-child { flex: none; }
+  select { font: 12px var(--mono); color: var(--fg); background: var(--card-hover); border: .5px solid var(--rule); border-radius: 6px; padding: 5px 8px; min-width: 0; max-width: 62%; text-overflow: ellipsis; }
+  select:disabled, input:disabled { opacity: .5; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Council models</h1><span id="status" role="status"></span></header>
+  <p class="lead">Changes save as you make them and apply to the next council question. Keys are entered in Claude Desktop, under Settings, Extensions, Claude Council.</p>
+  <div id="providers" aria-live="polite"><p class="lead">Loading the model lists from each provider.</p></div>
+</main>
+<script>
+'use strict'
+// @include panel-host.js
+// @include panel-page.js
+// @include marks.js
+// @include model-list.js
+const root = document.getElementById('providers')
+const state = {}
+let rosterMax = 0
+
+async function save() {
+  report('saving')
+  try {
+    await host.tool('council_models_save', { selections: state })
+    report('saved')
+  } catch (err) {
+    report(err.message, true)
+  }
+}
+
+function heading(row, detail) {
+  // One span for the mark and the title: the heading spreads its children apart.
+  return element('h2', {}, [element('span', {}, [markIcon(row.name), document.createTextNode(row.title)]), element('small', { textContent: detail })])
+}
+
+function single(row) {
+  const select = element('select', { disabled: !row.hasKey })
+  select.setAttribute('aria-label', `${row.title} model`)
+  select.append(element('option', { value: '', textContent: `Default (${row.defaultModel})` }))
+  const ids = row.selected === '' || row.models.includes(row.selected) ? row.models : [row.selected, ...row.models]
+  for (const id of ids) select.append(element('option', { value: id, textContent: id }))
+  select.value = row.selected
+  state[row.name] = row.selected
+  select.addEventListener('change', () => { state[row.name] = select.value; save() })
+  return [heading(row, row.hasKey ? '' : 'no key'), element('div', { className: 'line' }, [element('span', { textContent: 'Model' }), select])]
+}
+
+function roster(row) {
+  const chosen = new Set(row.selected)
+  state[row.name] = [...chosen]
+  const title = heading(row, '')
+  const count = title.querySelector('small')
+  function label() {
+    count.textContent = !row.hasKey ? 'no key' : chosen.size === 0 ? `default: ${row.defaultModel}` : `${chosen.size} of ${rosterMax} seats`
+  }
+  const { filter, list } = modelList({
+    ids: [...new Set([...row.selected, ...row.models])],
+    pinned: id => chosen.has(id),
+    label: 'Filter OpenRouter models',
+    empty: row.hasKey ? 'No model matches.' : 'The list appears once a key is saved.',
+    disabled: !row.hasKey,
+    row: id => {
+      const box = element('input', { type: 'checkbox', className: 'switch', checked: chosen.has(id), disabled: !row.hasKey })
+      box.addEventListener('change', () => {
+        if (box.checked && chosen.size >= rosterMax) { box.checked = false; return report(`at most ${rosterMax} OpenRouter seats`, true) }
+        if (box.checked) chosen.add(id); else chosen.delete(id)
+        state[row.name] = [...chosen]
+        label()
+        save()
+      })
+      return element('label', {}, [element('span', { textContent: id }), box])
+    },
+  })
+  label()
+  return [title, element('div', {}, [filter]), list]
+}
+
+async function load() {
+  await host.connect('council-models')
+  const data = await host.tool('council_models_data')
+  rosterMax = data.rosterMax
+  const cards = data.providers.map(row => {
+    const section = element('section', { className: row.hasKey ? '' : 'off' }, row.roster ? roster(row) : single(row))
+    if (!row.hasKey) section.append(element('div', { className: 'sub note', textContent: `Add the ${row.title} key in Claude Desktop, then reopen the council settings.` }))
+    if (row.listError) section.append(element('div', { className: 'sub note bad', textContent: `${row.listError}. The saved choice still applies.` }))
+    return section
+  })
+  if (data.problem) cards.unshift(element('p', { className: 'lead bad', textContent: `${data.problem} Any change here saves a fresh set.` }))
+  root.replaceChildren(...cards)
+  host.reportSize()
+}
+
+load().catch(err => { root.replaceChildren(element('p', { className: 'note bad', textContent: `Could not load the settings (${err.message}).` })) })
+</script>
+</body>
+</html>

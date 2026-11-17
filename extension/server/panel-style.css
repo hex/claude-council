@@ -1,0 +1,54 @@
+/* ABOUTME: Colours, type and card layout shared by the council's panels in Claude Desktop */
+/* ABOUTME: Light and dark tokens follow the system, or the theme the host names */
+:root {
+  color-scheme: light dark;
+  --bg: #faf9f5; --card: #ffffff; --card-hover: #f6f5f0; --rule: #e2dfd5; --fg: #1c1c1e; --dim: #6c6c70;
+  --lit: #4d8c57; --ink-claude: #a15840; --alert: #c2410c; --off: #d3d0c6; --knob: #ffffff;
+  --card-edge: 0 2px 4px rgb(35 35 35 / .03), 0 1px 2px rgb(35 35 35 / .04), 0 0 0 .5px var(--rule);
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1c1c1e; --card: #2c2c2e; --card-hover: #323236; --rule: #3a3a3c; --fg: #f2f2f7; --dim: #98989d;
+    --lit: #8ec07c; --ink-claude: #e08f75; --alert: #fb8b5e; --off: #48484a; --knob: #f2f2f7;
+    --card-edge: 0 0 0 1px var(--rule);
+  }
+}
+/* Native controls (radios, selects) follow the theme the host names, not the system's. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c1c1e; --card: #2c2c2e; --card-hover: #323236; --rule: #3a3a3c; --fg: #f2f2f7; --dim: #98989d;
+  --lit: #8ec07c; --ink-claude: #e08f75; --alert: #fb8b5e; --off: #48484a; --knob: #f2f2f7;
+  --card-edge: 0 0 0 1px var(--rule);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+main { padding: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 4px 12px; }
+h1 { font-size: 15px; font-weight: 600; margin: 0; }
+#status { font: 11px var(--mono); color: var(--dim); }
+#status.bad { color: var(--alert); }
+p.lead { color: var(--dim); font-size: 12px; margin: 0 4px 14px; }
+p.lead.bad { color: var(--alert); }
+section { background: var(--card); border-radius: 10px; box-shadow: var(--card-edge); margin-bottom: 12px; overflow: hidden; }
+section:last-child { margin-bottom: 0; }
+section > * { padding: 9px 14px; border-top: 1px dotted var(--rule); }
+section > :first-child { border-top: 0; }
+h2 { font-size: 15px; font-weight: 600; margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+h2 small { font: 11px var(--mono); font-weight: 400; color: var(--dim); }
+/* A seat's vendor mark, in line with the name and sitting on its baseline. */
+svg.mark { width: 16px; height: 16px; flex: none; vertical-align: -3px; margin-right: 7px; }
+section.off h2 { color: var(--dim); }
+/* The elbow that hangs a sub-row off the row above it. */
+.sub { padding-left: 34px; position: relative; }
+.sub::before { content: ""; position: absolute; left: 17px; top: 6px; width: 9px; height: 13px; border-left: 1px solid var(--rule); border-bottom: 1px solid var(--rule); border-bottom-left-radius: 3px; }
+.note { color: var(--dim); font-size: 12px; }
+.note.bad { color: var(--alert); }
+:focus-visible { outline: 2px solid var(--ink-claude); outline-offset: 2px; }
+input.switch { appearance: none; -webkit-appearance: none; flex: none; width: 34px; height: 20px; border-radius: 10px; background: var(--off); position: relative; margin: 0; cursor: pointer; transition: background .15s ease-out; }
+input.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--knob); box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .15s ease-out; }
+input.switch:checked { background: var(--lit); }
+input.switch:checked::after { transform: translateX(14px); }
+@media (prefers-reduced-motion: reduce) { input.switch, input.switch::after { transition: none; } }

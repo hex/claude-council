@@ -1,0 +1,23 @@
+/* ABOUTME: The look of a council seat's card: its answer's markdown, its error, the shortened note */
+/* ABOUTME: Shared by the panels that show answers, on top of panel-style.css */
+.answer { padding: 4px 14px 10px; overflow-wrap: anywhere; }
+.answer > * { margin: 8px 0 0; }
+.answer p { white-space: pre-line; }
+.answer h3 { font-size: 15px; } .answer h4 { font-size: 14px; } .answer h5, .answer h6 { font-size: 13px; }
+.answer ul, .answer ol { padding-left: 20px; }
+.answer li + li { margin-top: 3px; }
+.answer code { font: 12px var(--mono); background: var(--card-hover); border-radius: 4px; padding: 1px 4px; }
+.answer pre { background: var(--card-hover); border-radius: 6px; padding: 8px 10px; overflow: auto; }
+.answer pre code { background: none; padding: 0; }
+.answer hr { border: 0; border-top: 1px dotted var(--rule); }
+.answer .table { overflow-x: auto; }
+/* Words stay whole in a table: breaking anywhere would squeeze each column to one letter before the wrapper scrolls.
+   Separate borders, not collapsed: Chrome took over 30 seconds to draw a collapsed table with a header thousands of
+   cells wide over thousands of one-cell rows, and 0.3 seconds to draw it separate. */
+.answer table { border-collapse: separate; border-spacing: 0; font-size: 13px; overflow-wrap: normal; }
+.answer th, .answer td { padding: 5px 14px 5px 0; text-align: left; vertical-align: top; }
+.answer td { border-top: 1px dotted var(--rule); }
+.answer th { color: var(--dim); font-weight: 600; }
+.error { padding: 9px 14px; white-space: pre-line; overflow-wrap: anywhere; }
+.shortened { margin: 0; padding: 0 14px 10px; }
+.seat-list p.lead { white-space: pre-line; overflow-wrap: anywhere; }

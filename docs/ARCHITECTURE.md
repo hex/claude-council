@@ -608,6 +608,184 @@ Loop guards: stop_hook_active check + per-session block
 counter capped at max_iterations. Reviewer failure => allow.
 ```
 
+### Claude Desktop extension (`extension/`)
+
+A Claude Desktop chat has no shell and no keys, so the plugin's commands and
+skills cannot run there. The extension is a local stdio MCP server that Desktop
+starts with its built-in Node.js, plain CommonJS with no dependencies, which
+runs the same scripts the plugin does.
+
+- `server/index.js` reads newline-delimited JSON-RPC from stdin and answers on
+  stdout. Every tool result, error message and log line passes through one
+  function that replaces each key value with `[key removed]`; the envelope,
+  tool names, schemas and panel pages are the server's own and pass
+  untouched, so a key that happens to occur in them cannot corrupt the
+  protocol. A key field holding under 8 characters counts as no key. It exits
+  when stdin closes, on SIGTERM or SIGINT, or on an error it did not handle
+  (a write to an output Desktop closed among them), stopping any council run first,
+  and a `notifications/cancelled` stops the run of the call it names. It reads
+  input by the byte and drops a line over 1 MiB before holding it whole.
+- `server/council.js` holds the provider table (form field, model variable,
+  title), reads the keys once at start, keeps the saved model choices, builds
+  each run's environment and runs the scripts. A run's environment starts from
+  a short list of the server's own variables (`PATH`, `HOME`, the locale, the
+  `XDG_*` directories, proxy and certificate settings, and `COUNCIL_*` without
+  `COUNCIL_PASS_ENV`), then adds the keys from the form and the saved models.
+  Nothing else is inherited, so a key a shell exported before it started
+  Desktop reaches no seat. Each script runs in a process group of
+  its own, so stopping it reaches the providers and CLIs under it: SIGTERM to
+  the group, then SIGKILL two seconds later, since a CLI can ignore SIGTERM
+  and outlive the bash that started it. A run that passes its time limit or
+  writes more than any answers need is stopped the same way. A question
+  runs `query-council.sh`, whose JSON keeps each seat's answer and error
+  apart, then pipes that JSON through `format-output.sh` for the text. Two
+  questions asked together run side by side, as two plugin runs can. The
+  defaults the panel shows come from `get_model` run under the same
+  environment as a run with nothing chosen, so the two cannot disagree. The
+  picker's seat rows come from `query-council.sh --list-default-models` under
+  that same environment, which starts no agent.
+- `server/models.js` asks each keyed provider for its model list and parses the
+  answer. The parsing is pure, so `tests/extension-models.bats` checks it
+  against recorded and documented answers.
+- `server/settings.html`, `server/answers.html` and `server/pick.html` are
+  the three panels, MCP App pages served as `ui://council/settings/<hash>`,
+  `ui://council/answers/<hash>` and `ui://council/pick/<hash>` with mimeType
+  `text/html;profile=mcp-app`. Desktop draws one for each tool whose
+  `_meta.ui.resourceUri` names it: `council_settings`, `council_ask` and
+  `council_pick`. Each page carries `@include` lines that `index.js` replaces
+  with `panel-style.css` (colour tokens, card layout, switches),
+  `panel-host.js` (the `postMessage` connection, the host's capabilities,
+  theme and size reports), `panel-page.js` (element building and the status
+  line), for the settings panel and the picker, `model-list.js` and
+  `model-list.css` (a provider's models under a filter box) and, for the two
+  pages that show answers, `markdown.js`, `seat-cards.js` and
+  `seat-cards.css`, which draw a `council_ask` result as one card per seat. The pages have no network access: the settings panel
+  loads and saves through two app-only tools, the answers panel draws the
+  `structuredContent` of the `council_ask` result Desktop hands it, and the
+  picker runs its question through the app-only `council_pick_ask`, whose
+  function is `council_ask`'s own. The picker's model buttons load and save
+  through the settings panel's two tools; a save from the picker names one
+  seat, and the server changes that seat in the choices as saved at that
+  moment, so the page never sends, and cannot drop, the rest. The `visibility: ["app"]` hint on those
+  tools is the host's to enforce: the server cannot tell a call from a panel
+  from one by the model, so each validates every value as if the model had
+  sent it.
+- Choosing the seats and verbosity before a question happens in the picker.
+  The two descriptions split the questions: `council_ask` when the user named
+  the seats or a verbosity or said to just ask everyone, running at once,
+  and `council_pick` for every other question. `council_pick` opens the
+  picker, which runs the question and shows the answers itself,
+  while the model waits in `council_result` for the run.
+- The picker's answers reach the model only as a tool result. Measured in
+  Claude Desktop: `ui/update-model-context` answers `{}` and delivers nothing
+  to the model, with a content array or with `structuredContent`. `ui/message`
+  (its content must be an array; a single object is refused with "Invalid
+  params") neither posts a message nor starts a turn: Desktop puts the text
+  in the chat's message box as an unsent draft under a warning about
+  malicious content, and the user presses Enter. With text already in the
+  box, Desktop asks "Replace current text?" and the request stays pending
+  until the user answers, possibly for good. A panel's `tools/call` to an
+  app-only tool runs with no approval prompt. The server keeps each
+  `council_pick_ask` run in which a seat answered as a file in the state
+  directory's `held/` (mode 0600, keys removed), under a random 6-hex-digit
+  id (the last 5 runs), and returns the id to the panel. A file, not memory:
+  Desktop starts the extension twice, one copy for the panels' calls and one
+  for the model's, so the copy that ran the question is not the one
+  `council_result` reaches. The panel's `ui/message` names only the id, "Synthesise the
+  council's answers (run <id>).", and the model-visible `council_result`
+  returns that run's text exactly as `council_ask` would have. The
+  descriptions of `council_pick` and `council_result`, and `council_pick`'s
+  result, tell the model to call it when the user asks for a run's synthesis.
+- That message is the fallback. Desktop draws a panel only once its tool's
+  result has arrived, and keeps it clickable while the model's next tool call
+  is pending, so `council_pick` returns at once with a run id and tells the
+  model to call `council_result` with it in the same turn. That call waits:
+  the picker's record under `picks/` in the state directory is claimed by the
+  first Ask (a rename, so only one Ask gets it), the ask writes the run's
+  outcome there however the run ends, and the waiter, polling, returns it
+  with a closing line asking for a synthesis rather than a repeat of the
+  answers, which a small model otherwise gives. The waiter keeps a marker
+  touched as it waits; the ask reads the markers after writing the outcome
+  and answers the panel `awaited`, and a waiter that gives up removes its
+  marker before it looks for the outcome a last time, so a waiter the ask
+  counted that is still running finds the run. Counted is not delivered: a
+  waiter whose call was just cancelled, or whose server is exiting, finds it
+  and has its reply dropped, and one that died less than 2 seconds before is
+  counted too, so for that run the panel drafts no message. Closing that
+  window would take an acknowledgement from the waiter after its reply, and
+  even a reply written to stdout does not prove Desktop handed it to the
+  model, so the server does not try. A marker untouched for 2 seconds is a
+  dead waiter's. The wait ends `answerWithinMs` after the picker opened, the bound
+  the panel already puts on a run, so choosing and the run share it; then the
+  panel drafts the message. The state directory, not memory, carries all of
+  it, since the panel's calls and the model's land in different copies of the
+  server. On exit the server aborts its waiting calls and gives a picker's
+  ask a second to write its outcome.
+- Desktop caches a panel page by its `ui://` address across an extension
+  reinstall or upgrade, and only a full restart fetches it again. Each
+  address ends in the first 12 hex digits of the SHA-256 of the page
+  as served (after its `@include` lines are filled in), computed when the
+  server starts, so a changed page has a new address.
+- `server/markdown.js` reads the subset of markdown the answers panel draws
+  into plain data (blocks of styled runs). The page builds every DOM node from
+  that data with `textContent`, so a model's answer can never become markup.
+  `tests/extension-markdown.bats` runs it in node.
+- `server/marks.js` holds the vendor marks the three panels draw, 16 pixels
+  square, beside a seat's name: the picker's rows and waiting cards, the
+  answer cards, and the settings cards. `seatMark` maps a seat name and its
+  model id to a mark. A CLI seat shares its vendor's mark, and an OpenRouter
+  seat shows the mark of its model's maker, the part of the id before the
+  slash with any leading `~` dropped, or OpenRouter's own when the maker has
+  none here. A seat with no mark gets an empty box of the same size, so the
+  names stay in line. The page builds each mark with `createElementNS` from
+  the path data in this file; `tests/extension-marks.bats` runs the mapping in
+  node.
+
+#### Vendor marks
+
+The marks are their owners' trademarks, shown only to identify the service or
+model a seat runs. The package carries that statement and the licence of
+the path data in `server/THIRD-PARTY-NOTICES.md`. The path data and colours come unmodified from
+[simple-icons](https://simpleicons.org) 16.37.0
+(`https://unpkg.com/simple-icons@16.37.0/icons/<slug>.svg`), whose data is
+CC0-1.0 (https://unpkg.com/simple-icons@16.37.0/LICENSE.md, trademark notes in
+https://unpkg.com/simple-icons@16.37.0/DISCLAIMER.md); the colour is
+simple-icons' hex value, not checked against each vendor's own page. A black
+mark (simple-icons' `000000`, or Anthropic's `191919`) takes the text
+colour, so it stays visible in the dark theme.
+
+| Mark (`<slug>`) | Shown for | Colour | Source simple-icons cites | Usage terms |
+|---|---|---|---|---|
+| Google Gemini (`googlegemini`) | `gemini`, `antigravity` | `#8E75B2` | https://gemini.google.com | CC0-1.0 data |
+| Perplexity (`perplexity`) | `perplexity`, maker `perplexity/` | `#1FB8CD` | https://www.perplexity.ai | CC0-1.0 data |
+| Kimi (`kimi`) | `kimi`, `kimi-cli` | text colour | https://moonshotai.github.io/Branding-Guide | https://moonshotai.github.io/Branding-Guide |
+| Moonshot AI (`moonshotai`) | maker `moonshotai/` | text colour | https://www.moonshot.cn | CC0-1.0 data |
+| Cursor (`cursor`) | `cursor-cli` | text colour | https://cursor.com/brand | CC0-1.0 data |
+| GitHub Copilot (`githubcopilot`) | `copilot-cli` | text colour | https://primer.style/foundations/icons/copilot-24 | MIT (GitHub Primer), not CC0 |
+| OpenCode (`opencode`) | `opencode` | text colour | https://github.com/anomalyco/opencode/blob/1251a870cb384543c150c4a72fb101b55eec971b/packages/identity/mark.svg | CC0-1.0 data |
+| Claude (`claude`) | `claude-cli` | `#D97757` | https://claude.ai | CC0-1.0 data |
+| Anthropic (`anthropic`) | maker `anthropic/` | text colour | https://www.anthropic.com | CC0-1.0 data |
+| Ollama (`ollama`) | `ollama` | text colour | https://github.com/ollama/ollama/issues/2152#issuecomment-1905286922 | CC0-1.0 data |
+| OpenRouter (`openrouter`) | `openrouter-N` and `openrouter` with any other maker | `#94A3B8` | https://openrouter.ai | CC0-1.0 data |
+| DeepSeek (`deepseek`) | maker `deepseek/` | `#5786FE` | https://www.deepseek.com | CC0-1.0 data |
+| Meta (`meta`) | makers `meta/`, `meta-llama/` | `#0467DF` | https://www.meta.com | https://www.facebook.com/brand/resources/meta/company-brand |
+| Google (`google`) | maker `google/` | `#4285F4` | https://partnermarketinghub.withgoogle.com | https://about.google/brand-resource-center/brand-elements/ |
+| Mistral AI (`mistralai`) | maker `mistralai/` | `#FA520F` | https://chat.mistral.ai | CC0-1.0 data |
+| QWen (`qwen`) | maker `qwen/` | `#6950EF` | https://qwen.ai | CC0-1.0 data |
+
+simple-icons 16.37.0 carries no OpenAI or xAI mark. Those two come unmodified
+from [LobeHub Icons](https://github.com/lobehub/lobe-icons)
+(`https://unpkg.com/@lobehub/icons-static-svg@1.102.0/icons/<slug>.svg`, MIT),
+and are drawn with the even-odd fill rule their files name.
+
+| Mark (`<slug>`) | Shown for | Colour | Usage terms |
+|---|---|---|---|
+| OpenAI (`openai`) | `openai`, `codex`, maker `openai/` | text colour | MIT (LobeHub Icons) |
+| Grok (`grok`) | `grok`, `grok-cli`, maker `x-ai/` | text colour | MIT (LobeHub Icons) |
+
+Packed, the scripts sit under `plugin/` beside `server/`; in a checkout the
+server finds them one directory up. `extension/build.sh` builds the package.
+
 ## Data Flow
 
 ### Standard Query
@@ -759,6 +937,26 @@ claude-council/
 ├── evals/                       # `claude plugin eval` cases: prompt.md + graders/ per case
 │   ├── .gitignore               # Keeps eval run output (results/) out of the repo
 │   └── _shared/                 # Grader text the cases link to, file by file
+├── extension/                   # Claude Desktop extension (.mcpb), macOS and Linux
+│   ├── build.sh                 # Packs HEAD into dist/council-<version>.mcpb with mcpb 2.1.2
+│   ├── manifest.json            # Name, key fields, tools, privacy policies, platforms
+│   └── server/
+│       ├── index.js             # stdio JSON-RPC, tool table, panels, key redaction of tool output
+│       ├── council.js           # Providers, keys, saved choices, script runs
+│       ├── models.js            # Live model lists and their parsing
+│       ├── settings.html        # Settings panel drawn in the chat (MCP App)
+│       ├── answers.html         # One card per seat under a council_ask call (MCP App)
+│       ├── pick.html            # Choose seats and verbosity, ask, hand the answers to Claude
+│       ├── panel-style.css      # Colour tokens, card layout and switches every panel inlines
+│       ├── panel-host.js        # Every panel's connection to Desktop
+│       ├── panel-page.js        # Element building and the status line every panel uses
+│       ├── seat-cards.js        # A council_ask result as one card per seat
+│       ├── seat-cards.css       # The seat cards' look
+│       ├── markdown.js          # The markdown subset the seat cards draw, as data
+│       ├── marks.js             # The vendor mark drawn beside each seat's name
+│       ├── model-list.js        # A provider's models under a filter box, in settings and the picker
+│       ├── model-list.css       # The model list's look
+│       └── THIRD-PARTY-NOTICES.md  # The marks' trademark statement and LobeHub's licence
 ├── hooks/
 │   └── hooks.json               # Stop hook registration (stop gate) and the council-pane module
 ├── mods/

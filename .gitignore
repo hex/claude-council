@@ -47,3 +47,6 @@ CLAUDE.local.md
 .cs/private/
 .cs/session.lock
 .cs/session.mutex.lock
+
+# Claude Desktop extension packages (extension/build.sh)
+dist/

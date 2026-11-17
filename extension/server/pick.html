@@ -1,0 +1,385 @@
+<!doctype html>
+<!-- ABOUTME: The council picker panel Claude Desktop draws under a council_pick call (an MCP App page) -->
+<!-- ABOUTME: The user picks seats and verbosity and presses Ask; the answers show here and reach Claude through council_result -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Council picker</title>
+<style>
+  /* @include panel-style.css */
+  /* @include seat-cards.css */
+  /* @include model-list.css */
+  .seat { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+  .seat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat small { font: 11px var(--mono); color: var(--dim); margin-left: 8px; }
+  /* In a narrow panel the model's text shortens, never the name or the chevron. */
+  .seat > span.chooses { display: flex; align-items: center; min-width: 0; }
+  /* A seat's model where the extension chooses it: the grey text, made a button with a chevron. */
+  .seat button.model { display: inline-flex; align-items: center; min-width: 0; font: 11px var(--mono); color: var(--dim); background: none; border-radius: 4px; padding: 2px 4px; margin-left: 4px; }
+  .seat button.model:hover:not(:disabled) { color: var(--fg); background: var(--card-hover); }
+  .seat button.model::after { content: ""; display: inline-block; width: 4px; height: 4px; margin: 0 2px 0 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: translateY(-2px) rotate(45deg); }
+  .seat button.model[aria-expanded="true"]::after { transform: translateY(1px) rotate(225deg); }
+  /* Not while hidden: a display of its own would override the hidden attribute. */
+  .choose:not([hidden]) { display: grid; gap: 6px; }
+  .choose p { margin: 0; }
+  .choose .models { border: .5px solid var(--rule); border-radius: 6px; max-height: 240px; }
+  .choose .models > button[aria-pressed="true"] { color: var(--lit); font-weight: 600; }
+  .choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+  .choices label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .choices input { accent-color: var(--lit); margin: 0; }
+  /* Outside the card and in line with its switches, so it reads as acting on all of them. */
+  .all { padding: 0 14px 10px; }
+  .act { display: flex; align-items: center; justify-content: flex-end; }
+  button { font: 600 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; color: var(--bg); background: var(--fg); border: 0; border-radius: 6px; padding: 6px 18px; cursor: pointer; }
+  button:disabled, input:disabled { opacity: .5; cursor: default; }
+  #picker { margin-bottom: 12px; }
+  .waiting { padding: 12px 14px 9px; }
+  /* Lines the shape of an answer, shimmering where it will appear. */
+  .skeleton { height: 10px; border-radius: 5px; margin-bottom: 8px; background: linear-gradient(90deg, var(--card-hover) 25%, var(--rule) 50%, var(--card-hover) 75%); background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
+  .skeleton:nth-child(2) { width: 82%; animation-delay: .15s; }
+  .skeleton:nth-child(3) { width: 64%; animation-delay: .3s; }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+  #handoff { margin: 12px 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Council picker</h1><span id="status" role="status"></span></header>
+  <p class="lead" id="question">Waiting for the question.</p>
+  <div id="picker" class="seat-list"></div>
+  <div id="seats" class="seat-list" aria-live="polite"></div>
+  <div id="handoff"></div>
+</main>
+<script>
+'use strict'
+// @include panel-host.js
+// @include panel-page.js
+// @include marks.js
+// @include markdown.js
+// @include seat-cards.js
+// @include model-list.js
+const question = document.getElementById('question')
+const picker = document.getElementById('picker')
+const seats = document.getElementById('seats')
+const handoff = document.getElementById('handoff')
+
+// What a shortened answer's card says Claude has of it: the whole of it, which
+// council_result gives Claude.
+const WHOLE = 'Claude gets all of it when it writes the synthesis.'
+
+// The seats whose model the extension chooses, as the settings panel does: the
+// API seats and OpenRouter's. A CLI agent's model is set in its own settings.
+const CHOOSABLE = /^(gemini|openai|grok|perplexity|kimi|openrouter|openrouter-[1-9][0-9]*)$/
+// A list longer than this gets a filter box: OpenRouter's runs to hundreds.
+const FILTER_FROM = 20
+
+// Each provider's models and saved choice, from the tool the settings panel
+// loads with. Asked once, when a seat's model is first opened or focused, so
+// the picker itself draws at once; a failed load is asked again next time.
+let modelsLoad
+function loadModels() {
+  modelsLoad ??= host.tool('council_models_data').then(data => ({ data }), err => {
+    modelsLoad = undefined
+    return { error: err.message }
+  })
+  return modelsLoad
+}
+
+// A seat's row: its mark, its name, its model, and the switch that seats it.
+// Where the extension chooses the seat's model, the model is a button that
+// opens the provider's models under the row, and a choice saves at once, as
+// the saved default this question and later ones use. `saving(on)` says a
+// save started or ended; `renamed(was)` that the seat now has another name.
+function seatRow(seat, box, saving, renamed) {
+  const mark = { icon: markIcon(seat.provider, seat.model) }
+  const name = document.createTextNode(seat.provider)
+  const title = element('span', {}, [mark.icon, name])
+  const row = element('label', { className: 'seat', htmlFor: box.id }, [title, box])
+  const label = () => box.setAttribute('aria-label', `${seat.provider} (${seat.model})`)
+  label()
+  if (!CHOOSABLE.test(seat.provider)) {
+    title.append(element('small', { textContent: seat.model }))
+    return { rows: [row], close: () => {} }
+  }
+  const model = element('span', { textContent: seat.model })
+  const button = element('button', { type: 'button', className: 'model' }, [model])
+  button.setAttribute('aria-expanded', 'false')
+  title.className = 'chooses'
+  title.append(button)
+  const list = element('div', { className: 'sub choose', hidden: true })
+  // The saved choice: '' for the default, else a model id.
+  let current
+  const close = () => {
+    list.hidden = true
+    button.setAttribute('aria-expanded', 'false')
+    host.reportSize()
+  }
+  const say = (text, bad) => element('p', { className: bad ? 'note bad' : 'note', textContent: text })
+  async function save(id, provider) {
+    if (id === current) return close()
+    saving(true)
+    for (const option of list.querySelectorAll('button, input')) option.disabled = true
+    try {
+      const saved = await host.tool('council_models_save', { seat: seat.provider, model: id })
+      const was = seat.provider
+      current = id
+      seat.provider = saved.seat
+      seat.model = saved.model
+      name.textContent = seat.provider
+      model.textContent = seat.model
+      const icon = markIcon(seat.provider, seat.model)
+      mark.icon.replaceWith(icon)
+      mark.icon = icon
+      label()
+      if (was !== seat.provider) renamed(was)
+      close()
+      // The chosen option is gone with the list; focus goes back where it opened.
+      button.focus()
+    } catch (err) {
+      const problem = err.message.startsWith('Not saved') ? err.message : `Not saved (${err.message}).`
+      draw(provider, problem)
+    } finally {
+      saving(false)
+    }
+  }
+  function draw(provider, problem) {
+    // A roster seat has no default of its own: removing it is the settings panel's.
+    const offered = seat.provider.startsWith('openrouter-') ? [] : ['']
+    const ids = [...new Set([...offered, current, ...provider.models])]
+    const { filter, list: options } = modelList({
+      ids,
+      pinned: id => id === '' || id === current,
+      label: `Filter ${provider.title} models`,
+      empty: 'No model matches.',
+      row: id => {
+        const option = element('button', { type: 'button' }, [element('span', { textContent: id === '' ? `Default (${provider.defaultModel})` : id })])
+        option.setAttribute('aria-pressed', String(id === current))
+        option.addEventListener('click', () => { save(id, provider) })
+        return option
+      },
+    })
+    const lines = [problem, provider.listError && `${provider.listError}.`].filter(Boolean).map(text => say(text, true))
+    list.replaceChildren(...lines, ...(ids.length > FILTER_FROM ? [filter] : []), options)
+    host.reportSize()
+  }
+  async function open() {
+    list.hidden = false
+    button.setAttribute('aria-expanded', 'true')
+    list.replaceChildren(say('Loading the model list.'))
+    host.reportSize()
+    const { data, error } = await loadModels()
+    if (list.hidden) return
+    if (error) {
+      list.replaceChildren(say(`Could not load the model list (${error}).`, true))
+      return host.reportSize()
+    }
+    const provider = data.providers.find(candidate => candidate.name === (seat.provider.startsWith('openrouter') ? 'openrouter' : seat.provider))
+    current ??= provider.roster ? (seat.provider === 'openrouter' ? '' : seat.model) : provider.selected
+    draw(provider, '')
+  }
+  button.addEventListener('focus', loadModels)
+  button.addEventListener('click', () => { if (list.hidden) open(); else close() })
+  list.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return
+    close()
+    button.focus()
+  })
+  return { rows: [row, list], close, button }
+}
+
+// Desktop can send the tool result again; drawing the picker again would wipe
+// a run in progress or the answers it shows.
+let pickerDrawn = false
+
+function drawPicker(result) {
+  if (pickerDrawn) return
+  pickerDrawn = true
+  const data = result?.structuredContent
+  if (result?.isError || !Array.isArray(data?.seats)) return showAnswers(result, picker, WHOLE)
+  question.textContent = data.question
+  const chosen = new Set(data.seats.map(seat => seat.provider))
+  let verbosity = data.verbosity
+  // The run Claude may be waiting for, sent with each Ask until the server
+  // has answered one: a call the host refused or let time out may never have
+  // reached it. The server gives any later Ask a run of its own.
+  let pickedRun = data.run
+  const count = element('small')
+  const ask = element('button', { type: 'button', textContent: 'Ask' })
+  const controls = [ask]
+  const recount = () => {
+    count.textContent = `${chosen.size} of ${data.seats.length} on`
+    ask.disabled = chosen.size === 0 || saves > 0
+    all.checked = chosen.size === data.seats.length
+  }
+  const boxes = []
+  const all = element('input', { type: 'checkbox', className: 'switch', checked: true })
+  all.setAttribute('aria-label', 'All seats')
+  all.addEventListener('change', () => {
+    data.seats.forEach((seat, at) => {
+      boxes[at].checked = all.checked
+      if (all.checked) chosen.add(seat.provider); else chosen.delete(seat.provider)
+    })
+    recount()
+  })
+  controls.push(all)
+  // Saves in flight: Ask waits for them, so a run uses what the rows show.
+  let saves = 0
+  const saving = on => {
+    saves += on ? 1 : -1
+    recount()
+  }
+  const seatRows = data.seats.map((seat, at) => {
+    const box = element('input', { type: 'checkbox', className: 'switch', checked: true, id: `seat-${at}` })
+    box.addEventListener('change', () => {
+      if (box.checked) chosen.add(seat.provider); else chosen.delete(seat.provider)
+      recount()
+    })
+    controls.push(box)
+    boxes.push(box)
+    const drawn = seatRow(seat, box, saving, was => { if (chosen.delete(was)) chosen.add(seat.provider) })
+    if (drawn.button) controls.push(drawn.button)
+    return drawn
+  })
+  const choices = data.verbosities.map(level => {
+    const radio = element('input', { type: 'radio', name: 'verbosity', value: level, checked: level === verbosity })
+    radio.addEventListener('change', () => { verbosity = level })
+    controls.push(radio)
+    return element('label', {}, [radio, document.createTextNode(level)])
+  })
+  ask.addEventListener('click', () => {
+    for (const control of controls) control.disabled = true
+    for (const drawn of seatRows) drawn.close()
+    const picked = data.seats.filter(seat => chosen.has(seat.provider))
+    const args = { question: data.question, providers: picked.map(seat => seat.provider), verbosity }
+    if (pickedRun !== undefined) args.run = pickedRun
+    run(args, picked, ask, data.answerWithinMs, () => { pickedRun = undefined }).catch(err => {
+      report('failed', true)
+      seats.replaceChildren(element('p', { className: 'lead bad', textContent: `The panel could not show the answers (${err.message}).` }))
+      host.reportSize()
+      return false
+    }).then(asked => {
+      if (asked) return
+      for (const control of controls) control.disabled = false
+      recount()
+    })
+  })
+  recount()
+  report('')
+  picker.replaceChildren(
+    element('label', { className: 'seat all' }, [element('span', { textContent: 'All seats' }), all]),
+    element('section', {}, [element('h2', {}, [document.createTextNode('Seats'), count]), ...seatRows.flatMap(drawn => drawn.rows)]),
+    element('section', {}, [element('h2', {}, [document.createTextNode('Verbosity')]), element('div', { className: 'choices' }, choices)]),
+    element('div', { className: 'act' }, [ask]),
+  )
+  host.reportSize()
+}
+
+// Until the council answers, which takes 20 to 60 seconds, the Ask button
+// and a card per picked seat say it is running, where the user is looking:
+// the header's status line has scrolled out of view by then. Returns the
+// function that ends it; the answers or the error replace the cards.
+function showWaiting(picked, button) {
+  button.textContent = 'Asking...'
+  const started = Date.now()
+  // Hidden from screen readers: #seats is a live region, and a count that
+  // changes every second would be read out every second.
+  const counts = picked.map(() => element('span', { ariaHidden: 'true' }))
+  // From the start time, not a counter: a frame out of view gets its timers slowed.
+  const tick = () => {
+    const seconds = `${Math.floor((Date.now() - started) / 1000)} s`
+    for (const count of counts) count.textContent = seconds
+  }
+  tick()
+  const timer = setInterval(tick, 1000)
+  seats.replaceChildren(...picked.map((seat, at) => element('section', {}, [
+    seatHeading(seat),
+    element('div', { className: 'note waiting' }, [...[1, 2, 3].map(() => element('div', { className: 'skeleton' })), document.createTextNode('waiting, '), counts[at]]),
+  ])))
+  host.reportSize()
+  return () => {
+    clearInterval(timer)
+    button.textContent = 'Ask'
+  }
+}
+
+// Runs the question through council_pick_ask, which is council_ask itself,
+// shows the answers, and asks Claude for the synthesis unless the server
+// says Claude was waiting for this run when it ended. True once a seat
+// answered; false to let the user press Ask again. Waits at most
+// `answerWithinMs`, the server's own bound on the run, and calls `answered`
+// once the server's result has come back.
+async function run(args, picked, button, answerWithinMs, answered) {
+  report('asking the council')
+  handoff.replaceChildren()
+  const stopWaiting = showWaiting(picked, button)
+  let result
+  try {
+    result = await host.request('tools/call', { name: 'council_pick_ask', arguments: args }, answerWithinMs)
+  } catch (err) {
+    report('failed', true)
+    const problem = err instanceof HostTimeout
+      ? `No answer came back within ${answerWithinMs / 60000} minutes, so the panel stopped waiting. Press Ask to try again.`
+      : `Claude Desktop did not run the question (${err.message}).`
+    seats.replaceChildren(element('p', { className: 'lead bad', textContent: problem }))
+    host.reportSize()
+    return false
+  } finally {
+    stopWaiting()
+  }
+  answered()
+  showAnswers(result, seats, WHOLE)
+  if (result?.isError) return false
+  // The server holds a run, and names it, only when a seat answered.
+  const id = result?.structuredContent?.run
+  const awaited = result?.structuredContent?.awaited === true
+  if (id === undefined) {
+    const line = awaited ? 'No seat answered, and Claude has the errors. Press Ask to try again.' : 'No seat answered. Press Ask to try again.'
+    handoff.replaceChildren(element('p', { className: 'lead', textContent: line }))
+    host.reportSize()
+    return false
+  }
+  if (awaited) {
+    handoff.replaceChildren(element('p', { className: 'lead', textContent: 'Claude is writing the synthesis.' }))
+    host.reportSize()
+  } else {
+    handOff(id)
+  }
+  return true
+}
+
+// Asks Claude for the synthesis. The answers cannot reach Claude from here:
+// Claude Desktop drops ui/update-model-context, and puts a ui/message into the
+// message box as a draft the user sends. So the message only names the run,
+// and council_result gives Claude its answers. The request is not awaited:
+// with text already in the box, Desktop asks the user whether to replace it
+// and answers late or never.
+function handOff(id) {
+  const line = element('p', { className: 'lead', textContent: `Press Enter in the message box to get Claude's synthesis of run ${id}.` })
+  handoff.replaceChildren(line)
+  host.reportSize()
+  host.request('ui/message', { role: 'user', content: [{ type: 'text', text: `Synthesise the council's answers (run ${id}).` }] })
+    .then(reply => { if (reply?.isError) throw new Error('refused') })
+    .catch(() => {
+      line.textContent = `Ask Claude: "synthesise council run ${id}"`
+      host.reportSize()
+    })
+}
+
+host.connect('council-pick', {
+  'ui/notifications/tool-input': params => {
+    if (typeof params?.arguments?.question === 'string') question.textContent = params.arguments.question
+    report('listing the seats')
+    host.reportSize()
+  },
+  'ui/notifications/tool-result': drawPicker,
+  'ui/notifications/tool-cancelled': () => {
+    report('cancelled', true)
+    picker.replaceChildren(element('p', { className: 'lead', textContent: 'The picker was cancelled.' }))
+    host.reportSize()
+  },
+}).catch(err => { picker.replaceChildren(element('p', { className: 'lead bad', textContent: `Could not connect to Claude Desktop (${err.message}).` })) })
+</script>
+</body>
+</html>

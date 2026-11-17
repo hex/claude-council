@@ -1,0 +1,131 @@
+{
+  "manifest_version": "0.3",
+  "name": "council",
+  "display_name": "Claude Council",
+  "version": "2026.11.1",
+  "description": "Ask other AI models one question from a Claude Desktop chat, on your own API keys.",
+  "long_description": "Claude Council sends one question to several other AI model providers (Gemini, OpenAI, xAI, Perplexity, Kimi and any model OpenRouter routes to) and returns each answer to the chat, where Claude compares them. Enter an API key for each provider you want on the council under Configure; a provider without a key is left out. The CLI agents found on this machine also receive the question: codex, agy, grok, kimi, cursor-agent and ollama, and claude, copilot or opencode when a question names them. They answer on their own logins (ollama on a local model); codex, agy, grok and kimi also receive their own vendor's key from this form, and in a council question no CLI agent receives another vendor's key. A status check starts each installed CLI agent but claude and opencode with every key set. To pick models, ask Claude to open the council settings. The question leaves your machine for every provider with a key and every CLI agent that answers, on your keys and logins and at your cost.",
+  "icon": "icon.png",
+  "author": {
+    "name": "hex",
+    "url": "https://github.com/hex"
+  },
+  "homepage": "https://github.com/hex/claude-council",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hex/claude-council"
+  },
+  "support": "https://github.com/hex/claude-council/issues",
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/server/index.js"
+      ],
+      "env": {
+        "GEMINI_API_KEY": "${user_config.gemini_api_key}",
+        "OPENAI_API_KEY": "${user_config.openai_api_key}",
+        "XAI_API_KEY": "${user_config.xai_api_key}",
+        "PERPLEXITY_API_KEY": "${user_config.perplexity_api_key}",
+        "KIMI_API_KEY": "${user_config.kimi_api_key}",
+        "OPENROUTER_API_KEY": "${user_config.openrouter_api_key}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "council_ask",
+      "description": "Ask the council of other AI models one question and get each answer back."
+    },
+    {
+      "name": "council_pick",
+      "description": "A panel to choose the seats and verbosity, then ask."
+    },
+    {
+      "name": "council_result",
+      "description": "Give Claude the answers of a council run made in the picker, for its synthesis."
+    },
+    {
+      "name": "council_status",
+      "description": "Show which council providers are usable and the model each would use."
+    },
+    {
+      "name": "council_settings",
+      "description": "Show each provider's model, with a panel in the chat to change them."
+    }
+  ],
+  "user_config": {
+    "gemini_api_key": {
+      "type": "string",
+      "title": "Gemini API key",
+      "description": "For a council question, given only to Gemini seats: Google's Gemini API, and the agy CLI if it is installed. Also lists Gemini's models in the settings panel. Leave empty to leave the Gemini API off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "openai_api_key": {
+      "type": "string",
+      "title": "OpenAI API key",
+      "description": "For a council question, given only to OpenAI seats: OpenAI's API, and the codex CLI if it is installed. Also lists OpenAI's models in the settings panel. Leave empty to leave the OpenAI API off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "xai_api_key": {
+      "type": "string",
+      "title": "xAI API key (Grok)",
+      "description": "For a council question, given only to xAI seats: xAI's API, and the grok CLI if it is installed. Also lists xAI's models in the settings panel. Leave empty to leave the xAI API off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "perplexity_api_key": {
+      "type": "string",
+      "title": "Perplexity API key",
+      "description": "For a council question, given only to Perplexity's API, for the perplexity seat. Leave empty to leave it off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "kimi_api_key": {
+      "type": "string",
+      "title": "Kimi API key",
+      "description": "For a council question, given only to Kimi seats: Moonshot AI's Kimi API, and the kimi CLI if it is installed. Also lists Kimi's models in the settings panel. Leave empty to leave the Kimi API off the council.",
+      "sensitive": true,
+      "required": false
+    },
+    "openrouter_api_key": {
+      "type": "string",
+      "title": "OpenRouter API key",
+      "description": "For a council question, given only to OpenRouter, for every OpenRouter seat. Also lists OpenRouter's models in the settings panel. Leave empty to leave it off the council.",
+      "sensitive": true,
+      "required": false
+    }
+  },
+  "privacy_policies": [
+    "https://policies.google.com/privacy",
+    "https://openai.com/policies/privacy-policy/",
+    "https://x.ai/legal/privacy-policy",
+    "https://www.perplexity.ai/hub/legal/privacy-notice",
+    "https://platform.kimi.ai/docs/agreement/userprivacy",
+    "https://openrouter.ai/privacy"
+  ],
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "keywords": [
+    "council",
+    "second-opinion",
+    "gemini",
+    "openai",
+    "grok",
+    "perplexity",
+    "kimi",
+    "openrouter"
+  ]
+}

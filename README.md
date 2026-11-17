@@ -76,6 +76,97 @@ agreement, disagreements, and recommendation. Agreement is not verification:
 the models share your description and its assumptions.
 [The synthesis names the premise that could change the answer](docs/REFERENCE.md#reading-the-synthesis).
 
+## Claude Desktop
+
+The plugin needs Claude Code. For an ordinary Claude Desktop chat there is a
+Desktop extension, `council-<version>.mcpb`, that gives Claude five tools:
+`council_ask`, `council_pick`, `council_result`, `council_status` and
+`council_settings`. It runs on macOS and Linux only, because it starts the
+council's bash scripts.
+
+1. Build the package with `bash extension/build.sh` in a clean checkout. It
+   needs `npm` and writes `dist/council-<version>.mcpb`.
+2. Double-click the file. Desktop warns that the extension gets access to
+   everything on your computer and is not verified by Anthropic. Both hold for
+   any extension installed from a file: its server runs as you, with your files
+   and network, and Anthropic has not reviewed it. Install only a package you
+   built or trust.
+3. In Settings, Extensions, Claude Council, Configure, paste a key for each
+   provider you want: Gemini, OpenAI, xAI, Perplexity, Kimi, OpenRouter. An
+   empty field leaves that provider's API out. Desktop stores the keys. For a
+   question, each key goes only to its own vendor's seats: the vendor's API,
+   and its CLI agent when one is installed (`codex` gets the OpenAI key, `agy`
+   the Gemini key, `grok` the xAI key, `kimi` the Kimi key). A status check is
+   different: it starts each installed CLI agent but `claude` and `opencode`
+   with every key set.
+4. In a chat, ask Claude to open the council settings. A panel in the chat
+   lists each keyed provider's models, fetched live from that provider. Pick
+   one per provider, or switch on up to 12 OpenRouter models, one seat each.
+   Every change saves at once and applies to the next question.
+5. Ask Claude to put a question to the council. Desktop asks you to approve
+   the tool call, and that approval is the only check before the question
+   leaves your machine. A panel under the tool call shows each seat's answer,
+   or its error, in a card of its own headed by the seat's name and its
+   vendor's logo, and Claude writes the synthesis below it. Desktop waits for
+   the whole run, from seconds to a few minutes.
+
+### Asking at once
+
+Name the seats or a verbosity (standard, brief or
+detailed) in your message, or say to just ask everyone, and Claude runs the
+question at once, on every default seat at standard unless you named others.
+Claude passes your question as you asked it, adding context only when it
+depends on earlier messages the council cannot see.
+
+### The picker
+
+Otherwise, as in "ask the council: which queue should we
+use?", Claude opens `council_pick`, a panel with the question, a switch per
+seat and the three verbosities. Claude then waits, in the same turn, in
+`council_result` for the picker's run.
+
+1. Press Ask. The answers appear in that panel, and the line under them says
+   "Claude is writing the synthesis".
+2. Claude writes the synthesis with no message from you. When every seat
+   fails, Claude says what failed.
+
+When no seat answers, the panel says so and Ask works again.
+
+### Changing a model in the picker
+
+On an API seat or an OpenRouter seat the
+model in grey is a button: click it to pick another model from that
+provider's live list (OpenRouter's has a filter box). The choice saves at
+once, as the settings panel's would, and applies to this question and the
+ones after it. An OpenRouter seat changes only its own model; adding or
+removing OpenRouter seats stays in the settings panel.
+
+### When Claude is no longer waiting
+
+Claude waits at most 11.5 minutes from
+when the picker opened. If it has stopped waiting by the time the answers are
+in, or you press Ask a second time in the same panel:
+
+- Desktop puts "Synthesise the council's answers (run 3f9a2c)." in the
+  message box, under a caution about malicious content, and the line under
+  the answers says to press Enter. The panel cannot send that message itself.
+- Claude then fetches that run's answers with `council_result` and writes the
+  synthesis.
+- If Desktop refuses the message, the line instead gives the words to send
+  yourself (`Ask Claude: "synthesise council run 3f9a2c"`).
+- The extension keeps the last 5 runs in which a seat answered; after that,
+  ask the council again.
+
+A question with no providers named goes to every provider with a key and to
+every CLI agent the scripts find (`codex`, `agy`, `grok`, `kimi`,
+`cursor-agent`, `ollama`) in your PATH, `~/.local/bin`, `~/bin`,
+`/opt/homebrew/bin` or `/usr/local/bin`. `claude`, `copilot` and `opencode`
+get it only when the question names them. A CLI agent answers on its own
+login, so it receives the question even when its vendor's key field is
+empty; apart from its own vendor's key it gets no key from the form. The
+[reference](docs/REFERENCE.md#claude-desktop-extension) lists the files it
+keeps and its limits.
+
 ## Features
 
 | Capability | Guide |
@@ -95,6 +186,7 @@ the models share your description and its assumptions.
 | Watch answers arrive and retry failed seats | [The pane](#the-pane) |
 | Get a note from one seat while Claude works | [Heads-up side-check](#heads-up-side-check) |
 | Have a second model review the diff before Claude stops | [Stop-gate review](docs/USAGE.md#stop-gate-review-opt-in-off-by-default) |
+| Ask the council from a Claude Desktop chat | [Claude Desktop](#claude-desktop) |
 | Call the scripts without Claude Code | [Direct script usage](docs/REFERENCE.md#direct-script-usage) |
 
 The [reference](docs/REFERENCE.md) lists every flag, variable, model default,
