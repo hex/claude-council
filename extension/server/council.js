@@ -224,11 +224,13 @@ function choicesFile() {
 // The saved choices, or the defaults with a notice saying why the file was
 // ignored: a run on defaults the user did not choose may cost more, so every
 // tool that reads the choices passes the notice on. `problem` is why, for a
-// save that must not replace the file.
+// save that must not replace the file. `unopened` marks a file the system
+// would not open or read: its contents may be good, so no save replaces it.
 function readChoices() {
-  const ignored = problem => ({
+  const ignored = (problem, unopened = false) => ({
     choices: noChoices(),
     problem,
+    unopened,
     notice: `The saved model choices in ${choicesFile()} could not be read (${problem}), so every provider uses its default model.`,
   })
   let fd
@@ -237,13 +239,13 @@ function readChoices() {
   } catch (err) {
     if (err.code === 'ENOENT') return { choices: noChoices(), notice: '' }
     if (err.code === 'ELOOP') return ignored('the file is a symbolic link, which is not followed')
-    return ignored(`the file could not be opened: ${err.code}`)
+    return ignored(`the file could not be opened: ${err.code}`, true)
   }
   let text
   try {
     text = fs.readFileSync(fd, 'utf8')
   } catch (err) {
-    return ignored(`the file could not be read: ${err.code}`)
+    return ignored(`the file could not be read: ${err.code}`, true)
   } finally {
     fs.closeSync(fd)
   }
@@ -963,14 +965,16 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   // (roster); the picker saves one seat's model (seat and model) and is told
   // the model the seat now uses. Each is a change to the choices as saved at
   // that moment, so a panel never writes back what it loaded. The settings
-  // panel's change is made to the defaults when the file cannot be read: a
-  // save there is how such a file is replaced.
+  // panel's change is made to the defaults when the file's contents are not
+  // choices: a save there is how such a file is replaced. A file the system
+  // would not open is left alone.
   async function saveFromPanel(input, signal) {
     const given = ['selections', 'roster'].filter(name => input?.[name] !== undefined).length + (input?.seat !== undefined || input?.model !== undefined ? 1 : 0)
     if (given > 1) return refused('Not saved: council_models_save takes selections, a roster change, or a seat and its model, one of them.')
     if (input?.seat === undefined && input?.model === undefined) {
-      const saved = readChoices().choices
-      const result = input?.roster !== undefined ? withRosterChange(saved, input.roster) : parseChoices(input?.selections, saved)
+      const saved = readChoices()
+      if (saved.unopened) return refused(`Not saved: the saved model choices in ${choicesFile()} could not be read (${saved.problem}).`)
+      const result = input?.roster !== undefined ? withRosterChange(saved.choices, input.roster) : parseChoices(input?.selections, saved.choices)
       if (result.problem) return refused(`Not saved: ${result.problem}.`)
       writeChoices(result.choices)
       return { text: JSON.stringify({ saved: true }) }

@@ -56,9 +56,10 @@ run_sync() {
         # The whole path: whoever reads it may not share this directory. Under
         # Git Bash PWD is the MSYS form (/c/Users/...), which a native Windows
         # program such as Claude Code cannot open, so the path is printed as
-        # cygpath -m gives it (C:/Users/...), a form bash opens too.
-        local saved="${PWD}/${outfile}"
-        if command -v cygpath >/dev/null 2>&1; then saved=$(cygpath -m "$saved"); fi
+        # cygpath -m gives it (C:/Users/...), a form bash opens too. A cygpath
+        # that fails or prints nothing leaves the path as bash has it.
+        local saved="${PWD}/${outfile}" native
+        if native=$(cygpath -m "$saved" 2>/dev/null) && [[ -n "$native" ]]; then saved=$native; fi
         echo "$saved"
     else
         echo "Council query failed:" >&2

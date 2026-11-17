@@ -1116,6 +1116,21 @@ mode_of() {
         '{"gemini":"","openai":"gpt-test-1","grok":"","perplexity":"","kimi":"","openrouter":["vendor/alpha","vendor/delta","vendor/epsilon"]}'
 }
 
+@test "extension: a settings save is refused when the saved choices cannot be opened, the file left as it was" {
+    [ "$(id -u)" -ne 0 ] || skip "root opens a file of mode 000"
+    save_choices '{"openai":"gpt-x"}'
+    chmod 000 "${STATE_DIR}/models.json"
+    mcp "$INIT" "$(call 1 council_models_save '{"roster":{"add":"a/3"}}')" \
+        "$(call 2 council_models_save '{"selections":{"gemini":"gemini-x"}}')"
+    chmod 600 "${STATE_DIR}/models.json"
+    local id
+    for id in 1 2; do
+        assert_eq "$(result_error "$id")" true
+        assert_eq "$(result_text "$id")" "Not saved: the saved model choices in ${STATE_DIR}/models.json could not be read (the file could not be opened: EACCES)."
+    done
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" '{"openai":"gpt-x"}'
+}
+
 @test "extension: a roster change the choices cannot take is refused with a sentence, the file left as it was" {
     local full='{"openrouter":["a/1","a/2","a/3","a/4","a/5","a/6","a/7","a/8","a/9","a/10","a/11","a/12"]}'
     save_choices "$full"
@@ -1617,7 +1632,7 @@ ${asked}"
         const council = require(process.argv[1])
         const { keys, tooShort } = council.readKeys(process.env)
         const theCouncil = council.openCouncil({ root: process.argv[2], keys, tooShort, redact: text => text,
-          timeoutsMs: { ask: 8000, status: 1000, script: 1000, relay: 1000 } })
+          timeoutsMs: { ask: 6000, status: 1000, script: 3000, relay: 1000 } })
         const signal = new AbortController().signal
         const sleep = ms => new Promise(done => setTimeout(done, ms))
         const main = async () => {

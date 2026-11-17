@@ -257,6 +257,21 @@ wait_for_job() {
     grep -q "FAKE-CODEX-RESPONSE" ".claude/council-cache/${name}"
 }
 
+@test "run-council: a cygpath that fails or prints nothing leaves the saved file's path as bash has it" {
+    local bin="${BATS_TEST_TMPDIR}/cygbin" body name
+    mkdir -p "$bin"
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    for body in 'echo "cygpath: cannot convert" >&2; exit 1' 'exit 0'; do
+        printf '#!/bin/bash\n%s\n' "$body" > "${bin}/cygpath"
+        chmod +x "${bin}/cygpath"
+        PATH="${bin}:${PATH}" run --separate-stderr bash "$RUN_COUNCIL" --providers=codex -- "test question"
+        assert_eq "$status" 0
+        name="${output#"${PWD}/.claude/council-cache/"}"
+        [[ "$name" =~ ^council-[0-9]+\.md$ ]] || { echo "printed: ${output}" >&2; false; }
+        assert_eq "$stderr" ""
+    done
+}
+
 @test "run-council: sync drops a self-ignoring .gitignore even under --no-cache" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     # --no-cache skips cache_set/ensure_cache_dir, so run_sync itself must drop
