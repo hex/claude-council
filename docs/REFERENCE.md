@@ -798,8 +798,9 @@ never followed.
 by side. The server stops a run after 10 minutes and a status check after
 3. Each run starts in a process group of its own. The server stops the whole
 group on a timeout, a cancelled call, a run that writes more than 8 MiB to
-stdout or 1 MiB to stderr, and its own exit (Desktop closing its input, or
-SIGTERM or SIGINT): SIGTERM first, then SIGKILL 2 seconds later for anything
+stdout or 1 MiB to stderr, and its own exit (Desktop closing its input,
+SIGTERM or SIGINT, or an error it did not handle, such as a reply it cannot
+write because Desktop closed its output, after which it exits 1): SIGTERM first, then SIGKILL 2 seconds later for anything
 still running. On its own exit it sends that SIGKILL as soon as every run has
 closed, or after the 2 seconds, then gives the calls still going up to 1
 second more to end (a picker's ask writing its outcome, a waiting

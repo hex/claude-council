@@ -13,6 +13,8 @@
 #   - input ends, or SIGTERM or SIGINT arrives, during a council run: the run's whole process
 #     group is stopped, a seat that ignores SIGTERM too (SIGKILL after a grace period), before
 #     the server exits
+#   - the app closes the server's output during a council run, so a reply cannot be written:
+#     the run's whole group is stopped the same way before the server exits 1
 #   - a council run past its time limit: stopped the same way, and the tool says so
 #   - notifications/cancelled for a council question in flight: its run is stopped and the
 #     request never answered, while a question asked beside it is answered
@@ -726,7 +728,9 @@ stubborn_seat() {
 # DRIVE_HOLD_MS so a reply the server should not send has time to arrive,
 # and just before closing it writes to $DRIVE_SEEN "there" or "gone": whether a process matching
 # DRIVE_WATCH (a pgrep -f pattern) was still running, or with DRIVE_FILES set,
-# whether a file matching that glob was still there; "signal <NAME>" sends the server that signal. Leaves the server's stdout in
+# whether a file matching that glob was still there; "signal <NAME>" sends the server that signal;
+# "deafen" closes the reading end of the server's output and sends a ping, whose reply the server
+# then cannot write. Leaves the server's stdout in
 # $output and its exit code in $status, 128 plus the signal's number for a
 # signal it died of.
 drive() {
@@ -761,6 +765,10 @@ drive() {
           clearInterval(poll)
           const [verb, argument] = action.split(" ")
           if (verb === "signal") return child.kill(argument)
+          if (verb === "deafen") {
+            child.stdout.destroy()
+            return child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 99, method: "ping" })}\n`)
+          }
           child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: Number(argument) } })}\n`)
           child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 99, method: "ping" })}\n`)
           setTimeout(() => {
@@ -800,6 +808,13 @@ drive() {
     [ "$status" -eq 130 ]
     assert_eq "$(reply 1)" ''
     run ! pgrep -f 'sleep 97.34'
+}
+
+@test "extension: a reply that cannot be written, the server's output closed, stops the run's whole group before the server exits" {
+    stubborn_seat 97.37
+    drive "$STUBBORN_STARTED" "deafen" "$INIT" "$(call 1 council_ask '{"question":"q","providers":["codex"]}')"
+    [ "$status" -eq 1 ]
+    run ! pgrep -f 'sleep 97.37'
 }
 
 @test "extension: a cancelled council question stops its run and is never answered; another goes on" {

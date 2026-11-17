@@ -273,16 +273,37 @@ const CALLS_END_MS = 1000
 
 // Exits once every council run still going has been stopped, since a run is
 // in a process group of its own and would otherwise outlive the server, and
-// every call has ended or had its time to.
+// every call has ended or had its time to. Asked again while it is at work,
+// it does nothing: the first exit goes on. It exits even when the stopping
+// itself fails, since nothing else would end the server by then.
 async function shutDown(exitCode) {
   if (shuttingDown) return
   shuttingDown = true
-  await theCouncil.stopRuns()
-  const calls = [...callsInFlight.values()]
-  for (const call of calls) call.controller.abort()
-  await Promise.race([Promise.allSettled(calls.map(call => call.outcome)), new Promise(done => setTimeout(done, CALLS_END_MS))])
+  try {
+    await theCouncil.stopRuns()
+    const calls = [...callsInFlight.values()]
+    for (const call of calls) call.controller.abort()
+    await Promise.race([Promise.allSettled(calls.map(call => call.outcome)), new Promise(done => setTimeout(done, CALLS_END_MS))])
+  } catch (err) {
+    log(`council extension: could not stop every run before exiting: ${err?.stack ?? err}`)
+    process.exit(1)
+  }
   process.exit(exitCode)
 }
+
+// Ends the server for an error nothing handled, by the same exit as any
+// other, so no run outlives it. Said once: the log itself may be what failed,
+// and its error comes back here.
+function crash(err) {
+  if (shuttingDown) return
+  log(`council extension: exiting on an error: ${err?.stack ?? err}`)
+  shutDown(1)
+}
+
+// An app that stops reading the server's output makes the next reply's write
+// fail; with no reader left there is nothing to serve.
+process.stdout.on('error', crash)
+process.on('uncaughtException', crash)
 
 // Desktop ends the server by closing its input; a signal ends it as usual.
 readLines(process.stdin, receive, () => shutDown(0))

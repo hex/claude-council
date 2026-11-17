@@ -617,7 +617,8 @@ runs the same scripts the plugin does.
   tool names, schemas and panel pages are the server's own and pass
   untouched, so a key that happens to occur in them cannot corrupt the
   protocol. A key field holding under 8 characters counts as no key. It exits
-  when stdin closes or on SIGTERM or SIGINT, stopping any council run first,
+  when stdin closes, on SIGTERM or SIGINT, or on an error it did not handle
+  (a write to an output Desktop closed among them), stopping any council run first,
   and a `notifications/cancelled` stops the run of the call it names. It reads
   input by the byte and drops a line over 1 MiB before holding it whole.
 - `server/council.js` holds the provider table (form field, model variable,
