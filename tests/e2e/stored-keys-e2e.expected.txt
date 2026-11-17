@@ -1,0 +1,8 @@
+OPENAI_API_KEY stored, not exported: the stored value (length 36)
+GEMINI_API_KEY stored, the shell exports another: the stored value (length 36)
+PERPLEXITY_API_KEY stored, the shell exports another: the stored value (length 36)
+OPENROUTER_API_KEY stored, not exported: the stored value (length 36)
+XAI_API_KEY not stored, the shell exports one: the shell value (length 36)
+OPENROUTER_MODELS stored with surrounding spaces, the shell exports another: the stored, trimmed, value (length 36)
+settings.json and the credentials keychain items unchanged
+PASS

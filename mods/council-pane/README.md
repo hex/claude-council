@@ -2,19 +2,15 @@
 
 A Claude Code mod that draws the council's streaming pane inside Claude Code, so it works without tmux.
 
-Mods are early access. You need `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, and the API can change between Claude Code releases. The heads-up side-check needs Claude Code 2.1.302 or later; the rest of the mod runs on 2.1.278. The tmux pane is still the default and nothing here replaces it.
+The mod loads by itself on Claude Code 2.1.287 or later. On 2.1.278 to 2.1.286 it loads only with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, which later versions ignore. It does not load under `--safe-mode`, with `disableAllHooks` set, or where managed settings set `allowManagedHooksOnly` or the built-in guard's `allowManagedModsOnly`. The mods API can change between Claude Code releases. The heads-up side-check needs Claude Code 2.1.302 or later. The tmux pane is still the default and nothing here replaces it.
 
 The [plugin README](../../README.md#what-the-mod-runs-reads-and-sends) lists every program the mod starts and what it reads, writes and sends.
 
 ## Run it
 
-The mod ships with the plugin: `hooks/hooks.json` at the repo root names `pane.tsx` as a module, so an installed council loads it whenever the variable is set. Without the variable Claude Code skips the module and the tmux pane works as before.
+The mod ships with the plugin: `hooks/hooks.json` at the repo root names `pane.tsx` as a module, so an installed council loads it in every session where mods load. Where it does not load, the tmux pane works as before.
 
-```
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude
-```
-
-Then run `/claude-council:ask` as usual. From a checkout, add `--plugin-dir .` to run this tree's copy over the installed one.
+Run `/claude-council:ask` as usual. From a checkout, add `--plugin-dir .` to run this tree's copy over the installed one.
 
 ## How it hooks in
 
@@ -74,6 +70,9 @@ They show up in `/config`, which lists each row by its title alone; the table be
 | `wake_on_async_done` | off | Submits a prompt when a background job's result can be fetched. That starts a model turn and costs tokens. A job that fails wakes nobody. |
 | `council_tool` | on | Registers `mcp__claude-council__ask` so the model can call the council as a tool. Nothing is sent until you confirm it on a card that names every seat and the verbosity. |
 | `heads_up` | off | Turns the heads-up side-check on in every project. A project's `.claude/council-heads-up.json` overrides it for that project. See [Heads-up side-check](#heads-up-side-check). |
+| `openrouter_models` | empty | OpenRouter model ids, separated by commas or spaces. At session start the mod sets a non-blank value as `OPENROUTER_MODELS`, the same way as the API keys below, so each id becomes a seat `openrouter-1`, `openrouter-2` and so on. Empty leaves a shell export alone. |
+
+Six more fields hold provider API keys: `gemini_api_key`, `openai_api_key`, `xai_api_key`, `perplexity_api_key`, `kimi_api_key` and `openrouter_api_key`. They are sensitive, so `/config` does not list them; set them with `/plugin configure claude-council`, whose Save reloads the mod. Claude Code keeps them in its secure storage. At session start, before anything else, the mod sets each stored key as its variable (`GEMINI_API_KEY` and so on) in Claude Code's own process with `$.env.set`, so every command Claude Code starts after it, the council's scripts among them, gets the stored key in place of a shell export. The mod writes no key to a file. It only ever sets these variables: a key or `openrouter_models` list removed from the config, or the plugin disabled, stays in that session's environment until Claude Code restarts, and the shell export it replaced does not come back until then. `hooks/stored-variables.ts` holds the table, and `tests/stored-variables.test.ts` fails when it, `plugin.json` and the `$.env.set` calls in `pane.tsx` disagree.
 
 The council sends your question to third-party providers, and a tool is easier for the model to call unprompted than a slash command. A call that names no seats, or no verbosity, sends nothing and opens no dialog. Its result lists the seats a default run uses (`query-council.sh --list-default-models`) and tells Claude to ask you with AskUserQuestion, in one call, which seats and how verbose, the same choices `/claude-council:ask` offers, then to call again with your answers. When your own message named the seats or said to ask every seat, Claude passes them at standard verbosity without asking. A seat named twice is asked once. A named seat must be one the council can ask now: a seat a default run uses, a seat this machine has a key or a program for (`seat-info.sh discover`), or one of the seats the runner seats only by name (`claude-cli`, `copilot-cli`, `opencode`). Any other name is refused with the seats found on this machine, a router seat past your roster and a wrongly cased name included.
 

@@ -13,6 +13,7 @@ import type { Note, Paused, Session } from '../types'
 import { decideHost, HOST_LABELS, HOST_QUESTION, HOST_STORE_KEY, hostFrom, hostRowLabel, isCouncilRun, paneCommand, type HostSetting, type PaneHost } from './host'
 import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLive, reopenReply, runPid, wakePrompt, type FinishNotice, progressBand } from './notices'
 import { paneOptions, type PaneOptions } from './options'
+import { storedValues, type StoredValue, type StoredVariable } from './stored-variables'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
 import { askableSeats, type Askable, choiceRequest, confirmOutcome, confirmQuestion, councilArgs, councilResult, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
@@ -384,6 +385,35 @@ async function aimRun($: EngineInterface, state: PaneState, settings: PaneOption
   await startWatching($, state, settings)
   const host = await paneHost($, settings.host)
   await $.env.set('COUNCIL_MOD_PANE_DIR', host === 'mod' ? state.root : undefined)
+}
+
+// The engine accepts only a literal variable name, so each write is spelled
+// out; a variable added to stored-variables.ts without a case fails to compile.
+function setVariable($: EngineInterface, variable: StoredVariable, value: string): ReturnType<EngineInterface['env']['set']> {
+  switch (variable) {
+    case 'GEMINI_API_KEY': return $.env.set('GEMINI_API_KEY', value)
+    case 'OPENAI_API_KEY': return $.env.set('OPENAI_API_KEY', value)
+    case 'XAI_API_KEY': return $.env.set('XAI_API_KEY', value)
+    case 'PERPLEXITY_API_KEY': return $.env.set('PERPLEXITY_API_KEY', value)
+    case 'KIMI_API_KEY': return $.env.set('KIMI_API_KEY', value)
+    case 'OPENROUTER_API_KEY': return $.env.set('OPENROUTER_API_KEY', value)
+    case 'OPENROUTER_MODELS': return $.env.set('OPENROUTER_MODELS', value)
+  }
+}
+
+// Set in this process, so every Bash command, hook and script started after
+// inherits the stored value in place of the shell's; nothing is written to disk.
+// A value that fails is logged and the rest still go on; the engine's text is
+// not known to leave the value out, so the value is cut from it.
+async function applyStoredValues($: EngineInterface, stored: readonly StoredValue[]): Promise<void> {
+  for (const { variable, value } of stored) {
+    try {
+      const { deny } = await setVariable($, variable, value)
+      if (deny) $.ui.log(`stored ${variable} not applied: ${deny.replaceAll(value, '<value>')}`)
+    } catch (error) {
+      $.ui.log(`stored ${variable} not applied: ${String(error).replaceAll(value, '<value>')}`)
+    }
+  }
 }
 
 // Logs a line once per distinct text: a condition that persists across polls or
@@ -806,10 +836,12 @@ function retryRow(
 
 export const register: Register = (on, options) => {
   const settings = paneOptions(options)
+  const stored = storedValues(options)
   const state: PaneState = { root: '', drawn: '', isPolling: false, shown: new Set(), lastError: '', pidCheckedAtMs: 0, headsUpCheckedAtMs: 0, isPollingHeadsUp: false, headsUpProblem: '', lastFailure: '', headsUpTip: '',
     turnInFlight: false, headsUpReceipt: '', headsUpSkipped: '', headsUpTurnOffArmed: '', frame: 0, nowMs: 0, queryingSinceMs: {}, closed: new Set(), fitted: new Map(), tableFit: { columns: 0, byText: new Map() } }
 
   on('session.start', async ($, e, next) => {
+    await applyStoredValues($, stored)
     await $.command.register({ name: REOPEN_COMMAND, description: 'Reopen the council pane, or forget where it was told to open', argumentHint: '[ask]', immediate: true })
     await $.command.register({ name: HEADS_UP_COMMAND, description: 'Heads-up side-check: set it up in a few questions, switch it on for this project naming the seat, or off, or show its state and counts', argumentHint: '[setup | on [seat] | off | status]', immediate: true })
     if (settings.offersTool) await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
