@@ -95,7 +95,8 @@
 #   - council_settings: each provider's model in plain text, defaults as the scripts resolve them,
 #     every line saying "key set" or "no key"
 #   - panel data: a provider with no key is never contacted; one with a key is, and only its own
-#     endpoint, and a failed list says so without the key
+#     endpoint, and a failed list says so without the key; the request follows no redirect,
+#     since Gemini's key rides a header a redirect to another host would carry along
 #   - a list failure that quotes a key longer than the error shown: the key is replaced whole
 #     before the error is cut, so no part of it reaches the panel
 #  the council picker
@@ -952,11 +953,11 @@ In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configur
     [ ! -s "$COUNCIL_FENCE_LOG" ]
 }
 
-@test "extension: a keyed provider's list is asked of its own endpoint only, and a failure says so" {
+@test "extension: a keyed provider's list is asked of its own endpoint only, following no redirect, and a failure says so" {
     export GEMINI_API_KEY="$SENTINEL_KEY" OPENROUTER_API_KEY="${SENTINEL_KEY}-router"
     mcp "$INIT" "$(call 1 council_models_data)"
     assert_eq "$(jq -sc 'sort_by(.fetch)' "$COUNCIL_FENCE_LOG")" \
-        '[{"fetch":"https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000","authorized":true},{"fetch":"https://openrouter.ai/api/v1/models","authorized":true}]'
+        '[{"fetch":"https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000","authorized":true,"redirect":"error"},{"fetch":"https://openrouter.ai/api/v1/models","authorized":true,"redirect":"error"}]'
     assert_eq "$(result_text 1 | jq -c '[.providers[] | select(.hasKey) | {name, listError}]')" \
         '[{"name":"gemini","listError":"Could not load the model list (network fenced off in tests)"},{"name":"openrouter","listError":"Could not load the model list (network fenced off in tests)"}]'
 }

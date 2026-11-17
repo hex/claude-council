@@ -61,7 +61,9 @@ function modelIds(provider, body) {
 async function listModels(provider, key) {
   if (provider === 'perplexity') return PERPLEXITY_PRESETS
   const list = LISTS[provider]
-  const response = await fetch(list.url, { headers: list.headers(key), signal: AbortSignal.timeout(LIST_TIMEOUT_MS) })
+  // A redirect is an error, never followed: Gemini's key rides a header of
+  // its own, which a redirect to another host would carry along.
+  const response = await fetch(list.url, { headers: list.headers(key), redirect: 'error', signal: AbortSignal.timeout(LIST_TIMEOUT_MS) })
   if (!response.ok) throw new Error(`${new URL(list.url).host} answered HTTP ${response.status}`)
   return modelIds(provider, await response.json())
 }
