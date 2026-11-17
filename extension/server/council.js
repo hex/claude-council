@@ -812,8 +812,9 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   }
 
   // A picker run's text, by its id or the latest held when none is given. A
-  // run named by a picker still waiting on it is waited for; with no id the
-  // call never waits.
+  // run named by a picker still waiting on it is waited for; one still going
+  // past its picker's deadline is answered with a sentence saying to call
+  // again; with no id the call never waits.
   async function result(input, signal) {
     if (input === null || typeof input !== 'object' || Array.isArray(input)) return refused('council_result takes an object, with a run id or none')
     const unknown = Object.keys(input).find(name => name !== 'run')
@@ -823,6 +824,10 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     // the picker stops being pending, so a run between the two is found.
     const pending = input.run === undefined ? undefined : pendingPick(input.run)
     if (pending) return awaitPick(pending, signal)
+    // A run claimed before its picker's deadline may go on past it, for no
+    // longer than the picker waits for a run. Looked at before the held runs
+    // are read, so a run that ends in between is found among them.
+    const unended = input.run !== undefined && picks().some(pick => pick.run === input.run && has(pick, 'asking') && pick.deadline + answerWithinMs() > Date.now())
     const kept = `The extension keeps the last ${RUNS_KEPT} picker runs in which a seat answered. Ask the council the question again.`
     const dir = heldDirectory()
     const held = heldRuns(dir)
@@ -833,6 +838,7 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     const ended = input.run === undefined ? undefined : picks().find(pick => pick.run === input.run)
     const failure = ended && outcomeOf(ended)
     if (failure) return { text: failure }
+    if (unended) return { text: `The user pressed Ask in the council picker, and run ${input.run} has no outcome yet. Its answers may be seconds away: call council_result with run ${input.run} again shortly, and do not ask the council the question again.` }
     if (input.run === undefined) return refused(`No council run from the picker is held. ${kept}`)
     return refused(`Council run ${shown(input.run)} is not held. ${kept}`)
   }

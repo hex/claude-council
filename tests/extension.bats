@@ -136,6 +136,8 @@
 #     and the seats asked, and that ask's result says it was awaited
 #   - every seat failing, a refused run: the waiter ends with what failed
 #   - the wait running out: a sentence saying the user has not pressed Ask, and no marker left
+#   - council_result for a run still going past its picker's deadline: a sentence saying to call
+#     again shortly and not to ask again; once the run ends, its answers
 #   - a waiting council_result cancelled: its marker removed at once, and never answered
 #   - a waiter that died: its marker, untouched for just over 2 seconds, is not counted as waiting
 #   - council_result for an id council_pick never made, or with no id while a picker is open:
@@ -1550,6 +1552,39 @@ ${asked}"
     assert_eq "$(jq -c '.waited' <<< "$output")" "$(jq -cn --arg run "$picked" '{text: "The user has not pressed Ask in the council picker within 7 seconds of it opening. When they do, the picker drafts a message asking for the synthesis of run \($run); call council_result with that run then."}')"
     [ -d "${STATE_DIR}/picks" ]
     run ! compgen -G "${STATE_DIR}/picks/*/waiting-*"
+}
+
+@test "extension: council_result for a picker run still going past the picker's deadline says to call again, never to ask again, and then gives its answers" {
+    install_fake_curl echo
+    export OPENROUTER_API_KEY="$SENTINEL_KEY"
+    # The picker's deadline is 10 seconds after it opens. Ask is pressed 8.5
+    # seconds in and its seat takes 2 seconds, so the run ends after the deadline.
+    run --separate-stderr "$NODE" -e '
+        const council = require(process.argv[1])
+        const { keys, tooShort } = council.readKeys(process.env)
+        const theCouncil = council.openCouncil({ root: process.argv[2], keys, tooShort, redact: text => text,
+          timeoutsMs: { ask: 8000, status: 1000, script: 1000, relay: 1000 } })
+        const signal = new AbortController().signal
+        const sleep = ms => new Promise(done => setTimeout(done, ms))
+        const main = async () => {
+          const run = (await theCouncil.pick({ question: "q" }, true, signal)).structured.run
+          await sleep(8500)
+          const asking = theCouncil.pickAsk({ question: "q", providers: ["openrouter"], run }, signal)
+          await sleep(1800)
+          const during = await theCouncil.result({ run }, signal)
+          const asked = await asking
+          const after = await theCouncil.result({ run }, signal)
+          process.stdout.write(JSON.stringify({ run, during, asked: asked.text, after }))
+        }
+        main()
+    ' "${PROJECT_ROOT}/extension/server/council.js" "$PROJECT_ROOT"
+    [ "$status" -eq 0 ]
+    local picked
+    picked=$(jq -r '.run' <<< "$output")
+    [[ "$picked" =~ ^[0-9a-f]{6}$ ]] || false
+    assert_eq "$(jq -c '.during' <<< "$output")" "$(jq -cn --arg run "$picked" '{text: "The user pressed Ask in the council picker, and run \($run) has no outcome yet. Its answers may be seconds away: call council_result with run \($run) again shortly, and do not ask the council the question again."}')"
+    assert_eq "$(jq -r '.after.text' <<< "$output")" "$(jq -r '.asked' <<< "$output")"
+    [[ "$(jq -r '.asked' <<< "$output")" == *'asked: q'* ]]
 }
 
 @test "extension: a picker ask whose run id is not six hex digits is refused before anything is run or written" {
