@@ -420,6 +420,13 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
       const child = spawn('bash', args, {
         cwd: options.cwd, env: options.env, detached: true, stdio: [options.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
       })
+      // A bash that did not start has no pid, so no group to stop, and with
+      // the machine out of file descriptors no output to read; its 'error'
+      // event says why. It is never one of the runs.
+      if (child.pid === undefined) {
+        child.on('error', err => resolve({ exitCode: 127, stdout: '', stderr: `could not start bash: ${err.message}`, stopped: null }))
+        return
+      }
       let closed
       const run = { child, stopped: null, killed: null, closed: new Promise(done => { closed = done }) }
       running.add(run)

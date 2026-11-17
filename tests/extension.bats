@@ -19,6 +19,8 @@
 #   - a request line over 1 MiB: dropped with one invalid request error, serving goes on
 #   - a question over 100000 bytes (one argv entry): refused before any run
 #   - a run writing more than 8 MiB to stdout, or 1 MiB to stderr: stopped, and the tool says so
+#   - bash that cannot be started (the machine out of file descriptors): the tool says so, and
+#     the run that never began does not break the stop of every run at the server's exit
 #   - a listening socket, ever: none (the fence refuses and records any attempt)
 #  tools and the panel resource
 #   - tools/list: the three panel tools carry the app-only visibility key, each panel's tool its uri,
@@ -833,6 +835,29 @@ drive() {
     [ "$status" -eq 0 ]
     assert_eq "$output" '{"text":"The status check wrote more than 1 MiB of progress and errors, so it was stopped.","isError":true}'
     run ! pgrep -f 'sleep 97.36'
+}
+
+@test "extension: bash that cannot be started is a tool error saying so, and stopping every run still ends" {
+    # Every file descriptor but two is taken, too few for a child's pipes.
+    run --separate-stderr bash -c 'ulimit -n 64 && exec "$@"' _ "$NODE" -e '
+        const fs = require("node:fs")
+        const council = require(process.argv[1])
+        const theCouncil = council.openCouncil({ root: process.argv[2], keys: new Map(), tooShort: [], redact: text => text })
+        const taken = []
+        try {
+          for (;;) taken.push(fs.openSync("/dev/null", "r"))
+        } catch (err) {
+          if (err.code !== "EMFILE") throw err
+        }
+        fs.closeSync(taken.pop())
+        fs.closeSync(taken.pop())
+        theCouncil.status({}, new AbortController().signal).then(async outcome => {
+          for (const fd of taken) fs.closeSync(fd)
+          await theCouncil.stopRuns()
+          process.stdout.write(JSON.stringify(outcome))
+        })
+    ' "${PROJECT_ROOT}/extension/server/council.js" "$PROJECT_ROOT"
+    assert_eq "$status $output" '0 {"text":"could not start bash: spawn bash EMFILE\n\nIn Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configure, not in exported variables. Models are chosen with the council_settings tool.","isError":true}'
 }
 
 @test "extension: a council run past its time limit is stopped, a seat ignoring SIGTERM too" {
