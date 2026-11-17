@@ -229,6 +229,15 @@ wait_for_job() {
     grep -q "FAKE-CODEX-RESPONSE" "$output"
 }
 
+@test "run-council: the saved file is named by its whole path, readable from any directory" {
+    export COUNCIL_FAKE_BEHAVIOR=valid
+    run bash "$RUN_COUNCIL" --providers=codex -- "test question"
+    [ "$status" -eq 0 ]
+    [ "${output#"$PWD"/.claude/council-cache/council-}" != "$output" ]
+    cd /
+    grep -q "FAKE-CODEX-RESPONSE" "$output"
+}
+
 @test "run-council: sync drops a self-ignoring .gitignore even under --no-cache" {
     export COUNCIL_FAKE_BEHAVIOR=valid
     # --no-cache skips cache_set/ensure_cache_dir, so run_sync itself must drop

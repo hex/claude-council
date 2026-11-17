@@ -58,7 +58,7 @@ bats --verbose-run tests/cache.bats
 | `agent-analysis.bats` | 11 tests | validate-analysis.sh as the executable mirror of the agent-analysis schema, kept in sync with it |
 | `check-status.bats` | 39 tests | two-tier CLI availability, the claude-cli row probed under its scrubbed environment, the copilot-cli row's seat hint and install remediation, the opencode row's seat hint, its `auth list --standalone` probe that sends no prompt and gets no inherited `OPENCODE_CONFIG_CONTENT`, with project config off, its logged-out and install remediations, remediation strings, HTTP probe branches (401/403/500/000), the inference probe after a passed key check (402 and each vendor's out-of-quota marker read `Inference blocked`, a plain 429 `Rate limited`, any other answer `inference unverified`, a rejected key gets no chat request), rejected-key classification (Gemini/xAI answer a bad key with 400, not 401) and its false-positive guards (a typo'd model is not a bad key), transfer-failure exit codes, curl writing nothing, unusable jq, Perplexity's minimum max_tokens, a Perplexity 403 read as a rejected key only on `invalid_api_key` (an HTML or typeless 403 is a plain error, its message on the row), a retired `PERPLEXITY_MODEL` shown as `Unsupported model` with no probe sent, every row's status beginning at the same column, a roster seat row keeping the export hint |
 | `check-status-probe.bats` | 13 tests | the probes themselves rather than what they report: `-X POST` and `--max-time` on every probe, each inference probe's chat endpoint and 16-token cap, OpenRouter probed at `/api/v1/key` rather than the `/api/v1/models` endpoint that answers 200 without a key, Perplexity's minimum max_tokens, temp-file cleanup, keys off the curl argv, an unusable jq, curl writing nothing |
-| `jobs.bats` | 19 tests | job store, --async lifecycle, --result/--jobs/--cancel (incl. the worker tree dying when jq emits CRLF), self-ignoring cache dir |
+| `jobs.bats` | 20 tests | job store, --async lifecycle, --result/--jobs/--cancel (incl. the worker tree dying when jq emits CRLF), self-ignoring cache dir, the saved file printed as a whole path |
 | `router-seats.bats` | 15 tests | `OPENROUTER_MODELS` splitting the one router script into numbered seats: per-seat `get_model` (roster entry, `<SEAT>_MODEL` override, out-of-range, zero, leading-zero and non-numeric seat numbers all reporting `unknown` rather than a neighbour's id or an arithmetic abort), discovery replacing rather than joining the single seat, `provider_script_path` mapping every seat back to one script, per-seat vision opt-in, colour and swatch not falling to the unknown-provider default, every provider's swatch drawing to the same width, every palette name provider_color asks for being defined by both rendering callers, and an end-to-end run asserting each seat both is labelled with and actually queried its own model |
 | `stop-gate.bats` | 16 tests | opt-in gating, loop guards, BLOCK verdict, fail-open, the reviewer name checked against the providers on disk (a path-shaped name allows the stop), an allowlisted API seat actually reaching the reviewer, the reviewer given its own key and no other secret, config/event reads surviving CRLF from a Windows jq, a review several times what a pipe holds still blocking |
 | `theme.bats` | 24 tests | terminal theme detection, theme-aware emphasis + muted-text (faint/gray) rendering |
@@ -82,7 +82,7 @@ bats --verbose-run tests/cache.bats
 | `extension-markdown.bats` | 13 tests | the answers panel's markdown reader in node: hostile 200 KB answers parsed in linear time (a table with a header thousands of cells wide over thousands of short rows among them), pipe tables as table blocks with styled cells and each column's alignment, a table apart from the paragraph before it and ended by a line with no pipe, pipe lines with no delimiter row or a delimiter row of another width left as text and a table in a code block left as code, a pipe in a code span or written as `\|` kept in its cell, a row keeping the cells it has, list items separated by blank lines kept as one list, headings, paragraphs keeping their line breaks, rules, bold, italic and inline code runs, markers inside code left literal, `snake_case` and `file_v2_` never italic, lists split by kind with depth and continuation lines, an unclosed fence running to the end, CRLF line ends |
 | `extension-marks.bats` | 6 tests | which vendor mark the panels draw beside each seat, in node: every seat by name, CLI seats sharing their vendor's mark, OpenAI's and xAI's seats and makers, an OpenRouter seat showing its model maker's mark (a `~` alias and both of Meta's prefixes included), OpenRouter's own mark for any other maker (`openai/` and `x-ai/` included), a model id with no maker part or no model, no mark for an unknown seat or one named like an object property (`constructor`, `__proto__`), and a drawing and a colour behind every mark the mapping can return |
 
-**Total: 1077 tests** across 38 `.bats` files.
+**Total: 1086 tests** across 38 `.bats` files.
 
 The bats suite does not cover `mods/`. The council-pane mod has its own checks:
 
@@ -226,18 +226,6 @@ why on the line above:
 # Ordering by mtime is the point, and find offers no portable way to sort.
 # shellcheck disable=SC2012
 ls -t "$dir"/*.json
-```
-
-## Plugin scanner (HOL)
-
-CI also runs the HOL plugin scanner on every push to main and every pull
-request (`.github/workflows/hol-plugin-scanner.yml`). It fails on a high finding
-or a score under 80. Score a `git archive HEAD` export, not the working
-directory, where untracked session files read as findings:
-
-```bash
-git archive HEAD | tar -x -C "$dir"
-pipx run plugin-scanner lint "$dir" --format text
 ```
 
 ## Plugin Evals (`claude plugin eval`)

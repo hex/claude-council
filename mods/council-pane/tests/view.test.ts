@@ -1,7 +1,7 @@
 // ABOUTME: Tests for choosing which council run the pane shows and the markdown it draws
 // ABOUTME: Expected strings are written out by hand, never rebuilt from the code under test
 import { test, expect } from 'bun:test'
-import { isMoving, unseenRun, paneSections, parseColors, markdownBlocks, queryingSince, withinTextBudget, seatsToCancel, seatFolds } from '../hooks/view'
+import { isMoving, unseenRun, paneSections, parseColors, markdownBlocks, queryingSince, withinTextBudget, seatsToCancel, seatFolds, seatRowFit } from '../hooks/view'
 
 test('unseenRun names the first run dir not shown before, ignoring other entries', () => {
   const entries = [
@@ -27,10 +27,10 @@ test('paneSections gives one row per seat, its answer or its error text under it
     isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', stateColor: 'success', vendor: 'rgb(59,130,246)', fill: 'rgb(41,91,172)', name: 'gemini', model: 'gemini-3-pro', note: '', bar: '━━━━━━━━━━━━━━', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
+    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', stateColor: 'success', vendor: 'rgb(59,130,246)', name: 'gemini', model: 'gemini-3-pro', note: '', bar: '━━━━━━━━━━━━━━', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
     { kind: 'body', text: 'Use Postgres.' },
-    { kind: 'seat', key: 'jump:openai', fold: 'seat:jump:openai', digit: '2', stateColor: 'claude', vendor: 'rgb(113,113,122)', fill: 'rgb(79,79,85)', name: 'openai', model: '', note: '', bar: '····━━━━······', time: '    ', open: false, action: { press: 'cancel', seat: 'openai' } },
-    { kind: 'seat', key: 'jump:grok', fold: 'seat:jump:grok', digit: '3', stateColor: 'error', vendor: 'rgb(239,68,68)', fill: 'rgb(167,48,48)', name: 'grok  ', model: '', note: '', bar: '━━············', time: '0.9s', open: true, action: { press: 'fold', seat: 'grok' } },
+    { kind: 'seat', key: 'jump:openai', fold: 'seat:jump:openai', digit: '2', stateColor: 'claude', vendor: 'rgb(113,113,122)', name: 'openai', model: '', note: '', bar: '····━━━━······', time: '    ', open: false, action: { press: 'cancel', seat: 'openai' } },
+    { kind: 'seat', key: 'jump:grok', fold: 'seat:jump:grok', digit: '3', stateColor: 'error', vendor: 'rgb(239,68,68)', name: 'grok  ', model: '', note: '', bar: '━━············', time: '0.9s', open: true, action: { press: 'fold', seat: 'grok' } },
     { kind: 'body', text: 'HTTP 429' },
     { kind: 'footer', fold: { label: 'fold', folds: ['seat:jump:gemini', 'seat:jump:grok'] }, cancelAll: true },
   ])
@@ -123,7 +123,7 @@ test('a retriable error keeps its text open under the row while its digit retrie
     responses: {}, errors: { kimi: 'HTTP 500' }, colors: {}, retriable: ['kimi'], isDone: false,
   })
   expect(sections.slice(1, 3)).toEqual([
-    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '2', stateColor: 'error', vendor: 'rgb(113,113,122)', fill: 'rgb(79,79,85)', name: 'kimi  ', model: '', note: '', bar: '━━············', time: '0.3s', open: true, action: { press: 'retry', seat: 'kimi' } },
+    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '2', stateColor: 'error', vendor: 'rgb(113,113,122)', name: 'kimi  ', model: '', note: '', bar: '━━············', time: '0.3s', open: true, action: { press: 'retry', seat: 'kimi' } },
     { kind: 'body', text: 'HTTP 500' },
   ])
 })
@@ -181,9 +181,9 @@ test('a cancelled seat draws a bare grey track, and a finished run leads with it
   })
   expect(sections).toEqual([
     { kind: 'summary', text: '1 of 2 answered · 1 cancelled · 4.2s' },
-    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', stateColor: 'success', vendor: 'rgb(59,130,246)', fill: 'rgb(41,91,172)', name: 'gemini  ', model: '', note: '', bar: '━━━━━━━━━━━━━━', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
+    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', stateColor: 'success', vendor: 'rgb(59,130,246)', name: 'gemini  ', model: '', note: '', bar: '━━━━━━━━━━━━━━', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
     { kind: 'body', text: 'a' },
-    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '2', stateColor: 'inactive', vendor: 'rgb(113,113,122)', fill: 'rgb(79,79,85)', name: 'grok-cli', model: 'grok-4.7', note: '', bar: '··············', time: '    ', open: false },
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '2', stateColor: 'inactive', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: 'grok-4.7', note: '', bar: '··············', time: '    ', open: false },
     { kind: 'footer', cancelAll: false },
   ])
 })
@@ -206,11 +206,11 @@ test('a closed section draws its row alone; an open one keeps its text', () => {
   expect(sections).toEqual([
     { kind: 'summary', text: '2 of 3 answered · 1 error · 1 fell back · 4.2s' },
     { kind: 'synthesis', key: 'jump:synthesis', fold: 'synthesis:jump:synthesis', open: false },
-    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', stateColor: 'success', vendor: 'rgb(113,113,122)', fill: 'rgb(79,79,85)', name: 'gemini  ', model: '', note: '', bar: '━━━━━━━━━━━━━━', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
+    { kind: 'seat', key: 'jump:gemini', fold: 'seat:jump:gemini', digit: '1', stateColor: 'success', vendor: 'rgb(113,113,122)', name: 'gemini  ', model: '', note: '', bar: '━━━━━━━━━━━━━━', time: '4.2s', open: true, action: { press: 'fold', seat: 'gemini' } },
     { kind: 'body', text: 'Use Postgres.' },
     // The fallback reason goes with the answer it explains, so a closed seat hides both.
-    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '2', stateColor: 'claude', vendor: 'rgb(113,113,122)', fill: 'rgb(79,79,85)', name: 'grok-cli', model: '', note: 'fell back', bar: '━━━━━━━━━━━━━━', time: '1.2s', open: false, action: { press: 'open', seat: 'grok-cli' } },
-    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '3', stateColor: 'error', vendor: 'rgb(113,113,122)', fill: 'rgb(79,79,85)', name: 'kimi    ', model: '', note: '', bar: '━━············', time: '0.9s', open: false, action: { press: 'open', seat: 'kimi' } },
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '2', stateColor: 'claude', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: '', note: 'fell back', bar: '━━━━━━━━━━━━━━', time: '1.2s', open: false, action: { press: 'open', seat: 'grok-cli' } },
+    { kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '3', stateColor: 'error', vendor: 'rgb(113,113,122)', name: 'kimi    ', model: '', note: '', bar: '━━············', time: '0.9s', open: false, action: { press: 'open', seat: 'kimi' } },
     { kind: 'footer', fold: { label: 'fold', folds: ['seat:jump:gemini', 'seat:jump:grok-cli', 'seat:jump:kimi', 'synthesis:jump:synthesis'] }, cancelAll: false },
   ])
 })
@@ -274,7 +274,7 @@ test('paneSections falls back to a neutral vendor colour and notes an empty run'
   expect(paneSections({ ...base, providers: [], isDone: false })).toEqual([{ kind: 'note', text: 'Waiting for the council...' }])
   expect(paneSections({ ...base, providers: [], isDone: true })).toEqual([{ kind: 'note', text: 'Council finished with no answers.' }])
   const [, seat] = paneSections({ ...base, providers: [{ name: 'kimi', state: 'cached' }], responses: { kimi: 'x' }, isDone: true })
-  expect(seat).toEqual({ kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '1', stateColor: 'suggestion', vendor: 'rgb(113,113,122)', fill: 'rgb(79,79,85)', name: 'kimi', model: '', note: 'cached', bar: '━━━━━━━━━━━━━━', time: '', open: true, action: { press: 'fold', seat: 'kimi' } })
+  expect(seat).toEqual({ kind: 'seat', key: 'jump:kimi', fold: 'seat:jump:kimi', digit: '1', stateColor: 'suggestion', vendor: 'rgb(113,113,122)', name: 'kimi', model: '', note: 'cached', bar: '━━━━━━━━━━━━━━', time: '', open: true, action: { press: 'fold', seat: 'kimi' } })
 })
 
 test('paneSections shows why a seat fell back, between its row and the answer its API gave', () => {
@@ -286,7 +286,7 @@ test('paneSections shows why a seat fell back, between its row and the answer it
     isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', stateColor: 'claude', vendor: 'rgb(113,113,122)', fill: 'rgb(79,79,85)', name: 'grok-cli', model: 'grok-4.6 via grok API', note: 'fell back', bar: '━━━━━━━━━━━━━━', time: '1.2s', open: true, action: { press: 'fold', seat: 'grok-cli' } },
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', stateColor: 'claude', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: 'grok-4.6 via grok API', note: 'fell back', bar: '━━━━━━━━━━━━━━', time: '1.2s', open: true, action: { press: 'fold', seat: 'grok-cli' } },
     { kind: 'reason', text: 'grok-cli fell back: Error from grok CLI: sandbox could not be applied' },
     { kind: 'body', text: 'Use Postgres.' },
     { kind: 'footer', cancelAll: false },
@@ -314,7 +314,7 @@ test('a fallback seat whose answer has not landed yet shows nothing to open, not
     responses: {}, errors: { 'grok-cli': 'sandbox could not be applied' }, colors: {}, isDone: false,
   })
   expect(sections).toEqual([
-    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', stateColor: 'claude', vendor: 'rgb(113,113,122)', fill: 'rgb(79,79,85)', name: 'grok-cli', model: '', note: 'fell back', bar: '━━━━━━━━━━━━━━', time: '', open: false },
+    { kind: 'seat', key: 'jump:grok-cli', fold: 'seat:jump:grok-cli', digit: '1', stateColor: 'claude', vendor: 'rgb(113,113,122)', name: 'grok-cli', model: '', note: 'fell back', bar: '━━━━━━━━━━━━━━', time: '', open: false },
     { kind: 'footer', cancelAll: false },
   ])
 })
@@ -467,3 +467,106 @@ test('queryingSince starts a clock when a provider queries and drops it when it 
   expect(queryingSince(failed, [{ name: 'grok', state: 'querying' }], 9000)).toEqual({ grok: 9000 })
 })
 
+
+test('seatRowFit keeps the whole bar and the whole model while the row has room', () => {
+  // name 12, time 4, the longest model 31: 16 + 31 + (2 + 14) + (2 + 4) + 12 = 81 cells
+  expect(seatRowFit(100, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 14, middleCells: 50 })
+  expect(seatRowFit(81, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 14, middleCells: 31 })
+})
+
+test('seatRowFit shrinks the bar first, down to five cells, and only then the model', () => {
+  expect(seatRowFit(80, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 13, middleCells: 31 })
+  expect(seatRowFit(72, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 5, middleCells: 31 })
+  expect(seatRowFit(60, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 5, middleCells: 19 })
+})
+
+test('seatRowFit drops the model, then the bar, before the name, the time or the button would be cut', () => {
+  // 16 (edge and name) + 6 (time) + 12 (button) = 34 cells are never cut; the narrow bar and its gap take 7 more.
+  expect(seatRowFit(42, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 5, middleCells: 1 })
+  expect(seatRowFit(41, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 5, middleCells: 0 })
+  expect(seatRowFit(40, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 0, middleCells: 6 })
+  expect(seatRowFit(34, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 0, middleCells: 0 })
+  expect(seatRowFit(20, { name: 12, time: 4, middle: 31, note: 0 })).toEqual({ barCells: 0, middleCells: 0 })
+})
+
+const NARROW_RUN = {
+  providers: [
+    { name: 'codex', state: 'complete', ms: 1700, model: 'gpt-5.5' },
+    { name: 'openrouter-3', state: 'querying', model: 'xiaomi/mimo-v2.6-pro-ultraspeed' },
+    { name: 'grok-cli', state: 'fallback', ms: 900, model: 'grok-4.6 via grok API' },
+  ],
+  responses: {},
+  errors: {},
+  colors: {},
+  isDone: false,
+}
+const seatRows = (columns: number) =>
+  paneSections(NARROW_RUN, { columns }).flatMap(section => (section.kind === 'seat' ? [{ name: section.name, model: section.model, note: section.note, bar: section.bar, time: section.time, press: section.action?.press }] : []))
+
+test('a narrow pane cuts the model with an ellipsis and keeps the name, the note, the time and the button', () => {
+  // 16 (edge and name) + 6 (time) + 12 (button) + 7 (bar) leave 19 cells; the fallen-back seat's note takes 12 of them.
+  expect(seatRows(60)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '━━━━━', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/mimo-v2.6-p…', note: '', bar: '····━', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: 'grok-4…', note: 'fell back', bar: '━━━━━', time: '0.9s', press: undefined },
+  ])
+})
+
+test('seatRowFit keeps the bar only while it fits beside the widest note', () => {
+  // 34 cells are never cut; a 9-cell note beside the 7 of the narrow bar and its gap needs 50.
+  expect(seatRowFit(50, { name: 12, time: 4, middle: 33, note: 9 })).toEqual({ barCells: 5, middleCells: 9 })
+  expect(seatRowFit(49, { name: 12, time: 4, middle: 33, note: 9 })).toEqual({ barCells: 0, middleCells: 15 })
+  expect(seatRowFit(43, { name: 12, time: 4, middle: 33, note: 9 })).toEqual({ barCells: 0, middleCells: 9 })
+  expect(seatRowFit(42, { name: 12, time: 4, middle: 33, note: 9 })).toEqual({ barCells: 0, middleCells: 8 })
+})
+
+test('the narrowest pane that holds the bar beside a note draws that row with no model', () => {
+  expect(seatRows(50)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '━━━━━', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/m…', note: '', bar: '····━', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: '', note: 'fell back', bar: '━━━━━', time: '0.9s', press: undefined },
+  ])
+})
+
+test('a pane with no room for the bar beside a note draws no bar on any row, and the note stays', () => {
+  expect(seatRows(49)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/mimo-v2…', note: '', bar: '', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: '', note: 'fell back', bar: '', time: '0.9s', press: undefined },
+  ])
+  // 16 + 9 (the note) + 6 + 12 = 43: the narrowest pane the note fits.
+  expect(seatRows(43)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/m…', note: '', bar: '', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: '', note: 'fell back', bar: '', time: '0.9s', press: undefined },
+  ])
+})
+
+test('a pane too narrow for a row\'s note draws that row\'s model in the cells left, and every row keeps its name, time and button', () => {
+  expect(seatRows(42)).toEqual([
+    { name: 'codex       ', model: 'gpt-5.5', note: '', bar: '', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: 'xiaomi/…', note: '', bar: '', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: 'grok-4.…', note: '', bar: '', time: '0.9s', press: undefined },
+  ])
+  expect(seatRows(36)).toEqual([
+    { name: 'codex       ', model: '', note: '', bar: '', time: '1.7s', press: undefined },
+    { name: 'openrouter-3', model: '', note: '', bar: '', time: '    ', press: 'cancel' },
+    { name: 'grok-cli    ', model: '', note: '', bar: '', time: '0.9s', press: undefined },
+  ])
+})
+
+test('no seat row is wider than its pane, from the 34 cells that are never cut upward', () => {
+  // The edge mark and a space, the name and two spaces, the model, the note after its separator, the bar and the time after two spaces each, the 12-cell button column.
+  const cells = (row: ReturnType<typeof seatRows>[number]) =>
+    2 + row.name.length + 2 + row.model.length + (row.note === '' ? 0 : (row.model === '' ? 0 : 3) + row.note.length) + (row.bar === '' ? 0 : 2 + row.bar.length) + 2 + row.time.length + 12
+  const overruns: string[] = []
+  for (let columns = 34; columns <= 90; columns++) {
+    for (const row of seatRows(columns)) if (cells(row) > columns) overruns.push(`${row.name.trim()} takes ${cells(row)} of ${columns}`)
+  }
+  expect(overruns).toEqual([])
+})
+
+test('a wide pane, or no width given, draws the whole model and the 14-cell bar', () => {
+  expect(seatRows(120).map(row => [row.model, row.bar.length])).toEqual([['gpt-5.5', 14], ['xiaomi/mimo-v2.6-pro-ultraspeed', 14], ['grok-4.6 via grok API', 14]])
+  expect(paneSections(NARROW_RUN).flatMap(section => (section.kind === 'seat' ? [[section.model, section.bar.length]] : []))).toEqual([['gpt-5.5', 14], ['xiaomi/mimo-v2.6-pro-ultraspeed', 14], ['grok-4.6 via grok API', 14]])
+})

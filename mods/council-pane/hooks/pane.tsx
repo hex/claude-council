@@ -15,10 +15,10 @@ import { abandonedNotice, FINISH_NOTICE_MS, finishNotice, jobOutcome, noticeIsLi
 import { paneOptions, type PaneOptions } from './options'
 import { parseRetryOffer, retrySection, type RetryOffer, type RetrySection } from './retry'
 import { readText, readView, type Files } from './snapshot'
-import { confirmOutcome, confirmQuestion, councilArgs, KEEP_LABEL, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
+import { askableSeats, type Askable, choiceRequest, confirmOutcome, confirmQuestion, councilArgs, councilResult, KEEP_LABEL, missingChoices, seatsFromList, SEND_LABEL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA } from './tool'
 import { extractSynthesis } from './synthesis'
 import { fitTables } from './tables'
-import { isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
+import { ACTION_COLUMNS, isMoving, markdownBlocks, paneSections, queryingSince, seatFolds, seatsToCancel, unseenRun, type RunView, type Section } from './view'
 import { COLOR, FILL } from './theme'
 import { parseCatalog } from './catalog'
 
@@ -44,9 +44,6 @@ const CLOSED_MARK = '\u25b8'
 const EDGE_MARK = '\u258c'
 // The bands above the prompt start where Claude Code's own footer lines do.
 const BAND_INDENT = 2
-// A seat row's action column: two cells of gap, then the widest a
-// bracketed Button draws, the longest verb inside its brackets.
-const ACTION_COLUMNS = 2 + '[ cancel ]'.length
 // The heads-up runner forks and returns its pid; anything slower is a fault.
 const HEADS_UP_LAUNCH_MS = 10_000
 // A seat question reads the provider scripts and a config file or two.
@@ -112,6 +109,8 @@ type PaneState = {
   closed: Set<string>
   // When the pane picked the live run up; the progress band's clock.
   runStartedMs?: number
+  // True once the live run was told its pane is on screen.
+  saidShown?: boolean
   // Each section's Markdown blocks, for the text they were cut from: a frame
   // redraws the tree, not the markdown.
   fitted: Map<string, { text: string; blocks: string[] }>
@@ -278,9 +277,11 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.closed = new Set()
     state.runStartedMs = now
     state.fitted.clear()
+    state.saidShown = false
     await $.ui.open({ id: PANE_ID, title: 'Council' })
   }
   const runDir = state.runDir
+  await sayShown($, state, runDir)
   state.view = await readView(files($), runDir)
   state.queryingSinceMs = queryingSince(state.queryingSinceMs, state.view.providers, now)
   state.view.queryingSinceMs = state.queryingSinceMs
@@ -320,6 +321,18 @@ async function poll($: EngineInterface, state: PaneState, settings: PaneOptions)
     state.retry = undefined
     state.retryShown = undefined
   }
+}
+
+// Tells the run its answers can be read in the pane, by the `shown` file the
+// run looks for before it lets the chat skip them. An open pane can wait
+// undrawn (a narrow terminal, no surface attached) or sit behind another tab,
+// so the engine's record is asked on each poll until it says drawn.
+async function sayShown($: EngineInterface, state: PaneState, runDir: string): Promise<void> {
+  if (state.saidShown) return
+  const isDrawn = (await $.ui.panes()).some(pane => pane.id === PANE_ID && pane.isPlaced && pane.isShown)
+  if (!isDrawn) return
+  await $.fs.write(`${runDir}/shown`, '')
+  state.saidShown = true
 }
 
 // Advances the band's and the live seats' sweeps and the clock the elapsed
@@ -448,8 +461,12 @@ async function notASeat($: EngineInterface, seat: string): Promise<string | unde
   const ok = await seatInfo($, 'allowlisted', seat)
   if (ok.exitCode === 0) return undefined
   if (ok.exitCode !== 1) return `checking ${JSON.stringify(seat)} exited ${ok.exitCode}: ${ok.stderr.trim()}`
-  const names = (await $.fs.list(`${$.plugin.root}/scripts/providers`)).map(entry => entry.name).filter(name => name.endsWith('.sh')).map(name => name.slice(0, -3)).sort()
-  return `${JSON.stringify(seat)} is not a council seat; one of ${names.join(', ')}`
+  return `${JSON.stringify(seat)} is not a council seat; one of ${(await providerScripts($)).join(', ')}`
+}
+
+// The runner's registry: one providers/<name>.sh per provider it can run.
+async function providerScripts($: EngineInterface): Promise<string[]> {
+  return (await $.fs.list(`${$.plugin.root}/scripts/providers`)).map(entry => entry.name).filter(name => name.endsWith('.sh')).map(name => name.slice(0, -3)).sort()
 }
 
 // The project file is the consent and the only switch; it is read at each
@@ -860,15 +877,32 @@ export const register: Register = (on, options) => {
     // `e` is flat: the tool's input fields sit beside `tool` and `tool_use_id`.
     // Its declared type is the union of the listed tools, none of them this one.
     const input = e as unknown as Record<string, unknown>
-    const parsed = councilArgs(input)
-    if ('deny' in parsed) return { deny: parsed.deny }
     const script = `${$.plugin.root}/scripts/run-council.sh`
     if (!(await $.fs.exists(script))) return { deny: `council script not found at ${script}` }
+    // The seats a default query runs, as /claude-council:ask offers them.
+    const listed = await $.process.run(['bash', `${$.plugin.root}/scripts/query-council.sh`, '--list-default-models'], { timeoutMs: SEAT_INFO_MS })
+    if (listed.exitCode !== 0) return { result: `Listing the council seats exited ${listed.exitCode}: ${listed.stderr.trim()}. Nothing was sent.`, isError: true }
+    const seats = seatsFromList(listed.stdout)
+    const defaults = seats.map(seat => seat.name)
+    let askable: Askable = { found: defaults, namedOnly: [] }
+    if (input.providers !== undefined) {
+      const discovered = await seatInfo($, 'discover')
+      if (discovered.exitCode !== 0) return { result: `Listing the council seats exited ${discovered.exitCode}: ${discovered.stderr.trim()}. Nothing was sent.`, isError: true }
+      askable = askableSeats(defaults, discovered.stdout.split(/\s+/).filter(name => name !== ''), await providerScripts($))
+    }
+    // Refused before any question, so the user never answers for a call that cannot send.
+    const parsed = councilArgs(input, askable)
+    if ('deny' in parsed) return { deny: parsed.deny }
+    const missing = missingChoices(input)
+    if (missing.length > 0 || parsed.seats === undefined) {
+      if (seats.length === 0) return { result: 'No council seat is available on this machine, so nothing was sent. /claude-council:status shows each provider.', isError: true }
+      return { result: choiceRequest(seats, missing) }
+    }
     // The question goes to third-party providers, so the user confirms every
     // call; this gate holds even where the tool itself needs no permission.
     let answer: string | undefined
     try {
-      answer = await $.ui.ask(confirmQuestion(input), { header: 'Council', options: [SEND_LABEL, KEEP_LABEL] })
+      answer = await $.ui.ask(confirmQuestion(String(input.question), parsed.seats, String(input.verbosity)), { header: 'Council', options: [SEND_LABEL, KEEP_LABEL] })
     } catch {
       answer = undefined
     }
@@ -879,7 +913,7 @@ export const register: Register = (on, options) => {
     const run = await $.process.run(['bash', script, ...parsed.args], { timeoutMs: RUN_TIMEOUT_MS })
     const saved = run.stdout.trim().split('\n').pop() ?? ''
     if (run.exitCode !== 0 || !saved) return { result: run.stderr || 'council run failed', isError: true }
-    return { result: await $.fs.read(saved) }
+    return { result: councilResult(await $.fs.read(saved)) }
   })
 
   on('command.run', { command: HEADS_UP_COMMAND }, async ($, e) => {
@@ -1031,7 +1065,7 @@ export const register: Register = (on, options) => {
       fits.set(text, fitted)
       return fitted
     }
-    const sections = paneSections(state.view, { ...settings, nowMs: state.nowMs, frame: state.frame, fitText, closed: state.closed })
+    const sections = paneSections(state.view, { ...settings, nowMs: state.nowMs, frame: state.frame, fitText, closed: state.closed, columns })
     state.tableFit = { columns, byText: fits }
     const fit = (sectionKey: string, text: string) => {
       const kept = state.fitted.get(sectionKey)
@@ -1058,21 +1092,25 @@ export const register: Register = (on, options) => {
           return <Text key={key} dimColor>{section.text}</Text>
         case 'seat': {
           const action = section.action
-          // The model takes the slack and gives way when narrow, so the bar,
-          // the time and the action sit in the same columns on every row. An
-          // open seat's row is a header on its provider's colour, darkened, in
-          // white, so each answer starts where the eye can find it.
-          // Each cell's ink, chosen once: on the fill every cell is white.
-          const white = { color: COLOR.onFill }
-          const ink = section.open
-            ? { name: white, model: white, dim: white, state: white, label: white }
-            : { name: {}, model: { color: COLOR.hint }, dim: { dimColor: true }, state: { color: section.stateColor }, label: {} }
+          // The row arrives fitted to the pane's width (seatRowFit): the bar
+          // has given way first and then the model, cut to its cells, and a
+          // bar or a note with no room is not drawn, so the row asks the
+          // surface to shrink nothing. The model's cell takes the slack, so the bar, the
+          // time and the action sit in the same columns on every row. An
+          // open seat's row is drawn as a folded one is: its button reads
+          // `fold` and its answer follows.
+          const ink = { model: { color: COLOR.hint }, dim: { dimColor: true }, state: { color: section.stateColor } }
+          // A hairline sets an open seat's row apart from the answer under it.
+          // A terminal draws one from cells; a page's own rule spans the pane
+          // whatever its font, where a row of cells would wrap.
+          const answerFollows = sections[index + 1]?.kind === 'body' || sections[index + 1]?.kind === 'reason'
           return (
-            <Box key={section.key} flexDirection="row" width={columns} {...(section.open ? { backgroundColor: section.fill } : {})}>
+            <Box key={section.key} flexDirection="column" width={columns}>
+            <Box flexDirection="row" width={columns}>
               <Box flexShrink={0}>
                 <Text>
                   <Text color={section.vendor}>{EDGE_MARK}</Text>
-                  <Text bold {...ink.name}>{` ${section.name}  `}</Text>
+                  <Text bold>{` ${section.name}  `}</Text>
                 </Text>
               </Box>
               <Box flexDirection="row" flexGrow={1} flexShrink={1}>
@@ -1090,25 +1128,24 @@ export const register: Register = (on, options) => {
               </Box>
               <Box flexShrink={0}>
                 <Text>
-                  <Text {...ink.state}>{`  ${section.bar}`}</Text>
+                  {section.bar === '' ? null : <Text {...ink.state}>{`  ${section.bar}`}</Text>}
                   <Text {...ink.dim}>{`  ${section.time}`}</Text>
                 </Text>
               </Box>
               <Box flexShrink={0} width={ACTION_COLUMNS} paddingLeft={2}>
                 {action ? (
                   // Not plain: a plain Button draws its hotkey beside the label, and
-                  // the row draws no number. A Button takes no colour of its own, so
-                  // the label is a Text child, white on a header fill.
+                  // the row draws no number.
                   <Button
                     key={`${action.press}:${action.seat}`}
                     label={action.press}
                     {...(section.digit ? { hotkey: section.digit } : {})}
                     onPress={() => (action.press === 'cancel' || action.press === 'retry' ? pressSeat($, state, action.press, action.seat) : toggleSection($, state, section.fold))}
-                  >
-                    <Text {...ink.label}>{action.press}</Text>
-                  </Button>
+                  />
                 ) : null}
               </Box>
+            </Box>
+            {!answerFollows ? null : e.surface === 'terminal' ? <Text color={COLOR.hint} dimColor>{'─'.repeat(columns)}</Text> : <Markdown text="---" />}
             </Box>
           )
         }
@@ -1141,10 +1178,10 @@ export const register: Register = (on, options) => {
           )
         case 'body':
           // The text arrives fitted to the pane's width and within its budget.
-          // A fallback's reason already took the blank line above it. A blank
+          // The seat's hairline stands where a blank line would. A blank
           // line follows when another section does; the footer brings its own.
           return (
-            <Box key={key} flexDirection="column" marginTop={sections[index - 1]?.kind === 'reason' ? 0 : 1} marginBottom={sections[index + 1] !== undefined && sections[index + 1]?.kind !== 'footer' ? 1 : 0}>
+            <Box key={key} flexDirection="column" marginBottom={sections[index + 1] !== undefined && sections[index + 1]?.kind !== 'footer' ? 1 : 0}>
               {fit(key, section.text).map((block, part) => (
                 <Markdown key={`${key}-${part}`} text={block} />
               ))}
@@ -1152,7 +1189,7 @@ export const register: Register = (on, options) => {
           )
         case 'reason':
           return (
-            <Box key={key} marginTop={1}>
+            <Box key={key}>
               <Text color={COLOR.muted}>{section.text}</Text>
             </Box>
           )

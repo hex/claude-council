@@ -28,7 +28,7 @@ If you reached this skill any other way, verify providers are actually absent
 before spawning anything:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh --list-default 2>&1 | head -1
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/query-council.sh" --list-default 2>&1 | head -1
 ```
 
 If that lists one or more providers and the user did **not** ask for `--local`,
@@ -41,8 +41,8 @@ strictly weaker than the cross-vendor council the user can actually get.
 Source the libs once:
 
 ```bash
-source ${CLAUDE_PLUGIN_ROOT}/scripts/lib/prompts.sh
-source ${CLAUDE_PLUGIN_ROOT}/scripts/lib/roles.sh
+source "${CLAUDE_PLUGIN_ROOT}/scripts/lib/prompts.sh"
+source "${CLAUDE_PLUGIN_ROOT}/scripts/lib/roles.sh"
 ```
 
 **If the user passed `--roles`**, it already says both which lenses and how many
