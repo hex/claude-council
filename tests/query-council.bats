@@ -92,6 +92,7 @@ run_council() {
     run "$HOST_BASH" "$SCRIPT" --list-available
     [ "$status" -eq 0 ]
     [[ "$output" == *"No providers configured."* ]]
+    [[ "$output" == *$'\n'"  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, PERPLEXITY_API_KEY, KIMI_API_KEY or OPENROUTER_API_KEY) in your shell or with /plugin configure claude-council in the Claude Code CLI"$'\n'* ]]
 }
 
 @test "query-council: querying with no providers exits nonzero with guidance" {
@@ -887,19 +888,31 @@ env_reporting_provider() {
 @test "query-council: a provider gets its own key and the base environment, no other secret" {
     local fakedir="${BATS_TEST_TMPDIR}/env-scrub"
     env_reporting_provider "$fakedir" gemini
+    # A custom seat named claude has the family CLAUDE_, which covers the stored options too.
+    env_reporting_provider "$fakedir" claude
     run --separate-stderr env PROVIDERS_DIR="$fakedir" GEMINI_API_KEY=example-key GEMINI_MODEL=gemini-x \
         OPENAI_API_KEY=other-key BWS_ACCESS_TOKEN=vault EXAMPLE_DB_PASSWORD=pw \
         CLAUDE_CODE_OAUTH_TOKEN=example-token \
-        "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=gemini "ping"
+        CLAUDE_PLUGIN_ROOT=/tmp/example-root CLAUDE_PLUGIN_OPTION_OPENAI_API_KEY=stored-key \
+        CLAUDE_PLUGIN_OPTION_GEMINI_API_KEY=stored-key claude_plugin_option_kimi_api_key=stored-key \
+        "$HOST_BASH" "$SCRIPT" --no-cache --no-pane --providers=gemini,claude "ping"
     [ "$status" -eq 0 ]
-    local seen
+    local seen seat
+    for seat in gemini claude; do
+        seen=" $(echo "$output" | jq -r --arg seat "$seat" '.round1[$seat].response') "
+        for name in PATH HOME COUNCIL_SEAT CLAUDE_PLUGIN_ROOT; do
+            [[ "$seen" == *" $name "* ]] || { echo "$seat: missing $name in:$seen"; return 1; }
+        done
+        for name in OPENAI_API_KEY BWS_ACCESS_TOKEN EXAMPLE_DB_PASSWORD PROVIDERS_DIR_REAL \
+            CLAUDE_PLUGIN_OPTION_OPENAI_API_KEY CLAUDE_PLUGIN_OPTION_GEMINI_API_KEY claude_plugin_option_kimi_api_key; do
+            [[ "$seen" != *" $name "* ]] || { echo "$seat: leaked $name in:$seen"; return 1; }
+        done
+    done
     seen=" $(echo "$output" | jq -r '.round1.gemini.response') "
-    for name in GEMINI_API_KEY GEMINI_MODEL PATH HOME COUNCIL_SEAT; do
+    for name in GEMINI_API_KEY GEMINI_MODEL; do
         [[ "$seen" == *" $name "* ]] || { echo "missing $name in:$seen"; return 1; }
     done
-    for name in OPENAI_API_KEY BWS_ACCESS_TOKEN EXAMPLE_DB_PASSWORD CLAUDE_CODE_OAUTH_TOKEN PROVIDERS_DIR_REAL; do
-        [[ "$seen" != *" $name "* ]] || { echo "leaked $name in:$seen"; return 1; }
-    done
+    [[ "$seen" != *" CLAUDE_CODE_OAUTH_TOKEN "* ]] || { echo "leaked CLAUDE_CODE_OAUTH_TOKEN in:$seen"; return 1; }
 }
 
 @test "query-council: COUNCIL_PASS_ENV lets named variables through to every provider" {

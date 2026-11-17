@@ -42,6 +42,18 @@ export OPENAI_API_KEY="..."
 # KIMI_API_KEY, OPENROUTER_API_KEY
 ```
 
+Or store the keys in the plugin's config. Run `/plugin configure claude-council`,
+fill in the API key rows, and choose Save configuration. Claude Code keeps them in
+its secure storage, not in a settings file. The council's mod sets each stored
+key as its variable for the whole session, so every command Claude Code starts,
+in every project, gets the stored key in place of one your shell exports.
+The OpenRouter models row takes the model ids `OPENROUTER_MODELS` takes, so
+the router's seats need no export either.
+Stored keys need Claude Code 2.1.287 or later. The desktop app's plugin
+Settings tab takes them too, for sessions on that computer. They never reach
+claude.ai chat or Cowork. [API keys](docs/REFERENCE.md#api-keys) covers where they are kept,
+when the mod does not load, and how a cleared key behaves.
+
 The `codex`, `agy` (Antigravity), `grok`, `kimi`, and `cursor-agent` CLIs use
 your existing subscriptions without an API key. Claude Code itself, the
 Copilot CLI and OpenCode can sit too, when named in `--providers`. A local
@@ -103,15 +115,15 @@ and the [heads-up guide](docs/USAGE.md#heads-up-side-check-opt-in-off-by-default
 
 ## The pane
 
-With `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, the pane opens inside Claude Code,
+On Claude Code 2.1.287 or later, the pane opens inside Claude Code,
 as in the animation above. Each seat has one row with its model, a bar for
 its state, its time, and a button for what it does now: cancel, retry, open,
 or fold. When the run ends,
 the synthesis opens at the top with the answers folded below it. Reopen the
 last run with `/council-pane`. Inside tmux, the mod asks once which pane you want.
 
-Mods are early access. The [mod guide](mods/council-pane/README.md) lists
-keys, settings, and limits. It also lets Claude call the council as a tool;
+The [mod guide](mods/council-pane/README.md) lists keys, settings, limits,
+and when the mod does not load. It also lets Claude call the council as a tool;
 every call asks you first.
 
 ### What the mod runs, reads and sends
@@ -153,6 +165,12 @@ It writes files in that `$TMPDIR` directory, including `model.json` and
 `.claude/council-heads-up.json` in the project, and only from
 `/heads-up setup`, `/heads-up on`, `/heads-up off` or a note's `Turn off`.
 That file is the heads-up switch. Claude Code itself does not read it.
+
+It sets environment variables in Claude Code's own process. With an API key
+or the OpenRouter models list stored in the plugin's config, it sets that
+variable, such as `OPENAI_API_KEY` or `OPENROUTER_MODELS`, when the session
+starts. Every command Claude Code starts after that gets the stored value in
+place of the one your shell exports, the same as an export would. Before a council run it sets `COUNCIL_MOD_PANE_DIR`.
 
 It touches the prompt in two places. With `wake_on_async_done` on, it
 submits `The background council job <id> has finished. Fetch it with
@@ -221,7 +239,8 @@ home, because the native CLIs find it through `USERPROFILE`.
 | Problem | Fix |
 |---|---|
 | Cloned the repo and nothing loads | Don't clone into `~/.claude/plugins/`. `pluginDirectories` is not a setting. Follow [running from a local clone](docs/REFERENCE.md#running-from-a-local-clone). |
-| No providers found | Run `/claude-council:status`. Export keys in the shell that starts Claude Code, or use `--local`. |
+| No providers found | Run `/claude-council:status`. Export keys in the shell that starts Claude Code, store them with `/plugin configure claude-council`, or use `--local`. |
+| A stored key is not used | After saving one with `claude plugin configure` in a shell, restart Claude Code. Stored keys need the council's mod, which loads on Claude Code 2.1.287 or later and not under `--safe-mode` or `disableAllHooks`. Without it, export the key in your shell. |
 | A different model answered | A header such as `grok-4.7 (grok-latest unavailable)` records a [model fallback](docs/REFERENCE.md#model-fallback). Setting that provider's `_MODEL` variable disables fallback. |
-| No pane | Use tmux or set `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` for the pane inside Claude Code. |
+| No pane | Use tmux, or update to Claude Code 2.1.287 or later for the pane inside Claude Code. The [mod guide](mods/council-pane/README.md) lists what stops it loading. |
 | Updating | Run `/plugin update claude-council`, then restart Claude Code. |

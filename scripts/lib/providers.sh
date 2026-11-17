@@ -121,7 +121,8 @@ provider_env_prefix() {
 # subshell that then execs the provider. A shell that loads every secret at
 # start would otherwise hand each provider, and each CLI agent, every other
 # vendor's key. What stays: the base a process needs, proxy and CA settings,
-# the Windows variables Git Bash's node CLIs need, COUNCIL_*, the provider's
+# the Windows variables Git Bash's node CLIs need, COUNCIL_*, CLAUDE_PLUGIN_*
+# apart from CLAUDE_PLUGIN_OPTION_*, the provider's
 # own vendor prefixes and exact names, and any names listed in COUNCIL_PASS_ENV
 # (comma-separated). Windows keeps some of these names in mixed case, so the
 # match ignores case.
@@ -178,6 +179,9 @@ provider_env_scrub() {
         for prefix in $families; do
             if [[ "$name" == "$prefix"* ]]; then keep=1; fi
         done
+        # A hook gets every stored plugin option here, the API keys among them,
+        # so neither CLAUDE_PLUGIN_* above nor a family such as CLAUDE_ keeps one.
+        if [[ "$name" == CLAUDE_PLUGIN_OPTION_* ]]; then keep=0; fi
         if [[ "$pass" == *",${name},"* || "$exact" == *",${name},"* ]]; then keep=1; fi
         if (( keep == 0 )); then unset "$name" 2>/dev/null || true; fi
     done

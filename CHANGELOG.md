@@ -6,10 +6,16 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 
 ## Unreleased
 
+### Added
+- Provider API keys can live in the plugin's config instead of your shell profile. `/plugin configure claude-council` has six new fields, for Gemini, OpenAI, xAI, Perplexity, Kimi and OpenRouter. Claude Code keeps them in its secure storage, not in `settings.json`. When a session starts, the council's mod sets each stored key as its variable (`GEMINI_API_KEY` and so on) in Claude Code's own process; the mod writes no key to a file. Every command Claude Code starts in that session, in any project, gets the stored key in place of the same variable exported in your shell, the council's slash commands, tool, heads-up checks and Stop gate among them. Stored keys work only where the mod loads, which takes Claude Code 2.1.287 or later and a session without `--safe-mode`. They never reach claude.ai chat or Cowork: the desktop app's plugin page shows no fields for them, and Cowork does not prompt for plugin values. Saving in the dialog applies a key at once; after `claude plugin configure` in a shell, restart Claude Code. A key removed from the config stays in the session until Claude Code restarts. `tests/e2e/stored-keys-e2e.sh` checks the keys in a real `claude -p` session.
+- The OpenRouter roster can live in the plugin's config too. The OpenRouter models field (`openrouter_models`) takes model ids from openrouter.ai/models separated by commas or spaces, and each id becomes its own seat, `openrouter-1`, `openrouter-2` and so on. At session start the mod sets a non-blank value as `OPENROUTER_MODELS`, over a shell export, the same way it sets a stored key; a blank field leaves the export alone. The list is not a secret, so Claude Code keeps it in `settings.json` with the other options.
+
 ### Removed
 - CI no longer runs the HOL plugin scanner. Its workflow is gone, and so are the weekly Dependabot bumps of its action.
 
 ### Changed
+- `/claude-council:status` and the no-providers message name `/plugin configure claude-council` next to the shell export, and the no-providers message names all six key variables.
+- The docs no longer say the council-pane mod needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. Claude Code 2.1.287 and later loads mods by default and ignores that variable.
 - An open seat's row in the Claude Code pane has no colored fill. It looks like a folded row, and its button reads `fold`. The fill was heavy in the desktop app's side pane. A thin rule under the row sets it apart from its answer.
 - The council tool asks which seats and how verbose before it sends, as `/claude-council:ask` does. A call without `providers` or `verbosity` sends nothing: its result lists the seats a default run uses and has Claude ask you both in one AskUserQuestion dialog, then call again with your answers. The send dialog opens with every seat's name and the verbosity, then the question on one line; a question longer than 300 characters is cut there with a note of its full length, and the providers still receive all of it. A seat named twice is asked once. A seat the council cannot ask now, such as a router seat past your roster or a provider with no key, is refused with the seats found on this machine. When your message already named the seats or said to ask every seat, Claude skips the questions and sends at standard verbosity.
 
@@ -28,6 +34,9 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - The answers reach the chat when the council pane was never drawn. A run aimed at the mod's pane marked its transcript as already shown as soon as the pane was requested, so in a headless run, or in a terminal too narrow for a pane nobody opened, Claude listed each seat as `answered` and printed no answer. The mod now tells the run once the pane is on screen, and only then is the transcript marked. The tests cover the run's side; that the mod reports a drawn pane is confirmed only by a manual run.
 - `/claude-council:ask` loads the `council-execution` skill before it runs the query. The command printed the run call itself, so a model could run it without the skill, never learn that the transcript's closing `## 🧭 Synthesis` heading is where its own synthesis goes, and report the synthesis as empty while paraphrasing the answers.
 - `run-council.sh` prints the saved transcript's whole path. It printed a path relative to the directory the run started in, and Claude could look for the file in the plugin folder first.
+
+### Security
+- No seat receives the `CLAUDE_PLUGIN_OPTION_*` variables any more, a custom seat named `claude` included, unless `COUNCIL_PASS_ENV` names one. Claude Code gives a hook every stored plugin option under that prefix, and the Stop gate starts its seat from a hook, so that seat would otherwise have received every stored API key. A seat still gets its own key through its vendor's variables.
 
 ## 2026.11.1
 

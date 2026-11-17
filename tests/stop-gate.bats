@@ -194,15 +194,17 @@ for a in "$@"; do
     [[ "$prev" == "-o" ]] && outfile="$a"
     prev="$a"
 done
-seen="own=${OPENROUTER_API_KEY:+set} other=${OPENAI_API_KEY:+set} secret=${EXAMPLE_DB_PASSWORD:+set}"
+seen="own=${OPENROUTER_API_KEY:+set} other=${OPENAI_API_KEY:+set} secret=${EXAMPLE_DB_PASSWORD:+set} stored=${CLAUDE_PLUGIN_OPTION_OPENROUTER_API_KEY:+set} end"
 [[ -n "$outfile" ]] && printf '{"choices":[{"message":{"content":"BLOCK: %s"}}]}' "$seen" > "$outfile"
 printf '200'
 CURL
     chmod +x "$dir/curl"
+    # Claude Code exports every configured option to a hook as CLAUDE_PLUGIN_OPTION_<KEY>.
     PATH="$dir:$PATH" OPENROUTER_API_KEY=k OPENAI_API_KEY=other EXAMPLE_DB_PASSWORD=pw \
+        CLAUDE_PLUGIN_OPTION_OPENROUTER_API_KEY=stored \
         run bash "$GATE" <<< "$(stop_event)"
     [ "$status" -eq 0 ]
-    [[ "$(echo "$output" | jq -r '.reason')" == *"BLOCK: own=set other= secret="* ]]
+    [[ "$(echo "$output" | jq -r '.reason')" == *"BLOCK: own=set other= secret= stored= end"* ]]
 }
 
 @test "stop-gate: a slow reviewer times out and fails open instead of hanging" {

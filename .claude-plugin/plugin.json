@@ -37,32 +37,73 @@
     "pane_host": {
       "type": "string",
       "title": "Pane opens in",
-      "description": "Where the council pane opens. claude-code draws it inside Claude Code; tmux leaves it to a tmux pane; ask asks once, the first time a run starts inside tmux, and remembers the answer (/council-pane ask forgets it). Outside tmux the pane opens here either way. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
+      "description": "Where the council pane opens. claude-code draws it inside Claude Code; tmux leaves it to a tmux pane; ask asks once, the first time a run starts inside tmux, and remembers the answer (/council-pane ask forgets it). Outside tmux the pane opens here either way.",
       "default": "ask"
     },
     "collapse_when_done": {
       "type": "boolean",
       "title": "Collapse status when done",
-      "description": "Open a finished run on its summary and the synthesis, with the seats folded below. Off keeps the live order: the seats, then the synthesis. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
+      "description": "Open a finished run on its summary and the synthesis, with the seats folded below. Off keeps the live order: the seats, then the synthesis.",
       "default": true
     },
     "wake_on_async_done": {
       "type": "boolean",
       "title": "Wake on async finish",
-      "description": "When a background council run (--async) finishes, submit a prompt so Claude fetches the result by itself. That starts a model turn and costs tokens; a failed run wakes nobody. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
+      "description": "When a background council run (--async) finishes, submit a prompt so Claude fetches the result by itself. That starts a model turn and costs tokens; a failed run wakes nobody.",
       "default": false
     },
     "council_tool": {
       "type": "boolean",
       "title": "Council as a tool",
-      "description": "Let Claude call the council as a tool, not only through /claude-council:ask. Every call shows you the question and the providers and asks before anything is sent. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
+      "description": "Let Claude call the council as a tool, not only through /claude-council:ask. Every call shows you the question and the providers and asks before anything is sent.",
       "default": true
     },
     "heads_up": {
       "type": "boolean",
       "title": "Heads-up side-check",
-      "description": "Turn the heads-up side-check on in every project: while Claude works a long turn, one council seat, codex by default, rereads the last five turns, the last eight tool results and the text Claude wrote with Write or Edit, and may show one line above the prompt. Nothing asks before a send; that material leaves the machine on every check. A project's .claude/council-heads-up.json overrides this for that project and picks the seat and cadence. Experimental: needs CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1.",
+      "description": "Turn the heads-up side-check on in every project: while Claude works a long turn, one council seat, codex by default, rereads the last five turns, the last eight tool results and the text Claude wrote with Write or Edit, and may show one line above the prompt. Nothing asks before a send; that material leaves the machine on every check. A project's .claude/council-heads-up.json overrides this for that project and picks the seat and cadence.",
       "default": false
+    },
+    "gemini_api_key": {
+      "type": "string",
+      "title": "Gemini API key",
+      "description": "The key the gemini seat uses, kept in Claude Code's secure storage. The council's mod sets GEMINI_API_KEY from it for every command in the session, over a shell export.",
+      "sensitive": true
+    },
+    "openai_api_key": {
+      "type": "string",
+      "title": "OpenAI API key",
+      "description": "The key the openai seat uses, kept in Claude Code's secure storage. The council's mod sets OPENAI_API_KEY from it for every command in the session, over a shell export.",
+      "sensitive": true
+    },
+    "xai_api_key": {
+      "type": "string",
+      "title": "xAI API key (Grok)",
+      "description": "The key the grok seat uses, kept in Claude Code's secure storage. The council's mod sets XAI_API_KEY from it for every command in the session, over a shell export.",
+      "sensitive": true
+    },
+    "perplexity_api_key": {
+      "type": "string",
+      "title": "Perplexity API key",
+      "description": "The key the perplexity seat uses, kept in Claude Code's secure storage. The council's mod sets PERPLEXITY_API_KEY from it for every command in the session, over a shell export.",
+      "sensitive": true
+    },
+    "kimi_api_key": {
+      "type": "string",
+      "title": "Kimi API key",
+      "description": "The key the kimi seat uses, kept in Claude Code's secure storage. The council's mod sets KIMI_API_KEY from it for every command in the session, over a shell export.",
+      "sensitive": true
+    },
+    "openrouter_api_key": {
+      "type": "string",
+      "title": "OpenRouter API key",
+      "description": "The key every OpenRouter seat uses, kept in Claude Code's secure storage. The council's mod sets OPENROUTER_API_KEY from it for every command in the session, over a shell export.",
+      "sensitive": true
+    },
+    "openrouter_models": {
+      "type": "string",
+      "title": "OpenRouter models",
+      "description": "Model ids from openrouter.ai/models, separated by commas or spaces, such as deepseek/deepseek-v3.2,z-ai/glm-5.3. Each id becomes its own seat, openrouter-1, openrouter-2 and so on, all on the one OpenRouter key. The council's mod sets OPENROUTER_MODELS from it for every command in the session, over a shell export. Left empty, a shell export still applies; with neither, one openrouter seat runs the default model."
     }
   }
 }

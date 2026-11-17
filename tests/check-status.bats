@@ -50,8 +50,8 @@ plain_output() {
     export COUNCIL_FAKE_BEHAVIOR=valid
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"export OPENAI_API_KEY="* ]]
-    [[ "$output" == *"export PERPLEXITY_API_KEY="* ]]
+    [[ "$output" == *"export OPENAI_API_KEY=<key> or /plugin configure claude-council in the Claude Code CLI"* ]]
+    [[ "$output" == *"export PERPLEXITY_API_KEY=<key> or /plugin configure claude-council in the Claude Code CLI"* ]]
 }
 
 @test "check-status: a roster seat without a key shows the same export remediation" {
@@ -64,7 +64,7 @@ plain_output() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [[ "$output" == *"OpenRouter 1"* ]]
-    [[ "$output" == *"export OPENROUTER_API_KEY="* ]]
+    [[ "$output" == *"export OPENROUTER_API_KEY=<key> or /plugin configure claude-council in the Claude Code CLI"* ]]
 }
 
 @test "check-status: a connected roster seat names the model the query would send" {
