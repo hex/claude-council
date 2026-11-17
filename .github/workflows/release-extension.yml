@@ -1,0 +1,51 @@
+# ABOUTME: Builds the Claude Desktop extension from a published release's tag and attaches it to that release
+# ABOUTME: A release holds only the source otherwise, and the package can be built only from a checkout
+
+name: Attach the Desktop extension to the release
+
+on:
+  release:
+    types: [published]
+  # Attaches the package again to a release whose first run failed.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag, such as v2026.11.2
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+
+      # The package is named after the plugin's version, so a tag that says
+      # another version would attach a package under the wrong release.
+      - name: Check the tag names the plugin's version
+        run: |
+          version=$(jq -er '.version' .claude-plugin/plugin.json)
+          if [[ "v${version}" != "$TAG" ]]; then
+            echo "::error::tag ${TAG} does not match the plugin's version ${version}"
+            exit 1
+          fi
+
+      - name: Build the package
+        run: |
+          package=$(bash extension/build.sh)
+          echo "PACKAGE=${package}" >> "$GITHUB_ENV"
+
+      - name: Attach the package to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$PACKAGE" --clobber --repo "$GITHUB_REPOSITORY"

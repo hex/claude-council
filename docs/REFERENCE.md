@@ -867,4 +867,8 @@ HEAD`) and stops when a packed file has uncommitted changes. It stages
 `plugin/`, adds `extension/manifest.json`, `extension/server/` and the icon,
 sets the manifest's version to `.claude-plugin/plugin.json`'s, runs `mcpb
 validate`, and packs with `@anthropic-ai/mcpb` 2.1.2 into
-`dist/council-<version>.mcpb`.
+`dist/council-<version>.mcpb`. When a GitHub release is published, the
+`release-extension.yml` workflow runs the same build from the release's tag
+and attaches the package to the release. It stops when the tag is not `v`
+followed by the plugin's version. Run it by hand with the tag to attach the
+package again.
