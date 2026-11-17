@@ -1361,9 +1361,10 @@ perplexity: sonar-test-1"
 @test "extension: council_result keeps the latest 5 picker runs, forgetting the oldest" {
     install_fake_curl echo
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
-    local requests=("$INIT") id
+    local requests=("$INIT") id args
     for id in 1 2 3 4 5 6; do
-        requests+=("$(call "$id" council_pick_ask "{\"question\":\"question ${id}\",\"providers\":[\"openrouter\"]}")")
+        args="{\"question\":\"question ${id}\",\"providers\":[\"openrouter\"]}"
+        requests+=("$(call "$id" council_pick_ask "$args")")
     done
     mcp "${requests[@]}" "$(call 11 council_result '{"run":"{{1.result.structuredContent.run}}"}')" \
         "$(call 12 council_result '{"run":"{{2.result.structuredContent.run}}"}')" "$(call 16 council_result '{"run":"{{6.result.structuredContent.run}}"}')"
@@ -1461,6 +1462,14 @@ ask_picked() {
     assert_eq "$(result_text 2)" "$(result_text 3)"
 }
 
+# A council_pick_ask request for the run with the given id. The arguments go
+# through a variable: bash 3.2 brace-expands a double-quoted JSON literal that
+# sits inside a quoted command substitution.
+ask_run() {
+    local args="{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"$2\"}"
+    call "$1" council_pick_ask "$args"
+}
+
 # Starts, in the background, a server session that opens the picker and then
 # waits in council_result for its run, as Claude does in the turn that opened
 # it. Returns once the waiter's marker is in the state directory, with the run
@@ -1492,7 +1501,7 @@ finish_waiter() {
     install_fake_curl answer
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
     start_waiter
-    mcp "$INIT" "$(call 1 council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"${PICKED_RUN}\"}")"
+    mcp "$INIT" "$(ask_run 1 "$PICKED_RUN")"
     assert_eq "$(result_seats 1 | jq -c '{run, awaited}')" "{\"run\":\"${PICKED_RUN}\",\"awaited\":true}"
     local asked
     asked=$(result_text 1)
@@ -1509,7 +1518,7 @@ The user pressed Ask in the council picker, which asked openrouter, and has read
     install_fake_curl leak
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
     start_waiter
-    mcp "$INIT" "$(call 1 council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"${PICKED_RUN}\"}")"
+    mcp "$INIT" "$(ask_run 1 "$PICKED_RUN")"
     assert_eq "$(result_seats 1 | jq -c '{run, awaited}')" '{"run":null,"awaited":true}'
     local asked
     asked=$(result_text 1)
@@ -1547,9 +1556,10 @@ ${asked}"
     install_fake_curl answer
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
     local runs=('"../held/x"' '"ABCDEF"' '"3f9a2"' '"3f9a2c0"' '7' '""')
-    local requests=("$INIT") at
+    local requests=("$INIT") at args
     for at in "${!runs[@]}"; do
-        requests+=("$(call $((at + 1)) council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":${runs[$at]}}")")
+        args="{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":${runs[$at]}}"
+        requests+=("$(call $((at + 1)) council_pick_ask "$args")")
     done
     mcp "${requests[@]}"
     for at in "${!runs[@]}"; do
@@ -1587,7 +1597,7 @@ ${asked}"
         sleep 0.1
     done
     [ -e "$ready" ]
-    mcp "$INIT" "$(call 1 council_pick_ask "{\"question\":\"q\",\"providers\":[\"openrouter\"],\"run\":\"${picked}\"}")"
+    mcp "$INIT" "$(ask_run 1 "$picked")"
     kill "$AGER_PID"
     wait "$AGER_PID" || true
     AGER_PID=''
