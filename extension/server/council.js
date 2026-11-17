@@ -918,7 +918,9 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
       try {
         row.models = await models.listModels(provider.name, keys.get(provider.name))
       } catch (err) {
-        row.listError = `Could not load the model list (${String(err?.message ?? err).slice(0, 120)})`
+        // The keys go before the cut: an error can quote the key it was
+        // sent, and the cut could leave the first part of one.
+        row.listError = `Could not load the model list (${redact(String(err?.message ?? err)).slice(0, 120)})`
       }
       return row
     }))

@@ -88,6 +88,8 @@
 #     every line saying "key set" or "no key"
 #   - panel data: a provider with no key is never contacted; one with a key is, and only its own
 #     endpoint, and a failed list says so without the key
+#   - a list failure that quotes a key longer than the error shown: the key is replaced whole
+#     before the error is cut, so no part of it reaches the panel
 #  the council picker
 #   - council_pick: the panel gets the question, each seat with its model and the three
 #     verbosities, standard chosen, and no agent is started; where no panel is drawn the text lists
@@ -896,6 +898,16 @@ In Claude Desktop, API keys go in Settings, Extensions, Claude Council, Configur
         '[{"fetch":"https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000","authorized":true},{"fetch":"https://openrouter.ai/api/v1/models","authorized":true}]'
     assert_eq "$(result_text 1 | jq -c '[.providers[] | select(.hasKey) | {name, listError}]')" \
         '[{"name":"gemini","listError":"Could not load the model list (network fenced off in tests)"},{"name":"openrouter","listError":"Could not load the model list (network fenced off in tests)"}]'
+}
+
+@test "extension: a list failure quoting a key longer than the error shown leaves no part of the key in it" {
+    # A line break inside a key makes the request's header invalid, and the
+    # error for that quotes the header's whole value.
+    local key
+    key="sk-test-ab"$'\n'"$(printf '%0140d' 0)"
+    GEMINI_API_KEY="$key" mcp "$INIT" "$(call 1 council_models_data)"
+    assert_eq "$(result_text 1 | jq -r '.providers[] | select(.name == "gemini") | .listError')" \
+        'Could not load the model list (Headers.append: "[key removed]" is an invalid header value.)'
 }
 
 @test "extension: panel data offers the scripts' default for each provider and the saved choice" {
