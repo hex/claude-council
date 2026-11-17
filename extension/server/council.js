@@ -150,9 +150,10 @@ function choiceProblem(provider, choice) {
 
 // Saved choices are parsed whole: every value ends up in the scripts'
 // environment, so one bad value rejects the set rather than being repaired.
-function parseChoices(value) {
+// A provider the value does not name keeps its choice in `onto`.
+function parseChoices(value, onto = noChoices()) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return { problem: 'expected an object of provider names' }
-  const choices = noChoices()
+  const choices = { ...onto }
   for (const [name, choice] of Object.entries(value)) {
     const provider = PROVIDERS.find(candidate => candidate.name === name)
     if (!provider) return { problem: `${shown(name)} is not a provider the settings cover` }
@@ -200,6 +201,20 @@ function withSeatModel(choices, seat, model) {
   }
   const problem = choiceProblem(router, next)
   return problem ? { problem } : { choices: { ...choices, openrouter: next }, seat }
+}
+
+// The choices with one model added to the end of the OpenRouter roster
+// (`add`) or taken out of it (`remove`), as the settings panel's switches save
+// it: every other choice and position kept. A model already seated is not
+// added twice, and one not seated is not missed.
+function withRosterChange(choices, change) {
+  const names = change !== null && typeof change === 'object' && !Array.isArray(change) ? Object.keys(change) : []
+  const id = names.length === 1 && (names[0] === 'add' || names[0] === 'remove') ? change[names[0]] : undefined
+  if (typeof id !== 'string') return { problem: `expected one model id to add or one to remove, got ${shown(change)}` }
+  const roster = choices.openrouter
+  const next = names[0] === 'remove' ? roster.filter(seated => seated !== id) : roster.includes(id) ? roster : [...roster, id]
+  const problem = choiceProblem(PROVIDERS.find(provider => provider.roster), next)
+  return problem ? { problem } : { choices: { ...choices, openrouter: next } }
 }
 
 function choicesFile() {
@@ -943,17 +958,23 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
     return { text: JSON.stringify({ providers: rows, rosterMax: ROSTER_MAX, problem: notice }) }
   }
 
-  // The settings panel saves every provider's choice at once (selections);
-  // the picker saves one seat's model (seat and model), changed in the
-  // choices as saved at that moment, and is told the model the seat now uses.
+  // The settings panel saves the choice of each provider it names
+  // (selections) or one model added to or taken out of the OpenRouter roster
+  // (roster); the picker saves one seat's model (seat and model) and is told
+  // the model the seat now uses. Each is a change to the choices as saved at
+  // that moment, so a panel never writes back what it loaded. The settings
+  // panel's change is made to the defaults when the file cannot be read: a
+  // save there is how such a file is replaced.
   async function saveFromPanel(input, signal) {
+    const given = ['selections', 'roster'].filter(name => input?.[name] !== undefined).length + (input?.seat !== undefined || input?.model !== undefined ? 1 : 0)
+    if (given > 1) return refused('Not saved: council_models_save takes selections, a roster change, or a seat and its model, one of them.')
     if (input?.seat === undefined && input?.model === undefined) {
-      const result = parseChoices(input?.selections)
+      const saved = readChoices().choices
+      const result = input?.roster !== undefined ? withRosterChange(saved, input.roster) : parseChoices(input?.selections, saved)
       if (result.problem) return refused(`Not saved: ${result.problem}.`)
       writeChoices(result.choices)
       return { text: JSON.stringify({ saved: true }) }
     }
-    if (input.selections !== undefined) return refused('Not saved: council_models_save takes either selections or a seat and its model, not both.')
     const change = () => {
       const saved = readChoices()
       if (saved.problem) return { problem: `the saved model choices in ${choicesFile()} could not be read (${saved.problem}). Save a fresh set in the council settings` }

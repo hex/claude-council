@@ -80,6 +80,9 @@
 #     directory found with looser permissions is tightened
 #   - a state directory that is a symbolic link: refused with a sentence, the target left as it was
 #   - a models file that is a symbolic link: not read, and the answer says the defaults ran
+#   - a settings save: only the providers it names change, or one model joins or leaves the saved
+#     OpenRouter roster; a choice the picker saved since the panel loaded is kept; a roster change
+#     past the seat limit, with a bad id, or naming no single model is refused, the file as it was
 #   - one seat's model saved from the picker: only that provider's choice or that roster position
 #     changes, every other choice and the roster order kept; Default clears the choice and the
 #     answer names the scripts' default
@@ -1089,6 +1092,57 @@ mode_of() {
         '{"gemini":"gemini-3-pro","openai":"","grok":"","perplexity":"sonar-test-1","kimi":"","openrouter":["vendor/alpha","vendor/delta","vendor/gamma"]}'
 }
 
+@test "extension: a settings save changes only the providers it names, a model the picker saved since the panel loaded kept" {
+    save_choices '{"openai":"gpt-test-1","perplexity":"sonar-test-1","openrouter":["vendor/alpha","vendor/beta"]}'
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"gemini","model":"gemini-3-pro"}')" \
+        "$(call 2 council_models_save '{"selections":{"openai":"gpt-test-2"}}')"
+    assert_eq "$(result_text 2)" '{"saved":true}'
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"gemini-3-pro","openai":"gpt-test-2","grok":"","perplexity":"sonar-test-1","kimi":"","openrouter":["vendor/alpha","vendor/beta"]}'
+}
+
+@test "extension: a settings save adds one model to the end of the saved OpenRouter roster or takes one out, a seat the picker changed kept" {
+    save_choices '{"openai":"gpt-test-1","openrouter":["vendor/alpha","vendor/beta","vendor/gamma"]}'
+    mcp "$INIT" "$(call 1 council_models_save '{"seat":"openrouter-2","model":"vendor/delta"}')" \
+        "$(call 2 council_models_save '{"roster":{"remove":"vendor/gamma"}}')" \
+        "$(call 3 council_models_save '{"roster":{"add":"vendor/epsilon"}}')" \
+        "$(call 4 council_models_save '{"roster":{"add":"vendor/alpha"}}')" \
+        "$(call 5 council_models_save '{"roster":{"remove":"vendor/never"}}')"
+    local id
+    for id in 2 3 4 5; do
+        assert_eq "$(result_text "$id")" '{"saved":true}'
+    done
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" \
+        '{"gemini":"","openai":"gpt-test-1","grok":"","perplexity":"","kimi":"","openrouter":["vendor/alpha","vendor/delta","vendor/epsilon"]}'
+}
+
+@test "extension: a roster change the choices cannot take is refused with a sentence, the file left as it was" {
+    local full='{"openrouter":["a/1","a/2","a/3","a/4","a/5","a/6","a/7","a/8","a/9","a/10","a/11","a/12"]}'
+    save_choices "$full"
+    mcp "$INIT" "$(call 1 council_models_save '{"roster":{"add":"a/13"}}')" \
+        "$(call 2 council_models_save '{"roster":{"remove":"a/1,a/2"}}')" \
+        "$(call 3 council_models_save '{"roster":{"add":"a/13","remove":"a/1"}}')" \
+        "$(call 4 council_models_save '{"roster":["a/13"]}')" \
+        "$(call 5 council_models_save '{"roster":{"remove":7}}')" \
+        "$(call 6 council_models_save '{"roster":{"remove":"a/1"},"selections":{}}')"
+    assert_eq "$(result_text 1)" 'Not saved: OpenRouter: 13 models chosen, at most 12 seats.'
+    assert_eq "$(result_text 2)" '{"saved":true}'
+    assert_eq "$(result_text 3)" 'Not saved: expected one model id to add or one to remove, got {"add":"a/13","remove":"a/1"}.'
+    assert_eq "$(result_text 4)" 'Not saved: expected one model id to add or one to remove, got ["a/13"].'
+    assert_eq "$(result_text 5)" 'Not saved: expected one model id to add or one to remove, got {"remove":7}.'
+    assert_eq "$(result_text 6)" 'Not saved: council_models_save takes selections, a roster change, or a seat and its model, one of them.'
+    local id
+    for id in 1 3 4 5 6; do
+        assert_eq "$(result_error "$id")" true
+    done
+    assert_eq "$(jq -c '.openrouter' "${STATE_DIR}/models.json")" "$(jq -c '.openrouter' <<< "$full")"
+    save_choices '{"openrouter":["a/1"]}'
+    mcp "$INIT" "$(call 1 council_models_save '{"roster":{"add":"a/2,a/3"}}')"
+    assert_eq "$(result_error 1)" true
+    assert_eq "$(result_text 1)" 'Not saved: OpenRouter: "a/2,a/3" is not a model id.'
+    assert_eq "$(jq -c . "${STATE_DIR}/models.json")" '{"openrouter":["a/1"]}'
+}
+
 @test "extension: with no roster saved, a model chosen for the openrouter seat starts the roster as openrouter-1" {
     install_fake_curl answer
     export OPENROUTER_API_KEY="$SENTINEL_KEY"
@@ -1127,7 +1181,7 @@ mode_of() {
     assert_eq "$(result_text 7)" 'Not saved: Gemini: "gemini 3; rm -rf ~" is not a model id.'
     assert_eq "$(result_text 8)" 'Not saved: OpenRouter: "a/1,a/2" is not a model id.'
     assert_eq "$(result_text 9)" 'Not saved: expected a seat name and a model id, got "gemini" and undefined.'
-    assert_eq "$(result_text 10)" 'Not saved: council_models_save takes either selections or a seat and its model, not both.'
+    assert_eq "$(result_text 10)" 'Not saved: council_models_save takes selections, a roster change, or a seat and its model, one of them.'
     local id
     for id in 1 2 3 4 5 6 7 8 9 10; do assert_eq "$(result_error $id)" true; done
     assert_eq "$(jq -c . "${STATE_DIR}/models.json")" "$saved"
