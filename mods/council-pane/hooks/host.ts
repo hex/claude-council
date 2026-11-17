@@ -50,8 +50,10 @@ const baseName = (word: string) => word.slice(Math.max(word.lastIndexOf('/'), wo
 
 function isQuery(words: string[]): boolean {
   let at = 0
+  // `words[at]!` here and in the inner loop: the loop's own test holds `at` below words.length.
   while (at < words.length && ASSIGNMENT.test(words[at]!)) at++
   for (let valued = RUNNERS.get(baseName(words[at] ?? '')); valued !== undefined; valued = RUNNERS.get(baseName(words[at] ?? ''))) {
+    // `!`: a runner was found under this word's name, and no runner has the empty name a missing word reads as.
     const isCommand = baseName(words[at]!) === 'command'
     at++
     while (at < words.length) {
@@ -63,6 +65,7 @@ function isQuery(words: string[]): boolean {
     }
   }
   if (baseName(words[at] ?? '') !== 'bash' || baseName(words[at + 1] ?? '') !== SCRIPT_NAME) return false
+  // `words[flag]!`: the loop's test holds `flag` below words.length.
   for (let flag = at + 2; flag < words.length && words[flag] !== '--'; flag++) {
     if (NOT_A_QUERY.test(words[flag]!) || words[flag] === NO_PANE) return false
   }
@@ -88,10 +91,12 @@ export function isCouncilRun(command: string): boolean {
     return false
   }
   for (let at = 0; at < command.length; at++) {
+    // `!`: the loop's test holds `at` below command.length.
     const char = command[at]!
     const next = command[at + 1]
     if (quote !== '') {
       if (char === quote) quote = ''
+      // `command[++at]!` is `next`, which this branch has matched against a character.
       else if (quote === '"' && char === '\\' && (next === '"' || next === '\\')) word += command[++at]!
       else if (quote === '"' && char === '$' && next === '(') {
         at++
@@ -106,6 +111,7 @@ export function isCouncilRun(command: string): boolean {
     } else if (char === '\\' && next === '\n') {
       at++
     } else if (char === '\\' && (next === ' ' || next === '\t')) {
+      // `command[++at]!` is `next`, the space or tab matched above.
       word = (word ?? '') + command[++at]!
     } else if (char === ' ' || char === '\t' || char === '\r') {
       if (word !== undefined) words.push(word)
