@@ -104,9 +104,11 @@ async function main() {
     server.kill('SIGKILL')
     process.exit(124)
   }, EXIT_WAIT_MS)
+  // Exits once everything printed has been read: on macOS a pipe takes 64 KB
+  // at a time, and an exit before the reader caught up would cut a long reply.
   server.on('exit', code => {
     clearTimeout(timer)
-    process.exit(code ?? 1)
+    process.stdout.write('', () => process.exit(code ?? 1))
   })
 }
 
