@@ -123,7 +123,10 @@ seat_enter_scratch() {
 # Points LINK at TARGET, keeping a link that already does and replacing one
 # that points elsewhere. Seats of concurrent council runs share the home, so
 # two can reach this at once; both write the same target, and the readback
-# decides. Never `mv` a fresh link over the old one: when the old link points
+# decides. Where no link exists yet it is made without -f, so the seat that
+# loses the race fails to make it and reads the winner's: a forced link would
+# take the winner's away for a moment, and a third seat reading back in that
+# moment would find none. Never `mv` a fresh link over the old one: when the old link points
 # at a directory, mv moves the new link into that directory, which is the
 # user's real one. A real file or directory at LINK is refused, never written
 # into.
@@ -136,7 +139,11 @@ seat_link() {
             echo "Error: ${link} is not a link; the seat's home holds only links to the user's login." >&2
             return 1
         fi
-        ln -sfn "$target" "$link" 2>/dev/null || true
+        if [[ -L "$link" ]]; then
+            ln -sfn "$target" "$link" 2>/dev/null || true
+        else
+            ln -sn "$target" "$link" 2>/dev/null || true
+        fi
     done
     [[ -L "$link" && "$(readlink "$link")" == "$target" ]] && return 0
     echo "Error: could not link ${link} to ${target} for the seat's login." >&2

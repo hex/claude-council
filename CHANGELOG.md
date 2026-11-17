@@ -41,6 +41,8 @@ to a `YYYY.M.BUILD` versioning scheme where `BUILD` resets each month.
 - `/claude-council:ask` loads the `council-execution` skill before it runs the query. The command printed the run call itself, so a model could run it without the skill, never learn that the transcript's closing `## 🧭 Synthesis` heading is where its own synthesis goes, and report the synthesis as empty while paraphrasing the answers.
 - `run-council.sh` prints the saved transcript's whole path. It printed a path relative to the directory the run started in, and Claude could look for the file in the plugin folder first. Under Git Bash on Windows the path is in the `C:/...` form, which Claude Code can open.
 
+- Several seats of one CLI starting at once on a machine where that CLI's seat home does not exist yet all start. One could fail with `could not link ... for the seat's login` when it looked for the login link at the moment another seat was replacing it.
+
 ### Security
 - No seat receives the `CLAUDE_PLUGIN_OPTION_*` variables any more, a custom seat named `claude` included, unless `COUNCIL_PASS_ENV` names one. Claude Code gives a hook every stored plugin option under that prefix, and the Stop gate starts its seat from a hook, so that seat would otherwise have received every stored API key. A seat still gets its own key through its vendor's variables.
 
