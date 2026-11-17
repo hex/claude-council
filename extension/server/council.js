@@ -263,7 +263,8 @@ function modelEnvironment(choices) {
 }
 
 // Desktop starts the server with a minimal PATH; CLI seats live in these.
-// The user's own directories come first, as in a login shell.
+// They come after the inherited PATH, the user's own directories first
+// among them.
 function searchPath(inherited) {
   const home = os.homedir()
   return [inherited, `${home}/.local/bin`, `${home}/bin`, '/opt/homebrew/bin', '/usr/local/bin'].filter(Boolean).join(':')
