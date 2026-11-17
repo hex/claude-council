@@ -623,10 +623,11 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   }
 
   // Writes the text whole or not at all, as the choices are, and never more
-  // than 0600.
+  // than 0600. Without the keys: a seat's error can quote the key it was
+  // sent, and this is the one way a run's text reaches a file.
   function writePrivate(file, text) {
     const scratch = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}`)
-    fs.writeFileSync(scratch, text, { mode: 0o600, flag: 'wx' })
+    fs.writeFileSync(scratch, redact(text), { mode: 0o600, flag: 'wx' })
     fs.renameSync(scratch, file)
   }
 
@@ -687,12 +688,11 @@ function openCouncil({ root, keys, tooShort, redact, timeoutsMs = TIMEOUTS_MS })
   }
 
   // Holds an answered run's text under the run id, forgetting the oldest
-  // past RUNS_KEPT. Without the keys: a seat's error can quote the key it
-  // was sent, and no key may reach a file.
+  // past RUNS_KEPT.
   function holdRun(run, text) {
     const dir = heldDirectory()
     const held = heldRuns(dir)
-    writePrivate(path.join(dir, `${String(Date.now()).padStart(15, '0')}-${run}.txt`), redact(text))
+    writePrivate(path.join(dir, `${String(Date.now()).padStart(15, '0')}-${run}.txt`), text)
     for (const [old] of held.slice(0, Math.max(0, held.length + 1 - RUNS_KEPT))) fs.rmSync(path.join(dir, old), { force: true })
     // writePrivate's scratch files that a crash or a failed write left: no
     // write between a scratch file and its rename takes a minute, so an
